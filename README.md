@@ -11,7 +11,9 @@ Battle opens on a window where you choose three of your companions and play the 
 companions from a neighbouring colony, in the Backyard: an isometric board in Formiga Home's
 style, the creatures drawn exactly as Desktop draws them. Each turn you give your orders on their
 cards and the board (or let the timer run out and they choose for themselves), lock in, and watch
-the turn play out tick by tick with a recap that says why each of them did what it did. The same
+the turn play out tick by tick with a recap that says why each of them did what it did. The
+Handler's Notebook beside the board keeps what each of your companions has been seen to do,
+match after match, so you can learn how they carry out an order. The same
 match also runs headless from the command line. There is no online play yet, and Desktop does
 not open Battle yet: Battle's side of that hand-off is built (`--formiga-battle <dir>`), Desktop's
 is still to come.
@@ -33,6 +35,7 @@ cargo run --release -p formiga-battle -- match --seed 4 --board          # an AI
 cargo run --release -p formiga-battle -- match --from-save <colony.json> --left 0,2,3 --record m.json
 cargo run --release -p formiga-battle -- replay m.json                   # replays and checks every turn
 cargo run --release -p formiga-battle -- tournament --pairings 5000      # fairness by kind and trio
+cargo run --release -p formiga-battle -- tournament --coach familiar,generic  # what knowing them is worth
 cargo run --release -p formiga-battle -- arena                           # draws Backyard
 ```
 
@@ -58,7 +61,9 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
 - **`formiga-battle-core`**: the rules, with no drawing, clock or network. `arena` (boards as
   data, in `arenas/`), `order`, `game` (a match, and a turn tick by tick), `profile` (a creature
   as Desktop records it), `interpret` (how a creature carries out its order, and why), `ai` (the
-  fallback for a missing order, and the AI coach), `recap`, `replay` and `tournament`.
+  fallback for a missing order, and the AI coaches), `plan` (coaches that think a turn ahead,
+  knowing their creatures or not), `notebook` (what each creature was seen to do), `recap`,
+  `replay` and `tournament`.
 - **`formiga-battle-contract`**: what Desktop hands Battle, a read-only roster built from
   Desktop's own trip projection (`formiga-travel`) plus the learned leanings a trip leaves at
   home, and Battle's acknowledgement, read and written through `formiga-expansion-rulebook` like
@@ -70,7 +75,7 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
   at the board without the window: picking, orders, locking, the turn being shown), `playback`
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
   `formiga-art`'s tools at pixel scale), `look` (each creature's own frames), `app` (the egui
-  window) and `cli` (the headless commands).
+  window), `store` (the notebook in Battle's data folder) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
 by one release tag (`v0.67.6`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is

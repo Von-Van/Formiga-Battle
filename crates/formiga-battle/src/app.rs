@@ -19,6 +19,7 @@ const TOP_H: f32 = 54.0;
 const INK: Color32 = Color32::from_rgb(0xf3, 0xec, 0xd8);
 const FAINT: Color32 = Color32::from_rgb(0xb7, 0xb0, 0x9a);
 const CARD: Color32 = Color32::from_rgb(0x33, 0x3d, 0x2c);
+const NOTE: Color32 = Color32::from_rgb(0xe8, 0xd6, 0x9c);
 const CARD_CHOSEN: Color32 = Color32::from_rgb(0x4a, 0x55, 0x3a);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,6 +34,8 @@ pub enum Review {
     Picking,
     Orders,
     Playing,
+    /// A few matches played out of sight first, then the notebook open beside the board.
+    Notebook,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -51,6 +54,8 @@ pub struct BattleApp {
     portraits: HashMap<(usize, usize), egui::TextureHandle>,
     hover: Option<formiga_battle_core::Tile>,
     error: Option<String>,
+    /// The side panel shows the Handler's Notebook instead of the orders.
+    notebook_open: bool,
     /// Every turn's orders come from the AI coach and lock at once: for review pictures.
     autoplay: bool,
     snap: Option<Snap>,
@@ -69,6 +74,7 @@ impl BattleApp {
             portraits: HashMap::new(),
             hover: None,
             error: None,
+            notebook_open: false,
             autoplay: review == Some(Review::Playing),
             snap,
             clock: 0.0,
@@ -82,6 +88,24 @@ impl BattleApp {
                 app.table.orders[2] = None;
                 app.table.select(1);
                 app.table.choose_verb(Verb::Move);
+            }
+            Some(Review::Notebook) => {
+                let mut now = 0.0;
+                for _ in 0..4 {
+                    if app.table.start(now).is_err() {
+                        break;
+                    }
+                    while !app.table.finished(now) {
+                        app.table.coach_orders();
+                        app.table.lock(now);
+                        now += 30.0;
+                        app.table.frame(now);
+                    }
+                    app.table.shown = None;
+                    app.table.seed = app.table.seed.wrapping_add(1);
+                }
+                app.begin();
+                app.notebook_open = true;
             }
             Some(Review::Picking) | None => {}
         }
@@ -307,6 +331,20 @@ impl BattleApp {
                                             .size(12.0)
                                             .color(FAINT),
                                         );
+                                        let note = match self.table.page(contender.traveler.id.0) {
+                                            Some(page) => {
+                                                page.notes().into_iter().next().unwrap_or_else(
+                                                    || {
+                                                        "In your notebook; no habits noted yet"
+                                                            .to_owned()
+                                                    },
+                                                )
+                                            }
+                                            None => "Not in your notebook yet".to_owned(),
+                                        };
+                                        ui.label(
+                                            RichText::new(note).size(12.0).italics().color(NOTE),
+                                        );
                                     });
                                 });
                             })
@@ -440,16 +478,33 @@ impl BattleApp {
         let composure: Vec<u8> = (0..TEAM_SIZE as u8)
             .map(|i| m.fighter(Slot::new(YOU, i)).composure)
             .collect();
-        ui.label(
-            RichText::new(if giving {
-                "Your orders"
-            } else {
-                "The turn plays out"
-            })
-            .size(18.0)
-            .color(INK),
-        );
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(if self.notebook_open {
+                    "Your notebook"
+                } else if giving {
+                    "Your orders"
+                } else {
+                    "The turn plays out"
+                })
+                .size(18.0)
+                .color(INK),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .selectable_label(self.notebook_open, "Notebook")
+                    .on_hover_text("What you have seen each of them do")
+                    .clicked()
+                {
+                    self.notebook_open = !self.notebook_open;
+                }
+            });
+        });
         ui.add_space(4.0);
+        if self.notebook_open {
+            self.notebook(ui, ctx);
+            return;
+        }
         for i in 0..TEAM_SIZE as u8 {
             let place = self.table.teams[0][i as usize];
             let texture = self.portrait(ctx, 0, place);
@@ -618,9 +673,87 @@ impl BattleApp {
             self.portraits.clear();
             self.stage = Stage::Picking;
         }
+        if !self.table.new_moments.is_empty() {
+            ui.add_space(10.0);
+            ui.label(RichText::new("New in your notebook").size(15.0).color(NOTE));
+            for (name, moment) in &self.table.new_moments {
+                ui.label(
+                    RichText::new(format!("{name}: {moment}"))
+                        .size(13.0)
+                        .color(FAINT),
+                );
+            }
+        }
         ui.add_space(10.0);
         ui.separator();
         self.recap(ui);
+    }
+
+    /// The Handler's Notebook for the three on the board: what each has been seen to do.
+    fn notebook(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for i in 0..TEAM_SIZE {
+                let place = self.table.teams[0][i];
+                let texture = self.portrait(ctx, 0, place);
+                let (contender, _) = &self.table.home[place];
+                let page = self.table.page(contender.traveler.id.0).cloned();
+                egui::Frame::new()
+                    .fill(CARD)
+                    .corner_radius(8.0)
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal_top(|ui| {
+                            ui.add(egui::Image::new((texture.id(), egui::vec2(48.0, 48.0))));
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(&contender.traveler.name)
+                                        .size(16.0)
+                                        .color(INK)
+                                        .strong(),
+                                );
+                                let Some(page) = page else {
+                                    ui.label(
+                                        RichText::new("Nothing noted yet: play a match together.")
+                                            .size(13.0)
+                                            .color(FAINT),
+                                    );
+                                    return;
+                                };
+                                let played = if page.matches == 1 {
+                                    "Played once".to_owned()
+                                } else {
+                                    format!("Played {} times, won {}", page.matches, page.wins)
+                                };
+                                ui.label(RichText::new(played).size(12.0).color(FAINT));
+                                let notes = page.notes();
+                                if notes.is_empty() {
+                                    ui.label(
+                                        RichText::new("No habits noted yet.")
+                                            .size(13.0)
+                                            .italics()
+                                            .color(FAINT),
+                                    );
+                                }
+                                for note in notes.iter().take(4) {
+                                    ui.label(
+                                        RichText::new(format!("· {note}")).size(13.0).color(NOTE),
+                                    );
+                                }
+                                for moment in page.moments.iter().rev().take(2) {
+                                    ui.label(
+                                        RichText::new(moment.as_str())
+                                            .size(12.0)
+                                            .italics()
+                                            .color(FAINT),
+                                    );
+                                }
+                            });
+                        });
+                    });
+                ui.add_space(4.0);
+            }
+        });
     }
 
     /// Ask for the picture when it is time, and save it when it comes.

@@ -5,15 +5,19 @@
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
 use crate::scene::{Choice, Marks};
+use crate::store::{self, Notebook};
 use formiga_battle_contract::{BattleSnapshot, Contender};
+use formiga_battle_core::Event;
 use formiga_battle_core::ai::{self, Coach};
 use formiga_battle_core::interpret::distances;
+use formiga_battle_core::notebook::{Page, observe};
 use formiga_battle_core::recap::recap_naming;
 use formiga_battle_core::rng::{self, Purpose};
 use formiga_battle_core::{
     Arena, Match, Order, Orders, Outcome, Profile, Ruleset, Side, Slot, TEAM_SIZE, Target, Tile,
     TurnReport,
 };
+use std::path::PathBuf;
 
 /// The Handler always plays the left team; the AI the right.
 pub const YOU: Side = Side::Left;
@@ -76,12 +80,22 @@ pub struct Table {
     pub shown: Option<Shown>,
     /// Every turn told, newest last.
     pub log: Vec<(u8, Vec<String>)>,
+    /// The colony the Handler's companions come from, so their notebook pages are theirs.
+    pub colony_id: String,
+    pub notebook: Notebook,
+    /// Where the notebook is kept; `None` keeps it only for this sitting, as review pictures do.
+    pub notebook_folder: Option<PathBuf>,
+    /// Every event of the match so far, for the notebook at its end.
+    match_events: Vec<Event>,
+    /// What this match added to the notebook, by name: shown with the result.
+    pub new_moments: Vec<(String, String)>,
 }
 
 impl Table {
     /// A table for the Handler's roster against a visiting colony. A colony of fewer than three is
     /// joined by friends from next door so it can field a team.
     pub fn new(roster: BattleSnapshot, visitors: BattleSnapshot, seed: u64) -> Self {
+        let colony_id = roster.colony_id.clone();
         let reduce_motion = roster.presentation.reduce_motion;
         let pair = |s: &BattleSnapshot| -> Vec<(Contender, Profile)> {
             s.contenders
@@ -114,6 +128,55 @@ impl Table {
             turn_began: 0.0,
             shown: None,
             log: Vec::new(),
+            colony_id,
+            notebook: Notebook::default(),
+            notebook_folder: None,
+            match_events: Vec::new(),
+            new_moments: Vec::new(),
+        }
+    }
+
+    /// Keeps the notebook in `folder` from now on, starting from what is already there.
+    pub fn keep_notebook_in(&mut self, folder: PathBuf) {
+        self.notebook = store::load(&folder);
+        self.notebook_folder = Some(folder);
+    }
+
+    /// A companion's page, if it has played.
+    pub fn page(&self, creature_id: u64) -> Option<&Page> {
+        self.notebook
+            .page(&self.colony_id, creature_id)
+            .filter(|p| p.matches > 0)
+    }
+
+    /// Writes what the match showed of the Handler's team into the notebook.
+    fn note_the_match(&mut self) {
+        let Some(m) = &self.m else {
+            return;
+        };
+        let won = m.outcome().and_then(|o| o.winner) == Some(YOU);
+        let team: Vec<(u64, String)> = m.rosters[YOU.index()]
+            .iter()
+            .map(|p| (p.creature_id, p.name.clone()))
+            .collect();
+        self.new_moments.clear();
+        for seen in observe(m, YOU, &self.match_events) {
+            let name = team
+                .iter()
+                .find(|(id, _)| *id == seen.creature_id)
+                .map(|(_, n)| n.clone())
+                .unwrap_or_default();
+            for moment in &seen.moments {
+                self.new_moments.push((name.clone(), moment.clone()));
+            }
+            self.notebook
+                .page_mut(&self.colony_id, seen.creature_id)
+                .record(&seen, won, &name, &team);
+        }
+        if let Some(folder) = &self.notebook_folder
+            && let Err(error) = store::save(folder, &self.notebook)
+        {
+            eprintln!("formiga-battle: the notebook could not be kept: {error:#}");
         }
     }
 
@@ -176,6 +239,8 @@ impl Table {
         self.m = Some(m);
         self.begin_orders(now);
         self.log.clear();
+        self.match_events.clear();
+        self.new_moments.clear();
         Ok(())
     }
 
@@ -357,6 +422,8 @@ impl Table {
             report.turn,
             recap_naming(m, &report.events, ["Your team", "The visiting team"]),
         ));
+        self.match_events.extend(report.events.iter().cloned());
+        let over = m.outcome().is_some();
         self.shown = Some(Shown {
             playback,
             report,
@@ -364,6 +431,9 @@ impl Table {
         });
         self.selected = None;
         self.verb = None;
+        if over {
+            self.note_the_match();
+        }
     }
 
     /// The Handler's orders, as the AI coach would give them: for review pictures.
@@ -502,6 +572,32 @@ mod tests {
             .map(|p| p.name.clone())
             .collect();
         assert!(!theirs.contains(&ours), "{theirs:?}");
+    }
+
+    #[test]
+    fn a_finished_match_is_written_into_the_notebook_and_kept() {
+        let folder =
+            std::env::temp_dir().join(format!("formiga-battle-table-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
+        t.keep_notebook_in(folder.clone());
+        t.start(0.0).unwrap();
+        let mut now = 0.0;
+        while !t.finished(now) {
+            t.coach_orders();
+            t.lock(now);
+            now += 20.0;
+            t.frame(now);
+        }
+        let ours: Vec<u64> = t.m.as_ref().unwrap().rosters[0]
+            .iter()
+            .map(|p| p.creature_id)
+            .collect();
+        for id in &ours {
+            assert_eq!(t.page(*id).map(|p| p.matches), Some(1));
+        }
+        let kept = store::load(&folder);
+        assert_eq!(kept, t.notebook);
     }
 
     #[test]

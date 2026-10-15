@@ -2,7 +2,7 @@
 
 How a match of Formiga Battle resolves, as `formiga-battle-core` plays it. Every number here lives
 in `Ruleset` (`crates/formiga-battle-core/src/ruleset.rs`), travels with every recorded match, and
-is provisional until playtests settle it. `RULES_VERSION` is 1.
+is provisional until playtests settle it. `RULES_VERSION` is 2.
 
 ## A match
 
@@ -126,16 +126,18 @@ Its profile picks the way, and what it does with a moment to spare.
 
 Each tick it looks ahead over the steps left in the turn (at most three), at every way that
 spends at most its remaining detour budget, and scores each whole way: what every tile on it is
-like to this creature, less 220 for each step it would arrive later than the quickest way. It takes
-the first step of the best and looks again next tick.
+like to this creature, less 220 for each step it would arrive later than the quickest way. Danger
+counts on every tile the way passes; company and the lane it keeps to count as the way's
+average, so a long way round is never worth more company for being long. It takes the first
+step of the best and looks again next tick.
 
 | Part of a tile | Score |
 |---|---|
-| Within reach of the other team (not counting whom it is walking up to) | −caution for each creature of theirs |
-| In the zone while the other team is, when it is only passing through | −caution / 2 |
+| Within reach of the other team (not counting whom it is walking up to) | −caution for each creature of theirs, for a cautious creature; nothing for a bold one, which does not avoid them but does not seek them out either |
+| In the zone while the other team is, when it is only passing through | −caution / 2, likewise |
 | Beside a teammate | +togetherness / 2, +100 for a high bond (+50 medium), −200 for high avoidance (−100 medium) |
 | How far out from the middle row | +wanderlust × rows out / half the board's height |
-| Against a wall or obstacle | +caution / 4 for each |
+| Against a wall or obstacle | +caution / 4 for each, likewise |
 
 Ties are broken by a seeded draw. Now and then (`variability`, 4% to 14%) it takes its second-best
 choice instead, if both are on time. Once arrived with ticks to spare it may take one follow-up
@@ -156,15 +158,41 @@ replays the same on every machine.
 ## Fairness
 
 `formiga-battle tournament` draws creatures the way Desktop draws a new companion, drifts their
-leanings, puts them in random trios and plays each pairing from both sides of the board. Over
-10,000 Exhibition-coached matches with the default rules (`--pairings 5000 --seed 7`):
+leanings, puts them in random trios and plays each pairing from both sides of the board. Score is
+wins plus half of draws, over matches played; with a few thousand matches a kind, about 0.01 of a
+score either way is chance.
+
+Over 10,000 Exhibition-coached matches with the default rules (`--pairings 5000 --seed 7`):
 
 | | |
 |---|---|
-| Left side | 0.494 |
-| Kinds, highest to lowest | Showoff 0.521, Troublemaker 0.514, Grump 0.512, Sweetheart 0.511, Lazybones 0.509, Guardian 0.492, Explorer 0.490, Wallflower 0.489, Scholar 0.477, Oddball 0.474 |
-| Spread between kinds | 0.047, each kind over 3,600 to 7,000 matches |
-| Knockouts | 2.5 a match |
+| Left side | 0.490 |
+| Kinds, highest to lowest | Troublemaker 0.512, Lazybones 0.505, Showoff 0.503, Guardian 0.501, Sweetheart 0.500, Explorer 0.497, Scholar 0.496, Grump 0.494, Wallflower 0.493, Oddball 0.492 |
+| Spread between kinds | 0.021, each kind over 3,600 to 7,000 matches |
+| Won by capture, knockout, at the cap, drawn | 63%, 3%, 30%, 3%, in 10.2 turns |
 
-Score is wins plus half of draws, over matches played. A trio of three of one kind is drawn too
-rarely for its score to mean much in 10,000 matches.
+With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500`), matches end
+sooner (78% by capture, in 7.6 turns) and kinds score within about 0.05 of each other, which two
+seeds show is chance: Grump is highest on one (0.532) and among the lowest on the other (0.481).
+
+That was not so before rules version 2. Under strong coaching, a bold creature went out of its
+way to walk into the other team's reach, and a social one detoured to stay beside its teammates
+because company counted on every tile of a long way round: Grumps scored 0.554 and Explorers
+0.459. Both now have to be paid for like any other preference.
+
+## Knowing your creatures
+
+The `familiar` and `generic` coaches (`plan.rs`) think each turn through the same way: for each
+creature, try each sensible order, play the turn out in their head against what they expect the
+other team to do, and keep whatever leaves the board best. The familiar coach imagines its
+creatures as they are; the generic one imagines every creature as one that leans no way at all.
+
+| Coaches | Familiar's score |
+|---|---|
+| familiar against generic, 4,000 matches | 0.511 |
+| familiar or generic against Exhibition | 0.997 and above |
+
+Knowing your creatures is worth about one match in a hundred against a coach who plans just as
+well without knowing them: positive, and small. Before version 2 it was worth three in a hundred,
+most of it from predicting the bold walking into reach, which was also what made some kinds
+better than others.

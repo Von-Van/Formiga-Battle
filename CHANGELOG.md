@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The Handler's Notebook: after every match, each of your companions' pages notes what it was
+  seen to do (the ways it keeps taking, the chances it takes, the friend it stays near) and a
+  few moments worth remembering, drawn from its last ten matches so the notes change as it does.
+  Shown on the team cards and beside the board; kept in Battle's own data folder.
+- Coaches that think a turn ahead, one knowing its creatures and one imagining them plain, and
+  the tournament to measure what knowing them is worth.
+- Rules version 2: a bold creature no longer goes out of its way into the other team's reach,
+  and company and lanes count as a way's average, so no kind of creature does consistently
+  better under strong coaching.
 - The window: choose three companions, give each an order on its card and the board with a turn
   timer, lock in against the visiting colony's AI, and watch each turn play out on an isometric
   Backyard drawn in Formiga Home's style, with every creature in Desktop's own frames, a recap of

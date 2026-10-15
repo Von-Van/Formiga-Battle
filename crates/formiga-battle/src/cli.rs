@@ -28,7 +28,9 @@ MATCH:
     --seed <N>           Match seed (default 1)
     --left <i,j,k>       Roster places for the left team (default 0,1,2)
     --right <i,j,k>      Roster places for the right team (default: three drawn visitors)
-    --coach <a>,<b>      exhibition or absent, for left and right (default exhibition,exhibition)
+    --coach <a>,<b>      exhibition, familiar, generic or absent, for left and right (default
+                         exhibition,exhibition). familiar and generic think each turn ahead;
+                         only familiar knows how its own creatures carry out orders
     --board              Draw the board after every turn
     --record <FILE>      Write the match record as JSON
     --json               Print every turn's report as JSON instead of telling it
@@ -198,6 +200,8 @@ fn coaches(args: &mut Args) -> Result<[Coach; 2]> {
     let parse = |s: &str| match s.trim() {
         "exhibition" => Ok(Coach::Exhibition),
         "absent" => Ok(Coach::Absent),
+        "familiar" => Ok(Coach::Familiar),
+        "generic" => Ok(Coach::Generic),
         other => bail!("unknown coach {other:?}"),
     };
     let parts: Vec<&str> = text.split(',').collect();

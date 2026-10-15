@@ -62,6 +62,11 @@ pub enum Coach {
     /// little chance so it cannot be read like a script. It knows nothing about any creature's
     /// temperament.
     Exhibition,
+    /// Thinks each turn through, knowing exactly how each of its creatures carries out an order.
+    Familiar,
+    /// Thinks each turn through the same way, imagining every creature as one that leans no way
+    /// at all: the measure `Familiar` is held against.
+    Generic,
 }
 
 impl Coach {
@@ -69,6 +74,8 @@ impl Coach {
         match self {
             Self::Absent => [None; TEAM_SIZE],
             Self::Exhibition => exhibition(m, side),
+            Self::Familiar => crate::plan::think_ahead(m, side, true),
+            Self::Generic => crate::plan::think_ahead(m, side, false),
         }
     }
 }

@@ -9,6 +9,7 @@ mod look;
 mod playback;
 mod roster;
 mod scene;
+mod store;
 mod table;
 
 use anyhow::{Context, Result, bail};
@@ -34,8 +35,9 @@ WINDOW:
                              and close
     --at <SECONDS>           With --snap
     --review <STAGE>         With --snap: picking (the team choice), orders (a turn's orders
-                             half given, MOVE chosen) or playing (the AI giving your orders too,
-                             every turn locked at once; the default)
+                             half given, MOVE chosen), playing (the AI giving your orders too,
+                             every turn locked at once; the default) or notebook (four matches
+                             played out of sight, then the notebook open)
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
                              (default 0), at --scale (default 3), --into seconds into the
                              turn after (default: still)
@@ -102,6 +104,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "picking" => app::Review::Picking,
                     "orders" => app::Review::Orders,
                     "playing" => app::Review::Playing,
+                    "notebook" => app::Review::Notebook,
                     other => bail!("unknown stage {other:?}"),
                 }
             }
@@ -126,6 +129,12 @@ fn window(args: Vec<String>) -> Result<()> {
     let mut table = table::Table::new(roster, sample::visitors(args.visitors), seed);
     if let Some(path) = args.render {
         return render_board(&path, &mut table, args.turns, args.into, args.scale);
+    }
+    // A review picture changes nothing, the notebook included.
+    if args.snap.is_none()
+        && let Some(folder) = store::folder()
+    {
+        table.keep_notebook_in(folder);
     }
     let snap = args.snap.map(|path| app::Snap {
         path,

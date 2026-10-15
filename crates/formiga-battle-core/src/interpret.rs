@@ -132,6 +132,14 @@ impl Weighed {
         self.shunned = self.shunned.or(other.shunned);
     }
 
+    /// A whole way's worth: danger counts on every tile it passes, while company and the lane
+    /// it keeps to count as the way's average, so a long way round is never worth more company
+    /// for being long.
+    fn along(&self, steps: usize) -> i32 {
+        let steps = steps.max(1) as i32;
+        self.exposure + self.centre + self.cover + (self.together + self.apart + self.lane) / steps
+    }
+
     fn total(&self) -> i32 {
         self.exposure + self.centre + self.together + self.apart + self.lane + self.cover
     }
@@ -148,14 +156,14 @@ fn weigh(m: &Match, slot: Slot, tile: Tile, chasing: Option<Slot>, passing_zone:
         .filter(|e| Some(**e) != chasing && m.fighter(**e).at.distance(tile) <= 1)
         .count() as i32;
     let mut w = Weighed {
-        exposure: -caution * reachable,
+        exposure: -caution.max(0) * reachable,
         ..Weighed::default()
     };
     if passing_zone
         && m.arena.in_zone(tile)
         && enemies.iter().any(|e| m.arena.in_zone(m.fighter(*e).at))
     {
-        w.centre = -caution / 2;
+        w.centre = -caution.max(0) / 2;
     }
     let me = m.profile(slot);
     let mut best = i32::MIN;
@@ -190,7 +198,7 @@ fn weigh(m: &Match, slot: Slot, tile: Tile, chasing: Option<Slot>, passing_zone:
     let reach = (i32::from(m.arena.height) / 2).max(1);
     w.lane = (i32::from(tile.y) - middle).abs() * i32::from(b.wanderlust) / reach;
     let walls = tile.steps().iter().filter(|t| !m.walkable(**t)).count() as i32;
-    w.cover = walls * caution / 4;
+    w.cover = walls * caution.max(0) / 4;
     w
 }
 
@@ -366,7 +374,7 @@ impl Look<'_> {
                 first_detour: self.distance(path[1]).unwrap_or(u8::MAX) >= self.here,
                 weighed: *sum,
                 late,
-                score: sum.total() - TIME_COST * i32::from(late),
+                score: sum.along(steps) - TIME_COST * i32::from(late),
             });
             return;
         }

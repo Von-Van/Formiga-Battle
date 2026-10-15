@@ -200,6 +200,15 @@ impl Match {
         &self.rosters[slot.side.index()][slot.index as usize]
     }
 
+    /// The same match, with one team's creatures taken to be these instead: what a coach who
+    /// imagines them so expects to happen. The board is unchanged.
+    pub fn imagining(&self, side: Side, profiles: [Profile; TEAM_SIZE]) -> Self {
+        let mut m = self.clone();
+        m.behaviors[side.index()] = profiles.clone().map(|p| p.behavior());
+        m.rosters[side.index()] = profiles;
+        m
+    }
+
     pub fn behavior(&self, slot: Slot) -> Behavior {
         self.behaviors[slot.side.index()][slot.index as usize]
     }
@@ -211,6 +220,11 @@ impl Match {
     /// Every creature still on the board, left team first.
     pub fn standing_slots(&self) -> impl Iterator<Item = Slot> + '_ {
         Slot::all().filter(|s| self.standing(*s))
+    }
+
+    /// Every creature on a side, knocked out or not.
+    pub fn team_all(&self, side: Side) -> impl Iterator<Item = Slot> + '_ {
+        Slot::all().filter(move |s| s.side == side)
     }
 
     pub fn team(&self, side: Side) -> impl Iterator<Item = Slot> + '_ {

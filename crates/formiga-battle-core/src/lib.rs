@@ -12,7 +12,9 @@
 //! - [`profile`]: who a creature is, read from Desktop's own record.
 //! - [`interpret`]: how a creature carries out its order, and why.
 //! - [`ai`]: the fallback for a missing order, and the coaches of AI matches.
+//! - [`plan`]: coaches that think a turn ahead, knowing their creatures or not.
 //! - [`recap`]: a turn told in sentences.
+//! - [`notebook`]: the Handler's Notebook: what each creature was seen to do, in plain words.
 //! - [`replay`]: a whole match as data, and replaying it.
 //! - [`tournament`]: many matches at once, for the fairness checks.
 
@@ -22,7 +24,9 @@ pub mod event;
 pub mod game;
 pub mod grid;
 pub mod interpret;
+pub mod notebook;
 pub mod order;
+pub mod plan;
 pub mod profile;
 pub mod recap;
 pub mod replay;
