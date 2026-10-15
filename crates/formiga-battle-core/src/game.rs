@@ -533,7 +533,8 @@ impl Match {
         let mut present = [0u8; 2];
         for slot in self.standing_slots() {
             let f = self.fighter(slot);
-            if self.arena.in_zone(f.at) {
+            // Knocked off balance, a creature in the zone does not contest it this tick.
+            if self.arena.in_zone(f.at) && !f.interrupted {
                 present[slot.side.index()] += 1;
                 if f.holding {
                     holders[slot.side.index()] += 1;
@@ -748,38 +749,64 @@ impl Match {
                     }
                 }
             } else if self.fighter(t).holding {
+                // Holders beside the one contested, shoulder to shoulder, that a contester has
+                // come within reach of.
                 let holders: Vec<Slot> = self
                     .team(t.side)
                     .filter(|h| {
+                        let at = self.fighter(*h).at;
                         self.fighter(*h).holding
                             && !countered.contains(h)
-                            && cs
-                                .iter()
-                                .any(|c| self.fighter(*c).at.touches(self.fighter(*h).at))
+                            && (*h == t || at.touches(there))
+                            && cs.iter().any(|c| self.fighter(*c).at.touches(at))
                     })
                     .collect();
-                let mut hits = vec![0u8; cs.len()];
-                for h in &holders {
-                    let reach = self.fighter(*h).at;
-                    if let Some(i) = (0..cs.len())
-                        .filter(|i| self.fighter(cs[*i]).at.touches(reach))
-                        .min_by_key(|i| hits[*i])
-                    {
-                        hits[i] += 1;
-                        damage[cs[i].side.index()][cs[i].index as usize] += 1;
-                        countered.insert(*h);
-                    }
-                }
-                let pressed = cs.len() > holders.len();
-                if pressed {
+                if cs.len() >= 2 && cs.len() > holders.len() {
+                    // Flanked: contested from more sides than it has holders to turn them away,
+                    // the hold breaks. Nobody loses composure; the holder is pushed off its tile,
+                    // away from a contester, or knocked off balance where it stands if every way
+                    // out is blocked.
+                    let pushed_to = cs.iter().find_map(|c| {
+                        let from = self.fighter(*c).at;
+                        let away = Tile::new(2 * there.x - from.x, 2 * there.y - from.y);
+                        (self.arena.contains(away)
+                            && self.walkable(away)
+                            && self.occupant(away).is_none())
+                        .then_some(away)
+                    });
                     damage[t.side.index()][t.index as usize] += 1;
+                    let f = self.fighter_mut(t);
+                    f.holding = false;
+                    f.interrupted = true;
+                    if let Some(to) = pushed_to {
+                        f.at = to;
+                    }
+                    push(EventKind::Flanked {
+                        target: t,
+                        by: cs,
+                        from: there,
+                        pushed_to,
+                    });
+                } else {
+                    let mut hits = vec![0u8; cs.len()];
+                    for h in &holders {
+                        let reach = self.fighter(*h).at;
+                        if let Some(i) = (0..cs.len())
+                            .filter(|i| self.fighter(cs[*i]).at.touches(reach))
+                            .min_by_key(|i| hits[*i])
+                        {
+                            hits[i] += 1;
+                            damage[cs[i].side.index()][cs[i].index as usize] += 1;
+                            countered.insert(*h);
+                        }
+                    }
+                    push(EventKind::Countered {
+                        target: t,
+                        holders,
+                        contesters: cs,
+                        pressed: false,
+                    });
                 }
-                push(EventKind::Countered {
-                    target: t,
-                    holders,
-                    contesters: cs,
-                    pressed,
-                });
             } else {
                 damage[t.side.index()][t.index as usize] += cs.len() as u8;
                 self.fighter_mut(t).interrupted = true;

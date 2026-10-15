@@ -50,10 +50,12 @@ pub enum Sign {
     CaughtSomeone,
     /// Waited rather than walk in among the other team.
     HungBack,
+    /// Came at a holder from another side with a friend and broke its hold.
+    Flanked,
 }
 
 impl Sign {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::KeptOutOfReach,
         Self::WentRoundTheYard,
         Self::KeptNearFriend,
@@ -69,6 +71,7 @@ impl Sign {
         Self::HeldFirm,
         Self::CaughtSomeone,
         Self::HungBack,
+        Self::Flanked,
     ];
 
     /// Its name in Desktop's keeping, the same as it is written in JSON. Never changed: a page
@@ -90,6 +93,7 @@ impl Sign {
             Self::HeldFirm => "held_firm",
             Self::CaughtSomeone => "caught_someone",
             Self::HungBack => "hung_back",
+            Self::Flanked => "flanked",
         }
     }
 
@@ -215,6 +219,20 @@ pub fn observe(m: &Match, side: crate::order::Side, events: &[Event]) -> Vec<See
                 } else if holders.len() >= 2 {
                     for h in holders {
                         moment(h, "Held the line side by side with a friend".to_owned());
+                    }
+                }
+            }
+            EventKind::Flanked { target, by, .. } => {
+                for c in by {
+                    signs.push((*c, Sign::Flanked));
+                }
+                moment(
+                    target,
+                    "Was caught from two sides and lost its spot".to_owned(),
+                );
+                if by.len() >= 2 {
+                    for c in by {
+                        moment(c, format!("Flanked {} with a friend", name(target)));
                     }
                 }
             }

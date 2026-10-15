@@ -136,6 +136,23 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                     list(m, contesters)
                 )
             }),
+            EventKind::Flanked {
+                target,
+                by,
+                pushed_to,
+                ..
+            } => Some(match pushed_to {
+                Some(_) => format!(
+                    "{} came at {} from two sides and pushed it off its spot.",
+                    list(m, by),
+                    name(target)
+                ),
+                None => format!(
+                    "{} came at {} from two sides; boxed in, it lost its footing.",
+                    list(m, by),
+                    name(target)
+                ),
+            }),
             EventKind::Scuffle {
                 contester, target, ..
             } => Some(format!(

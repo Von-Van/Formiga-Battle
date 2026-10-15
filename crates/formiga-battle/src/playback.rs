@@ -309,6 +309,41 @@ impl Playback {
                         );
                     }
                 }
+                EventKind::Flanked {
+                    target,
+                    by,
+                    from,
+                    pushed_to,
+                } => {
+                    let short = age < 0.6;
+                    effect(&mut frame, Burst::Hit, *from);
+                    let f = frame.figure_mut(*target);
+                    f.holding = false;
+                    if let Some(to) = pushed_to {
+                        // Shoved one tile, quickly.
+                        let share = (age / 0.35).clamp(0.0, 1.0);
+                        let (fx, fy) = (f32::from(from.x) + 0.5, f32::from(from.y) + 0.5);
+                        let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
+                        f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
+                        f.tile = *to;
+                    }
+                    set_pose(
+                        &mut frame,
+                        &mut since,
+                        *target,
+                        if short { Pose::Wobble } else { Pose::Idle },
+                        *when,
+                    );
+                    for c in by {
+                        set_pose(
+                            &mut frame,
+                            &mut since,
+                            *c,
+                            if short { Pose::Reach } else { Pose::Idle },
+                            *when,
+                        );
+                    }
+                }
                 EventKind::Scuffle {
                     contester, target, ..
                 } => {
