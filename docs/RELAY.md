@@ -45,7 +45,7 @@ for any other version. Then:
 - A joiner whose digest differs from the opener's is refused `build`, unless the version has
   released builds (both digests are then among them).
 
-The site keeps the released builds in its own repository, in `lib/battle-builds.json` (`{"0.2.0":
+The site keeps the released builds in its own repository, in `lib/battle-builds.mjs` (`{"0.2.0":
 ["<digest>", …]}`), changed by a pull request when a Battle release's digests are known; the
 reference takes them through `Relay::knowing`.
 
