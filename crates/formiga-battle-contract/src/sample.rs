@@ -19,6 +19,19 @@ pub fn colony() -> SaveFile {
     save
 }
 
+/// A neighbouring colony, made the same way from another seed: who an AI match is played
+/// against, so the other team are real companions with looks and temperaments of their own.
+pub fn visitors(seed: u8) -> BattleSnapshot {
+    let seed = if seed == 3 { 4 } else { seed };
+    crate::project_roster(
+        &formiga_travel::sample::colony(seed),
+        SessionId::parse(formiga_travel::sample::SESSION).expect("the sample session"),
+        formiga_travel::sample::MADE,
+        "0.67.6",
+    )
+    .expect("a sample colony projects")
+}
+
 pub fn snapshot() -> BattleSnapshot {
     crate::project_roster(
         &colony(),

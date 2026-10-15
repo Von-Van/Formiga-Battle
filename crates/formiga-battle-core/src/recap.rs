@@ -39,6 +39,12 @@ pub fn describe(m: &Match, order: &Order) -> String {
 /// The turn's events, told. Each creature's route is told once a turn, by the first choice it
 /// made that was not the plain way.
 pub fn recap(m: &Match, events: &[Event]) -> Vec<String> {
+    recap_naming(m, events, [team_name(Side::Left), team_name(Side::Right)])
+}
+
+/// The same, with each team called what the teller calls it: "Your team", "The visiting team".
+pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String> {
+    let team_name = |side: Side| teams[side.index()];
     let name = |s: &Slot| m.profile(*s).name.clone();
     let mut lines = Vec::new();
     let mut routed: BTreeSet<Slot> = BTreeSet::new();

@@ -11,16 +11,30 @@
 //! Battle never changes a colony. Whatever it sends back (results, medals, souvenirs) is a later
 //! version of this contract; nothing here is written by Battle.
 //!
+//! # A session, file by file
+//!
+//! Everything for one session lives in one directory, named after its [`SessionId`]:
+//!
+//! | File | Written by | When |
+//! |---|---|---|
+//! | [`SNAPSHOT_FILE`] | Desktop | Before Battle is started. Never changed afterwards |
+//! | [`ACK_FILE`] | Battle | Once it has read the snapshot, saying whether it can open it |
+//!
+//! Battle is started with two arguments, [`LAUNCH_ARGUMENT`] and the session directory's
+//! absolute path, and with nothing else. Every file is written whole to a temporary name and
+//! renamed into place.
+//!
 //! | Version | What it added |
 //! |---|---|
-//! | 1 | The roster snapshot |
+//! | 1 | The roster snapshot and the acknowledgement |
 
 use formiga_battle_core::{Bond, Leanings, Profile, Strength};
-pub use formiga_expansion_rulebook::SessionId;
 use formiga_expansion_rulebook::{self as rulebook, Kind, sanitize_text};
+pub use formiga_expansion_rulebook::{AckRefusal, SessionId};
 use formiga_travel::{Band, Presentation, TravelRelationship, Traveler};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use std::path::Path;
 use time::OffsetDateTime;
 
 pub mod sample;
@@ -29,6 +43,8 @@ pub mod sample;
 pub const BATTLE_FORMAT_VERSION: u32 = 1;
 pub const SNAPSHOT_FORMAT: &str = "formiga.battle.snapshot";
 pub const SNAPSHOT_FILE: &str = "snapshot.json";
+pub const ACK_FORMAT: &str = "formiga.battle.ack";
+pub const ACK_FILE: &str = "ack.json";
 /// The argument Battle is started with, followed by the session directory's absolute path.
 pub const LAUNCH_ARGUMENT: &str = "--formiga-battle";
 
@@ -38,7 +54,16 @@ pub mod discovery {
     pub const MACOS_BUNDLE_ID: &str = "com.formiga.battle";
     /// An integer in Battle's `Info.plist`: the newest Battle version it reads.
     pub const MACOS_BATTLE_VERSION_KEY: &str = "FormigaBattleVersion";
+    /// The per-user registry key Battle's Windows installer would write, under
+    /// `HKEY_CURRENT_USER`, with the same key under `HKEY_LOCAL_MACHINE` for a machine-wide
+    /// install.
     pub const WINDOWS_REGISTRY_KEY: &str = r"Software\Formiga\Battle";
+    /// `REG_SZ`: the full path of Battle's executable.
+    pub const WINDOWS_PATH_VALUE: &str = "Path";
+    /// `REG_SZ`: Battle's version, for messages.
+    pub const WINDOWS_VERSION_VALUE: &str = "Version";
+    /// `REG_DWORD`: the newest Battle version it reads.
+    pub const WINDOWS_BATTLE_VERSION_VALUE: &str = "BattleVersion";
     /// For development: the path of a Battle executable (or, on macOS, an `.app`) to use instead
     /// of an installed one.
     pub const PATH_OVERRIDE_ENV: &str = "FORMIGA_BATTLE_PATH";
@@ -46,6 +71,7 @@ pub mod discovery {
 
 pub mod limits {
     pub const MAX_SNAPSHOT_BYTES: u64 = 256 * 1024;
+    pub const MAX_ACK_BYTES: u64 = 4 * 1024;
     pub const MAX_CONTENDERS: usize = formiga_travel::limits::MAX_TRAVELERS;
     pub const MAX_RELATIONSHIPS: usize = formiga_travel::limits::MAX_RELATIONSHIPS;
     pub const MAX_VERSION_CHARS: usize = 32;
@@ -302,6 +328,121 @@ impl BattleSnapshot {
     }
 }
 
+/// Battle's answer to a session: it can open the roster, or why not.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BattleAck {
+    pub format: String,
+    pub version: u32,
+    pub min_reader_version: u32,
+    pub session_id: SessionId,
+    /// The version of Battle that answered, for messages only.
+    pub battle_version: String,
+    pub accepted: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refusal: Option<AckRefusal>,
+}
+
+fn ack_kind() -> Kind {
+    Kind {
+        format: ACK_FORMAT,
+        max_bytes: limits::MAX_ACK_BYTES,
+        reads: BATTLE_FORMAT_VERSION,
+    }
+}
+
+impl BattleAck {
+    pub fn new(session_id: SessionId, battle_version: &str, refusal: Option<AckRefusal>) -> Self {
+        Self {
+            format: ACK_FORMAT.to_owned(),
+            version: BATTLE_FORMAT_VERSION,
+            min_reader_version: 1,
+            session_id,
+            battle_version: sanitize_text(battle_version, limits::MAX_VERSION_CHARS),
+            accepted: refusal.is_none(),
+            refusal,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), BattleError> {
+        if !rulebook::header_ok(
+            &self.format,
+            self.version,
+            self.min_reader_version,
+            ACK_FORMAT,
+        ) || self.accepted != self.refusal.is_none()
+        {
+            return Err(BattleError::Invalid(
+                "an acknowledgement either accepts or says why not".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn encode(&self) -> Result<Vec<u8>, BattleError> {
+        self.validate()?;
+        Ok(rulebook::encode(self, ack_kind())?)
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, BattleError> {
+        let ack: Self = rulebook::decode(bytes, ack_kind())?;
+        ack.validate()?;
+        Ok(ack)
+    }
+}
+
+/// What opening a session directory gave: the roster, or the refusal Battle has already written
+/// into the directory for Desktop to read.
+#[derive(Debug)]
+pub enum Opened {
+    Roster(BattleSnapshot),
+    Refused(AckRefusal, BattleError),
+}
+
+/// Reads a session directory as Battle does when Desktop starts it, and answers in it. The
+/// directory must be named after the snapshot's own session, so a snapshot copied anywhere else
+/// is not mistaken for a session.
+pub fn open_session(directory: &Path, battle_version: &str) -> Result<Opened, BattleError> {
+    let read = BattleSnapshot::read(&directory.join(SNAPSHOT_FILE)).and_then(|snapshot| {
+        let named =
+            directory.file_name().and_then(|n| n.to_str()) == Some(snapshot.session_id.as_str());
+        if named {
+            Ok(snapshot)
+        } else {
+            Err(BattleError::Invalid(
+                "the session directory is not named after its snapshot's session".to_owned(),
+            ))
+        }
+    });
+    let session = directory
+        .file_name()
+        .and_then(|n| n.to_str())
+        .and_then(SessionId::parse);
+    let (ack, opened) = match read {
+        Ok(snapshot) => (
+            BattleAck::new(snapshot.session_id.clone(), battle_version, None),
+            Opened::Roster(snapshot),
+        ),
+        Err(error) => {
+            let refusal = match error {
+                BattleError::UnsupportedVersion { .. } => AckRefusal::UnsupportedVersion {
+                    reads: BATTLE_FORMAT_VERSION,
+                },
+                _ => AckRefusal::Invalid,
+            };
+            let Some(session) = session else {
+                // Nothing can be answered in a directory that is not a session's.
+                return Err(error);
+            };
+            (
+                BattleAck::new(session, battle_version, Some(refusal)),
+                Opened::Refused(refusal, error),
+            )
+        }
+    };
+    rulebook::write_atomically(&directory.join(ACK_FILE), &ack.encode()?)?;
+    Ok(opened)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,6 +491,56 @@ mod tests {
             BattleSnapshot::decode(&bytes),
             Err(BattleError::UnsupportedVersion { .. })
         ));
+    }
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "formiga-battle-contract-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn a_session_is_opened_and_answered_in_its_own_directory() {
+        let snapshot = sample::snapshot();
+        let dir = scratch("open").join(snapshot.session_id.as_str());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(SNAPSHOT_FILE), snapshot.encode().unwrap()).unwrap();
+        let opened = open_session(&dir, "0.1.0").unwrap();
+        assert!(matches!(opened, Opened::Roster(ref read) if *read == snapshot));
+        let ack = BattleAck::decode(&std::fs::read(dir.join(ACK_FILE)).unwrap()).unwrap();
+        assert!(ack.accepted);
+        assert_eq!(ack.session_id, snapshot.session_id);
+    }
+
+    #[test]
+    fn a_snapshot_that_does_not_check_out_is_answered_with_a_refusal() {
+        let snapshot = sample::snapshot();
+        let dir = scratch("refuse").join(snapshot.session_id.as_str());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(SNAPSHOT_FILE),
+            b"{\"format\":\"formiga.battle.snapshot\"}",
+        )
+        .unwrap();
+        let opened = open_session(&dir, "0.1.0").unwrap();
+        assert!(matches!(opened, Opened::Refused(AckRefusal::Invalid, _)));
+        let ack = BattleAck::decode(&std::fs::read(dir.join(ACK_FILE)).unwrap()).unwrap();
+        assert!(!ack.accepted);
+    }
+
+    #[test]
+    fn a_visiting_colony_brings_companions_of_its_own() {
+        let home = sample::snapshot().profiles();
+        let visitors = sample::visitors(9).profiles();
+        assert!(visitors.len() >= 3);
+        assert!(
+            visitors
+                .iter()
+                .any(|v| !home.iter().any(|h| h.nature == v.nature))
+        );
     }
 
     #[test]

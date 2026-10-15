@@ -8,7 +8,12 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+eframe.workspace = true
+formiga-art.workspace = true
 formiga-battle-contract.workspace = true
 formiga-battle-core.workspace = true
 formiga-core.workspace = true
+formiga-travel.workspace = true
+png.workspace = true
 serde_json.workspace = true
+time.workspace = true
