@@ -32,7 +32,7 @@ fn neither_side_of_the_board_and_no_kind_of_creature_wins_consistently_more() {
 }
 
 #[test]
-fn matches_end_inside_the_turn_cap_and_mostly_by_capture() {
+fn matches_end_inside_the_turn_cap_and_the_beacon_decides_some_outright() {
     let s = run(
         &Arena::backyard(),
         Ruleset::default(),
@@ -42,7 +42,7 @@ fn matches_end_inside_the_turn_cap_and_mostly_by_capture() {
     );
     assert!(s.average_turns() <= f64::from(Ruleset::default().turn_cap));
     assert!(
-        s.by_capture * 3 > s.matches,
+        s.by_capture * 6 > s.matches,
         "captures {} of {}",
         s.by_capture,
         s.matches

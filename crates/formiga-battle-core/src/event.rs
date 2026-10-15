@@ -108,13 +108,22 @@ pub enum EventKind {
         target: Slot,
         by: Vec<Slot>,
     },
-    /// Someone holding turned a contest away. Each holder costs one contester a composure. When
-    /// contesters outnumber the holders, the holder they pressed loses one too.
+    /// Someone holding turned a contest away, with any holders of its team beside it. Each
+    /// holder costs one contester a composure.
     Countered {
         target: Slot,
         holders: Vec<Slot>,
         contesters: Vec<Slot>,
-        pressed: bool,
+    },
+    /// Contested from more sides than it had holders to turn them away, a holder's hold broke:
+    /// it was pushed off its tile away from a contester (`pushed_to`), or knocked off balance
+    /// where it stood if every way out was blocked. Nobody loses composure; it holds nothing more
+    /// this turn.
+    Flanked {
+        target: Slot,
+        by: Vec<Slot>,
+        from: Tile,
+        pushed_to: Option<Tile>,
     },
     /// A contest met someone busy with a contest of their own. Nobody is hurt.
     Scuffle {

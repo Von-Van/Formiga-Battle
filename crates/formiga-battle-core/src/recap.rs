@@ -115,15 +115,7 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                 target,
                 holders,
                 contesters,
-                pressed,
-            } => Some(if *pressed {
-                format!(
-                    "{} pressed {} together; {} held on, wobbling.",
-                    list(m, contesters),
-                    name(target),
-                    name(target)
-                )
-            } else if holders.len() > 1 {
+            } => Some(if holders.len() > 1 {
                 format!(
                     "{} held firm side by side and turned {} away.",
                     list(m, holders),
@@ -135,6 +127,23 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                     name(target),
                     list(m, contesters)
                 )
+            }),
+            EventKind::Flanked {
+                target,
+                by,
+                pushed_to,
+                ..
+            } => Some(match pushed_to {
+                Some(_) => format!(
+                    "{} came at {} from two sides and pushed it off its spot.",
+                    list(m, by),
+                    name(target)
+                ),
+                None => format!(
+                    "{} came at {} from two sides; boxed in, it lost its footing.",
+                    list(m, by),
+                    name(target)
+                ),
             }),
             EventKind::Scuffle {
                 contester, target, ..

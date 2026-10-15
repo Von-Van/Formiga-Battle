@@ -64,31 +64,32 @@ fn a_holder_counters_a_lone_contester_and_is_unhurt() {
         target: R0,
         holders: vec![R0],
         contesters: vec![L0],
-        pressed: false
     }));
 }
 
 #[test]
-fn two_contesters_against_one_holder_press_it_for_one_and_one_of_them_is_countered() {
+fn two_contesters_from_opposite_sides_break_a_hold_and_neither_is_turned_away() {
     let mut m = board(&[(L0, (0, 2)), (L1, (2, 2)), (R0, (1, 2))]);
     let report = m.resolve_turn(orders(&[
         (L0, contest(R0)),
         (L1, contest(R0)),
         (R0, hold(1, 2)),
     ]));
-    assert_eq!(composure(&m, R0), 2, "pressed by two, the holder loses one");
-    let left_lost = (3 - composure(&m, L0)) + (3 - composure(&m, L1));
-    assert_eq!(left_lost, 1, "the holder counters exactly one of them");
-    assert!(m.fighter(R0).holding, "pressed, it keeps holding");
-    assert!(
-        kinds(&report)
-            .iter()
-            .any(|k| matches!(k, EventKind::Countered { pressed: true, .. }))
-    );
+    assert_eq!(composure(&m, R0), 2, "flanked, the holder loses one");
+    assert_eq!((composure(&m, L0), composure(&m, L1)), (3, 3));
+    assert!(!m.fighter(R0).holding && m.fighter(R0).interrupted);
+    // Both ways out are where a contester stands: boxed in, it stays where it is.
+    assert_eq!(at(&m, R0), (1, 2));
+    assert!(kinds(&report).contains(&&EventKind::Flanked {
+        target: R0,
+        by: vec![L0, L1],
+        from: Tile::new(1, 2),
+        pushed_to: None,
+    }));
 }
 
 #[test]
-fn two_contesters_against_two_holders_side_by_side_are_both_countered_without_pressing() {
+fn two_contesters_against_two_holders_side_by_side_are_both_turned_away() {
     // R0 holds at (1,1); R1 holds at (0,0), next to both contesters.
     let mut m = board(&[(L0, (1, 0)), (L1, (0, 1)), (R0, (1, 1)), (R1, (0, 0))]);
     m.resolve_turn(orders(&[
@@ -201,11 +202,22 @@ fn a_contest_is_settled_once_a_turn() {
 }
 
 #[test]
-fn a_cautious_creature_with_a_nervous_streak_hops_back_after_its_contest() {
+fn a_creature_with_a_nervous_streak_stays_put_after_a_contest_that_landed() {
     let mut teams = rosters();
     teams[0][0] = with_tension(plain(1), formiga_core::Tension::BraveButNervous);
     let mut m = board_with(field(), teams, &[(L0, (0, 2)), (R0, (1, 2))]);
-    let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(4, 2))]));
+    m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(4, 2))]));
+    assert_eq!(composure(&m, R0), 2);
+    assert_eq!(at(&m, L0), (0, 2));
+}
+
+#[test]
+fn a_creature_with_a_nervous_streak_hops_back_when_its_contest_is_turned_away() {
+    let mut teams = rosters();
+    teams[0][0] = with_tension(plain(1), formiga_core::Tension::BraveButNervous);
+    let mut m = board_with(field(), teams, &[(L0, (0, 2)), (R0, (1, 2))]);
+    let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, hold(1, 2))]));
+    assert_eq!(composure(&m, L0), 2);
     assert_ne!(at(&m, L0), (0, 2));
     assert!(report.events.iter().any(|e| matches!(
         e.kind,

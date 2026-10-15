@@ -2,7 +2,7 @@
 
 How a match of Formiga Battle resolves, as `formiga-battle-core` plays it. Every number here lives
 in `Ruleset` (`crates/formiga-battle-core/src/ruleset.rs`), travels with every recorded match, and
-is provisional until playtests settle it. `RULES_VERSION` is 3.
+is provisional until playtests settle it. `RULES_VERSION` is 4.
 
 ## A match
 
@@ -15,8 +15,8 @@ locked together and the turn resolves in `ticks_per_turn` ticks.
 |---|---|---|
 | `composure` | 3 | The same for everyone. Zero is a cartoon knockout: off the board for this match only |
 | `ticks_per_turn` | 3 | Every creature takes at most one step a tick |
-| `capture_ticks` | 6 | Ticks of controlling the beacon, in total, that win |
-| `capture_rule` | `majority` | See [The beacon](#the-beacon) |
+| `capture_ticks` | 3 | Ticks of controlling the beacon, in total, that win: one whole turn's worth |
+| `capture_rule` | `uncontested` | See [The beacon](#the-beacon) |
 | `capture_decays` | false | Whether one team's progress falls while the other controls the beacon |
 | `turn_cap` | 12 | The last turn |
 | `damage_cap` | 2 | The most composure one creature can lose in one tick |
@@ -56,8 +56,8 @@ tick. A creature at zero is knocked out and leaves the board at once.
 | Encounter | Rule |
 |---|---|
 | CONTEST vs anyone not holding | Interrupted: it stops where it is for the rest of the turn and loses one composure for each contester (capped) |
-| CONTEST vs HOLD | Countered: each holder touching a contester costs one contester one composure, at most once a tick, spread so no contester takes a second before every other has taken one. The contesters are turned away |
-| Group pressure | When the contesters on one holder outnumber the holders countering them, that holder also loses one composure, once, however many more there are. Two contesters against one holder: the holder loses one and one contester loses one. Two against two holders side by side: each contester loses one and neither holder does |
+| CONTEST vs HOLD | Countered: the holder, and each holder of its team beside it corner to corner that a contester has reached, costs one contester one composure, at most once a tick, spread so no contester takes a second before every other has taken one. The contesters are turned away |
+| CONTEST vs HOLD from two sides | Flanked, when the contesters outnumber the holders turning them away: see [Encirclement](#encirclement) |
 | CONTEST vs CONTEST | A scuffle: a contest that reaches someone busy with a contest of their own that tick (a creature or a lever) hurts nobody. The busy one's own contest still settles |
 | MOVE vs HOLD | The mover walks round, if there is a way round. Nobody is hurt |
 | Two wanting one tile | A fair draw, seeded and the same for both teams, lets one in; the other is bumped |
@@ -69,20 +69,52 @@ A contest is settled once a turn, whatever comes of it. On the way to a target t
 off, a creature may instead take a contest against someone not holding who walks into reach (see
 `opportunism` below).
 
+## Encirclement
+
+A holder can be broken without being worn down: by contesters coming at it from two or more of
+its four sides at once.
+
+- **Flanked.** When two or more contesters settle on one holder in the same tick and they
+  outnumber the holders turning them away (the holder itself, and any holder of its team beside
+  it, corner to corner, that a contester has reached), the hold breaks. The holder loses one
+  composure, however many came at it, and nobody is turned away.
+- **Pushed.** It is pushed one tile straight away from one of its contesters, onto a free tile out
+  of the zone if any of those ways leads out of it; ties go to the upper tile, then the one
+  nearer its own side of the board. If every way out is blocked (two contesters on opposite
+  sides block each other's), it is knocked off balance where it stands.
+- **Off balance.** Either way it stops for the rest of the turn, is not holding, and does not count
+  in the zone. Next turn it can hold again.
+- **Side by side.** Two holders corner to corner share the two tiles they both touch: a
+  contester on either is turned away by both, so it takes three to break one of them.
+- **Already in place.** Contests already beside their target settle before anyone steps, so
+  flankers who were in place when the turn began break the hold before the holder can step
+  away. Getting into place is the work: it takes MOVE (or HOLD on the flanking tile), and on the
+  way a flanker that is not yet holding can be caught by a single contest.
+
+The counterplay is the defender's: hold beside a friend, contest a flanker on its way, or move
+before the flankers are in place. Being flanked costs a little composure; what it really costs is
+the zone.
+
+`ai::flank_threatened` says whether a holder would be flanked if everyone of the other team beside
+it contested it now, and `ai::flank_places` finds two sides to flank it from.
+
 ## The beacon
 
 The zone (`Z` tiles) is the beacon. At the end of every tick:
 
-- `majority` (the default): a team gains a tick of progress when more of its creatures are
-  holding in the zone than the other team has in the zone, holding or not.
-- `uncontested`: a team gains a tick of progress when it has someone holding in the zone and the
-  other team has nobody in it at all.
+- `uncontested` (the default): a team gains a tick of progress when it has someone holding in the
+  zone and nobody of the other team stands in it unbroken. Progress pauses as soon as the other
+  team gets someone into the zone and keeps them there; a creature knocked off balance, flanked or
+  caught on the move, no longer counts.
+- `majority`: a team gains a tick of progress when more of its creatures are holding in the zone
+  than the other team has in it unbroken, holding or not.
 
 Walking through the zone is not holding it. Reaching `capture_ticks` wins at once.
 
-The handoff left the exact uncontested condition open. Under `uncontested`, both teams nearly
-always have someone in the zone: in 10,000 Exhibition-coached matches, 1% were won by capture and
-88% went to the turn cap. Under `majority`, 59% were won by capture, in 10.4 turns on average.
+Before rules version 4 the default was `majority`, because under `uncontested` both teams nearly
+always had someone in the zone and almost nothing was won by capture. Flanking gives a team a way
+to clear the zone, and `majority` lets a team that only ever holds win before anyone can flank it,
+so version 4 counts it the handoff's way.
 
 ## The end
 
@@ -101,23 +133,29 @@ Props use the three orders and grant nothing permanent. Each is data in the aren
 
 | Prop | Interaction | Effect | Telegraph | Counterplay |
 |---|---|---|---|---|
-| Beacon (`Z`) | HOLD in the zone | Capture progress | Progress shown to both teams | Outnumber the holders in the zone; group pressure |
+| Beacon (`Z`) | HOLD in the zone | Capture progress | Progress shown to both teams | Stand in the zone unbroken to pause it; flank its holders to clear it |
 | Gate lever (`L`, gates `G`/`g`) | CONTEST from a tile touching the lever | Every gate swings `swing_ticks` later (at least 1), then the lever rests `cooldown_turns` whole turns | The pull, and the tick the gates will swing, are an event both teams see | HOLD on a tile touching the lever: a pull is turned away like a contest, one composure for each such holder. A gate cannot close on someone standing in it |
 
 ## Arenas
 
 Arenas are text files in `arenas/` (format in `crates/formiga-battle-core/src/arena.rs`). The
-first, Backyard, is 9 by 7 and the same for both teams, mirrored left to right:
+first, Backyard, is 9 by 7 and the same for both teams, mirrored left to right. Its yard is a
+cross: an arm has open ground on three sides, so a holder on it can be flanked and pushed out of
+the yard; the middle can be flanked only from the arms.
 
 ```text
 . . . # G # . . .
 1 . . . . . . . 2
-. . # Z Z Z # . .
+. . # . Z . # . .
 1 . . Z Z Z . . 2
-. . # Z Z Z # . .
+. . # . Z . # . .
 1 . . . . . . . 2
 . . . . L . . . .
 ```
+
+Before rules version 4 the yard was the whole 3 by 3 square. With all six creatures fitting in it,
+holders could always be found to keep it contested, and a flank could rarely push anyone out:
+in 3,000 Exhibition matches on the square, 14% were won by capture, and Wallflowers scored 0.413.
 
 ## How a creature walks
 
@@ -140,11 +178,15 @@ step of the best and looks again next tick.
 | Against a wall or obstacle | +caution / 4 for each, likewise |
 
 Ties are broken by a seeded draw. Now and then (`variability`, 1% to 6%) it takes its second-best
-choice instead, if both are on time. A wary creature (caution 150 or more) sent to walk or hold
-waits one tick, once a turn, rather than take a step that puts it within reach of more of the
-other team than it is now; told to contest, it goes anyway. Once arrived with ticks to spare it may take one follow-up
-step beside a friend or out of reach, if that beats its patience; after its contest a creature that
-`steps back` takes one step out of reach. Every choice that is not the plain way has a reason the
+choice instead, if both are on time. A wary creature (caution 150 or more) sent to walk waits one
+tick, once a turn, rather than take a step that puts it within reach of more of the other team
+than it is now; told to hold or contest, it goes anyway. Once arrived with ticks to spare it may
+take one follow-up step beside a friend or out of reach, if that beats its patience; when its
+contest is turned away, a creature that `steps back` takes one step out of reach.
+
+Both of those were wider before rules version 4: a wary creature hung back when sent to hold too,
+and one that steps back did so after every contest. With flanking, both meant walking away from
+the place it had been sent to take, and Wallflowers scored 0.39 to 0.43. Every choice that is not the plain way has a reason the
 recap says in words.
 
 `docs/PERSONALITY.md` says where caution, togetherness and the rest come from.
@@ -168,20 +210,42 @@ Over 10,000 Exhibition-coached matches with the default rules (`--pairings 5000 
 
 | | |
 |---|---|
-| Left side | 0.496 |
-| Kinds, highest to lowest | Troublemaker 0.518, Grump 0.505, Showoff 0.503, Lazybones 0.502, Sweetheart 0.501, Scholar 0.497, Explorer 0.496, Guardian 0.494, Oddball 0.494, Wallflower 0.488 |
-| Spread between kinds | 0.029, each kind over 3,600 to 7,000 matches |
-| Won by capture, knockout, at the cap, drawn | 63%, 3%, 31%, 3%, in 10.2 turns |
+| Left side | 0.502 |
+| Kinds, highest to lowest | Showoff 0.516, Troublemaker 0.513, Lazybones 0.511, Sweetheart 0.506, Explorer 0.497, Oddball 0.496, Scholar 0.494, Guardian 0.493, Grump 0.489, Wallflower 0.480 |
+| Spread between kinds | 0.036, each kind over 3,600 to 7,000 matches |
+| Won by capture, knockout, at the cap, drawn | 21%, 0%, 67%, 12%, in 11.4 turns |
 
 With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500`, seeds 7 and
-8), kinds score within 0.046 and 0.039 of each other. Wallflowers, the most cautious kind, are
-lowest on both (0.471 and 0.478): about two points under even, as they were before hanging back
-was added, and the one place to watch in playtests.
+8), kinds score within 0.037 of each other on both, with no kind lowest on both; 27% of those
+matches are won by capture and 2% by knockout, in about 10 turns.
+
+Most matches now go to the turn cap. With good holding on both sides the zone stays contested,
+and the cap's order (beacon progress, then composure, then creatures standing) decides them;
+flanks are what move composure. Every tie between equal tiles, in the rules and in the coaches,
+is broken from each team's own side of the board, so the board plays the same from both sides.
 
 Before rules version 2, under strong coaching, a bold creature went out of its way to walk into
 the other team's reach, and a social one detoured to stay beside its teammates because company
 counted on every tile of a long way round: Grumps scored 0.554 and Explorers 0.459. Both now
 have to be paid for like any other preference.
+
+## Holding still
+
+The `turtle` coach is the strategy encirclement was made against: every creature walks to a tile
+of the zone and holds it for the rest of the match. Over 2,000 matches each (`--coach
+<coach>,turtle --pairings 1000 --seed 3`):
+
+| Against turtle | Score | How |
+|---|---|---|
+| exhibition | 0.679 | 78% won or lost at the cap, 22% drawn |
+| familiar | 0.897 | 92% at the cap, 8% drawn |
+| generic | 0.634 | 92% at the cap, 7% drawn |
+
+Three holders in a five-tile cross keep it contested for as long as they stand, so they are
+almost never beaten by capture; they are beaten on the cap, because a team that only holds never
+stops anyone from standing in the zone too and is flanked turn after turn. Under rules version 3
+(`majority`, no flanking) the turtle beat the Exhibition coach 99.9% of the time and the familiar
+coach 83%.
 
 ## Knowing your creatures
 
@@ -192,13 +256,18 @@ creatures as they are; the generic one imagines every creature as one that leans
 
 | Coaches | Familiar's score |
 |---|---|
-| familiar against generic, 6,000 matches | 0.524 |
-| familiar or generic against Exhibition | 0.997 and above |
+| familiar against generic, 6,000 matches | 0.590 |
+| familiar against Exhibition, 2,000 matches | 0.978 |
+| generic against Exhibition, 2,000 matches | 0.683 |
 
-Knowing your creatures is worth about five points between two equally careful coaches: the one
-who knows them wins 52.4% and the one who does not 47.6%. Most of it comes from hanging back: a
-coach who knows which of its creatures are wary plans for the tick they lose, or sends them to
-contest instead. It was 51.1% in rules version 2, before wary creatures hung back, and 53.1% in
-version 1, when most of it came from bold creatures walking into reach, which also made some
-kinds stronger than others. Hanging back every tick rather than once a turn was worth 52.5% too,
-but cost Wallflowers four points.
+Knowing your creatures is worth more under rules version 4 than it was: the coach who knows them
+wins 59.0% against one who plans as well without knowing them (52.4% under version 3). A flank
+lands only if both flankers are in place at the start of a turn, so knowing who will wander, who
+hangs back and who goes the long way round decides whether a flank lands. It shows most with the
+creatures that differ most from a plain one: the generic coach scores 0.426 with its Wallflowers
+against Exhibition, while the familiar coach scores 0.503 with them.
+
+Under version 3, most of it came from hanging back: a coach who knows which of its creatures are
+wary plans for the tick they lose, or sends them to contest instead. It was 51.1% in rules
+version 2, before wary creatures hung back, and 53.1% in version 1, when most of it came from
+bold creatures walking into reach, which also made some kinds stronger than others.

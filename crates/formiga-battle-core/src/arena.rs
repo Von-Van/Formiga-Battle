@@ -25,6 +25,11 @@
 //! decides where anyone can walk.
 
 use crate::grid::Tile;
+use crate::order::Side;
+
+/// The arenas that come with Battle, by id, Backyard first. A new arena is a file in `arenas/`
+/// and a line here.
+const BUILT_IN: &[(&str, &str)] = &[("backyard", include_str!("../../../arenas/backyard.arena"))];
 use serde::{Deserialize, Serialize};
 
 /// The largest board the rules accept on either side.
@@ -213,10 +218,27 @@ impl Arena {
         Ok(arena)
     }
 
-    /// The first arena: one beacon in a walled yard, a gate in the yard's far wall, and the lever
-    /// that swings it on the near side.
+    /// The first arena: a cross-shaped beacon yard in the middle, a gate in a short wall across
+    /// the far lane, and the lever that swings it on the near side.
     pub fn backyard() -> Self {
-        Self::parse(include_str!("../../../arenas/backyard.arena")).expect("Backyard parses")
+        Self::parse(BUILT_IN[0].1).expect("Backyard parses")
+    }
+
+    /// Every arena that comes with Battle, Backyard first. Both windows of a friend match must
+    /// play the same one, so an arena is named by its id and never sent as text.
+    pub fn built_in() -> Vec<Self> {
+        BUILT_IN
+            .iter()
+            .map(|(id, text)| Self::parse(text).unwrap_or_else(|e| panic!("{id} parses: {e}")))
+            .collect()
+    }
+
+    /// The built-in arena with this id.
+    pub fn by_id(id: &str) -> Option<Self> {
+        BUILT_IN
+            .iter()
+            .find(|(known, _)| *known == id)
+            .and_then(|(_, text)| Self::parse(text).ok())
     }
 
     pub fn contains(&self, tile: Tile) -> bool {
@@ -232,6 +254,16 @@ impl Arena {
 
     pub fn in_zone(&self, tile: Tile) -> bool {
         self.zone.contains(&tile)
+    }
+
+    /// How far a tile is across the board from `side`'s own edge: the column, counted from the
+    /// left for the left team and from the right for the right. Every choice between tiles that
+    /// are otherwise equal goes by it, so the board plays the same from both sides.
+    pub fn across(&self, side: Side, t: Tile) -> i8 {
+        match side {
+            Side::Left => t.x,
+            Side::Right => self.width as i8 - 1 - t.x,
+        }
     }
 
     /// Every tile, row by row.
@@ -260,10 +292,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn backyard_reads_with_three_starts_a_side_and_one_lever_for_its_gate() {
+    fn backyard_reads_with_a_cross_shaped_yard_three_starts_a_side_and_one_lever_for_its_gate() {
         let arena = Arena::backyard();
         assert_eq!(arena.id, "backyard");
-        assert_eq!(arena.zone.len(), 9);
+        assert_eq!(arena.zone.len(), 5);
         assert_eq!(arena.gates.len(), 1);
         assert_eq!(arena.levers.len(), 1);
         assert_eq!(arena.zone_centre(), Tile::new(4, 3));
@@ -272,6 +304,32 @@ mod tests {
                 assert_eq!(arena.terrain(tile), Terrain::Open);
             }
         }
+    }
+
+    #[test]
+    fn every_built_in_arena_reads_under_its_own_id_and_is_the_same_for_both_teams() {
+        for arena in Arena::built_in() {
+            assert_eq!(
+                Arena::by_id(&arena.id).map(|a| a.id),
+                Some(arena.id.clone())
+            );
+            let mirror = |t: Tile| Tile::new(arena.width as i8 - 1 - t.x, t.y);
+            for tile in arena.tiles() {
+                assert_eq!(
+                    arena.terrain(tile),
+                    arena.terrain(mirror(tile)),
+                    "{}",
+                    arena.id
+                );
+                assert_eq!(
+                    arena.in_zone(tile),
+                    arena.in_zone(mirror(tile)),
+                    "{}",
+                    arena.id
+                );
+            }
+        }
+        assert!(Arena::by_id("nowhere").is_none());
     }
 
     #[test]
