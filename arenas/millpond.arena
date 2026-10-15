@@ -1,0 +1,14 @@
+// Millpond: a meadow by the mill, with the beacon on a jetty above the water. A channel cuts the
+// far lane, crossed only by a footbridge the winch on the near bank lowers and raises; the
+// pond's two arms flank the jetty, so the way onto it is from the near side or round the ends.
+id: millpond
+name: Millpond
+swing_ticks: 1
+cooldown_turns: 1
+. . . . . . . . .
+1 . # # G # # . 2
+. . . . . . . . .
+1 . # Z Z Z # . 2
+. . . . Z . . . .
+1 . . . . . . . 2
+. . . # L # . . .
