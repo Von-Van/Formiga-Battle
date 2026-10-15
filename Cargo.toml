@@ -1,0 +1,36 @@
+[workspace]
+members = [
+    "crates/formiga-battle",
+    "crates/formiga-battle-contract",
+    "crates/formiga-battle-core",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+authors = ["Formiga contributors"]
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+# Formiga Desktop's shared crates, all from the same Desktop release so their types agree.
+# Move them to a new release's tag together.
+formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.6" }
+formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.6" }
+formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.6" }
+
+formiga-battle-contract = { path = "crates/formiga-battle-contract" }
+formiga-battle-core = { path = "crates/formiga-battle-core" }
+
+anyhow = "1.0.104"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+time = { version = "0.3.55", features = ["formatting", "local-offset", "macros", "parsing", "serde"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

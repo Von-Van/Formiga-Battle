@@ -1,0 +1,361 @@
+//! What Formiga Desktop hands Formiga Battle: a read-only roster of the colony's companions, and
+//! how Battle reads it into match profiles.
+//!
+//! This is a draft kept beside Battle until Desktop adopts it, the way Formiga Farm keeps its
+//! session contract. It is built from Desktop's own pieces so the two cannot disagree: each
+//! contender travels as the very [`formiga_travel::Traveler`] a trip to Formiga Hill carries
+//! (look, temperament kind, axes, tension, traits), with the learned leanings a trip leaves at
+//! home added beside it, and bonds travel in Desktop's own bands. Documents are bounded, checked
+//! and written the way every companion app's are, through `formiga-expansion-rulebook`.
+//!
+//! Battle never changes a colony. Whatever it sends back (results, medals, souvenirs) is a later
+//! version of this contract; nothing here is written by Battle.
+//!
+//! | Version | What it added |
+//! |---|---|
+//! | 1 | The roster snapshot |
+
+use formiga_battle_core::{Bond, Leanings, Profile, Strength};
+pub use formiga_expansion_rulebook::SessionId;
+use formiga_expansion_rulebook::{self as rulebook, Kind, sanitize_text};
+use formiga_travel::{Band, Presentation, TravelRelationship, Traveler};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+use time::OffsetDateTime;
+
+pub mod sample;
+
+/// The version of every Battle document this build writes, and the newest it reads.
+pub const BATTLE_FORMAT_VERSION: u32 = 1;
+pub const SNAPSHOT_FORMAT: &str = "formiga.battle.snapshot";
+pub const SNAPSHOT_FILE: &str = "snapshot.json";
+/// The argument Battle is started with, followed by the session directory's absolute path.
+pub const LAUNCH_ARGUMENT: &str = "--formiga-battle";
+
+/// How Desktop would find an installed Battle without starting it: the same arrangement as Hill,
+/// Home and Farm, under Battle's own names.
+pub mod discovery {
+    pub const MACOS_BUNDLE_ID: &str = "com.formiga.battle";
+    /// An integer in Battle's `Info.plist`: the newest Battle version it reads.
+    pub const MACOS_BATTLE_VERSION_KEY: &str = "FormigaBattleVersion";
+    pub const WINDOWS_REGISTRY_KEY: &str = r"Software\Formiga\Battle";
+    /// For development: the path of a Battle executable (or, on macOS, an `.app`) to use instead
+    /// of an installed one.
+    pub const PATH_OVERRIDE_ENV: &str = "FORMIGA_BATTLE_PATH";
+}
+
+pub mod limits {
+    pub const MAX_SNAPSHOT_BYTES: u64 = 256 * 1024;
+    pub const MAX_CONTENDERS: usize = formiga_travel::limits::MAX_TRAVELERS;
+    pub const MAX_RELATIONSHIPS: usize = formiga_travel::limits::MAX_RELATIONSHIPS;
+    pub const MAX_VERSION_CHARS: usize = 32;
+}
+
+rulebook::contract_error!(pub enum BattleError, "Battle");
+
+/// Desktop's learned leanings, whole numbers from -100 to 100. A trip to Hill leaves them at
+/// home; Battle reads them, because how a companion has come to live is part of how it walks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContenderLeanings {
+    pub cursor_trust: i8,
+    pub sociability: i8,
+    pub climbing: i8,
+    pub sleep_security: i8,
+    pub exploration: i8,
+    pub play: i8,
+    pub home_affinity: i8,
+    pub routine: i8,
+}
+
+impl ContenderLeanings {
+    fn values(&self) -> [i8; 8] {
+        [
+            self.cursor_trust,
+            self.sociability,
+            self.climbing,
+            self.sleep_security,
+            self.exploration,
+            self.play,
+            self.home_affinity,
+            self.routine,
+        ]
+    }
+}
+
+/// One companion who could be picked for a team.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Contender {
+    #[serde(flatten)]
+    pub traveler: Traveler,
+    pub leanings: ContenderLeanings,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BattleSnapshot {
+    pub format: String,
+    pub version: u32,
+    pub min_reader_version: u32,
+    pub session_id: SessionId,
+    /// The same one-way colony digest a trip to Hill carries.
+    pub colony_id: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at_utc: OffsetDateTime,
+    pub desktop_version: String,
+    pub contenders: Vec<Contender>,
+    #[serde(default)]
+    pub relationships: Vec<TravelRelationship>,
+    #[serde(default)]
+    pub presentation: Presentation,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProjectionError {
+    #[error(transparent)]
+    Travel(#[from] formiga_travel::ProjectionError),
+    #[error(transparent)]
+    Battle(#[from] BattleError),
+}
+
+fn kind() -> Kind {
+    Kind {
+        format: SNAPSHOT_FORMAT,
+        max_bytes: limits::MAX_SNAPSHOT_BYTES,
+        reads: BATTLE_FORMAT_VERSION,
+    }
+}
+
+/// The roster Desktop would hand Battle for a colony: every companion as a trip carries it, with
+/// its leanings. The same colony, session and time give the same snapshot, byte for byte.
+pub fn project_roster(
+    save: &formiga_core::SaveFile,
+    session_id: SessionId,
+    created_at_utc: OffsetDateTime,
+    desktop_version: &str,
+) -> Result<BattleSnapshot, ProjectionError> {
+    let travel = formiga_travel::project_colony(save, session_id, created_at_utc, desktop_version)?;
+    let contenders = travel
+        .travelers
+        .into_iter()
+        .filter_map(|traveler| {
+            let creature = save.creatures.iter().find(|c| c.id == traveler.id.0)?;
+            let l = Leanings::from(&creature.tendencies);
+            Some(Contender {
+                traveler,
+                leanings: ContenderLeanings {
+                    cursor_trust: l.cursor_trust,
+                    sociability: l.sociability,
+                    climbing: l.climbing,
+                    sleep_security: l.sleep_security,
+                    exploration: l.exploration,
+                    play: l.play,
+                    home_affinity: l.home_affinity,
+                    routine: l.routine,
+                },
+            })
+        })
+        .collect();
+    let snapshot = BattleSnapshot {
+        format: SNAPSHOT_FORMAT.to_owned(),
+        version: BATTLE_FORMAT_VERSION,
+        min_reader_version: 1,
+        session_id: travel.session_id,
+        colony_id: travel.colony_id,
+        created_at_utc: travel.created_at_utc,
+        desktop_version: travel.desktop_version,
+        contenders,
+        relationships: travel.relationships,
+        presentation: travel.presentation,
+    };
+    snapshot.validate()?;
+    Ok(snapshot)
+}
+
+impl BattleSnapshot {
+    pub fn validate(&self) -> Result<(), BattleError> {
+        let invalid = |why: &str| BattleError::Invalid(why.to_owned());
+        if !rulebook::header_ok(
+            &self.format,
+            self.version,
+            self.min_reader_version,
+            SNAPSHOT_FORMAT,
+        ) {
+            return Err(invalid(
+                "the snapshot's header is not one this build writes",
+            ));
+        }
+        if sanitize_text(&self.desktop_version, limits::MAX_VERSION_CHARS) != self.desktop_version {
+            return Err(invalid("the Desktop version is not plain text"));
+        }
+        if self.contenders.is_empty() || self.contenders.len() > limits::MAX_CONTENDERS {
+            return Err(invalid("a roster has between one and twelve companions"));
+        }
+        let ids: BTreeSet<u64> = self.contenders.iter().map(|c| c.traveler.id.0).collect();
+        if ids.len() != self.contenders.len() {
+            return Err(invalid("two contenders are the same companion"));
+        }
+        for c in &self.contenders {
+            let t = &c.traveler;
+            if !rulebook::is_sanitized(&t.name, formiga_travel::limits::MAX_NAME_CHARS)
+                || t.name.is_empty()
+            {
+                return Err(invalid("a contender's name is not plain text"));
+            }
+            let a = t.character.axes;
+            let unit = |v: f32| v.is_finite() && (0.0..=1.0).contains(&v);
+            if ![
+                a.social,
+                a.energy,
+                a.boldness,
+                a.playfulness,
+                a.curiosity,
+                a.feistiness,
+                a.impulsiveness,
+                a.suspicion,
+                a.affection,
+            ]
+            .into_iter()
+            .all(unit)
+            {
+                return Err(invalid("a temperament axis is off its scale"));
+            }
+            if !c.leanings.values().iter().all(|v| (-100..=100).contains(v)) {
+                return Err(invalid("a leaning is off its scale"));
+            }
+        }
+        if self.relationships.len() > limits::MAX_RELATIONSHIPS
+            || !self
+                .relationships
+                .iter()
+                .all(|r| r.a.0 < r.b.0 && ids.contains(&r.a.0) && ids.contains(&r.b.0))
+        {
+            return Err(invalid("a bond names someone not on the roster"));
+        }
+        Ok(())
+    }
+
+    /// The snapshot's bytes, once validated. The same snapshot always gives the same bytes.
+    pub fn encode(&self) -> Result<Vec<u8>, BattleError> {
+        self.validate()?;
+        Ok(rulebook::encode(self, kind())?)
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, BattleError> {
+        let snapshot: Self = rulebook::decode(bytes, kind())?;
+        snapshot.validate()?;
+        Ok(snapshot)
+    }
+
+    pub fn read(path: &std::path::Path) -> Result<Self, BattleError> {
+        Self::decode(&rulebook::read_bounded(path, limits::MAX_SNAPSHOT_BYTES)?)
+    }
+
+    /// Every contender as a match profile, with its bonds to everyone else on the roster.
+    pub fn profiles(&self) -> Vec<Profile> {
+        let strength = |band: Band| match band {
+            Band::None => Strength::None,
+            Band::Low => Strength::Low,
+            Band::Medium => Strength::Medium,
+            Band::High => Strength::High,
+        };
+        self.contenders
+            .iter()
+            .map(|c| {
+                let t = &c.traveler;
+                let temperament = formiga_core::Temperament {
+                    kind: t.character.temperament.into(),
+                    axes: t.character.axes.into(),
+                    tension: t.character.tension.map(Into::into),
+                };
+                let l = c.leanings;
+                let tendencies = formiga_core::LearnedTendencies {
+                    cursor_trust: f32::from(l.cursor_trust),
+                    sociability: f32::from(l.sociability),
+                    climbing: f32::from(l.climbing),
+                    sleep_security: f32::from(l.sleep_security),
+                    exploration: f32::from(l.exploration),
+                    play: f32::from(l.play),
+                    home_affinity: f32::from(l.home_affinity),
+                    routine: f32::from(l.routine),
+                };
+                let mut profile = Profile::from_parts(t.id.0, &t.name, &temperament, &tendencies);
+                profile.bonds = self
+                    .relationships
+                    .iter()
+                    .filter_map(|r| {
+                        let with = if r.a == t.id {
+                            r.b
+                        } else if r.b == t.id {
+                            r.a
+                        } else {
+                            return None;
+                        };
+                        Some(Bond {
+                            with: with.0,
+                            affinity: strength(r.affinity),
+                            avoidance: strength(r.avoidance),
+                        })
+                    })
+                    .collect();
+                profile
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_sample_roster_round_trips_byte_for_byte() {
+        let snapshot = sample::snapshot();
+        let bytes = snapshot.encode().unwrap();
+        let read = BattleSnapshot::decode(&bytes).unwrap();
+        assert_eq!(read, snapshot);
+        assert_eq!(read.encode().unwrap(), bytes);
+    }
+
+    #[test]
+    fn every_companion_reads_as_desktop_reads_it() {
+        let save = sample::colony();
+        let profiles = sample::snapshot().profiles();
+        assert_eq!(profiles.len(), save.creatures.len());
+        for (profile, creature) in profiles.iter().zip(&save.creatures) {
+            let direct = Profile::from_creature(creature);
+            assert_eq!(profile.creature_id, direct.creature_id);
+            assert_eq!(profile.kind, direct.kind);
+            assert_eq!(profile.tension, direct.tension);
+            assert_eq!(profile.nature, direct.nature);
+            assert_eq!(profile.leanings, direct.leanings);
+        }
+    }
+
+    #[test]
+    fn bonds_come_in_desktops_bands_both_ways_round() {
+        let profiles = sample::snapshot().profiles();
+        let (a, b) = (&profiles[0], &profiles[1]);
+        let ab = a.bond_with(b.creature_id).expect("a bond");
+        let ba = b.bond_with(a.creature_id).expect("the same bond");
+        assert_eq!(ab.affinity, ba.affinity);
+        assert_eq!(ab.avoidance, ba.avoidance);
+    }
+
+    #[test]
+    fn a_snapshot_from_a_newer_battle_reader_is_refused_for_its_version() {
+        let mut snapshot = sample::snapshot();
+        snapshot.version = BATTLE_FORMAT_VERSION + 1;
+        snapshot.min_reader_version = BATTLE_FORMAT_VERSION + 1;
+        let bytes = serde_json::to_vec(&snapshot).unwrap();
+        assert!(matches!(
+            BattleSnapshot::decode(&bytes),
+            Err(BattleError::UnsupportedVersion { .. })
+        ));
+    }
+
+    #[test]
+    fn a_leaning_off_its_scale_is_refused() {
+        let mut snapshot = sample::snapshot();
+        snapshot.contenders[0].leanings.play = 127;
+        assert!(snapshot.validate().is_err());
+    }
+}

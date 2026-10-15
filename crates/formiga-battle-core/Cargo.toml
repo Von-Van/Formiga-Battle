@@ -1,0 +1,13 @@
+[package]
+name = "formiga-battle-core"
+description = "Formiga Battle's rules: deterministic, headless, with no drawing and no network"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+formiga-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
