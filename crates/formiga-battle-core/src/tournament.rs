@@ -160,7 +160,7 @@ pub fn run(
             match outcome.victory {
                 Some(Victory::Capture) => summary.by_capture += 1,
                 Some(Victory::Knockout) => summary.by_knockout += 1,
-                Some(Victory::TurnCap) => summary.at_cap += 1,
+                Some(Victory::TurnCap | Victory::Forfeit) => summary.at_cap += 1,
                 None => summary.draws += 1,
             }
             for report in &reports {

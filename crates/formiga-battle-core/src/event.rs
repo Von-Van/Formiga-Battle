@@ -59,6 +59,8 @@ pub enum Victory {
     /// The turn cap came: more capture progress, then more composure left, then more creatures
     /// standing.
     TurnCap,
+    /// The other Handler was away too long in a match with a friend.
+    Forfeit,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

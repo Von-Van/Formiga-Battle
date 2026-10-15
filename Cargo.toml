@@ -3,6 +3,7 @@ members = [
     "crates/formiga-battle",
     "crates/formiga-battle-contract",
     "crates/formiga-battle-core",
+    "crates/formiga-battle-room",
 ]
 resolver = "2"
 
@@ -24,10 +25,12 @@ formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0
 
 formiga-battle-contract = { path = "crates/formiga-battle-contract" }
 formiga-battle-core = { path = "crates/formiga-battle-core" }
+formiga-battle-room = { path = "crates/formiga-battle-room" }
 
 anyhow = "1.0.104"
 directories = "5.0.1"
 eframe = "0.36.2"
+getrandom = "0.4.3"
 png = "0.18.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

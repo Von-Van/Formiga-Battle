@@ -78,6 +78,12 @@ impl MatchRecord {
             }
             reports.push(report);
         }
+        if let Some(outcome) = self.outcome
+            && outcome.victory == Some(crate::event::Victory::Forfeit)
+            && let Some(winner) = outcome.winner
+        {
+            m.forfeit(winner.other());
+        }
         if m.outcome() != self.outcome {
             return Err(ReplayError::Outcome);
         }

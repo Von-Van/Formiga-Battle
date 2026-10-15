@@ -1,9 +1,10 @@
 //! Desktop's roster read as match profiles. The contract carries who each companion is; how that
 //! becomes a profile for the rules is Battle's own, so the contract knows nothing of the rules.
 
-use formiga_battle_contract::{BattleSnapshot, Contender};
-use formiga_battle_core::{Bond, Profile, Strength};
-use formiga_travel::Band;
+use formiga_battle_contract::{BattleSnapshot, Contender, SessionId};
+use formiga_battle_core::{Bond, Profile, Strength, TEAM_SIZE};
+use formiga_travel::{Band, TravelRelationship};
+use std::collections::BTreeSet;
 
 fn strength(band: Band) -> Strength {
     match band {
@@ -64,6 +65,79 @@ pub fn profiles(snapshot: &BattleSnapshot) -> Vec<Profile> {
         .collect()
 }
 
+/// A team as a roster of its own, for reading and checking: the three, and their bonds to each
+/// other.
+fn as_roster(team: &[Contender], bonds: &[TravelRelationship]) -> BattleSnapshot {
+    BattleSnapshot {
+        format: formiga_battle_contract::SNAPSHOT_FORMAT.to_owned(),
+        version: formiga_battle_contract::BATTLE_FORMAT_VERSION,
+        min_reader_version: 1,
+        session_id: SessionId::parse("00000000000000000000000000000000").expect("a session id"),
+        colony_id: "0000000000000000".to_owned(),
+        created_at_utc: time::OffsetDateTime::UNIX_EPOCH,
+        desktop_version: "battle".to_owned(),
+        contenders: team.to_vec(),
+        relationships: bonds.to_vec(),
+        presentation: Default::default(),
+    }
+}
+
+/// A team's profiles, in team order, with their bonds to each other: the same on every machine
+/// for the same team.
+pub fn team_profiles(team: &[Contender], bonds: &[TravelRelationship]) -> Vec<Profile> {
+    profiles(&as_roster(team, bonds))
+}
+
+/// The match two teams play, as the room and both clients build it: the same seed, rules, arena
+/// and profiles give the same match on every machine.
+pub fn room_match(
+    arena: formiga_battle_core::Arena,
+    ruleset: formiga_battle_core::Ruleset,
+    seed: u64,
+    teams: [&[Contender]; 2],
+    bonds: [&[TravelRelationship]; 2],
+) -> Result<formiga_battle_core::Match, formiga_battle_core::game::MatchError> {
+    formiga_battle_core::Match::new(
+        arena,
+        ruleset,
+        seed,
+        [
+            team_profiles(teams[0], bonds[0]),
+            team_profiles(teams[1], bonds[1]),
+        ],
+    )
+}
+
+/// The bonds among a chosen few, from their whole roster.
+pub fn bonds_among(roster: &BattleSnapshot, team: &[Contender]) -> Vec<TravelRelationship> {
+    let ids: BTreeSet<u64> = team.iter().map(|c| c.traveler.id.0).collect();
+    roster
+        .relationships
+        .iter()
+        .filter(|r| ids.contains(&r.a.0) && ids.contains(&r.b.0))
+        .copied()
+        .collect()
+}
+
+/// Whether a team sent by someone else can be played and drawn: three different companions,
+/// every field within Desktop's bounds, every look one the art crate can draw, every bond among
+/// them.
+pub fn check_team(team: &[Contender], bonds: &[TravelRelationship]) -> Result<(), String> {
+    if team.len() != TEAM_SIZE {
+        return Err("a team is three companions".to_owned());
+    }
+    as_roster(team, bonds)
+        .validate()
+        .map_err(|error| error.to_string())?;
+    for contender in team {
+        contender
+            .traveler
+            .to_creature()
+            .map_err(|_| format!("{}'s look cannot be drawn", contender.traveler.name))?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,6 +166,18 @@ mod tests {
         let ba = b.bond_with(a.creature_id).expect("the same bond");
         assert_eq!(ab.affinity, ba.affinity);
         assert_eq!(ab.avoidance, ba.avoidance);
+    }
+
+    #[test]
+    fn a_team_of_three_from_desktop_checks_out_and_one_of_two_does_not() {
+        let roster = sample::snapshot();
+        let team: Vec<Contender> = roster.contenders[..3].to_vec();
+        let bonds = bonds_among(&roster, &team);
+        assert!(check_team(&team, &bonds).is_ok());
+        assert!(check_team(&team[..2], &[]).is_err());
+        let mut twice = team.clone();
+        twice[1] = twice[0].clone();
+        assert!(check_team(&twice, &[]).is_err());
     }
 
     #[test]

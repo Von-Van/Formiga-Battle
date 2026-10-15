@@ -5,9 +5,10 @@ use crate::host::Host;
 use crate::iso::View;
 use crate::look::Look;
 use crate::scene::{self, TEAM};
-use crate::table::{Table, Verb, YOU};
+use crate::table::{Table, Verb};
 use eframe::egui::{self, Align2, Color32, FontId, RichText, Sense, Stroke};
 use formiga_art::Canvas;
+use formiga_battle_contract::Contender;
 use formiga_battle_core::recap::describe;
 use formiga_battle_core::{Match, Order, Tile};
 use formiga_battle_core::{Side, Slot, TEAM_SIZE, Victory};
@@ -36,6 +37,8 @@ pub enum Review {
     Playing,
     /// A few matches played out of sight first, then the notebook open beside the board.
     Notebook,
+    /// A room opened for a friend on the room service, its code showing.
+    Room,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -51,11 +54,15 @@ pub struct BattleApp {
     stage: Stage,
     view: View,
     board: Option<egui::TextureHandle>,
-    portraits: HashMap<(usize, usize), egui::TextureHandle>,
+    portraits: HashMap<(u64, String), egui::TextureHandle>,
     hover: Option<formiga_battle_core::Tile>,
     error: Option<String>,
     /// The side panel shows the Handler's Notebook instead of the orders.
     notebook_open: bool,
+    /// What the Handler types to play a friend.
+    handler: String,
+    room_addr: String,
+    join_code: String,
     /// Every turn's orders come from the AI coach and lock at once: for review pictures.
     autoplay: bool,
     snap: Option<Snap>,
@@ -75,6 +82,10 @@ impl BattleApp {
             hover: None,
             error: None,
             notebook_open: false,
+            handler: String::new(),
+            room_addr: std::env::var("FORMIGA_BATTLE_ROOM")
+                .unwrap_or_else(|_| format!("127.0.0.1:{}", formiga_battle_room::DEFAULT_PORT)),
+            join_code: String::new(),
             autoplay: review == Some(Review::Playing),
             snap,
             clock: 0.0,
@@ -107,6 +118,11 @@ impl BattleApp {
                 app.begin();
                 app.notebook_open = true;
             }
+            Some(Review::Room) => {
+                app.handler = "Jake".to_owned();
+                let addr = app.room_addr.clone();
+                app.table.open_room(&addr, "Jake", None);
+            }
             Some(Review::Picking) | None => {}
         }
         app
@@ -122,21 +138,20 @@ impl BattleApp {
         }
     }
 
-    fn portrait(&mut self, ctx: &egui::Context, side: usize, place: usize) -> egui::TextureHandle {
+    fn portrait(&mut self, ctx: &egui::Context, contender: &Contender) -> egui::TextureHandle {
         let reduce = self.table.reduce_motion;
-        let pool = if side == 0 {
-            &self.table.home
-        } else {
-            &self.table.away
-        };
-        let contender = &pool[place].0;
+        let key = (contender.traveler.id.0, contender.traveler.name.clone());
         self.portraits
-            .entry((side, place))
+            .entry(key)
             .or_insert_with(|| {
                 let canvas = Look::of(contender, reduce)
                     .map(|mut look| look.portrait())
                     .unwrap_or_else(|_| Canvas::new(48, 48));
-                texture(ctx, &format!("portrait-{side}-{place}"), &canvas)
+                texture(
+                    ctx,
+                    &format!("portrait-{:x}", contender.traveler.id.0),
+                    &canvas,
+                )
             })
             .clone()
     }
@@ -145,6 +160,13 @@ impl BattleApp {
         let ctx = ui.ctx().clone();
         self.clock = ctx.input(|input| input.time) as f32;
         let now = self.clock;
+        if self.table.pending.is_some() || self.table.friend.is_some() {
+            if self.table.poll(now) {
+                self.stage = Stage::Playing;
+                self.notebook_open = false;
+            }
+            ctx.request_repaint();
+        }
         if self.stage == Stage::Playing {
             if self.autoplay && self.table.shown.is_none() && !self.table.finished(now) {
                 self.table.coach_orders();
@@ -258,8 +280,12 @@ impl BattleApp {
             for side in Side::BOTH {
                 let team = TEAM[side.index()];
                 ui.label(
-                    RichText::new(if side == YOU { "You" } else { "Visitors" })
-                        .color(color(team.light)),
+                    RichText::new(if side == self.table.you {
+                        "You".to_owned()
+                    } else {
+                        self.table.other_short()
+                    })
+                    .color(color(team.light)),
                 );
                 beacon_bar(ui, shown[side.index()], m.ruleset.capture_ticks, team);
                 ui.add_space(12.0);
@@ -273,7 +299,30 @@ impl BattleApp {
                 } else {
                     INK
                 }));
-                ui.label(RichText::new("Visitors ready").color(color(TEAM[1].light)));
+                let other = color(TEAM[self.table.you.other().index()].light);
+                match &self.table.friend {
+                    None => {
+                        ui.label(RichText::new("Visitors ready").color(other));
+                    }
+                    Some(f) if f.opponent_away => {
+                        ui.label(
+                            RichText::new(format!("{} is away", self.table.other_short()))
+                                .color(FAINT),
+                        );
+                    }
+                    Some(f) if f.opponent_ready => {
+                        ui.label(
+                            RichText::new(format!("{} is ready", self.table.other_short()))
+                                .color(other),
+                        );
+                    }
+                    Some(_) => {
+                        ui.label(
+                            RichText::new(format!("{} is choosing", self.table.other_short()))
+                                .color(FAINT),
+                        );
+                    }
+                }
             }
         });
     }
@@ -293,9 +342,9 @@ impl BattleApp {
             for row in (0..count).collect::<Vec<_>>().chunks(per_row) {
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                     for &place in row {
-                        let texture = self.portrait(ctx, 0, place);
+                        let contender = self.table.home[place].0.clone();
+                        let texture = self.portrait(ctx, &contender);
                         let chosen = self.table.picked.contains(&place);
-                        let (contender, _) = &self.table.home[place];
                         let response = egui::Frame::new()
                             .fill(if chosen { CARD_CHOSEN } else { CARD })
                             .stroke(if chosen {
@@ -374,6 +423,8 @@ impl BattleApp {
             {
                 self.begin();
             }
+            ui.add_space(18.0);
+            self.lobby(ui);
             if let Some(error) = &self.error {
                 ui.colored_label(Color32::from_rgb(0xff, 0x9a, 0x7a), error);
             }
@@ -468,15 +519,17 @@ impl BattleApp {
             self.result(ui);
             return;
         }
-        let giving = self.table.shown.is_none();
+        let you = self.table.you;
+        let sent = self.table.friend.as_ref().is_some_and(|f| f.sent);
+        let giving = self.table.shown.is_none() && !sent;
         let Some(m) = &self.table.m else {
             return;
         };
         let standing: Vec<bool> = (0..TEAM_SIZE as u8)
-            .map(|i| m.standing(Slot::new(YOU, i)))
+            .map(|i| m.standing(Slot::new(you, i)))
             .collect();
         let composure: Vec<u8> = (0..TEAM_SIZE as u8)
-            .map(|i| m.fighter(Slot::new(YOU, i)).composure)
+            .map(|i| m.fighter(Slot::new(you, i)).composure)
             .collect();
         ui.horizontal(|ui| {
             ui.label(
@@ -506,10 +559,10 @@ impl BattleApp {
             return;
         }
         for i in 0..TEAM_SIZE as u8 {
-            let place = self.table.teams[0][i as usize];
-            let texture = self.portrait(ctx, 0, place);
+            let contender = self.table.board_teams[you.index()][i as usize].clone();
+            let texture = self.portrait(ctx, &contender);
             let chosen = giving && self.table.selected == Some(i);
-            let name = self.table.home[place].0.traveler.name.clone();
+            let name = contender.traveler.name.clone();
             let order = self.table.orders[i as usize];
             let order_text = match (standing[i as usize], order) {
                 (false, _) => "Knocked out for this match".to_owned(),
@@ -601,6 +654,26 @@ impl BattleApp {
                 self.table.lock(now);
             }
         }
+        if sent && self.table.shown.is_none() {
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new(format!(
+                    "Orders sent. Waiting for {}…",
+                    self.table.other_short()
+                ))
+                .color(NOTE),
+            );
+        }
+        if let Some(notice) = self.table.notice.clone() {
+            ui.add_space(6.0);
+            ui.colored_label(Color32::from_rgb(0xff, 0xc0, 0x8a), &notice);
+            if self.table.friend.is_some()
+                && notice.starts_with("Lost the room")
+                && ui.button("Reconnect").clicked()
+            {
+                self.table.reconnect();
+            }
+        }
         ui.add_space(10.0);
         ui.separator();
         self.recap(ui);
@@ -626,16 +699,17 @@ impl BattleApp {
     }
 
     fn result(&mut self, ui: &mut egui::Ui) {
+        let you = self.table.you;
         let outcome = self.table.outcome().expect("finished");
         let (title, why) = match (outcome.winner, outcome.victory) {
-            (Some(side), Some(Victory::Capture)) if side == YOU => (
+            (Some(side), Some(Victory::Capture)) if side == you => (
                 "You lit the beacon!",
                 "Your team held the yard long enough.",
             ),
-            (Some(side), Some(Victory::Knockout)) if side == YOU => {
+            (Some(side), Some(Victory::Knockout)) if side == you => {
                 ("You win!", "The visitors are all sitting out, dizzy.")
             }
-            (Some(side), _) if side == YOU => (
+            (Some(side), _) if side == you => (
                 "You win on the tally",
                 "Time ran out with your team ahead on the beacon.",
             ),
@@ -655,6 +729,9 @@ impl BattleApp {
         };
         ui.label(RichText::new(title).size(24.0).color(INK).strong());
         ui.label(RichText::new(why).color(FAINT));
+        if let Some(reason) = &self.table.ended_because {
+            ui.label(RichText::new(reason).color(FAINT));
+        }
         ui.label(RichText::new(format!("After {} turns", outcome.turn)).color(FAINT));
         ui.add_space(10.0);
         if ui
@@ -689,13 +766,82 @@ impl BattleApp {
         self.recap(ui);
     }
 
+    /// Playing a friend: open a room and pass on its code, or join one with the code a friend
+    /// gave.
+    fn lobby(&mut self, ui: &mut egui::Ui) {
+        ui.separator();
+        ui.label(RichText::new("Play a friend").size(18.0).color(INK));
+        if let Some(pending) = &self.table.pending {
+            match &pending.code {
+                Some(code) => {
+                    ui.label(
+                        RichText::new("Your room is open. Give your friend this code:")
+                            .color(FAINT),
+                    );
+                    ui.label(RichText::new(code).size(30.0).color(NOTE).strong());
+                    ui.label(RichText::new("The match begins when they join.").color(FAINT));
+                }
+                None => {
+                    ui.label(RichText::new("Talking to the room service…").color(FAINT));
+                }
+            }
+            if ui.button("Cancel").clicked() {
+                self.table.leave_room();
+            }
+        } else {
+            let ready = self.table.picked.len() == TEAM_SIZE;
+            egui::Grid::new("lobby")
+                .num_columns(2)
+                .spacing([10.0, 6.0])
+                .show(ui, |ui| {
+                    ui.label(RichText::new("Your name").color(FAINT));
+                    ui.add(egui::TextEdit::singleline(&mut self.handler).desired_width(200.0));
+                    ui.end_row();
+                    ui.label(RichText::new("Room service").color(FAINT));
+                    ui.add(egui::TextEdit::singleline(&mut self.room_addr).desired_width(200.0));
+                    ui.end_row();
+                });
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(ready, egui::Button::new("Open a room for a friend"))
+                    .clicked()
+                {
+                    let (addr, handler) = (self.room_addr.clone(), self.handler.clone());
+                    self.table.open_room(&addr, &handler, None);
+                }
+                ui.label(RichText::new("or").color(FAINT));
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.join_code)
+                        .hint_text("code")
+                        .desired_width(90.0),
+                );
+                if ui
+                    .add_enabled(
+                        ready && !self.join_code.trim().is_empty(),
+                        egui::Button::new("Join"),
+                    )
+                    .clicked()
+                {
+                    let (addr, handler, code) = (
+                        self.room_addr.clone(),
+                        self.handler.clone(),
+                        self.join_code.clone(),
+                    );
+                    self.table.open_room(&addr, &handler, Some(&code));
+                }
+            });
+        }
+        if let Some(notice) = &self.table.notice {
+            ui.colored_label(Color32::from_rgb(0xff, 0xc0, 0x8a), notice);
+        }
+    }
+
     /// The Handler's Notebook for the three on the board: what each has been seen to do.
     fn notebook(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             for i in 0..TEAM_SIZE {
-                let place = self.table.teams[0][i];
-                let texture = self.portrait(ctx, 0, place);
-                let (contender, _) = &self.table.home[place];
+                let contender = self.table.board_teams[self.table.you.index()][i].clone();
+                let texture = self.portrait(ctx, &contender);
                 let page = self.table.page(contender.traveler.id.0).cloned();
                 egui::Frame::new()
                     .fill(CARD)

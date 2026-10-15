@@ -7,7 +7,6 @@ mod host;
 mod iso;
 mod look;
 mod playback;
-mod roster;
 mod scene;
 mod store;
 mod table;
@@ -37,7 +36,8 @@ WINDOW:
     --review <STAGE>         With --snap: picking (the team choice), orders (a turn's orders
                              half given, MOVE chosen), playing (the AI giving your orders too,
                              every turn locked at once; the default) or notebook (four matches
-                             played out of sight, then the notebook open)
+                             played out of sight, then the notebook open) or room (a room
+                             opened on the room service, its code showing)
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
                              (default 0), at --scale (default 3), --into seconds into the
                              turn after (default: still)
@@ -105,6 +105,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "orders" => app::Review::Orders,
                     "playing" => app::Review::Playing,
                     "notebook" => app::Review::Notebook,
+                    "room" => app::Review::Room,
                     other => bail!("unknown stage {other:?}"),
                 }
             }

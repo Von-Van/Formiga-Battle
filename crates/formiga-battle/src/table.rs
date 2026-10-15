@@ -17,10 +17,33 @@ use formiga_battle_core::{
     Arena, Match, Order, Orders, Outcome, Profile, Ruleset, Side, Slot, TEAM_SIZE, Target, Tile,
     TurnReport,
 };
+use formiga_battle_room::protocol::{ClientMsg, Refusal, ServerMsg};
+use formiga_battle_room::roster::room_match;
+use formiga_battle_room::{Client, Heard};
 use std::path::PathBuf;
 
-/// The Handler always plays the left team; the AI the right.
-pub const YOU: Side = Side::Left;
+/// A match with a friend, through a room.
+pub struct Friend {
+    pub client: Client,
+    pub addr: String,
+    pub code: String,
+    pub token: String,
+    /// Both Handlers' names, left then right.
+    pub handlers: [String; 2],
+    /// This turn's orders have gone to the room.
+    pub sent: bool,
+    pub opponent_ready: bool,
+    pub opponent_away: bool,
+    /// When this turn locks, on the window's clock.
+    pub deadline: f32,
+}
+
+/// Waiting in the lobby: connected, maybe with a room open for a friend to join.
+pub struct Pending {
+    pub client: Client,
+    pub addr: String,
+    pub code: Option<String>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Verb {
@@ -61,6 +84,8 @@ pub struct Table {
     pub home: Vec<(Contender, Profile)>,
     /// The visiting colony's.
     pub away: Vec<(Contender, Profile)>,
+    /// How the Handler's companions get on, as Desktop's roster has it.
+    home_bonds: Vec<formiga_travel::TravelRelationship>,
     pub arena: Arena,
     pub ruleset: Ruleset,
     pub seed: u64,
@@ -89,6 +114,18 @@ pub struct Table {
     match_events: Vec<Event>,
     /// What this match added to the notebook, by name: shown with the result.
     pub new_moments: Vec<(String, String)>,
+    /// The side the Handler plays: left against the AI, either against a friend.
+    pub you: Side,
+    /// Who is on the board, as Desktop's companions, by side and place.
+    pub board_teams: [Vec<Contender>; 2],
+    /// The other side's name in recaps.
+    pub other_name: String,
+    pub friend: Option<Friend>,
+    pub pending: Option<Pending>,
+    /// Something the room said for the Handler to read.
+    pub notice: Option<String>,
+    /// Why the match ended without a turn to show it, such as a forfeit.
+    pub ended_because: Option<String>,
 }
 
 impl Table {
@@ -101,7 +138,7 @@ impl Table {
             s.contenders
                 .iter()
                 .cloned()
-                .zip(crate::roster::profiles(s))
+                .zip(formiga_battle_room::roster::profiles(s))
                 .collect()
         };
         let mut home = pair(&roster);
@@ -113,6 +150,7 @@ impl Table {
         Self {
             home,
             away: friends,
+            home_bonds: roster.relationships.clone(),
             arena: Arena::backyard(),
             ruleset: Ruleset::default(),
             seed,
@@ -133,6 +171,13 @@ impl Table {
             notebook_folder: None,
             match_events: Vec::new(),
             new_moments: Vec::new(),
+            you: Side::Left,
+            board_teams: [Vec::new(), Vec::new()],
+            other_name: "The visiting team".to_owned(),
+            friend: None,
+            pending: None,
+            notice: None,
+            ended_because: None,
         }
     }
 
@@ -154,13 +199,13 @@ impl Table {
         let Some(m) = &self.m else {
             return;
         };
-        let won = m.outcome().and_then(|o| o.winner) == Some(YOU);
-        let team: Vec<(u64, String)> = m.rosters[YOU.index()]
+        let won = m.outcome().and_then(|o| o.winner) == Some(self.you);
+        let team: Vec<(u64, String)> = m.rosters[self.you.index()]
             .iter()
             .map(|p| (p.creature_id, p.name.clone()))
             .collect();
         self.new_moments.clear();
-        for seen in observe(m, YOU, &self.match_events) {
+        for seen in observe(m, self.you, &self.match_events) {
             let name = team
                 .iter()
                 .find(|(id, _)| *id == seen.creature_id)
@@ -234,14 +279,369 @@ impl Table {
         for (look, p) in self.looks[1].iter_mut().zip(&m.rosters[1]) {
             look.name = p.name.clone();
         }
+        self.board_teams = [
+            self.picked
+                .iter()
+                .map(|i| self.home[*i].0.clone())
+                .collect(),
+            away.iter().map(|i| self.away[*i].0.clone()).collect(),
+        ];
         self.teams = [self.picked.clone(), away];
+        self.you = Side::Left;
+        self.other_name = "The visiting team".to_owned();
+        self.friend = None;
+        self.begin_match(m, now);
+        Ok(())
+    }
+
+    fn begin_match(&mut self, m: Match, now: f32) {
         self.facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
         self.m = Some(m);
+        self.shown = None;
         self.begin_orders(now);
         self.log.clear();
         self.match_events.clear();
         self.new_moments.clear();
-        Ok(())
+        self.ended_because = None;
+    }
+
+    /// The three the Handler has picked, and how they get on: the team sent to a room.
+    fn picked_team(&self) -> (Vec<Contender>, Vec<formiga_travel::TravelRelationship>) {
+        let team: Vec<Contender> = self
+            .picked
+            .iter()
+            .map(|i| self.home[*i].0.clone())
+            .collect();
+        let ids: Vec<u64> = team.iter().map(|c| c.traveler.id.0).collect();
+        let bonds = self
+            .home_bonds
+            .iter()
+            .filter(|r| ids.contains(&r.a.0) && ids.contains(&r.b.0))
+            .copied()
+            .collect();
+        (team, bonds)
+    }
+
+    /// Connects to a room service and opens a room for a friend (`code` is `None`), or joins
+    /// the friend's room by its code.
+    pub fn open_room(&mut self, addr: &str, handler: &str, code: Option<&str>) {
+        self.notice = None;
+        if self.picked.len() != TEAM_SIZE {
+            self.notice = Some("Choose three first.".to_owned());
+            return;
+        }
+        let client = match Client::connect(addr, env!("CARGO_PKG_VERSION")) {
+            Ok(client) => client,
+            Err(error) => {
+                self.notice = Some(format!(
+                    "Could not reach the room service at {addr}: {error}"
+                ));
+                return;
+            }
+        };
+        let (team, bonds) = self.picked_team();
+        let handler = handler.trim().to_owned();
+        let msg = match code {
+            None => ClientMsg::Create {
+                handler,
+                team,
+                bonds,
+            },
+            Some(code) => ClientMsg::Join {
+                code: code.to_owned(),
+                handler,
+                team,
+                bonds,
+            },
+        };
+        if let Err(error) = client.send(&msg) {
+            self.notice = Some(format!("The room service stopped answering: {error}"));
+            return;
+        }
+        self.pending = Some(Pending {
+            client,
+            addr: addr.to_owned(),
+            code: None,
+        });
+    }
+
+    /// Leaves the lobby or the match with a friend.
+    pub fn leave_room(&mut self) {
+        for client in [
+            self.pending.take().map(|p| p.client),
+            self.friend.take().map(|f| f.client),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let _ = client.send(&ClientMsg::Leave);
+        }
+    }
+
+    /// Tries the room again after the connection was lost, with the seat's token.
+    pub fn reconnect(&mut self) {
+        let Some(friend) = &mut self.friend else {
+            return;
+        };
+        match Client::connect(&friend.addr, env!("CARGO_PKG_VERSION")) {
+            Ok(client) => {
+                let _ = client.send(&ClientMsg::Rejoin {
+                    code: friend.code.clone(),
+                    token: friend.token.clone(),
+                });
+                friend.client = client;
+                self.notice = Some("Reconnecting…".to_owned());
+            }
+            Err(error) => self.notice = Some(format!("Still cannot reach the room: {error}")),
+        }
+    }
+
+    /// Whatever the room has said since the last frame. True if a match with a friend began.
+    pub fn poll(&mut self, now: f32) -> bool {
+        let mut began = false;
+        while let Some(heard) = self.hear() {
+            match heard {
+                Heard::Closed(why) => {
+                    self.notice = Some(format!("Lost the room: {why}."));
+                    self.pending = None;
+                    break;
+                }
+                Heard::Msg(msg) => began |= self.heard(*msg, now),
+            }
+        }
+        // Orders not sent by the time the room locks the turn are sent at the last moment.
+        if let Some(friend) = &self.friend
+            && !friend.sent
+            && self.shown.is_none()
+            && self.outcome().is_none()
+            && friend.deadline - now < 1.5
+        {
+            self.lock(now);
+        }
+        began
+    }
+
+    fn hear(&mut self) -> Option<Heard> {
+        if let Some(p) = &self.pending {
+            return p.client.try_hear();
+        }
+        self.friend.as_ref().and_then(|f| f.client.try_hear())
+    }
+
+    fn heard(&mut self, msg: ServerMsg, now: f32) -> bool {
+        match msg {
+            ServerMsg::Welcome { .. } => {}
+            ServerMsg::Refused { refusal } => {
+                self.notice = Some(refusal.words());
+                if !matches!(refusal, Refusal::NotThisTurn) {
+                    self.pending = None;
+                }
+            }
+            ServerMsg::Created { code, .. } => {
+                if let Some(p) = &mut self.pending {
+                    p.code = Some(code);
+                }
+            }
+            ServerMsg::Started {
+                code,
+                token,
+                you,
+                handlers,
+                teams,
+                bonds,
+                arena,
+                ruleset,
+                seed,
+                deadline_ms,
+            } => {
+                let Some(pending) = self.pending.take() else {
+                    return false;
+                };
+                let m = match room_match(
+                    arena,
+                    ruleset,
+                    seed,
+                    [&teams[0], &teams[1]],
+                    [&bonds[0], &bonds[1]],
+                ) {
+                    Ok(m) => m,
+                    Err(error) => {
+                        self.notice = Some(format!("The match could not begin: {error}"));
+                        return false;
+                    }
+                };
+                self.friend = Some(Friend {
+                    client: pending.client,
+                    addr: pending.addr,
+                    code,
+                    token,
+                    handlers: handlers.clone(),
+                    sent: false,
+                    opponent_ready: false,
+                    opponent_away: false,
+                    deadline: now + deadline_ms as f32 / 1000.0,
+                });
+                self.seat_friend_match(m, you, &handlers, teams, now);
+                return true;
+            }
+            ServerMsg::OpponentReady { .. } => {
+                if let Some(f) = &mut self.friend {
+                    f.opponent_ready = true;
+                }
+            }
+            ServerMsg::Resolved {
+                submitted,
+                hash,
+                deadline_ms,
+                ..
+            } => {
+                if let Some(f) = &mut self.friend {
+                    f.sent = false;
+                    f.opponent_ready = false;
+                    f.deadline = now + deadline_ms as f32 / 1000.0;
+                }
+                let Some(m) = &mut self.m else {
+                    return false;
+                };
+                let before = m.board.clone();
+                let report = m.resolve_turn(submitted);
+                if report.hash != hash
+                    && let Some(f) = &self.friend
+                {
+                    self.notice = Some("Out of step with the room; catching up.".to_owned());
+                    let _ = f.client.send(&ClientMsg::Resync);
+                }
+                self.show_turn(before, report, now);
+            }
+            ServerMsg::OpponentAway => {
+                if let Some(f) = &mut self.friend {
+                    f.opponent_away = true;
+                }
+            }
+            ServerMsg::OpponentBack => {
+                if let Some(f) = &mut self.friend {
+                    f.opponent_away = false;
+                }
+            }
+            ServerMsg::Resume {
+                you,
+                handlers,
+                teams,
+                record,
+                deadline_ms,
+                ..
+            } => match record.replay() {
+                Ok((m, _)) => {
+                    if let Some(f) = &mut self.friend {
+                        f.deadline = now + deadline_ms as f32 / 1000.0;
+                        f.sent = false;
+                    }
+                    self.notice = None;
+                    self.seat_friend_match(m, you, &handlers, teams, now);
+                }
+                Err(error) => {
+                    self.notice = Some(format!("Could not catch up with the room: {error}"))
+                }
+            },
+            ServerMsg::Ended { outcome, reason } => {
+                if let (Some(m), Some(outcome)) = (&mut self.m, outcome)
+                    && let Some(winner) = outcome.winner
+                {
+                    m.forfeit(winner.other());
+                }
+                self.ended_because = Some(reason);
+                if self.outcome().is_some() && self.shown.is_none() {
+                    self.note_the_match();
+                }
+            }
+        }
+        false
+    }
+
+    /// Puts a match with a friend on the board, from either side.
+    fn seat_friend_match(
+        &mut self,
+        mut m: Match,
+        you: Side,
+        handlers: &[String; 2],
+        teams: [Vec<Contender>; 2],
+        now: f32,
+    ) {
+        // A friend's companion who shares a name with one of the Handler's is told apart.
+        let ours: Vec<String> = m.rosters[you.index()]
+            .iter()
+            .map(|p| p.name.clone())
+            .collect();
+        for p in &mut m.rosters[you.other().index()] {
+            if ours.contains(&p.name) {
+                p.name = format!("{}'s {}", handlers[you.other().index()], p.name);
+            }
+        }
+        let looks: anyhow::Result<Vec<Vec<Look>>> = teams
+            .iter()
+            .map(|team| {
+                team.iter()
+                    .map(|c| Look::of(c, self.reduce_motion))
+                    .collect()
+            })
+            .collect();
+        match looks {
+            Ok(mut looks) => {
+                for (look, p) in looks[you.other().index()]
+                    .iter_mut()
+                    .zip(&m.rosters[you.other().index()])
+                {
+                    look.name = p.name.clone();
+                }
+                let right = looks.pop().expect("two teams");
+                let left = looks.pop().expect("two teams");
+                self.looks = [left, right];
+            }
+            Err(error) => {
+                self.notice = Some(format!("A companion's look could not be drawn: {error}"));
+                return;
+            }
+        }
+        self.you = you;
+        self.other_name = format!("{}'s team", handlers[you.other().index()]);
+        self.board_teams = teams;
+        self.begin_match(m, now);
+    }
+
+    /// Shows a resolved turn, and notes the match if it was the last.
+    fn show_turn(
+        &mut self,
+        before: formiga_battle_core::game::Board,
+        report: TurnReport,
+        now: f32,
+    ) {
+        let Some(m) = &self.m else {
+            return;
+        };
+        let playback = crate::playback::Playback::new(
+            &before,
+            &m.arena.gates,
+            &self.facing,
+            &report.events,
+            m.ruleset.ticks_per_turn,
+        );
+        let mut names = ["", ""];
+        names[self.you.index()] = "Your team";
+        names[self.you.other().index()] = &self.other_name;
+        self.log
+            .push((report.turn, recap_naming(m, &report.events, names)));
+        self.match_events.extend(report.events.iter().cloned());
+        let over = m.outcome().is_some();
+        self.shown = Some(Shown {
+            playback,
+            report,
+            started: now,
+        });
+        self.selected = None;
+        self.verb = None;
+        if over {
+            self.note_the_match();
+        }
     }
 
     fn begin_orders(&mut self, now: f32) {
@@ -251,16 +651,27 @@ impl Table {
         self.selected = self
             .m
             .as_ref()
-            .and_then(|m| m.team(YOU).next().map(|s| s.index));
+            .and_then(|m| m.team(self.you).next().map(|s| s.index));
     }
 
     pub fn outcome(&self) -> Option<Outcome> {
         self.m.as_ref().and_then(Match::outcome)
     }
 
-    /// Seconds left on the timer.
+    /// What the other side is called in a few words: the visitors, or the friend's name.
+    pub fn other_short(&self) -> String {
+        match &self.friend {
+            Some(f) => f.handlers[self.you.other().index()].clone(),
+            None => "Visitors".to_owned(),
+        }
+    }
+
+    /// Seconds left on the timer: the room's, against a friend.
     pub fn time_left(&self, now: f32) -> f32 {
-        (f32::from(self.ruleset.turn_seconds) - (now - self.turn_began)).max(0.0)
+        match &self.friend {
+            Some(f) => (f.deadline - now).max(0.0),
+            None => (f32::from(self.ruleset.turn_seconds) - (now - self.turn_began)).max(0.0),
+        }
     }
 
     /// Chooses a creature of the Handler's to give an order to.
@@ -268,7 +679,7 @@ impl Table {
         if self
             .m
             .as_ref()
-            .is_some_and(|m| m.standing(Slot::new(YOU, index)))
+            .is_some_and(|m| m.standing(Slot::new(self.you, index)))
         {
             self.selected = Some(index);
             self.verb = None;
@@ -286,7 +697,7 @@ impl Table {
         let (Some(m), Some(index), Some(verb)) = (&self.m, self.selected, self.verb) else {
             return Vec::new();
         };
-        let slot = Slot::new(YOU, index);
+        let slot = Slot::new(self.you, index);
         match verb {
             Verb::Move | Verb::Hold => {
                 let from = m.fighter(slot).at;
@@ -308,7 +719,7 @@ impl Table {
                     .collect()
             }
             Verb::Contest => m
-                .team(YOU.other())
+                .team(self.you.other())
                 .map(|e| (m.fighter(e).at, Choice::Contest))
                 .chain(m.arena.levers.iter().map(|l| (*l, Choice::Contest)))
                 .collect(),
@@ -321,7 +732,7 @@ impl Table {
         let Some(m) = &self.m else {
             return false;
         };
-        let own = m.occupant(tile).filter(|s| s.side == YOU);
+        let own = m.occupant(tile).filter(|s| s.side == self.you);
         let (Some(index), Some(verb)) = (self.selected, self.verb) else {
             if let Some(s) = own {
                 self.select(s.index);
@@ -329,12 +740,12 @@ impl Table {
             }
             return false;
         };
-        let slot = Slot::new(YOU, index);
+        let slot = Slot::new(self.you, index);
         let order = match verb {
             Verb::Move => Order::Move { to: tile },
             Verb::Hold => Order::Hold { at: tile },
             Verb::Contest => {
-                if let Some(enemy) = m.occupant(tile).filter(|s| s.side != YOU) {
+                if let Some(enemy) = m.occupant(tile).filter(|s| s.side != self.you) {
                     Order::Contest {
                         target: Target::Creature { slot: enemy },
                     }
@@ -358,7 +769,7 @@ impl Table {
         self.verb = None;
         // On to the next creature still without an order.
         self.selected = m
-            .team(YOU)
+            .team(self.you)
             .map(|s| s.index)
             .find(|i| self.orders[*i as usize].is_none())
             .or(Some(index));
@@ -372,7 +783,7 @@ impl Table {
     /// What the board shows over itself just now.
     pub fn marks(&self, hover: Option<Tile>, now: f32) -> Marks {
         let mut marks = Marks {
-            selected: self.selected.map(|i| Slot::new(YOU, i)),
+            selected: self.selected.map(|i| Slot::new(self.you, i)),
             choices: self.choices(),
             hover,
             orders: Vec::new(),
@@ -392,7 +803,7 @@ impl Table {
             None => {
                 for (i, order) in self.orders.iter().enumerate() {
                     if let Some(order) = order {
-                        marks.orders.push((Slot::new(YOU, i as u8), *order));
+                        marks.orders.push((Slot::new(self.you, i as u8), *order));
                     }
                 }
             }
@@ -400,7 +811,8 @@ impl Table {
         marks
     }
 
-    /// Locks the Handler's orders with the AI's and starts showing the turn.
+    /// Locks the Handler's orders: against the AI, resolves the turn and starts showing it;
+    /// against a friend, sends them to the room, which resolves the turn when both are in.
     pub fn lock(&mut self, now: f32) {
         let Some(m) = &mut self.m else {
             return;
@@ -408,38 +820,34 @@ impl Table {
         if self.shown.is_some() || m.outcome().is_some() {
             return;
         }
-        let away = Coach::Exhibition.orders(m, YOU.other());
+        if let Some(friend) = &mut self.friend {
+            if friend.sent {
+                return;
+            }
+            let msg = ClientMsg::Submit {
+                turn: m.board.turn + 1,
+                orders: self.orders,
+            };
+            match friend.client.send(&msg) {
+                Ok(()) => friend.sent = true,
+                Err(error) => {
+                    self.notice = Some(format!("The room did not get those orders: {error}"))
+                }
+            }
+            self.selected = None;
+            self.verb = None;
+            return;
+        }
+        let away = Coach::Exhibition.orders(m, self.you.other());
         let before = m.board.clone();
         let report = m.resolve_turn([self.orders, away]);
-        let playback = crate::playback::Playback::new(
-            &before,
-            &m.arena.gates,
-            &self.facing,
-            &report.events,
-            m.ruleset.ticks_per_turn,
-        );
-        self.log.push((
-            report.turn,
-            recap_naming(m, &report.events, ["Your team", "The visiting team"]),
-        ));
-        self.match_events.extend(report.events.iter().cloned());
-        let over = m.outcome().is_some();
-        self.shown = Some(Shown {
-            playback,
-            report,
-            started: now,
-        });
-        self.selected = None;
-        self.verb = None;
-        if over {
-            self.note_the_match();
-        }
+        self.show_turn(before, report, now);
     }
 
     /// The Handler's orders, as the AI coach would give them: for review pictures.
     pub fn coach_orders(&mut self) {
         if let Some(m) = &self.m {
-            self.orders = Coach::Exhibition.orders(m, YOU);
+            self.orders = Coach::Exhibition.orders(m, self.you);
         }
     }
 
@@ -487,7 +895,7 @@ impl Table {
     pub fn fallback(&self, index: u8) -> Option<Order> {
         self.m
             .as_ref()
-            .map(|m| ai::fallback(m, Slot::new(YOU, index)))
+            .map(|m| ai::fallback(m, Slot::new(self.you, index)))
     }
 }
 
@@ -522,8 +930,8 @@ mod tests {
         let mut t = table();
         t.choose_verb(Verb::Contest);
         let m = t.m.as_ref().unwrap();
-        let teammate = m.fighter(Slot::new(YOU, 1)).at;
-        let enemy = m.fighter(Slot::new(YOU.other(), 0)).at;
+        let teammate = m.fighter(Slot::new(Side::Left, 1)).at;
+        let enemy = m.fighter(Slot::new(Side::Right, 0)).at;
         assert!(t.click(teammate), "clicking a teammate chooses it instead");
         assert_eq!(t.selected, Some(1));
         assert_eq!(t.orders[0], None);
@@ -598,6 +1006,61 @@ mod tests {
         }
         let kept = store::load(&folder);
         assert_eq!(kept, t.notebook);
+    }
+
+    #[test]
+    fn two_tables_play_a_whole_match_through_a_room() {
+        let server =
+            formiga_battle_room::serve("127.0.0.1:0", formiga_battle_room::Limits::default())
+                .unwrap();
+        let addr = server.addr().to_string();
+        let mut host = Table::new(sample::snapshot(), sample::visitors(9), 1);
+        let mut guest = Table::new(sample::visitors(11), sample::visitors(9), 2);
+        host.open_room(&addr, "Jake", None);
+        let mut now = 0.0;
+        let code = loop {
+            host.poll(now);
+            if let Some(code) = host.pending.as_ref().and_then(|p| p.code.clone()) {
+                break code;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            now += 0.005;
+            assert!(now < 5.0, "the room opens: {:?}", host.notice);
+        };
+        guest.open_room(&addr, "Friend", Some(&code.to_lowercase()));
+        let mut began = [false, false];
+        while !(began[0] && began[1]) {
+            began[0] |= host.poll(now);
+            began[1] |= guest.poll(now);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            now += 0.005;
+            assert!(now < 10.0, "both see the match begin");
+        }
+        assert_eq!(host.you, Side::Left);
+        assert_eq!(guest.you, Side::Right);
+        assert_eq!(host.other_short(), "Friend");
+        let mut turns = 0;
+        while !(host.finished(now) && guest.finished(now)) {
+            for t in [&mut host, &mut guest] {
+                if t.shown.is_none() && t.outcome().is_none() && !t.friend.as_ref().unwrap().sent {
+                    t.coach_orders();
+                    t.lock(now);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            now += 0.5;
+            host.poll(now);
+            guest.poll(now);
+            host.frame(now);
+            guest.frame(now);
+            turns += 1;
+            assert!(turns < 2000, "the match ends");
+        }
+        let (a, b) = (host.m.as_ref().unwrap(), guest.m.as_ref().unwrap());
+        assert_eq!(a.board, b.board, "both see the same board");
+        assert!(a.outcome().is_some());
+        assert!(host.notice.is_none(), "{:?}", host.notice);
+        server.stop();
     }
 
     #[test]

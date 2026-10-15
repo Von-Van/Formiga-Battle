@@ -12,16 +12,19 @@ companions from a neighbouring colony, in the Backyard: an isometric board in Fo
 style, the creatures drawn exactly as Desktop draws them. Each turn you give your orders on their
 cards and the board (or let the timer run out and they choose for themselves), lock in, and watch
 the turn play out tick by tick with a recap that says why each of them did what it did. The
-Handler's Notebook beside the board keeps what each of your companions has been seen to do,
-match after match, so you can learn how they carry out an order. The same
-match also runs headless from the command line. There is no online play yet, and Desktop does
-not open Battle yet: Battle's side of that hand-off is built (`--formiga-battle <dir>`), Desktop's
-is still to come.
+Handler's Notebook beside the board keeps what each of your companions has been seen to do, match
+after match, so you can learn how they carry out an order. To play a friend instead, one of you
+runs a room service and opens a room, and the other joins it with its code
+([docs/ROOMS.md](docs/ROOMS.md)). The same match also runs headless from the command line. Desktop
+opens Battle from its tray on a Desktop branch not yet released; Battle's side of that hand-off is
+`--formiga-battle <dir>`.
 
 - [docs/RULES.md](docs/RULES.md): how a match resolves, every provisional number, and the
   fairness tournament's results.
 - [docs/PERSONALITY.md](docs/PERSONALITY.md): every part of Desktop's record of a companion, and
   what Battle does with it.
+- [docs/ROOMS.md](docs/ROOMS.md): playing a friend through a room: running one, a room from start
+  to end, and what a room trusts.
 
 ## Commands
 
@@ -37,6 +40,7 @@ cargo run --release -p formiga-battle -- replay m.json                   # repla
 cargo run --release -p formiga-battle -- tournament --pairings 5000      # fairness by kind and trio
 cargo run --release -p formiga-battle -- tournament --coach familiar,generic  # what knowing them is worth
 cargo run --release -p formiga-battle -- arena                           # draws Backyard
+cargo run --release -p formiga-battle -- serve                           # a room service for friends
 ```
 
 In the window: choose a card (or 1, 2, 3), then MOVE, HOLD or CONTEST (or M, H, C), then a tile
@@ -70,6 +74,10 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
   every companion app's documents. It is Desktop's: this is a copy of it as Desktop has adopted
   it, kept here byte for byte until a Desktop release carries it, when Battle takes it by tag
   like the other Desktop crates.
+- **`formiga-battle-room`**: rooms for playing a friend. `protocol` (the messages), `service`
+  (rooms as a state machine: codes, seats, deadlines, forfeits), `net` (the service on sockets
+  with plain threads, and the client end), `code` (invite codes) and `roster` (a team of
+  Desktop's companions read as match profiles, the same on every machine).
 - **`formiga-battle`**: the app. `host` (Desktop's session, or a rehearsal), `roster` (a
   contender read as a match profile), `table` (one sitting
   at the board without the window: picking, orders, locking, the turn being shown), `playback`

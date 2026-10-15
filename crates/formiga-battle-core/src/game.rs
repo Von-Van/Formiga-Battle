@@ -819,6 +819,18 @@ impl Match {
         }
     }
 
+    /// Ends the match for a side whose Handler has been away too long: the other side wins. Only
+    /// a room ever does this; nothing in the rules does.
+    pub fn forfeit(&mut self, side: Side) {
+        if self.board.outcome.is_none() {
+            self.board.outcome = Some(Outcome {
+                winner: Some(side.other()),
+                victory: Some(Victory::Forfeit),
+                turn: self.board.turn,
+            });
+        }
+    }
+
     /// At the turn cap: more beacon progress wins, then more composure left across the team, then
     /// more creatures standing. Anything level after that is a draw.
     fn decide_at_cap(&self) -> Outcome {

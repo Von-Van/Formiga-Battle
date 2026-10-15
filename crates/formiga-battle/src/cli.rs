@@ -18,6 +18,8 @@ HEADLESS COMMANDS:
     tournament   Play many AI matches between random trios and report fairness
     replay       Replay a recorded match and check every turn
     arena        Draw an arena's tiles
+    serve        Run a room service for matches between friends (--bind <addr:port>, default
+                 127.0.0.1:7878; 0.0.0.0:7878 for the local network)
 
 ROSTER (roster, match):
     --sample             The sample colony (the default)
@@ -90,7 +92,7 @@ impl Args {
 }
 
 /// The commands this module answers.
-pub const COMMANDS: [&str; 5] = ["roster", "match", "tournament", "replay", "arena"];
+pub const COMMANDS: [&str; 6] = ["roster", "match", "tournament", "replay", "arena", "serve"];
 
 pub fn run(mut args: Vec<String>) -> Result<()> {
     let command = args.remove(0);
@@ -108,6 +110,23 @@ pub fn run(mut args: Vec<String>) -> Result<()> {
             args.0.remove(0);
             args.done()?;
             replay(PathBuf::from(file))
+        }
+        "serve" => {
+            let bind = args
+                .value("--bind")?
+                .unwrap_or_else(|| format!("127.0.0.1:{}", formiga_battle_room::DEFAULT_PORT));
+            args.done()?;
+            let server = formiga_battle_room::serve(&bind, formiga_battle_room::Limits::default())
+                .with_context(|| format!("could not listen on {bind}"))?;
+            eprintln!(
+                "formiga-battle: rooms open on {} (protocol {}, rules version {}); stop with Ctrl-C",
+                server.addr(),
+                formiga_battle_room::PROTOCOL_VERSION,
+                RULES_VERSION
+            );
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(3600));
+            }
         }
         "arena" => {
             let arena = load_arena(args.value("--file")?)?;
@@ -151,7 +170,7 @@ fn load_roster(args: &mut Args) -> Result<Vec<Profile>> {
         (None, Some(path)) => BattleSnapshot::read(path.as_ref())?,
         (None, None) => sample::snapshot(),
     };
-    Ok(crate::roster::profiles(&snapshot))
+    Ok(formiga_battle_room::roster::profiles(&snapshot))
 }
 
 /// A fixed session for a roster read here; it never leaves this process.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Play a friend: one Handler opens a room on a room service (`formiga-battle serve`) and passes
+  on its six-character code; the other joins. The room locks each turn when both have given
+  orders or at the deadline, resolves it, and both windows check their board against the
+  room's. A Handler who drops out keeps their seat and can come back; three turns in a row with
+  no orders forfeits, said in words.
 - The Handler's Notebook: after every match, each of your companions' pages notes what it was
   seen to do (the ways it keeps taking, the chances it takes, the friend it stays near) and a
   few moments worth remembering, drawn from its last ten matches so the notes change as it does.

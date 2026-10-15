@@ -1212,6 +1212,7 @@ dependencies = [
  "formiga-art",
  "formiga-battle-contract",
  "formiga-battle-core",
+ "formiga-battle-room",
  "formiga-core",
  "formiga-expansion-rulebook",
  "formiga-travel",
@@ -1242,6 +1243,22 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "formiga-battle-room"
+version = "0.1.0"
+dependencies = [
+ "formiga-battle-contract",
+ "formiga-battle-core",
+ "formiga-core",
+ "formiga-expansion-rulebook",
+ "formiga-travel",
+ "getrandom 0.4.3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "time",
 ]
 
 [[package]]
