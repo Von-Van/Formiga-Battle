@@ -65,6 +65,16 @@ fn run(
     tell: Sender<Told>,
 ) {
     let client = RelayClient::new(&base);
+    // Reading the program to digest it takes a moment, so it is done here, off the window.
+    let entrant = match entrant.build.clone().digested() {
+        Ok(build) => Entrant { build, ..entrant },
+        Err(error) => {
+            let _ = tell.send(Told::Gone(format!(
+                "Battle could not read its own program to say which copy it is: {error}"
+            )));
+            return;
+        }
+    };
     let seated = match &code {
         None => client.open(&entrant),
         Some(code) => client.join(code, &entrant),

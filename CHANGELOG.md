@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Only matching, unaltered copies play a friend: a joiner must have the same Battle, opened by
+  the same Desktop, and the same copy of Battle (its program's SHA-256) as the friend who opened
+  the room, or both copies must be builds the relay knows as that version's release. Someone with
+  another version is told which their friend has. A match whose two boards came out differently
+  earns nothing. The relay speaks version 2, and the window says what is shared for this.
 - What a match earns, kept by Desktop: a friend match earns Open Circuit points, a match-history
   line, notebook entries and a match played for each of the three; a match against the visitors
   earns Backyard Cup progress (three wins win the cup, a trophy and a medal, and unlock the

@@ -6,7 +6,9 @@ use formiga_battle_core::ai::Coach;
 use formiga_battle_core::{Match, RULES_VERSION, Side, TEAM_SIZE};
 use formiga_battle_room::relay::{Answer, Limits, Refusal, Request, Stage};
 use formiga_battle_room::roster::{bonds_among, room_match};
-use formiga_battle_room::{Entrant, RELAY_VERSION, Relay, RelayClient, View, serve_relay};
+use formiga_battle_room::{
+    Build, Entrant, RELAY_VERSION, Relay, RelayClient, Released, View, serve_relay,
+};
 
 fn entrant(seed: u8, handler: &str) -> Entrant {
     let roster = if seed == 0 {
@@ -18,6 +20,11 @@ fn entrant(seed: u8, handler: &str) -> Entrant {
     Entrant {
         protocol: RELAY_VERSION,
         rules_version: RULES_VERSION,
+        build: Build {
+            battle: "0.1.0".to_owned(),
+            desktop: Some("0.67.7".to_owned()),
+            digest: "a".repeat(64),
+        },
         handler: handler.to_owned(),
         bonds: bonds_among(&roster, &team),
         team,
@@ -107,6 +114,96 @@ fn a_friend_playing_by_other_rules_cannot_join() {
             relay: RELAY_VERSION,
             rules_version: RULES_VERSION
         }
+    );
+}
+
+/// What a joiner is told by a relay knowing `released`, when it plays with `change`d from the
+/// opener's build; `None` if it is seated.
+fn joining_with(released: Released, change: impl FnOnce(&mut Build)) -> Option<Refusal> {
+    let mut relay = Relay::with_entropy(Limits::default(), counting()).knowing(released);
+    let (code, _) = seated(relay.handle(
+        Request::Open {
+            entrant: entrant(0, "Jake"),
+        },
+        0,
+    ));
+    let mut other = entrant(9, "Friend");
+    change(&mut other.build);
+    match relay.handle(
+        Request::Join {
+            code,
+            entrant: other,
+        },
+        10,
+    ) {
+        Answer::Seat { .. } => None,
+        Answer::Refused(r) => Some(r),
+        answer => panic!("expected a seat or a refusal, got {answer:?}"),
+    }
+}
+
+#[test]
+fn a_friend_with_another_battle_or_desktop_cannot_join_and_is_told_which_to_have() {
+    let told = Some(Refusal::Mismatch {
+        battle: "0.1.0".to_owned(),
+        desktop: Some("0.67.7".to_owned()),
+    });
+    assert_eq!(
+        joining_with(Released::default(), |b| b.battle = "0.1.1".to_owned()),
+        told
+    );
+    assert_eq!(
+        joining_with(Released::default(), |b| b.desktop =
+            Some("0.67.8".to_owned())),
+        told
+    );
+    assert_eq!(
+        joining_with(Released::default(), |b| b.desktop = None),
+        told
+    );
+    assert_eq!(joining_with(Released::default(), |_| {}), None);
+}
+
+#[test]
+fn another_copy_of_the_same_versions_cannot_join_unless_both_were_released() {
+    let other = |b: &mut Build| b.digest = "b".repeat(64);
+    assert_eq!(
+        joining_with(Released::default(), other),
+        Some(Refusal::Build)
+    );
+    let mut released = Released::default();
+    released.0.insert(
+        "0.1.0".to_owned(),
+        ["a".repeat(64), "b".repeat(64)].into_iter().collect(),
+    );
+    assert_eq!(joining_with(released, other), None);
+}
+
+#[test]
+fn a_copy_that_is_none_of_its_releases_builds_cannot_open_a_room() {
+    let mut released = Released::default();
+    released
+        .0
+        .insert("0.1.0".to_owned(), ["b".repeat(64)].into_iter().collect());
+    let mut relay = Relay::with_entropy(Limits::default(), counting()).knowing(released);
+    let r = refusal(relay.handle(
+        Request::Open {
+            entrant: entrant(0, "Jake"),
+        },
+        0,
+    ));
+    assert_eq!(r, Refusal::Build);
+    assert_eq!(relay.rooms(), 0);
+}
+
+#[test]
+fn a_build_of_another_shape_is_not_read() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let mut odd = entrant(0, "Jake");
+    odd.build.digest = "not a digest".to_owned();
+    assert_eq!(
+        refusal(relay.handle(Request::Open { entrant: odd }, 0)),
+        Refusal::Malformed
     );
 }
 

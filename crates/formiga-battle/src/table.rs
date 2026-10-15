@@ -20,7 +20,7 @@ use formiga_battle_core::{
     TurnReport,
 };
 use formiga_battle_room::roster::{check_team, room_match};
-use formiga_battle_room::{Entrant, View, relay_base};
+use formiga_battle_room::{Build, Entrant, View, relay_base};
 use std::path::PathBuf;
 
 /// The session Desktop opened, and the answer being written into it.
@@ -132,6 +132,8 @@ pub struct Table {
     pub friend: Option<Friend>,
     /// Where friend matches go: the site's relay, unless development points elsewhere.
     pub relay: String,
+    /// The version of the Desktop whose roster this is, as its snapshot says.
+    desktop_version: String,
     /// Something the room said for the Handler to read.
     pub notice: Option<String>,
     /// Why the match ended without a turn to show it, such as a forfeit.
@@ -185,6 +187,7 @@ impl Table {
             other_name: "The visiting team".to_owned(),
             friend: None,
             relay: relay_base(),
+            desktop_version: roster.desktop_version.clone(),
             notice: None,
             ended_because: None,
         }
@@ -210,6 +213,20 @@ impl Table {
         let Some(m) = &self.m else {
             return;
         };
+        // A match whose two boards came out differently was not played by the same rules on both
+        // sides, so nobody can say who won it: it earns nothing.
+        if self
+            .friend
+            .as_ref()
+            .and_then(|f| f.view.as_ref())
+            .is_some_and(|v| v.out_of_step)
+        {
+            self.earned = vec![
+                "Your board and your friend's came out differently, so this match earned nothing."
+                    .to_owned(),
+            ];
+            return;
+        }
         let now = time::OffsetDateTime::now_utc();
         let earned = match &self.friend {
             Some(friend) => rewards::friend_match(
@@ -343,6 +360,7 @@ impl Table {
         let entrant = Entrant {
             protocol: formiga_battle_room::RELAY_VERSION,
             rules_version: formiga_battle_core::RULES_VERSION,
+            build: self.build(),
             handler: handler.trim().to_owned(),
             team,
             bonds,
@@ -358,6 +376,12 @@ impl Table {
             opponent_away: false,
             deadline: 0.0,
         });
+    }
+
+    /// What this Battle plays with: the Desktop that opened it, or none in a rehearsal. The line
+    /// to the relay adds the program's digest.
+    fn build(&self) -> Build {
+        Build::this(self.session.as_ref().map(|_| self.desktop_version.clone()))
     }
 
     /// Leaves the room, or the match with a friend. Leaving a match forfeits it.
@@ -413,6 +437,7 @@ impl Table {
 
     /// A new view of the room.
     fn seen(&mut self, view: View, now: f32) -> bool {
+        let mine = self.build();
         let Some(friend) = &mut self.friend else {
             return false;
         };
@@ -429,9 +454,14 @@ impl Table {
         if !friend.seated
             && let Some([a, b]) = &view.entrants
         {
-            // The relay checks nothing of the rules: each window checks both teams itself.
+            // The relay checks nothing of the rules: each window checks both teams itself, and that
+            // both sides play the same Battle and Desktop by the rules this Battle knows.
             let unfit = [a, b].into_iter().find_map(|e| {
-                if e.rules_version != formiga_battle_core::RULES_VERSION {
+                if e.rules_version != formiga_battle_core::RULES_VERSION
+                    || e.build.battle != mine.battle
+                    || e.build.desktop != mine.desktop
+                    || view.ruleset != Ruleset::default()
+                {
                     Some("Your Battle and your friend's are different versions; both need the newest.".to_owned())
                 } else {
                     check_team(&e.team, &e.bonds)

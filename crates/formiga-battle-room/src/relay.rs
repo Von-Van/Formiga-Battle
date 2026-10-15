@@ -12,6 +12,7 @@
 //! token is kept only as a digest. A room is deleted when its match ends and both sides have seen
 //! the end, or when it has gone quiet; nothing outlives it.
 
+use crate::build::{Build, Mismatch, Released};
 use crate::code;
 use formiga_battle_contract::Contender;
 use formiga_battle_core::{Orders, Ruleset, Side, TEAM_SIZE};
@@ -20,8 +21,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-/// The version of the relay's requests and answers.
-pub const RELAY_VERSION: u32 = 1;
+/// The version of the relay's requests and answers. 2: an entrant says which Battle and Desktop
+/// it plays with ([`Build`]).
+pub const RELAY_VERSION: u32 = 2;
 /// The largest body the relay reads.
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
 /// The header a seat's token travels in. Never in a URL, so it is never in a link or a log.
@@ -84,6 +86,8 @@ impl Default for Limits {
 pub struct Entrant {
     pub protocol: u32,
     pub rules_version: u32,
+    /// Which Battle and Desktop it plays with: a joiner's must match the opener's.
+    pub build: Build,
     /// A display name for the Handler, as they typed it.
     pub handler: String,
     pub team: Vec<Contender>,
@@ -178,6 +182,15 @@ pub enum Refusal {
     /// 409: this Battle speaks another version of the relay, or plays by other rules than the
     /// friend who opened the room (whose rules version this names).
     Version { relay: u32, rules_version: u32 },
+    /// 409: the friend who opened the room plays with another Battle or another Desktop (or in a
+    /// rehearsal, with none), whose versions this names.
+    Mismatch {
+        battle: String,
+        desktop: Option<String>,
+    },
+    /// 409: this Battle is not the same build as the friend's, or not one the relay knows as
+    /// released.
+    Build,
     /// 404
     NoSuchRoom,
     /// 409
@@ -195,7 +208,11 @@ pub enum Refusal {
 impl Refusal {
     pub const fn status(&self) -> u16 {
         match self {
-            Self::Version { .. } | Self::RoomFull | Self::NotThisTurn => 409,
+            Self::Version { .. }
+            | Self::Mismatch { .. }
+            | Self::Build
+            | Self::RoomFull
+            | Self::NotThisTurn => 409,
             Self::NoSuchRoom => 404,
             Self::Team { .. } => 422,
             Self::Malformed => 400,
@@ -209,6 +226,19 @@ impl Refusal {
                 "Your Battle and your friend's are different versions; both need the newest."
                     .to_owned()
             }
+            Self::Mismatch { battle, desktop } => match desktop {
+                Some(desktop) => format!(
+                    "Your friend plays with Battle {battle} and Formiga Desktop {desktop}; both of \
+                     you need the same Battle and the same Desktop."
+                ),
+                None => format!(
+                    "Your friend is rehearsing with Battle {battle}, without Formiga Desktop; both \
+                     of you need the same Battle, opened the same way."
+                ),
+            },
+            Self::Build => "Your Battle is not the same copy as your friend's; both of you need \
+                            Battle exactly as it was released."
+                .to_owned(),
             Self::NoSuchRoom => "There is no room with that code, or it has closed.".to_owned(),
             Self::RoomFull => "That room already has two Handlers.".to_owned(),
             Self::Team { reason } => format!("That team cannot play: {reason}."),
@@ -272,6 +302,7 @@ pub struct Relay {
     limits: Limits,
     rooms: BTreeMap<String, Room>,
     entropy: Box<dyn FnMut() -> u64 + Send>,
+    released: Released,
 }
 
 fn digest(seat: &str) -> String {
@@ -302,7 +333,13 @@ impl Relay {
             limits,
             rooms: BTreeMap::new(),
             entropy,
+            released: Released::default(),
         }
+    }
+
+    /// The same relay, knowing these released builds.
+    pub fn knowing(self, released: Released) -> Self {
+        Self { released, ..self }
     }
 
     pub fn rooms(&self) -> usize {
@@ -313,9 +350,10 @@ impl Relay {
         format!("{:016x}{:016x}", (self.entropy)(), (self.entropy)())
     }
 
-    /// What the relay checks of an entrant: its shape only. It does not know the rules, so it
-    /// cannot check a team any further; each window checks the other's team before it plays.
-    fn check(entrant: &Entrant) -> Result<(), Refusal> {
+    /// What the relay checks of an entrant: its shape, and that its build is one the relay may
+    /// admit. It does not know the rules, so it cannot check a team any further; each window
+    /// checks the other's team before it plays.
+    fn check(&self, entrant: &Entrant) -> Result<(), Refusal> {
         if entrant.protocol != RELAY_VERSION {
             return Err(Refusal::Version {
                 relay: RELAY_VERSION,
@@ -326,6 +364,12 @@ impl Relay {
             return Err(Refusal::Team {
                 reason: "a team is three companions".to_owned(),
             });
+        }
+        if !entrant.build.well_formed() {
+            return Err(Refusal::Malformed);
+        }
+        if !self.released.admits(&entrant.build) {
+            return Err(Refusal::Build);
         }
         Ok(())
     }
@@ -345,7 +389,7 @@ impl Relay {
         self.sweep(now);
         match request {
             Request::Open { entrant } => {
-                if let Err(r) = Self::check(&entrant) {
+                if let Err(r) = self.check(&entrant) {
                     return refused(r);
                 }
                 if self.rooms.len() >= self.limits.max_rooms {
@@ -391,11 +435,12 @@ impl Relay {
                 let Some(code) = code::normalize(&code) else {
                     return refused(Refusal::NoSuchRoom);
                 };
-                if let Err(r) = Self::check(&entrant) {
+                if let Err(r) = self.check(&entrant) {
                     return refused(r);
                 }
                 let seat = self.seat();
                 let grace = self.limits.grace_ms;
+                let released = &self.released;
                 let Some(room) = self.rooms.get_mut(&code) else {
                     return refused(Refusal::NoSuchRoom);
                 };
@@ -411,6 +456,19 @@ impl Relay {
                         relay: RELAY_VERSION,
                         rules_version: rules,
                     });
+                }
+                // And with the same Battle and Desktop, as unaltered as the relay can tell.
+                if let Some(opener) = room.sides[0].as_ref().map(|s| &s.entrant.build) {
+                    match released.mismatch(opener, &entrant.build) {
+                        Some(Mismatch::Versions) => {
+                            return refused(Refusal::Mismatch {
+                                battle: opener.battle.clone(),
+                                desktop: opener.desktop.clone(),
+                            });
+                        }
+                        Some(Mismatch::Build) => return refused(Refusal::Build),
+                        None => {}
+                    }
                 }
                 room.sides[1] = Some(Seat {
                     entrant: Self::clean(entrant),

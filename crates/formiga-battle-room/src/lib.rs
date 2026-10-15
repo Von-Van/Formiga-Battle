@@ -5,14 +5,17 @@
 //! - [`relay`]: the relay as a state machine: rooms, seats, deadlines, forfeits. The reference
 //!   the relay on the Formiga site follows.
 //! - [`http`]: the relay over HTTP: the client Battle uses, and a local relay for development.
+//! - [`build`]: which Battle and Desktop a side plays with, so only matching copies play.
 //! - [`code`]: invite codes.
 //! - [`roster`]: how a team of Desktop's companions is read as match profiles, the same on every
 //!   machine.
 
+pub mod build;
 pub mod code;
 pub mod http;
 pub mod relay;
 pub mod roster;
 
+pub use build::{Build, Released};
 pub use http::{AskError, LocalRelay, RELAY_BASE, RELAY_ENV, RelayClient, relay_base, serve_relay};
 pub use relay::{Entrant, Limits, Locked, RELAY_VERSION, Relay, Stage, View};

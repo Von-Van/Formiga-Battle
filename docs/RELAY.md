@@ -26,10 +26,28 @@ and 256 KiB out. Every answer carries `Cache-Control: no-store`. The seat travel
 A code is six characters from `34679ACDEFGHJKMNPQRTUVWXY`, read generously (any case; spaces and
 dashes ignored). A seat is 32 lowercase hex digits from a cryptographic random source.
 
-An **Entrant** is `{"protocol": 1, "rules_version": n, "handler": "…", "team": [3 contenders], "bonds": [≤ 3]}`.
-The relay checks `protocol == 1`, three contenders and at most three bonds, and trims `handler` to
+An **Entrant** is `{"protocol": 2, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3]}`.
+The relay checks `protocol == 2`, three contenders and at most three bonds, and trims `handler` to
 at most 24 printable characters ("A Handler" if empty). A joiner's `rules_version` must equal the
 opener's. It does not look inside the contenders.
+
+A **Build** is `{"battle": "0.1.0", "desktop": "0.67.7" or null, "digest": "…"}`: Battle's
+version, the version of the Desktop that opened it (`null` in a rehearsal), and the SHA-256 of
+Battle's program file as 64 lowercase hex digits. Versions are 1 to 24 characters of letters,
+digits and `.+-`; anything else is malformed. The relay knows the **released builds**: for some
+Battle versions, the set of digests that version was released as (one per platform), and nothing
+for any other version. Then:
+
+- An entrant whose Battle version has released builds, and whose digest is none of them, is
+  refused `build`, opening or joining.
+- A joiner whose `battle` or `desktop` differs from the opener's is refused `mismatch`, naming the
+  opener's (`null` and a version differ).
+- A joiner whose digest differs from the opener's is refused `build`, unless the version has
+  released builds (both digests are then among them).
+
+The site keeps the released builds in its own repository, in `lib/battle-builds.json` (`{"0.2.0":
+["<digest>", …]}`), changed by a pull request when a Battle release's digests are known; the
+reference takes them through `Relay::knowing`.
 
 `orders` is three entries, each `null` or an order as Battle writes it; the relay stores them as
 given. `hash` is 16 lowercase hex digits. 64-bit numbers (`seed`, `hash`) always travel as 16 hex
@@ -41,7 +59,9 @@ digits, because JavaScript numbers lose anything past 53 bits.
 |---|---|---|
 | 400 | `{"refused": "malformed"}` | The body is not the shape above, or too large |
 | 404 | `{"refused": "no_such_room"}` | No room under that code, or a seat that is not one of its two (the same answer, so a seat cannot be guessed at) |
-| 409 | `{"refused": "version", "relay": 1, "rules_version": n}` | Another protocol, or a joiner playing by other rules than the opener (`n` is the opener's) |
+| 409 | `{"refused": "version", "relay": 2, "rules_version": n}` | Another protocol, or a joiner playing by other rules than the opener (`n` is the opener's) |
+| 409 | `{"refused": "mismatch", "battle": "…", "desktop": "…" or null}` | A joiner with another Battle or Desktop than the opener's (these are the opener's) |
+| 409 | `{"refused": "build"}` | A copy of Battle the relay does not admit, or not the opener's copy |
 | 409 | `{"refused": "room_full"}` | Joining a room that already has two |
 | 409 | `{"refused": "not_this_turn"}` | Orders for a turn that is not the one being played; a board for a turn not yet locked |
 | 422 | `{"refused": "team", "reason": "…"}` | Not three companions |

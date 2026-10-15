@@ -23,7 +23,7 @@ const CARD: Color32 = Color32::from_rgb(0x33, 0x3d, 0x2c);
 const NOTE: Color32 = Color32::from_rgb(0xe8, 0xd6, 0x9c);
 /// What a friend match sends, said in full before the first is opened.
 const SHARED: [&str; 5] = [
-    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here; your three companions' names, looks and temperaments, and how they get on; your orders each turn; and a check number for the board after each turn.",
+    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here; your three companions' names, looks and temperaments, and how they get on; your orders each turn; a check number for the board after each turn; and which versions of Battle and Formiga Desktop you have, with a fingerprint of your copy of Battle (the same for everyone with that copy), so only matching, unaltered copies play each other.",
     "Nothing else from your colony is sent. There is no account, no email, no device or computer ID.",
     "The relay keeps your room only while it is open. It deletes it when the match ends, or after five minutes with nobody in it, and never keeps a copy. Your seat's key is kept only in scrambled form.",
     "Like any website, formigaworld.com's host may keep its usual short-lived request logs (when a request came, and from what internet address). The relay itself logs nothing about your room.",
