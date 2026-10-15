@@ -6,10 +6,11 @@ use common::*;
 use formiga_battle_core::*;
 
 #[test]
-fn holding_the_beacon_alone_for_two_turns_wins_by_capture() {
-    let mut m = board(&[(L0, (6, 0)), (R0, (0, 4))]);
+fn holding_the_beacon_alone_for_three_ticks_wins_by_capture() {
+    // Two steps from the zone: it holds for the last two ticks of the first turn.
+    let mut m = board(&[(L0, (4, 0)), (R0, (0, 4))]);
     m.resolve_turn(orders(&[(L0, hold(6, 0)), (R0, hold(0, 4))]));
-    assert_eq!(m.board.capture, [3, 0]);
+    assert_eq!(m.board.capture, [2, 0]);
     assert_eq!(m.outcome(), None);
     m.resolve_turn(orders(&[(L0, hold(6, 0)), (R0, hold(0, 4))]));
     assert_eq!(
@@ -32,21 +33,41 @@ fn anyone_of_the_other_team_in_the_zone_pauses_the_beacon() {
 }
 
 #[test]
-fn two_holding_against_one_in_the_zone_control_it() {
-    let arena = Arena::backyard();
-    let mut m = board_on(arena, &[(L0, (4, 3)), (L1, (4, 2)), (R0, (5, 3))]);
+fn two_holding_against_one_in_the_zone_do_not_gain_unless_counted_by_majority() {
+    let placed = [(L0, (4, 3)), (L1, (4, 2)), (R0, (5, 3))];
     let given = orders(&[(L0, hold(4, 3)), (L1, hold(4, 2)), (R0, hold(5, 3))]);
-    m.resolve_turn(given);
-    assert_eq!(m.board.capture, [3, 0]);
-
-    // Read the handoff's way, anyone of the other team in the zone at all pauses it.
-    let mut m = board_on(
-        Arena::backyard(),
-        &[(L0, (4, 3)), (L1, (4, 2)), (R0, (5, 3))],
-    );
-    m.ruleset.capture_rule = CaptureRule::Uncontested;
+    // Anyone of the other team in the zone, unbroken, pauses it.
+    let mut m = board_on(Arena::backyard(), &placed);
     m.resolve_turn(given);
     assert_eq!(m.board.capture, [0, 0]);
+
+    // Counted the older way, outnumbering them is enough.
+    let mut m = board_on(Arena::backyard(), &placed);
+    m.ruleset.capture_rule = CaptureRule::Majority;
+    m.resolve_turn(given);
+    assert_eq!(m.board.capture, [3, 0]);
+}
+
+#[test]
+fn someone_knocked_off_balance_in_the_zone_no_longer_pauses_it() {
+    // R0 holds an arm of the cross; L1 and L2 flank it from outside while L0 holds the middle.
+    let mut m = board_on(
+        Arena::backyard(),
+        &[(L0, (4, 3)), (L1, (5, 2)), (L2, (5, 4)), (R0, (5, 3))],
+    );
+    let report = m.resolve_turn(orders(&[
+        (L0, hold(4, 3)),
+        (L1, contest(R0)),
+        (L2, contest(R0)),
+        (R0, hold(5, 3)),
+    ]));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::Flanked { target: R0, .. }))
+    );
+    assert_eq!(m.board.capture, [3, 0]);
+    assert_eq!(m.outcome().map(|o| o.victory), Some(Some(Victory::Capture)));
 }
 
 #[test]
@@ -293,7 +314,7 @@ fn a_wary_creature_hangs_back_one_tick_a_turn_before_walking_in_among_the_other_
     ];
     let mut m = board_with(field(), teams, &[(L0, (1, 2)), (R0, (3, 2))]);
     m.ruleset.detour_budget = 0;
-    let report = m.resolve_turn(orders(&[(L0, hold(2, 2)), (R0, hold(3, 2))]));
+    let report = m.resolve_turn(orders(&[(L0, walk(2, 2)), (R0, hold(3, 2))]));
     let hung = report
         .events
         .iter()
@@ -301,6 +322,24 @@ fn a_wary_creature_hangs_back_one_tick_a_turn_before_walking_in_among_the_other_
         .count();
     assert_eq!(hung, 1, "once a turn, and no more");
     assert_eq!(at(&m, L0), (2, 2), "and then it goes on");
+}
+
+#[test]
+fn a_wary_creature_sent_to_hold_goes_straight_to_its_post() {
+    let teams = [
+        vec![wary(), plain(2), plain(3)],
+        vec![plain(4), plain(5), plain(6)],
+    ];
+    let mut m = board_with(field(), teams, &[(L0, (1, 2)), (R0, (3, 2))]);
+    m.ruleset.detour_budget = 0;
+    let report = m.resolve_turn(orders(&[(L0, hold(2, 2)), (R0, hold(3, 2))]));
+    assert!(
+        !report
+            .events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::HungBack { .. }))
+    );
+    assert!(m.fighter(L0).holding);
 }
 
 #[test]

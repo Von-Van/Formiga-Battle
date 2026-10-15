@@ -285,20 +285,12 @@ impl Playback {
                     }
                 }
                 EventKind::Countered {
-                    target,
-                    contesters,
-                    pressed,
-                    ..
+                    target, contesters, ..
                 } => {
                     let tile = frame.figure(*target).tile;
                     effect(&mut frame, Burst::Shield, tile);
                     let short = age < 0.6;
-                    let held = if short && *pressed {
-                        Pose::Wobble
-                    } else {
-                        Pose::Hold
-                    };
-                    set_pose(&mut frame, &mut since, *target, held, *when);
+                    set_pose(&mut frame, &mut since, *target, Pose::Hold, *when);
                     for c in contesters {
                         set_pose(
                             &mut frame,

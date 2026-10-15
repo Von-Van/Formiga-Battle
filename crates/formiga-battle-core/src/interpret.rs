@@ -42,7 +42,7 @@ fn hangs_back(m: &Match, slot: Slot, to: Tile) -> bool {
     let f = m.fighter(slot);
     if m.behavior(slot).caution < WARY
         || f.hung_back
-        || !matches!(f.order, Some(Order::Move { .. } | Order::Hold { .. }))
+        || !matches!(f.order, Some(Order::Move { .. }))
     {
         return false;
     }
@@ -455,7 +455,13 @@ fn follow_up(m: &Match, slot: Slot) -> Option<Plan> {
             .into_iter()
             .filter(|t| m.arena.contains(*t) && m.walkable(*t) && m.occupant(*t).is_none())
             .map(|t| (t, weigh(m, slot, t, None, false)))
-            .max_by_key(|(t, w)| (w.total(), -(t.y as i32), -(t.x as i32)))?;
+            .max_by_key(|(t, w)| {
+                (
+                    w.total(),
+                    -(t.y as i32),
+                    -(m.arena.across(slot.side, *t) as i32),
+                )
+            })?;
     if best.1.total() <= stay {
         return None;
     }
@@ -473,10 +479,11 @@ fn follow_up(m: &Match, slot: Slot) -> Option<Plan> {
     })
 }
 
-/// After a contest, a creature that steps back takes one step out of reach, if there is one.
+/// Turned away by a holder, a creature that steps back takes one step out of reach, if there is
+/// one. After a contest that landed it stays where it is.
 fn step_back(m: &Match, slot: Slot) -> Option<Plan> {
     let f = m.fighter(slot);
-    if f.followed_up || !m.behavior(slot).steps_back {
+    if f.followed_up || !f.turned_away || !m.behavior(slot).steps_back {
         return None;
     }
     let reach = |t: Tile| {
@@ -490,7 +497,7 @@ fn step_back(m: &Match, slot: Slot) -> Option<Plan> {
             .into_iter()
             .filter(|t| m.arena.contains(*t) && m.walkable(*t) && m.occupant(*t).is_none())
             .map(|t| (t, reach(t)))
-            .min_by_key(|(t, r)| (*r, t.y, t.x))?;
+            .min_by_key(|(t, r)| (*r, t.y, m.arena.across(slot.side, *t)))?;
     (after < now).then_some(Plan {
         to,
         reason: Reason::SteppedBack,

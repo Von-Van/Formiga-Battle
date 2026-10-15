@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Rules version 4, encirclement: two contesters coming at a holder from two sides at once break
+  its hold. It loses one composure and is pushed off its tile, out of the yard if it can be, or
+  knocked off balance where it stands, and either way stops counting in the yard for the rest
+  of the turn. Two holders corner to corner turn a flank away together. The beacon now counts
+  the handoff's way: progress pauses whenever someone of the other team stands in the yard
+  unbroken, and three ticks of having it to yourselves light it. The Backyard's yard is a cross
+  of five tiles rather than a square of nine. A wary creature hangs back only when sent to walk,
+  and a nervous one steps back only when its contest is turned away. A team that only ever
+  holds the yard now loses to every coach: 68% to 90% of the time, where it used to beat the
+  visitors nearly always.
 - What a match earns, kept by Desktop: a friend match earns Open Circuit points, a match-history
   line, notebook entries and a match played for each of the three; a match against the visitors
   earns Backyard Cup progress (three wins win the cup, a trophy and a medal, and unlock the

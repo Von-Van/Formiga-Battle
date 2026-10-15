@@ -1,14 +1,15 @@
-// Backyard: the first arena. The beacon's yard in the middle, open along its top and bottom
-// and through a gap on each side. The far lane is cut in two by a gate in a short wall; the
-// lever on the near side swings it.
+// Backyard: the first arena. The beacon's yard is a cross in the middle: its centre and four
+// arms. An arm has open ground on three sides, so a holder on it can be flanked and pushed out;
+// the centre can be flanked only from the arms. The far lane is cut in two by a gate in a short
+// wall; the lever on the near side swings it.
 id: backyard
 name: Backyard
 swing_ticks: 1
 cooldown_turns: 1
 . . . # G # . . .
 1 . . . . . . . 2
-. . # Z Z Z # . .
+. . # . Z . # . .
 1 . . Z Z Z . . 2
-. . # Z Z Z # . .
+. . # . Z . # . .
 1 . . . . . . . 2
 . . . . L . . . .

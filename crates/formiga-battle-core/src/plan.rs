@@ -74,7 +74,13 @@ fn options(m: &Match, slot: Slot) -> Vec<Order> {
             walks.push(t);
         }
     }
-    walks.sort_by_key(|t| (dist[t.y as usize * w + t.x as usize], t.y, t.x));
+    walks.sort_by_key(|t| {
+        (
+            dist[t.y as usize * w + t.x as usize],
+            t.y,
+            m.arena.across(slot.side, *t),
+        )
+    });
     for to in walks.into_iter().take(4) {
         options.push(Order::Move { to });
     }
@@ -125,7 +131,20 @@ pub fn think_ahead(m: &Match, side: Side, familiar: bool) -> Orders {
     } else {
         imagined_plainly(m, side)
     };
-    let theirs = Coach::Exhibition.orders(&model, side.other());
+    // What the other team will do: anyone holding goes on holding where it is, anyone on its way
+    // to hold somewhere goes on there, and anyone else does what the Exhibition coach would.
+    let mut theirs = Coach::Exhibition.orders(&model, side.other());
+    for e in model.team(side.other()) {
+        let f = model.fighter(e);
+        if f.holding {
+            theirs[e.index as usize] = Some(crate::order::Order::Hold { at: f.at });
+        } else if let Some(Order::Hold { at }) = f.order
+            && !f.interrupted
+        {
+            // On its way to hold somewhere: it goes on.
+            theirs[e.index as usize] = Some(Order::Hold { at });
+        }
+    }
     let mut ours = Coach::Exhibition.orders(&model, side);
     let play = |ours: Orders| {
         let mut sim = model.clone();

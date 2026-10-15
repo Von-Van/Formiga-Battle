@@ -205,18 +205,11 @@ pub fn observe(m: &Match, side: crate::order::Side, events: &[Event]) -> Vec<See
                     format!("Spotted {} wandering past and went for them", name(took)),
                 );
             }
-            EventKind::Countered {
-                target,
-                holders,
-                contesters,
-                pressed,
-            } => {
+            EventKind::Countered { holders, .. } => {
                 for h in holders {
                     signs.push((*h, Sign::HeldFirm));
                 }
-                if *pressed && contesters.len() >= 2 {
-                    moment(target, "Held firm against two at once".to_owned());
-                } else if holders.len() >= 2 {
+                if holders.len() >= 2 {
                     for h in holders {
                         moment(h, "Held the line side by side with a friend".to_owned());
                     }

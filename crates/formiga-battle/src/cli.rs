@@ -45,7 +45,7 @@ TOURNAMENT:
 
 RULES (match, tournament):
     --capture <rule>     uncontested (the default) or majority
-    --capture-ticks <N>  Ticks of holding that light the beacon (default 6)
+    --capture-ticks <N>  Ticks of holding that light the beacon (default 3)
     --turn-cap <N>       The last turn (default 12)
 
 ARENA:

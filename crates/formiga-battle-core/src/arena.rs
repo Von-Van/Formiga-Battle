@@ -25,6 +25,7 @@
 //! decides where anyone can walk.
 
 use crate::grid::Tile;
+use crate::order::Side;
 use serde::{Deserialize, Serialize};
 
 /// The largest board the rules accept on either side.
@@ -234,6 +235,16 @@ impl Arena {
         self.zone.contains(&tile)
     }
 
+    /// How far a tile is across the board from `side`'s own edge: the column, counted from the
+    /// left for the left team and from the right for the right. Every choice between tiles that
+    /// are otherwise equal goes by it, so the board plays the same from both sides.
+    pub fn across(&self, side: Side, t: Tile) -> i8 {
+        match side {
+            Side::Left => t.x,
+            Side::Right => self.width as i8 - 1 - t.x,
+        }
+    }
+
     /// Every tile, row by row.
     pub fn tiles(&self) -> impl Iterator<Item = Tile> + '_ {
         (0..self.height as i8)
@@ -260,10 +271,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn backyard_reads_with_three_starts_a_side_and_one_lever_for_its_gate() {
+    fn backyard_reads_with_a_cross_shaped_yard_three_starts_a_side_and_one_lever_for_its_gate() {
         let arena = Arena::backyard();
         assert_eq!(arena.id, "backyard");
-        assert_eq!(arena.zone.len(), 9);
+        assert_eq!(arena.zone.len(), 5);
         assert_eq!(arena.gates.len(), 1);
         assert_eq!(arena.levers.len(), 1);
         assert_eq!(arena.zone_centre(), Tile::new(4, 3));

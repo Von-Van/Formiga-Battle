@@ -7,18 +7,20 @@ use serde::{Deserialize, Serialize};
 /// The version of the rules themselves: what the code does with a ruleset. A change to how
 /// anything resolves bumps it, so a recorded match from an older build is refused rather than
 /// replayed differently.
-pub const RULES_VERSION: u32 = 3;
+pub const RULES_VERSION: u32 = 4;
 
 /// When holding the zone counts toward the beacon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CaptureRule {
-    /// A team holding in the zone with nobody at all from the other team in it: the handoff's
-    /// first reading. Under AI play both teams nearly always have someone in the zone, and well
-    /// under one match in a hundred is won by capture.
+    /// A team holding in the zone while nobody of the other team stands in it unbroken: the
+    /// handoff's reading, and Jake's, that progress pauses when the other team gets in. The
+    /// default since rules version 4, when flanking gave a team a way to break holders and so
+    /// to clear the zone.
     Uncontested,
-    /// More of a team holding in the zone than the other team has in it, holding or not. The
-    /// default: about three matches in five are won by capture, in about ten turns.
+    /// More of a team holding in the zone than the other team has in it unbroken, holding or
+    /// not. The default before rules version 4; a team that only ever holds wins by it before
+    /// anyone can flank it.
     Majority,
 }
 
@@ -47,17 +49,15 @@ pub struct Ruleset {
 }
 
 impl Default for Ruleset {
-    /// The handoff's opening proposal, with two settings of its open questions decided by
-    /// tournament: capture is counted over two full turns of holding (at three ticks a turn, its
-    /// suggested three ticks would go to whoever reached the yard first), and a team controls the
-    /// zone by outnumbering the other team in it, since with nobody allowed in it at all almost
-    /// no match was ever won by capture.
+    /// The handoff's opening proposal, with its open questions decided by tournament: capture is
+    /// the handoff's three ticks of holding the zone with nobody of the other team in it, which
+    /// with three ticks a turn is one whole turn of having it to yourselves.
     fn default() -> Self {
         Self {
             composure: 3,
             ticks_per_turn: 3,
-            capture_ticks: 6,
-            capture_rule: CaptureRule::Majority,
+            capture_ticks: 3,
+            capture_rule: CaptureRule::Uncontested,
             capture_decays: false,
             turn_cap: 12,
             damage_cap: 2,
