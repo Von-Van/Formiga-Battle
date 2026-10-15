@@ -272,6 +272,62 @@ fn with_no_detour_budget_even_the_most_cautious_creature_walks_the_quickest_way(
     ];
     let mut m = board_with(field(), teams, &[(L0, (0, 2)), (R0, (2, 1))]);
     m.ruleset.detour_budget = 0;
+    // A tick more than the walk, for the one it hangs back.
+    m.ruleset.ticks_per_turn = 4;
     m.resolve_turn(orders(&[(L0, walk(3, 2)), (R0, hold(2, 1))]));
     assert_eq!(at(&m, L0), (3, 2));
+}
+
+fn wary() -> Profile {
+    let mut p = plain(1);
+    p.nature.boldness = 0;
+    p.nature.suspicion = 1000;
+    p
+}
+
+#[test]
+fn a_wary_creature_hangs_back_one_tick_a_turn_before_walking_in_among_the_other_team() {
+    let teams = [
+        vec![wary(), plain(2), plain(3)],
+        vec![plain(4), plain(5), plain(6)],
+    ];
+    let mut m = board_with(field(), teams, &[(L0, (1, 2)), (R0, (3, 2))]);
+    m.ruleset.detour_budget = 0;
+    let report = m.resolve_turn(orders(&[(L0, hold(2, 2)), (R0, hold(3, 2))]));
+    let hung = report
+        .events
+        .iter()
+        .filter(|e| matches!(e.kind, EventKind::HungBack { slot: L0, .. }))
+        .count();
+    assert_eq!(hung, 1, "once a turn, and no more");
+    assert_eq!(at(&m, L0), (2, 2), "and then it goes on");
+}
+
+#[test]
+fn a_wary_creature_sent_to_contest_goes_without_hanging_back() {
+    let teams = [
+        vec![wary(), plain(2), plain(3)],
+        vec![plain(4), plain(5), plain(6)],
+    ];
+    let mut m = board_with(field(), teams, &[(L0, (0, 2)), (R0, (3, 2))]);
+    let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(3, 2))]));
+    assert!(
+        !report
+            .events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::HungBack { .. }))
+    );
+    assert_eq!(composure(&m, R0), 2);
+}
+
+#[test]
+fn a_creature_that_is_not_wary_never_hangs_back() {
+    let mut m = board(&[(L0, (1, 2)), (R0, (3, 2))]);
+    let report = m.resolve_turn(orders(&[(L0, hold(2, 3)), (R0, hold(3, 2))]));
+    assert!(
+        !report
+            .events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::HungBack { .. }))
+    );
 }

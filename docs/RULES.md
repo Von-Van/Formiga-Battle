@@ -2,7 +2,7 @@
 
 How a match of Formiga Battle resolves, as `formiga-battle-core` plays it. Every number here lives
 in `Ruleset` (`crates/formiga-battle-core/src/ruleset.rs`), travels with every recorded match, and
-is provisional until playtests settle it. `RULES_VERSION` is 2.
+is provisional until playtests settle it. `RULES_VERSION` is 3.
 
 ## A match
 
@@ -139,8 +139,10 @@ step of the best and looks again next tick.
 | How far out from the middle row | +wanderlust × rows out / half the board's height |
 | Against a wall or obstacle | +caution / 4 for each, likewise |
 
-Ties are broken by a seeded draw. Now and then (`variability`, 4% to 14%) it takes its second-best
-choice instead, if both are on time. Once arrived with ticks to spare it may take one follow-up
+Ties are broken by a seeded draw. Now and then (`variability`, 1% to 6%) it takes its second-best
+choice instead, if both are on time. A wary creature (caution 150 or more) sent to walk or hold
+waits one tick, once a turn, rather than take a step that puts it within reach of more of the
+other team than it is now; told to contest, it goes anyway. Once arrived with ticks to spare it may take one follow-up
 step beside a friend or out of reach, if that beats its patience; after its contest a creature that
 `steps back` takes one step out of reach. Every choice that is not the plain way has a reason the
 recap says in words.
@@ -166,19 +168,20 @@ Over 10,000 Exhibition-coached matches with the default rules (`--pairings 5000 
 
 | | |
 |---|---|
-| Left side | 0.490 |
-| Kinds, highest to lowest | Troublemaker 0.512, Lazybones 0.505, Showoff 0.503, Guardian 0.501, Sweetheart 0.500, Explorer 0.497, Scholar 0.496, Grump 0.494, Wallflower 0.493, Oddball 0.492 |
-| Spread between kinds | 0.021, each kind over 3,600 to 7,000 matches |
-| Won by capture, knockout, at the cap, drawn | 63%, 3%, 30%, 3%, in 10.2 turns |
+| Left side | 0.496 |
+| Kinds, highest to lowest | Troublemaker 0.518, Grump 0.505, Showoff 0.503, Lazybones 0.502, Sweetheart 0.501, Scholar 0.497, Explorer 0.496, Guardian 0.494, Oddball 0.494, Wallflower 0.488 |
+| Spread between kinds | 0.029, each kind over 3,600 to 7,000 matches |
+| Won by capture, knockout, at the cap, drawn | 63%, 3%, 31%, 3%, in 10.2 turns |
 
-With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500`), matches end
-sooner (78% by capture, in 7.6 turns) and kinds score within about 0.05 of each other, which two
-seeds show is chance: Grump is highest on one (0.532) and among the lowest on the other (0.481).
+With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500`, seeds 7 and
+8), kinds score within 0.046 and 0.039 of each other. Wallflowers, the most cautious kind, are
+lowest on both (0.471 and 0.478): about two points under even, as they were before hanging back
+was added, and the one place to watch in playtests.
 
-That was not so before rules version 2. Under strong coaching, a bold creature went out of its
-way to walk into the other team's reach, and a social one detoured to stay beside its teammates
-because company counted on every tile of a long way round: Grumps scored 0.554 and Explorers
-0.459. Both now have to be paid for like any other preference.
+Before rules version 2, under strong coaching, a bold creature went out of its way to walk into
+the other team's reach, and a social one detoured to stay beside its teammates because company
+counted on every tile of a long way round: Grumps scored 0.554 and Explorers 0.459. Both now
+have to be paid for like any other preference.
 
 ## Knowing your creatures
 
@@ -189,10 +192,13 @@ creatures as they are; the generic one imagines every creature as one that leans
 
 | Coaches | Familiar's score |
 |---|---|
-| familiar against generic, 4,000 matches | 0.511 |
+| familiar against generic, 6,000 matches | 0.524 |
 | familiar or generic against Exhibition | 0.997 and above |
 
-Knowing your creatures is worth about one match in a hundred against a coach who plans just as
-well without knowing them: positive, and small. Before version 2 it was worth three in a hundred,
-most of it from predicting the bold walking into reach, which was also what made some kinds
-better than others.
+Knowing your creatures is worth about five points between two equally careful coaches: the one
+who knows them wins 52.4% and the one who does not 47.6%. Most of it comes from hanging back: a
+coach who knows which of its creatures are wary plans for the tick they lose, or sends them to
+contest instead. It was 51.1% in rules version 2, before wary creatures hung back, and 53.1% in
+version 1, when most of it came from bold creatures walking into reach, which also made some
+kinds stronger than others. Hanging back every tick rather than once a turn was worth 52.5% too,
+but cost Wallflowers four points.

@@ -94,9 +94,18 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                             format!("With a moment to spare, {n} tucked itself out of reach.")
                         }
                         Reason::SteppedBack => format!("{n} hopped back after the contest."),
+                        Reason::HungBack => {
+                            format!("{n} hung back rather than walk in among the other team.")
+                        }
                     })
                 }
             }
+            EventKind::HungBack { slot, .. } => routed.insert(*slot).then(|| {
+                format!(
+                    "{} hung back rather than walk in among the other team.",
+                    name(slot)
+                )
+            }),
             EventKind::Interrupted { target, by } => Some(format!(
                 "{} caught {} on the move.",
                 list(m, by),

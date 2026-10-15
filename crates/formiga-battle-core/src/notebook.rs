@@ -48,6 +48,8 @@ pub enum Sign {
     HeldFirm,
     /// Caught someone on the move.
     CaughtSomeone,
+    /// Waited rather than walk in among the other team.
+    HungBack,
 }
 
 /// What one match showed of one creature.
@@ -138,11 +140,13 @@ pub fn observe(m: &Match, side: crate::order::Side, events: &[Event]) -> Vec<See
                     }
                     Reason::FollowedUpToCover => Some(Sign::TuckedAway),
                     Reason::SteppedBack => Some(Sign::SteppedBack),
+                    Reason::HungBack => Some(Sign::HungBack),
                 };
                 if let Some(sign) = sign {
                     signs.push((*slot, sign));
                 }
             }
+            EventKind::HungBack { slot, .. } => signs.push((*slot, Sign::HungBack)),
             EventKind::TookOpportunity { slot, took, .. } => {
                 signs.push((*slot, Sign::TookAChance));
                 moment(

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// The version of the rules themselves: what the code does with a ruleset. A change to how
 /// anything resolves bumps it, so a recorded match from an older build is refused rather than
 /// replayed differently.
-pub const RULES_VERSION: u32 = 2;
+pub const RULES_VERSION: u32 = 3;
 
 /// When holding the zone counts toward the beacon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

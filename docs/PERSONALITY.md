@@ -35,12 +35,12 @@ leaning is its own value, -100 to 100. Every result is held to -500..=500.
 
 | Battle leaning | From | What it does |
 |---|---|---|
-| `caution` | (−6 × lean(boldness) + 4 × lean(suspicion)) / 10 − sleep security | Keeps out of the other team's reach and close to cover. Over about 440 it will take a two-step detour round a single creature of theirs. Below zero it does nothing: a bold creature does not avoid the other team, and does not seek it out |
+| `caution` | (−6 × lean(boldness) + 4 × lean(suspicion)) / 10 − sleep security | Keeps out of the other team's reach and close to cover. Over about 440 it will take a two-step detour round a single creature of theirs. Below zero it does nothing: a bold creature does not avoid the other team, and does not seek it out. At 150 or more it is wary: sent to walk or hold, it waits one tick, once a turn, rather than step within reach of more of the other team; sent to contest, it goes |
 | `togetherness` | 0.8 × lean(social) + 2 × sociability | Keeps beside teammates, more so the ones it is bonded to, and away from one it avoids. Counted as a way's average, so it chooses between ways of about the same length and rarely pays for a long one |
 | `wanderlust` | 0.6 × lean(curiosity) + 2 × exploration − home affinity | Takes the outside lanes rather than the middle |
 | `opportunism` | (5 × lean(feistiness) + 3 × lean(impulsiveness) + 2 × lean(playfulness)) / 10 + play | On the way to one contest, takes another that walks into reach: a chance of opportunism in a thousand |
 | `patience` | (−7 × lean(impulsiveness) − 3 × lean(energy)) / 10 + 2 × routine | With a moment to spare after arriving, stays where it was sent |
-| `variability` | 40 + impulsiveness / 10, in thousandths | How often it takes its second-best way, if both are on time: 4% to 14%. The same side of a companion Desktop's own decision temperature comes from |
+| `variability` | 10 + impulsiveness / 20, in thousandths | How often it takes its second-best way, if both are on time: 1% to 6%, small, so what a creature does can be learned. The same side of a companion Desktop's own decision temperature comes from |
 | `steps_back` | Tension BraveButNervous or DramaticButCowardly, or caution over 250 | Takes one step out of reach after its contest |
 
 | Desktop field | Read by |
@@ -74,7 +74,8 @@ all would have done, so it is always true of the board as it was.
 
 Battle keeps a page for each of the Handler's companions, by colony and Desktop's creature id, in
 its own data folder (`notebook.json`; `FORMIGA_BATTLE_DATA_DIR` for development). After every
-match it records what the events showed of each: every reason a step was not the plain way, the
+match it records what the events showed of each: every reason a step was not the plain way (and
+every tick it hung back), the
 contests it took on a chance, held firm in or caught someone with, which teammate it kept near,
 and a few moments worth remembering. Notes are drawn from the last ten matches only, so as
 Desktop's leanings drift and the creature walks differently, its notes change with it.

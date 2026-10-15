@@ -46,6 +46,38 @@ fn options(m: &Match, slot: Slot) -> Vec<Order> {
             target: Target::Creature { slot: enemy },
         });
     }
+    // A few places to walk to: next to where each of the other team stands, where a contest
+    // could come or be met, and the nearest tiles round the zone.
+    let dist = crate::interpret::distances(m, slot, &[f.at], false);
+    let w = m.arena.width as usize;
+    let reach = |t: crate::grid::Tile| {
+        m.arena.contains(t)
+            && m.walkable(t)
+            && m.occupant(t).is_none()
+            && dist[t.y as usize * w + t.x as usize]
+                .is_some_and(|d| (1..=m.ruleset.ticks_per_turn).contains(&d))
+    };
+    let mut walks: Vec<crate::grid::Tile> = Vec::new();
+    for enemy in m.team(slot.side.other()) {
+        for t in m.fighter(enemy).at.steps() {
+            if reach(t) && !walks.contains(&t) {
+                walks.push(t);
+            }
+        }
+    }
+    for t in m.arena.tiles() {
+        if reach(t)
+            && m.arena.zone.iter().any(|z| z.touches(t))
+            && !m.arena.in_zone(t)
+            && !walks.contains(&t)
+        {
+            walks.push(t);
+        }
+    }
+    walks.sort_by_key(|t| (dist[t.y as usize * w + t.x as usize], t.y, t.x));
+    for to in walks.into_iter().take(4) {
+        options.push(Order::Move { to });
+    }
     if m.lever_ready() && m.board.gates_open.iter().any(|open| !open) {
         for lever in &m.arena.levers {
             options.push(Order::Contest {

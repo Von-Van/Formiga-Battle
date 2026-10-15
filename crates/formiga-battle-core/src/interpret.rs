@@ -31,7 +31,30 @@ pub struct Plan {
     pub follow_up: bool,
 }
 
-/// The step a creature means to take this tick, if any.
+/// How cautious a creature must be to hang back rather than walk in among the other team.
+pub const WARY: i16 = 150;
+
+/// Whether a wary creature, sent to walk or hold, would rather not take this step: it would put
+/// it within reach of more of the other team than it is now. It waits one tick, once a turn, and
+/// then goes on: a Handler who knows it can plan for the tick it loses. Told to contest, it goes
+/// anyway: that is what it was sent for.
+fn hangs_back(m: &Match, slot: Slot, to: Tile) -> bool {
+    let f = m.fighter(slot);
+    if m.behavior(slot).caution < WARY
+        || f.hung_back
+        || !matches!(f.order, Some(Order::Move { .. } | Order::Hold { .. }))
+    {
+        return false;
+    }
+    let crowd = |t: Tile| {
+        m.team(slot.side.other())
+            .filter(|e| m.fighter(*e).at.distance(t) <= 1)
+            .count()
+    };
+    crowd(to) > crowd(f.at)
+}
+
+/// The step a creature means to take this tick, if any. A plan to its own tile is hanging back.
 pub fn plan_step(m: &Match, slot: Slot, now: u16) -> Option<Plan> {
     let f = m.fighter(slot);
     if f.out || f.interrupted || f.holding {
@@ -68,7 +91,16 @@ pub fn plan_step(m: &Match, slot: Slot, now: u16) -> Option<Plan> {
                 .collect()
         }
     };
-    route(m, slot, &goals, now)
+    let plan = route(m, slot, &goals, now)?;
+    if hangs_back(m, slot, plan.to) {
+        return Some(Plan {
+            to: m.fighter(slot).at,
+            reason: Reason::HungBack,
+            detour: false,
+            follow_up: false,
+        });
+    }
+    Some(plan)
 }
 
 /// Steps from every tile to the nearest goal, walking only where the ground allows and, if

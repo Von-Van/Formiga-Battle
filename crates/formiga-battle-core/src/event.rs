@@ -34,6 +34,8 @@ pub enum Reason {
     FollowedUpToCover,
     /// Stepped back after a contest.
     SteppedBack,
+    /// Waited a tick rather than walk in among the other team.
+    HungBack,
 }
 
 /// Why the fallback chose an order.
@@ -87,6 +89,11 @@ pub enum EventKind {
     Bumped {
         slot: Slot,
         wanted: Tile,
+    },
+    /// Waited a tick rather than walk in among two or more of the other team.
+    HungBack {
+        slot: Slot,
+        at: Tile,
     },
     /// Began holding where it stands.
     Holding {

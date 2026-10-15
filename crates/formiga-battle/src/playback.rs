@@ -249,6 +249,11 @@ impl Playback {
                         set_pose(&mut frame, &mut since, *slot, Pose::Worry, *when);
                     }
                 }
+                EventKind::HungBack { slot, .. } => {
+                    if age < 0.6 {
+                        set_pose(&mut frame, &mut since, *slot, Pose::Worry, *when);
+                    }
+                }
                 EventKind::Holding { slot, .. } => {
                     frame.figure_mut(*slot).holding = true;
                     set_pose(&mut frame, &mut since, *slot, Pose::Hold, *when);

@@ -186,13 +186,16 @@ pub struct Behavior {
     /// With a moment to spare, stays where it was told rather than shifting. From patience, calm
     /// and how much it has come to keep a routine.
     pub patience: i16,
-    /// In thousandths, 40 to 140: how often it takes its second-best step instead of its best.
+    /// In thousandths, 10 to 60: how often it takes its second-best step instead of its best.
     /// From impulsiveness, the same side Desktop's `decision_temperature` comes from.
     pub variability: u16,
     /// Steps back after a contest. Brave-but-nervous and dramatic-but-cowardly creatures always
     /// do; anyone else only if it is very cautious.
     pub steps_back: bool,
 }
+
+/// How cautious a creature must be to step back after a contest, whatever its tension.
+const WARY_STEPS_BACK: i16 = 250;
 
 impl Behavior {
     fn of(p: &Profile) -> Self {
@@ -214,11 +217,11 @@ impl Behavior {
         let patience = bound(
             (-lean(n.impulsiveness) * 7 - lean(n.energy) * 3) / 10 + i32::from(l.routine) * 2,
         );
-        let variability = 40 + n.impulsiveness / 10;
+        let variability = 10 + n.impulsiveness / 20;
         let steps_back = matches!(
             p.tension,
             Some(Tension::BraveButNervous | Tension::DramaticButCowardly)
-        ) || caution > 250;
+        ) || caution > WARY_STEPS_BACK;
         Self {
             caution,
             togetherness,
@@ -259,7 +262,7 @@ mod tests {
             ),
             (0, 0, 0, 0, 0)
         );
-        assert_eq!(b.variability, 90);
+        assert_eq!(b.variability, 35);
         assert!(!b.steps_back);
     }
 
@@ -300,7 +303,7 @@ mod tests {
                 ] {
                     assert!((-500..=500).contains(&value));
                 }
-                assert!((40..=140).contains(&b.variability));
+                assert!((10..=60).contains(&b.variability));
             }
         }
     }

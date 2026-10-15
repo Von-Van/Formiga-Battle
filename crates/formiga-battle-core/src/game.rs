@@ -54,6 +54,10 @@ pub struct Fighter {
     pub followed_up: bool,
     /// Steps that do not bring it closer it may still take this turn.
     pub detours_left: u8,
+    /// It has waited a tick this turn rather than walk in among the other team; it does not
+    /// wait twice in a turn.
+    #[serde(default)]
+    pub hung_back: bool,
     /// Its last step was bumped. Until it steps again, others plan round it as if it were
     /// standing still, and it plans round them, so two creatures meeting in a narrow way do not
     /// bump each other for ever.
@@ -74,6 +78,7 @@ impl Fighter {
             arrived: false,
             followed_up: false,
             detours_left: 0,
+            hung_back: false,
             bumped: false,
         }
     }
@@ -343,6 +348,7 @@ impl Match {
             f.followed_up = false;
             f.detours_left = detours;
             f.bumped = false;
+            f.hung_back = false;
             f.holding = matches!(order, Some(Order::Hold { at }) if at == f.at) && !f.out;
             if f.holding {
                 let at = f.at;
@@ -406,10 +412,21 @@ impl Match {
         let mut push = |kind| events.push(Event { turn, tick, kind });
 
         // 3. Everyone picks a step from the same picture.
-        let plans: Vec<(Slot, interpret::Plan)> = self
+        let mut plans: Vec<(Slot, interpret::Plan)> = self
             .standing_slots()
             .filter_map(|slot| interpret::plan_step(self, slot, now).map(|plan| (slot, plan)))
             .collect();
+        let hung: Vec<Slot> = plans
+            .iter()
+            .filter(|(slot, plan)| plan.to == self.fighter(*slot).at)
+            .map(|(slot, _)| *slot)
+            .collect();
+        for slot in &hung {
+            let at = self.fighter(*slot).at;
+            self.fighter_mut(*slot).hung_back = true;
+            push(EventKind::HungBack { slot: *slot, at });
+        }
+        plans.retain(|(slot, _)| !hung.contains(slot));
         for (slot, plan) in &plans {
             let f = self.fighter_mut(*slot);
             if plan.detour {

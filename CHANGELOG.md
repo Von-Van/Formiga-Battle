@@ -8,6 +8,11 @@
   Shown on the team cards and beside the board; kept in Battle's own data folder.
 - Coaches that think a turn ahead, one knowing its creatures and one imagining them plain, and
   the tournament to measure what knowing them is worth.
+- Rules version 3: knowing your creatures counts for more. A wary creature sent to walk or hold
+  waits a tick, once a turn, rather than step in among the other team, and impulse picks a
+  second-best way far less often, so what a creature does can be learned; a coach who knows its
+  creatures now wins 52.4% against one who plans as well without knowing them (from 51.1%).
+  The notebook notes who hangs back.
 - Rules version 2: a bold creature no longer goes out of its way into the other team's reach,
   and company and lanes count as a way's average, so no kind of creature does consistently
   better under strong coaching.
