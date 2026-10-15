@@ -2,6 +2,7 @@
 //! and faces, the orders the Handler has given so far, and the turn being shown. The window only
 //! asks this what to show and tells it what was clicked, so tests drive the same code.
 
+use crate::friend::{Ask, Line, Told};
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
 use crate::scene::{Choice, Marks};
@@ -17,32 +18,33 @@ use formiga_battle_core::{
     Arena, Match, Order, Orders, Outcome, Profile, Ruleset, Side, Slot, TEAM_SIZE, Target, Tile,
     TurnReport,
 };
-use formiga_battle_room::protocol::{ClientMsg, Refusal, ServerMsg};
-use formiga_battle_room::roster::room_match;
-use formiga_battle_room::{Client, Heard};
+use formiga_battle_room::roster::{check_team, room_match};
+use formiga_battle_room::{Entrant, View, relay_base};
 use std::path::PathBuf;
 
-/// A match with a friend, through a room.
+/// A match with a friend, through the relay.
 pub struct Friend {
-    pub client: Client,
-    pub addr: String,
-    pub code: String,
-    pub token: String,
+    pub line: Line,
+    /// The room's code, once the relay has opened or joined it.
+    pub code: Option<String>,
+    /// The match has begun and is on the board.
+    pub seated: bool,
     /// Both Handlers' names, left then right.
     pub handlers: [String; 2],
-    /// This turn's orders have gone to the room.
-    pub sent: bool,
+    /// The newest view of the room.
+    pub view: Option<View>,
+    /// The turn this Handler's orders have gone to the relay for.
+    pub sent_turn: Option<u8>,
     pub opponent_ready: bool,
     pub opponent_away: bool,
     /// When this turn locks, on the window's clock.
     pub deadline: f32,
 }
 
-/// Waiting in the lobby: connected, maybe with a room open for a friend to join.
-pub struct Pending {
-    pub client: Client,
-    pub addr: String,
-    pub code: Option<String>,
+impl Friend {
+    pub fn sent(&self, turn: u8) -> bool {
+        self.sent_turn == Some(turn)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,7 +123,8 @@ pub struct Table {
     /// The other side's name in recaps.
     pub other_name: String,
     pub friend: Option<Friend>,
-    pub pending: Option<Pending>,
+    /// Where friend matches go: the site's relay, unless development points elsewhere.
+    pub relay: String,
     /// Something the room said for the Handler to read.
     pub notice: Option<String>,
     /// Why the match ended without a turn to show it, such as a forfeit.
@@ -175,7 +178,7 @@ impl Table {
             board_teams: [Vec::new(), Vec::new()],
             other_name: "The visiting team".to_owned(),
             friend: None,
-            pending: None,
+            relay: relay_base(),
             notice: None,
             ended_because: None,
         }
@@ -322,240 +325,192 @@ impl Table {
         (team, bonds)
     }
 
-    /// Connects to a room service and opens a room for a friend (`code` is `None`), or joins
-    /// the friend's room by its code.
-    pub fn open_room(&mut self, addr: &str, handler: &str, code: Option<&str>) {
+    /// Opens a room on the relay for a friend (`code` is `None`), or joins the friend's room by
+    /// its code.
+    pub fn open_room(&mut self, handler: &str, code: Option<&str>) {
         self.notice = None;
         if self.picked.len() != TEAM_SIZE {
             self.notice = Some("Choose three first.".to_owned());
             return;
         }
-        let client = match Client::connect(addr, env!("CARGO_PKG_VERSION")) {
-            Ok(client) => client,
-            Err(error) => {
-                self.notice = Some(format!(
-                    "Could not reach the room service at {addr}: {error}"
-                ));
-                return;
-            }
-        };
         let (team, bonds) = self.picked_team();
-        let handler = handler.trim().to_owned();
-        let msg = match code {
-            None => ClientMsg::Create {
-                handler,
-                team,
-                bonds,
-            },
-            Some(code) => ClientMsg::Join {
-                code: code.to_owned(),
-                handler,
-                team,
-                bonds,
-            },
+        let entrant = Entrant {
+            protocol: formiga_battle_room::RELAY_VERSION,
+            rules_version: formiga_battle_core::RULES_VERSION,
+            handler: handler.trim().to_owned(),
+            team,
+            bonds,
         };
-        if let Err(error) = client.send(&msg) {
-            self.notice = Some(format!("The room service stopped answering: {error}"));
-            return;
-        }
-        self.pending = Some(Pending {
-            client,
-            addr: addr.to_owned(),
+        self.friend = Some(Friend {
+            line: Line::start(self.relay.clone(), entrant, code.map(str::to_owned)),
             code: None,
+            seated: false,
+            handlers: [String::new(), String::new()],
+            view: None,
+            sent_turn: None,
+            opponent_ready: false,
+            opponent_away: false,
+            deadline: 0.0,
         });
     }
 
-    /// Leaves the lobby or the match with a friend.
+    /// Leaves the room, or the match with a friend. Leaving a match forfeits it.
     pub fn leave_room(&mut self) {
-        for client in [
-            self.pending.take().map(|p| p.client),
-            self.friend.take().map(|f| f.client),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            let _ = client.send(&ClientMsg::Leave);
+        if let Some(friend) = self.friend.take() {
+            friend.line.ask(Ask::Leave);
         }
     }
 
-    /// Tries the room again after the connection was lost, with the seat's token.
-    pub fn reconnect(&mut self) {
-        let Some(friend) = &mut self.friend else {
-            return;
-        };
-        match Client::connect(&friend.addr, env!("CARGO_PKG_VERSION")) {
-            Ok(client) => {
-                let _ = client.send(&ClientMsg::Rejoin {
-                    code: friend.code.clone(),
-                    token: friend.token.clone(),
-                });
-                friend.client = client;
-                self.notice = Some("Reconnecting…".to_owned());
-            }
-            Err(error) => self.notice = Some(format!("Still cannot reach the room: {error}")),
-        }
-    }
-
-    /// Whatever the room has said since the last frame. True if a match with a friend began.
+    /// Whatever the relay has said since the last frame. True if a match with a friend began.
     pub fn poll(&mut self, now: f32) -> bool {
         let mut began = false;
-        while let Some(heard) = self.hear() {
-            match heard {
-                Heard::Closed(why) => {
-                    self.notice = Some(format!("Lost the room: {why}."));
-                    self.pending = None;
+        while let Some(told) = self.friend.as_ref().and_then(|f| f.line.told()) {
+            match told {
+                Told::Seated { code } => {
+                    if let Some(f) = &mut self.friend {
+                        f.code = Some(code);
+                    }
+                }
+                Told::View(view) => {
+                    self.notice = None;
+                    began |= self.seen(*view, now);
+                }
+                Told::Problem(why) => self.notice = Some(why),
+                Told::Gone(why) => {
+                    if self.outcome().is_none() {
+                        self.notice = Some(why);
+                    }
+                    let playing = self.friend.as_ref().is_some_and(|f| f.seated);
+                    if !playing || self.outcome().is_some() {
+                        self.friend = None;
+                    }
                     break;
                 }
-                Heard::Msg(msg) => began |= self.heard(*msg, now),
             }
         }
-        // Orders not sent by the time the room locks the turn are sent at the last moment.
+        self.catch_up(now);
+        // Orders not sent by the time the turn locks are sent at the last moment.
         if let Some(friend) = &self.friend
-            && !friend.sent
+            && friend.seated
             && self.shown.is_none()
             && self.outcome().is_none()
-            && friend.deadline - now < 1.5
+            && self
+                .m
+                .as_ref()
+                .is_some_and(|m| !friend.sent(m.board.turn + 1))
+            && friend.deadline - now < 2.0
         {
             self.lock(now);
         }
         began
     }
 
-    fn hear(&mut self) -> Option<Heard> {
-        if let Some(p) = &self.pending {
-            return p.client.try_hear();
+    /// A new view of the room.
+    fn seen(&mut self, view: View, now: f32) -> bool {
+        let Some(friend) = &mut self.friend else {
+            return false;
+        };
+        friend.deadline = now + view.deadline_ms as f32 / 1000.0;
+        friend.opponent_ready = view.opponent_ready;
+        friend.opponent_away = view.opponent_quiet_ms > 8_000;
+        if view.out_of_step {
+            self.notice = Some(
+                "Your board and your friend's came out differently; this match cannot be trusted."
+                    .to_owned(),
+            );
         }
-        self.friend.as_ref().and_then(|f| f.client.try_hear())
+        let mut began = false;
+        if !friend.seated
+            && let Some([a, b]) = &view.entrants
+        {
+            // The relay checks nothing of the rules: each window checks both teams itself.
+            let unfit = [a, b].into_iter().find_map(|e| {
+                if e.rules_version != formiga_battle_core::RULES_VERSION {
+                    Some("Your Battle and your friend's are different versions; both need the newest.".to_owned())
+                } else {
+                    check_team(&e.team, &e.bonds)
+                        .err()
+                        .map(|reason| format!("A team cannot play: {reason}."))
+                }
+            });
+            if let Some(why) = unfit {
+                self.notice = Some(why);
+                self.leave_room();
+                return false;
+            }
+            let handlers = [a.handler.clone(), b.handler.clone()];
+            match room_match(
+                Arena::backyard(),
+                view.ruleset,
+                view.seed,
+                [&a.team, &b.team],
+                [&a.bonds, &b.bonds],
+            ) {
+                Ok(m) => {
+                    friend.seated = true;
+                    friend.handlers = handlers.clone();
+                    let teams = [a.team.clone(), b.team.clone()];
+                    let you = view.you;
+                    friend.view = Some(view);
+                    self.seat_friend_match(m, you, &handlers, teams, now);
+                    return true;
+                }
+                Err(error) => self.notice = Some(format!("The match could not begin: {error}")),
+            }
+        }
+        if let Some(friend) = &mut self.friend {
+            friend.view = Some(view);
+            began = false;
+        }
+        began
     }
 
-    fn heard(&mut self, msg: ServerMsg, now: f32) -> bool {
-        match msg {
-            ServerMsg::Welcome { .. } => {}
-            ServerMsg::Refused { refusal } => {
-                self.notice = Some(refusal.words());
-                if !matches!(refusal, Refusal::NotThisTurn) {
-                    self.pending = None;
-                }
-            }
-            ServerMsg::Created { code, .. } => {
-                if let Some(p) = &mut self.pending {
-                    p.code = Some(code);
-                }
-            }
-            ServerMsg::Started {
-                code,
-                token,
-                you,
-                handlers,
-                teams,
-                bonds,
-                arena,
-                ruleset,
-                seed,
-                deadline_ms,
-            } => {
-                let Some(pending) = self.pending.take() else {
-                    return false;
-                };
-                let m = match room_match(
-                    arena,
-                    ruleset,
-                    seed,
-                    [&teams[0], &teams[1]],
-                    [&bonds[0], &bonds[1]],
-                ) {
-                    Ok(m) => m,
-                    Err(error) => {
-                        self.notice = Some(format!("The match could not begin: {error}"));
-                        return false;
-                    }
-                };
-                self.friend = Some(Friend {
-                    client: pending.client,
-                    addr: pending.addr,
-                    code,
-                    token,
-                    handlers: handlers.clone(),
-                    sent: false,
-                    opponent_ready: false,
-                    opponent_away: false,
-                    deadline: now + deadline_ms as f32 / 1000.0,
-                });
-                self.seat_friend_match(m, you, &handlers, teams, now);
-                return true;
-            }
-            ServerMsg::OpponentReady { .. } => {
-                if let Some(f) = &mut self.friend {
-                    f.opponent_ready = true;
-                }
-            }
-            ServerMsg::Resolved {
-                submitted,
-                hash,
-                deadline_ms,
-                ..
-            } => {
-                if let Some(f) = &mut self.friend {
-                    f.sent = false;
-                    f.opponent_ready = false;
-                    f.deadline = now + deadline_ms as f32 / 1000.0;
-                }
-                let Some(m) = &mut self.m else {
-                    return false;
-                };
-                let before = m.board.clone();
-                let report = m.resolve_turn(submitted);
-                if report.hash != hash
-                    && let Some(f) = &self.friend
-                {
-                    self.notice = Some("Out of step with the room; catching up.".to_owned());
-                    let _ = f.client.send(&ClientMsg::Resync);
-                }
-                self.show_turn(before, report, now);
-            }
-            ServerMsg::OpponentAway => {
-                if let Some(f) = &mut self.friend {
-                    f.opponent_away = true;
-                }
-            }
-            ServerMsg::OpponentBack => {
-                if let Some(f) = &mut self.friend {
-                    f.opponent_away = false;
-                }
-            }
-            ServerMsg::Resume {
-                you,
-                handlers,
-                teams,
-                record,
-                deadline_ms,
-                ..
-            } => match record.replay() {
-                Ok((m, _)) => {
-                    if let Some(f) = &mut self.friend {
-                        f.deadline = now + deadline_ms as f32 / 1000.0;
-                        f.sent = false;
-                    }
-                    self.notice = None;
-                    self.seat_friend_match(m, you, &handlers, teams, now);
-                }
-                Err(error) => {
-                    self.notice = Some(format!("Could not catch up with the room: {error}"))
-                }
-            },
-            ServerMsg::Ended { outcome, reason } => {
-                if let (Some(m), Some(outcome)) = (&mut self.m, outcome)
-                    && let Some(winner) = outcome.winner
-                {
-                    m.forfeit(winner.other());
-                }
-                self.ended_because = Some(reason);
-                if self.outcome().is_some() && self.shown.is_none() {
-                    self.note_the_match();
-                }
-            }
+    /// Works out the next locked turn not yet shown here, once the last has been shown, and
+    /// tells the relay the board it came to. A forfeit the relay reports ends the match.
+    fn catch_up(&mut self, now: f32) {
+        if self.shown.is_some() {
+            return;
         }
-        false
+        let Some(friend) = &self.friend else {
+            return;
+        };
+        let Some(view) = &friend.view else {
+            return;
+        };
+        let Some(m) = &mut self.m else {
+            return;
+        };
+        if !friend.seated {
+            return;
+        }
+        let next = view
+            .locked
+            .iter()
+            .find(|l| l.turn == m.board.turn + 1)
+            .copied();
+        let ending = view.ending.clone();
+        if let Some(locked) = next
+            && m.outcome().is_none()
+        {
+            let before = m.board.clone();
+            let report = m.resolve_turn(locked.submitted);
+            friend.line.ask(Ask::Board {
+                turn: report.turn,
+                hash: report.hash,
+                finished: m.outcome().is_some(),
+            });
+            self.show_turn(before, report, now);
+            return;
+        }
+        if let Some(ending) = ending
+            && m.outcome().is_none()
+            && next.is_none()
+            && let Some(side) = ending.forfeited
+        {
+            m.forfeit(side);
+            self.ended_because = Some(ending.reason);
+            self.note_the_match();
+        }
     }
 
     /// Puts a match with a friend on the board, from either side.
@@ -821,19 +776,15 @@ impl Table {
             return;
         }
         if let Some(friend) = &mut self.friend {
-            if friend.sent {
+            let turn = m.board.turn + 1;
+            if !friend.seated || friend.sent(turn) {
                 return;
             }
-            let msg = ClientMsg::Submit {
-                turn: m.board.turn + 1,
+            friend.line.ask(Ask::Orders {
+                turn,
                 orders: self.orders,
-            };
-            match friend.client.send(&msg) {
-                Ok(()) => friend.sent = true,
-                Err(error) => {
-                    self.notice = Some(format!("The room did not get those orders: {error}"))
-                }
-            }
+            });
+            friend.sent_turn = Some(turn);
             self.selected = None;
             self.verb = None;
             return;
@@ -1009,58 +960,62 @@ mod tests {
     }
 
     #[test]
-    fn two_tables_play_a_whole_match_through_a_room() {
-        let server =
-            formiga_battle_room::serve("127.0.0.1:0", formiga_battle_room::Limits::default())
+    fn two_tables_play_a_whole_match_through_a_relay() {
+        let relay =
+            formiga_battle_room::serve_relay("127.0.0.1:0", formiga_battle_room::Limits::default())
                 .unwrap();
-        let addr = server.addr().to_string();
         let mut host = Table::new(sample::snapshot(), sample::visitors(9), 1);
         let mut guest = Table::new(sample::visitors(11), sample::visitors(9), 2);
-        host.open_room(&addr, "Jake", None);
+        host.relay = relay.base();
+        guest.relay = relay.base();
+        host.open_room("Jake", None);
         let mut now = 0.0;
         let code = loop {
             host.poll(now);
-            if let Some(code) = host.pending.as_ref().and_then(|p| p.code.clone()) {
+            if let Some(code) = host.friend.as_ref().and_then(|f| f.code.clone()) {
                 break code;
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
             now += 0.005;
             assert!(now < 5.0, "the room opens: {:?}", host.notice);
         };
-        guest.open_room(&addr, "Friend", Some(&code.to_lowercase()));
+        guest.open_room("Friend", Some(&code.to_lowercase()));
         let mut began = [false, false];
         while !(began[0] && began[1]) {
             began[0] |= host.poll(now);
             began[1] |= guest.poll(now);
-            std::thread::sleep(std::time::Duration::from_millis(5));
-            now += 0.005;
-            assert!(now < 10.0, "both see the match begin");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            now += 0.02;
+            assert!(now < 20.0, "both see the match begin");
         }
         assert_eq!(host.you, Side::Left);
         assert_eq!(guest.you, Side::Right);
         assert_eq!(host.other_short(), "Friend");
-        let mut turns = 0;
+        let mut rounds = 0;
         while !(host.finished(now) && guest.finished(now)) {
             for t in [&mut host, &mut guest] {
-                if t.shown.is_none() && t.outcome().is_none() && !t.friend.as_ref().unwrap().sent {
+                let turn = t.m.as_ref().unwrap().board.turn + 1;
+                if t.shown.is_none()
+                    && t.outcome().is_none()
+                    && !t.friend.as_ref().unwrap().sent(turn)
+                {
                     t.coach_orders();
                     t.lock(now);
                 }
             }
-            std::thread::sleep(std::time::Duration::from_millis(5));
-            now += 0.5;
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            now += 2.0;
             host.poll(now);
             guest.poll(now);
             host.frame(now);
             guest.frame(now);
-            turns += 1;
-            assert!(turns < 2000, "the match ends");
+            rounds += 1;
+            assert!(rounds < 600, "the match ends");
         }
         let (a, b) = (host.m.as_ref().unwrap(), guest.m.as_ref().unwrap());
         assert_eq!(a.board, b.board, "both see the same board");
         assert!(a.outcome().is_some());
-        assert!(host.notice.is_none(), "{:?}", host.notice);
-        server.stop();
+        relay.stop();
     }
 
     #[test]

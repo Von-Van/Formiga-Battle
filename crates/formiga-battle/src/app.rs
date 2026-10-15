@@ -21,6 +21,15 @@ const INK: Color32 = Color32::from_rgb(0xf3, 0xec, 0xd8);
 const FAINT: Color32 = Color32::from_rgb(0xb7, 0xb0, 0x9a);
 const CARD: Color32 = Color32::from_rgb(0x33, 0x3d, 0x2c);
 const NOTE: Color32 = Color32::from_rgb(0xe8, 0xd6, 0x9c);
+/// What a friend match sends, said in full before the first is opened.
+const SHARED: [&str; 5] = [
+    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here; your three companions' names, looks and temperaments, and how they get on; your orders each turn; and a check number for the board after each turn.",
+    "Nothing else from your colony is sent. There is no account, no email, no device or computer ID.",
+    "The relay keeps your room only while it is open. It deletes it when the match ends, or after five minutes with nobody in it, and never keeps a copy. Your seat's key is kept only in scrambled form.",
+    "Like any website, formigaworld.com's host may keep its usual short-lived request logs (when a request came, and from what internet address). The relay itself logs nothing about your room.",
+    "What the match earns is written to your colony on this computer when Battle closes.",
+];
+
 const CARD_CHOSEN: Color32 = Color32::from_rgb(0x4a, 0x55, 0x3a);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,8 +70,9 @@ pub struct BattleApp {
     notebook_open: bool,
     /// What the Handler types to play a friend.
     handler: String,
-    room_addr: String,
     join_code: String,
+    /// The Handler has read what a friend match shares, this time.
+    understood: bool,
     /// Every turn's orders come from the AI coach and lock at once: for review pictures.
     autoplay: bool,
     snap: Option<Snap>,
@@ -83,9 +93,8 @@ impl BattleApp {
             error: None,
             notebook_open: false,
             handler: String::new(),
-            room_addr: std::env::var("FORMIGA_BATTLE_ROOM")
-                .unwrap_or_else(|_| format!("127.0.0.1:{}", formiga_battle_room::DEFAULT_PORT)),
             join_code: String::new(),
+            understood: false,
             autoplay: review == Some(Review::Playing),
             snap,
             clock: 0.0,
@@ -120,8 +129,8 @@ impl BattleApp {
             }
             Some(Review::Room) => {
                 app.handler = "Jake".to_owned();
-                let addr = app.room_addr.clone();
-                app.table.open_room(&addr, "Jake", None);
+                app.understood = true;
+                app.table.open_room("Jake", None);
             }
             Some(Review::Picking) | None => {}
         }
@@ -160,7 +169,7 @@ impl BattleApp {
         let ctx = ui.ctx().clone();
         self.clock = ctx.input(|input| input.time) as f32;
         let now = self.clock;
-        if self.table.pending.is_some() || self.table.friend.is_some() {
+        if self.table.friend.is_some() {
             if self.table.poll(now) {
                 self.stage = Stage::Playing;
                 self.notebook_open = false;
@@ -520,7 +529,12 @@ impl BattleApp {
             return;
         }
         let you = self.table.you;
-        let sent = self.table.friend.as_ref().is_some_and(|f| f.sent);
+        let sent = self.table.friend.as_ref().is_some_and(|f| {
+            self.table
+                .m
+                .as_ref()
+                .is_some_and(|m| f.sent(m.board.turn + 1))
+        });
         let giving = self.table.shown.is_none() && !sent;
         let Some(m) = &self.table.m else {
             return;
@@ -667,12 +681,6 @@ impl BattleApp {
         if let Some(notice) = self.table.notice.clone() {
             ui.add_space(6.0);
             ui.colored_label(Color32::from_rgb(0xff, 0xc0, 0x8a), &notice);
-            if self.table.friend.is_some()
-                && notice.starts_with("Lost the room")
-                && ui.button("Reconnect").clicked()
-            {
-                self.table.reconnect();
-            }
         }
         ui.add_space(10.0);
         ui.separator();
@@ -767,12 +775,12 @@ impl BattleApp {
     }
 
     /// Playing a friend: open a room and pass on its code, or join one with the code a friend
-    /// gave.
+    /// gave. What is shared is said here, every time, before anything is sent.
     fn lobby(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         ui.label(RichText::new("Play a friend").size(18.0).color(INK));
-        if let Some(pending) = &self.table.pending {
-            match &pending.code {
+        if let Some(friend) = &self.table.friend {
+            match &friend.code {
                 Some(code) => {
                     ui.label(
                         RichText::new("Your room is open. Give your friend this code:")
@@ -782,32 +790,41 @@ impl BattleApp {
                     ui.label(RichText::new("The match begins when they join.").color(FAINT));
                 }
                 None => {
-                    ui.label(RichText::new("Talking to the room service…").color(FAINT));
+                    ui.label(RichText::new("Opening the room…").color(FAINT));
                 }
             }
             if ui.button("Cancel").clicked() {
                 self.table.leave_room();
             }
         } else {
-            let ready = self.table.picked.len() == TEAM_SIZE;
-            egui::Grid::new("lobby")
-                .num_columns(2)
-                .spacing([10.0, 6.0])
+            egui::Frame::new()
+                .fill(CARD)
+                .corner_radius(8.0)
+                .inner_margin(10.0)
                 .show(ui, |ui| {
-                    ui.label(RichText::new("Your name").color(FAINT));
-                    ui.add(egui::TextEdit::singleline(&mut self.handler).desired_width(200.0));
-                    ui.end_row();
-                    ui.label(RichText::new("Room service").color(FAINT));
-                    ui.add(egui::TextEdit::singleline(&mut self.room_addr).desired_width(200.0));
-                    ui.end_row();
+                    ui.set_max_width(640.0);
+                    ui.label(
+                        RichText::new("What a friend match shares")
+                            .color(INK)
+                            .strong(),
+                    );
+                    for line in SHARED {
+                        ui.label(RichText::new(format!("· {line}")).size(13.0).color(FAINT));
+                    }
+                    ui.checkbox(&mut self.understood, "I understand what is shared");
                 });
+            let ready = self.table.picked.len() == TEAM_SIZE && self.understood;
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Your name for your friend").color(FAINT));
+                ui.add(egui::TextEdit::singleline(&mut self.handler).desired_width(180.0));
+            });
             ui.horizontal(|ui| {
                 if ui
                     .add_enabled(ready, egui::Button::new("Open a room for a friend"))
                     .clicked()
                 {
-                    let (addr, handler) = (self.room_addr.clone(), self.handler.clone());
-                    self.table.open_room(&addr, &handler, None);
+                    let handler = self.handler.clone();
+                    self.table.open_room(&handler, None);
                 }
                 ui.label(RichText::new("or").color(FAINT));
                 ui.add(
@@ -822,12 +839,8 @@ impl BattleApp {
                     )
                     .clicked()
                 {
-                    let (addr, handler, code) = (
-                        self.room_addr.clone(),
-                        self.handler.clone(),
-                        self.join_code.clone(),
-                    );
-                    self.table.open_room(&addr, &handler, Some(&code));
+                    let (handler, code) = (self.handler.clone(), self.join_code.clone());
+                    self.table.open_room(&handler, Some(&code));
                 }
             });
         }

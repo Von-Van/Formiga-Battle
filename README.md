@@ -13,9 +13,9 @@ style, the creatures drawn exactly as Desktop draws them. Each turn you give you
 cards and the board (or let the timer run out and they choose for themselves), lock in, and watch
 the turn play out tick by tick with a recap that says why each of them did what it did. The
 Handler's Notebook beside the board keeps what each of your companions has been seen to do, match
-after match, so you can learn how they carry out an order. To play a friend instead, one of you
-runs a room service and opens a room, and the other joins it with its code
-([docs/ROOMS.md](docs/ROOMS.md)). The same match also runs headless from the command line. Desktop
+after match, so you can learn how they carry out an order. To play a friend, one of you opens a
+room and reads out its code, and the other joins with it; the relay on the Formiga site passes
+the orders on and keeps nothing once the match is over ([docs/FRIENDS.md](docs/FRIENDS.md)). The same match also runs headless from the command line. Desktop
 opens Battle from its tray on a Desktop branch not yet released; Battle's side of that hand-off is
 `--formiga-battle <dir>`.
 
@@ -23,8 +23,10 @@ opens Battle from its tray on a Desktop branch not yet released; Battle's side o
   fairness tournament's results.
 - [docs/PERSONALITY.md](docs/PERSONALITY.md): every part of Desktop's record of a companion, and
   what Battle does with it.
-- [docs/ROOMS.md](docs/ROOMS.md): playing a friend through a room: running one, a room from start
-  to end, and what a room trusts.
+- [docs/FRIENDS.md](docs/FRIENDS.md): playing a friend: a match through the relay, and exactly
+  what is shared and kept.
+- [docs/RELAY.md](docs/RELAY.md): the relay's contract, request by request, for the one on the
+  Formiga site.
 
 ## Commands
 
@@ -40,7 +42,7 @@ cargo run --release -p formiga-battle -- replay m.json                   # repla
 cargo run --release -p formiga-battle -- tournament --pairings 5000      # fairness by kind and trio
 cargo run --release -p formiga-battle -- tournament --coach familiar,generic  # what knowing them is worth
 cargo run --release -p formiga-battle -- arena                           # draws Backyard
-cargo run --release -p formiga-battle -- serve                           # a room service for friends
+cargo run --release -p formiga-battle -- relay                           # a local relay, for development
 ```
 
 In the window: choose a card (or 1, 2, 3), then MOVE, HOLD or CONTEST (or M, H, C), then a tile
@@ -74,11 +76,12 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
   every companion app's documents. It is Desktop's: this is a copy of it as Desktop has adopted
   it, kept here byte for byte until a Desktop release carries it, when Battle takes it by tag
   like the other Desktop crates.
-- **`formiga-battle-room`**: rooms for playing a friend. `protocol` (the messages), `service`
-  (rooms as a state machine: codes, seats, deadlines, forfeits), `net` (the service on sockets
-  with plain threads, and the client end), `code` (invite codes) and `roster` (a team of
-  Desktop's companions read as match profiles, the same on every machine).
-- **`formiga-battle`**: the app. `host` (Desktop's session, or a rehearsal), `roster` (a
+- **`formiga-battle-room`**: playing a friend. `relay` (the relay as a state machine: rooms,
+  seats, deadlines, forfeits; the reference the site's relay follows), `http` (the client Battle
+  uses, and a local relay), `code` (invite codes) and `roster` (a team of Desktop's companions
+  read as match profiles, the same on every machine).
+- **`formiga-battle`**: the app. `host` (Desktop's session, or a rehearsal), `friend` (the line to the relay, on a thread of
+  its own), `roster` (a
   contender read as a match profile), `table` (one sitting
   at the board without the window: picking, orders, locking, the turn being shown), `playback`
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with

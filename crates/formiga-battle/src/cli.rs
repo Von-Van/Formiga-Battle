@@ -18,8 +18,8 @@ HEADLESS COMMANDS:
     tournament   Play many AI matches between random trios and report fairness
     replay       Replay a recorded match and check every turn
     arena        Draw an arena's tiles
-    serve        Run a room service for matches between friends (--bind <addr:port>, default
-                 127.0.0.1:7878; 0.0.0.0:7878 for the local network)
+    relay        For development: a local copy of the friend-match relay (--bind <addr:port>,
+                 default 127.0.0.1:7878); point Battle at it with FORMIGA_BATTLE_RELAY
 
 ROSTER (roster, match):
     --sample             The sample colony (the default)
@@ -92,7 +92,7 @@ impl Args {
 }
 
 /// The commands this module answers.
-pub const COMMANDS: [&str; 6] = ["roster", "match", "tournament", "replay", "arena", "serve"];
+pub const COMMANDS: [&str; 6] = ["roster", "match", "tournament", "replay", "arena", "relay"];
 
 pub fn run(mut args: Vec<String>) -> Result<()> {
     let command = args.remove(0);
@@ -111,18 +111,18 @@ pub fn run(mut args: Vec<String>) -> Result<()> {
             args.done()?;
             replay(PathBuf::from(file))
         }
-        "serve" => {
+        "relay" => {
             let bind = args
                 .value("--bind")?
-                .unwrap_or_else(|| format!("127.0.0.1:{}", formiga_battle_room::DEFAULT_PORT));
+                .unwrap_or_else(|| "127.0.0.1:7878".to_owned());
             args.done()?;
-            let server = formiga_battle_room::serve(&bind, formiga_battle_room::Limits::default())
-                .with_context(|| format!("could not listen on {bind}"))?;
+            let relay =
+                formiga_battle_room::serve_relay(&bind, formiga_battle_room::Limits::default())
+                    .with_context(|| format!("could not listen on {bind}"))?;
             eprintln!(
-                "formiga-battle: rooms open on {} (protocol {}, rules version {}); stop with Ctrl-C",
-                server.addr(),
-                formiga_battle_room::PROTOCOL_VERSION,
-                RULES_VERSION
+                "formiga-battle: a local relay for development; point Battle at it with\n  {}={}\nStop with Ctrl-C.",
+                formiga_battle_room::RELAY_ENV,
+                relay.base()
             );
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(3600));

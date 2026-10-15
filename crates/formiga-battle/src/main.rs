@@ -3,6 +3,7 @@
 
 mod app;
 mod cli;
+mod friend;
 mod host;
 mod iso;
 mod look;
@@ -37,7 +38,8 @@ WINDOW:
                              half given, MOVE chosen), playing (the AI giving your orders too,
                              every turn locked at once; the default) or notebook (four matches
                              played out of sight, then the notebook open) or room (a room
-                             opened on the room service, its code showing)
+                             opened on the relay, its code showing; FORMIGA_BATTLE_RELAY points
+                             at a local one from `formiga-battle relay`)
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
                              (default 0), at --scale (default 3), --into seconds into the
                              turn after (default: still)

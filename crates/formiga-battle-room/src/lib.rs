@@ -1,19 +1,18 @@
-//! Private rooms for Formiga Battle: two friends, an invite code, and every turn resolved by the
-//! room, which both clients check themselves against.
+//! Friend matches for Formiga Battle: two friends, an invite code, and a relay that passes their
+//! orders on once both are in. Both windows work out every turn themselves with the same rules
+//! and check each other through the relay; the relay never runs the rules.
 //!
-//! - [`protocol`]: what a client and a room say to each other.
-//! - [`service`]: the rooms as a state machine: codes, seats, deadlines, forfeits.
-//! - [`net`]: the service on sockets, and the client end.
+//! - [`relay`]: the relay as a state machine: rooms, seats, deadlines, forfeits. The reference
+//!   the relay on the Formiga site follows.
+//! - [`http`]: the relay over HTTP: the client Battle uses, and a local relay for development.
 //! - [`code`]: invite codes.
 //! - [`roster`]: how a team of Desktop's companions is read as match profiles, the same on every
 //!   machine.
 
 pub mod code;
-pub mod net;
-pub mod protocol;
+pub mod http;
+pub mod relay;
 pub mod roster;
-pub mod service;
 
-pub use net::{Client, Heard, Server, serve};
-pub use protocol::{ClientMsg, DEFAULT_PORT, PROTOCOL_VERSION, Refusal, ServerMsg};
-pub use service::{Limits, Service};
+pub use http::{AskError, LocalRelay, RELAY_BASE, RELAY_ENV, RelayClient, relay_base, serve_relay};
+pub use relay::{Entrant, Limits, Locked, RELAY_VERSION, Relay, Stage, View};
