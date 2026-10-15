@@ -84,7 +84,11 @@ impl Table {
     pub fn new(roster: BattleSnapshot, visitors: BattleSnapshot, seed: u64) -> Self {
         let reduce_motion = roster.presentation.reduce_motion;
         let pair = |s: &BattleSnapshot| -> Vec<(Contender, Profile)> {
-            s.contenders.iter().cloned().zip(s.profiles()).collect()
+            s.contenders
+                .iter()
+                .cloned()
+                .zip(crate::roster::profiles(s))
+                .collect()
         };
         let mut home = pair(&roster);
         let mut friends = pair(&visitors);

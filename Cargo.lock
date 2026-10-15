@@ -1201,7 +1201,6 @@ dependencies = [
 name = "formiga-battle-contract"
 version = "0.1.0"
 dependencies = [
- "formiga-battle-core",
  "formiga-core",
  "formiga-expansion-rulebook",
  "formiga-travel",

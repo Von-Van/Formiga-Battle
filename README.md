@@ -61,9 +61,12 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
   fallback for a missing order, and the AI coach), `recap`, `replay` and `tournament`.
 - **`formiga-battle-contract`**: what Desktop hands Battle, a read-only roster built from
   Desktop's own trip projection (`formiga-travel`) plus the learned leanings a trip leaves at
-  home, read and written through `formiga-expansion-rulebook` like every companion app's
-  documents. A draft kept here until Desktop adopts it.
-- **`formiga-battle`**: the app. `host` (Desktop's session, or a rehearsal), `table` (one sitting
+  home, and Battle's acknowledgement, read and written through `formiga-expansion-rulebook` like
+  every companion app's documents. It is Desktop's: this is a copy of it as Desktop has adopted
+  it, kept here byte for byte until a Desktop release carries it, when Battle takes it by tag
+  like the other Desktop crates.
+- **`formiga-battle`**: the app. `host` (Desktop's session, or a rehearsal), `roster` (a
+  contender read as a match profile), `table` (one sitting
   at the board without the window: picking, orders, locking, the turn being shown), `playback`
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
   `formiga-art`'s tools at pixel scale), `look` (each creature's own frames), `app` (the egui

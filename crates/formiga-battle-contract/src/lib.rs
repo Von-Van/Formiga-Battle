@@ -1,15 +1,16 @@
-//! What Formiga Desktop hands Formiga Battle: a read-only roster of the colony's companions, and
-//! how Battle reads it into match profiles.
+//! The roster contract between Formiga Desktop and Formiga Battle: a read-only copy of the
+//! colony's companions, and Battle's answer to it.
 //!
-//! This is a draft kept beside Battle until Desktop adopts it, the way Formiga Farm keeps its
-//! session contract. It is built from Desktop's own pieces so the two cannot disagree: each
+//! It is built from Desktop's own pieces so the two cannot disagree: each
 //! contender travels as the very [`formiga_travel::Traveler`] a trip to Formiga Hill carries
 //! (look, temperament kind, axes, tension, traits), with the learned leanings a trip leaves at
 //! home added beside it, and bonds travel in Desktop's own bands. Documents are bounded, checked
 //! and written the way every companion app's are, through `formiga-expansion-rulebook`.
 //!
 //! Battle never changes a colony. Whatever it sends back (results, medals, souvenirs) is a later
-//! version of this contract; nothing here is written by Battle.
+//! version of this contract; nothing here is written by Battle but its acknowledgement. How Battle
+//! turns a contender into a match profile is Battle's own, so this crate knows nothing of its
+//! rules.
 //!
 //! # A session, file by file
 //!
@@ -28,10 +29,9 @@
 //! |---|---|
 //! | 1 | The roster snapshot and the acknowledgement |
 
-use formiga_battle_core::{Bond, Leanings, Profile, Strength};
 use formiga_expansion_rulebook::{self as rulebook, Kind, sanitize_text};
 pub use formiga_expansion_rulebook::{AckRefusal, SessionId};
-use formiga_travel::{Band, Presentation, TravelRelationship, Traveler};
+use formiga_travel::{Presentation, TravelRelationship, Traveler};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -91,6 +91,30 @@ pub struct ContenderLeanings {
     pub play: i8,
     pub home_affinity: i8,
     pub routine: i8,
+}
+
+impl From<&formiga_core::LearnedTendencies> for ContenderLeanings {
+    /// Each tendency to the nearest whole number on its scale; one that is not a number at all
+    /// rests at zero.
+    fn from(t: &formiga_core::LearnedTendencies) -> Self {
+        let q = |v: f32| {
+            if v.is_finite() {
+                v.round().clamp(-100.0, 100.0) as i8
+            } else {
+                0
+            }
+        };
+        Self {
+            cursor_trust: q(t.cursor_trust),
+            sociability: q(t.sociability),
+            climbing: q(t.climbing),
+            sleep_security: q(t.sleep_security),
+            exploration: q(t.exploration),
+            play: q(t.play),
+            home_affinity: q(t.home_affinity),
+            routine: q(t.routine),
+        }
+    }
 }
 
 impl ContenderLeanings {
@@ -164,19 +188,9 @@ pub fn project_roster(
         .into_iter()
         .filter_map(|traveler| {
             let creature = save.creatures.iter().find(|c| c.id == traveler.id.0)?;
-            let l = Leanings::from(&creature.tendencies);
             Some(Contender {
                 traveler,
-                leanings: ContenderLeanings {
-                    cursor_trust: l.cursor_trust,
-                    sociability: l.sociability,
-                    climbing: l.climbing,
-                    sleep_security: l.sleep_security,
-                    exploration: l.exploration,
-                    play: l.play,
-                    home_affinity: l.home_affinity,
-                    routine: l.routine,
-                },
+                leanings: ContenderLeanings::from(&creature.tendencies),
             })
         })
         .collect();
@@ -273,58 +287,6 @@ impl BattleSnapshot {
 
     pub fn read(path: &std::path::Path) -> Result<Self, BattleError> {
         Self::decode(&rulebook::read_bounded(path, limits::MAX_SNAPSHOT_BYTES)?)
-    }
-
-    /// Every contender as a match profile, with its bonds to everyone else on the roster.
-    pub fn profiles(&self) -> Vec<Profile> {
-        let strength = |band: Band| match band {
-            Band::None => Strength::None,
-            Band::Low => Strength::Low,
-            Band::Medium => Strength::Medium,
-            Band::High => Strength::High,
-        };
-        self.contenders
-            .iter()
-            .map(|c| {
-                let t = &c.traveler;
-                let temperament = formiga_core::Temperament {
-                    kind: t.character.temperament.into(),
-                    axes: t.character.axes.into(),
-                    tension: t.character.tension.map(Into::into),
-                };
-                let l = c.leanings;
-                let tendencies = formiga_core::LearnedTendencies {
-                    cursor_trust: f32::from(l.cursor_trust),
-                    sociability: f32::from(l.sociability),
-                    climbing: f32::from(l.climbing),
-                    sleep_security: f32::from(l.sleep_security),
-                    exploration: f32::from(l.exploration),
-                    play: f32::from(l.play),
-                    home_affinity: f32::from(l.home_affinity),
-                    routine: f32::from(l.routine),
-                };
-                let mut profile = Profile::from_parts(t.id.0, &t.name, &temperament, &tendencies);
-                profile.bonds = self
-                    .relationships
-                    .iter()
-                    .filter_map(|r| {
-                        let with = if r.a == t.id {
-                            r.b
-                        } else if r.b == t.id {
-                            r.a
-                        } else {
-                            return None;
-                        };
-                        Some(Bond {
-                            with: with.0,
-                            affinity: strength(r.affinity),
-                            avoidance: strength(r.avoidance),
-                        })
-                    })
-                    .collect();
-                profile
-            })
-            .collect()
     }
 }
 
@@ -457,31 +419,6 @@ mod tests {
     }
 
     #[test]
-    fn every_companion_reads_as_desktop_reads_it() {
-        let save = sample::colony();
-        let profiles = sample::snapshot().profiles();
-        assert_eq!(profiles.len(), save.creatures.len());
-        for (profile, creature) in profiles.iter().zip(&save.creatures) {
-            let direct = Profile::from_creature(creature);
-            assert_eq!(profile.creature_id, direct.creature_id);
-            assert_eq!(profile.kind, direct.kind);
-            assert_eq!(profile.tension, direct.tension);
-            assert_eq!(profile.nature, direct.nature);
-            assert_eq!(profile.leanings, direct.leanings);
-        }
-    }
-
-    #[test]
-    fn bonds_come_in_desktops_bands_both_ways_round() {
-        let profiles = sample::snapshot().profiles();
-        let (a, b) = (&profiles[0], &profiles[1]);
-        let ab = a.bond_with(b.creature_id).expect("a bond");
-        let ba = b.bond_with(a.creature_id).expect("the same bond");
-        assert_eq!(ab.affinity, ba.affinity);
-        assert_eq!(ab.avoidance, ba.avoidance);
-    }
-
-    #[test]
     fn a_snapshot_from_a_newer_battle_reader_is_refused_for_its_version() {
         let mut snapshot = sample::snapshot();
         snapshot.version = BATTLE_FORMAT_VERSION + 1;
@@ -532,15 +469,37 @@ mod tests {
     }
 
     #[test]
-    fn a_visiting_colony_brings_companions_of_its_own() {
-        let home = sample::snapshot().profiles();
-        let visitors = sample::visitors(9).profiles();
-        assert!(visitors.len() >= 3);
+    fn every_companion_is_on_the_roster_with_its_leanings_rounded() {
+        let save = sample::colony();
+        let snapshot = sample::snapshot();
+        assert_eq!(snapshot.contenders.len(), save.creatures.len());
+        for (contender, creature) in snapshot.contenders.iter().zip(&save.creatures) {
+            assert_eq!(contender.traveler.id.0, creature.id);
+            let t = &creature.tendencies;
+            assert_eq!(
+                i32::from(contender.leanings.exploration),
+                t.exploration.round() as i32
+            );
+            assert_eq!(i32::from(contender.leanings.play), t.play.round() as i32);
+        }
         assert!(
-            visitors
+            snapshot
+                .contenders
                 .iter()
-                .any(|v| !home.iter().any(|h| h.nature == v.nature))
+                .any(|c| c.leanings != ContenderLeanings::default()),
+            "the sample's companions have lived a little"
         );
+    }
+
+    #[test]
+    fn a_tendency_that_is_not_a_number_rests_at_zero() {
+        let tendencies = formiga_core::LearnedTendencies {
+            play: f32::NAN,
+            routine: 250.0,
+            ..Default::default()
+        };
+        let leanings = ContenderLeanings::from(&tendencies);
+        assert_eq!((leanings.play, leanings.routine), (0, 100));
     }
 
     #[test]

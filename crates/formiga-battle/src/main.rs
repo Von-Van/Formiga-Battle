@@ -7,6 +7,7 @@ mod host;
 mod iso;
 mod look;
 mod playback;
+mod roster;
 mod scene;
 mod table;
 

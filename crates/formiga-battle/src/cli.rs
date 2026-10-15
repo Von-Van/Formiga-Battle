@@ -149,7 +149,7 @@ fn load_roster(args: &mut Args) -> Result<Vec<Profile>> {
         (None, Some(path)) => BattleSnapshot::read(path.as_ref())?,
         (None, None) => sample::snapshot(),
     };
-    Ok(snapshot.profiles())
+    Ok(crate::roster::profiles(&snapshot))
 }
 
 /// A fixed session for a roster read here; it never leaves this process.

@@ -7,7 +7,6 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-formiga-battle-core.workspace = true
 formiga-core.workspace = true
 formiga-expansion-rulebook.workspace = true
 formiga-travel.workspace = true
