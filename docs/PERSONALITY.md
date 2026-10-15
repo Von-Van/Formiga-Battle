@@ -72,12 +72,12 @@ all would have done, so it is always true of the board as it was.
 
 ## The Handler's Notebook
 
-Battle keeps a page for each of the Handler's companions, by colony and Desktop's creature id, in
-its own data folder (`notebook.json`; `FORMIGA_BATTLE_DATA_DIR` for development). After every
-match it records what the events showed of each: every reason a step was not the plain way (and
+Desktop keeps a page for each of the Handler's companions in the colony's Battle record, by its
+creature id, and hands it to Battle in each session. After every match with a friend, Battle
+records what the events showed of each: every reason a step was not the plain way (and
 every tick it hung back), the
 contests it took on a chance, held firm in or caught someone with, which teammate it kept near,
-and a few moments worth remembering. Notes are drawn from the last ten matches only, so as
+and a few moments worth remembering. Notes are drawn from the last ten friend matches only, so as
 Desktop's leanings drift and the creature walks differently, its notes change with it.
 
 A way of walking is noted once it is a habit: at least three times and in at least a fifth of its

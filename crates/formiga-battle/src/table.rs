@@ -5,13 +5,14 @@
 use crate::friend::{Ask, Line, Told};
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
+use crate::rewards;
 use crate::scene::{Choice, Marks};
-use crate::store::{self, Notebook};
+use formiga_battle_contract::{BattleRecord, BattleResult};
 use formiga_battle_contract::{BattleSnapshot, Contender};
 use formiga_battle_core::Event;
 use formiga_battle_core::ai::{self, Coach};
 use formiga_battle_core::interpret::distances;
-use formiga_battle_core::notebook::{Page, observe};
+use formiga_battle_core::notebook::Page;
 use formiga_battle_core::recap::recap_naming;
 use formiga_battle_core::rng::{self, Purpose};
 use formiga_battle_core::{
@@ -21,6 +22,12 @@ use formiga_battle_core::{
 use formiga_battle_room::roster::{check_team, room_match};
 use formiga_battle_room::{Entrant, View, relay_base};
 use std::path::PathBuf;
+
+/// The session Desktop opened, and the answer being written into it.
+pub struct Session {
+    pub directory: PathBuf,
+    pub result: BattleResult,
+}
 
 /// A match with a friend, through the relay.
 pub struct Friend {
@@ -107,15 +114,15 @@ pub struct Table {
     pub shown: Option<Shown>,
     /// Every turn told, newest last.
     pub log: Vec<(u8, Vec<String>)>,
-    /// The colony the Handler's companions come from, so their notebook pages are theirs.
-    pub colony_id: String,
-    pub notebook: Notebook,
-    /// Where the notebook is kept; `None` keeps it only for this sitting, as review pictures do.
-    pub notebook_folder: Option<PathBuf>,
+    /// What Desktop keeps of Battle for this colony, with this sitting's matches applied.
+    pub record: BattleRecord,
+    /// The session Desktop opened, if it did: what this sitting earned is written into it after
+    /// every match, for Desktop to apply when Battle closes. A rehearsal keeps nothing.
+    pub session: Option<Session>,
     /// Every event of the match so far, for the notebook at its end.
     match_events: Vec<Event>,
-    /// What this match added to the notebook, by name: shown with the result.
-    pub new_moments: Vec<(String, String)>,
+    /// What the last match earned, in words: shown with the result.
+    pub earned: Vec<String>,
     /// The side the Handler plays: left against the AI, either against a friend.
     pub you: Side,
     /// Who is on the board, as Desktop's companions, by side and place.
@@ -135,7 +142,7 @@ impl Table {
     /// A table for the Handler's roster against a visiting colony. A colony of fewer than three is
     /// joined by friends from next door so it can field a team.
     pub fn new(roster: BattleSnapshot, visitors: BattleSnapshot, seed: u64) -> Self {
-        let colony_id = roster.colony_id.clone();
+        let record = roster.record.clone().unwrap_or_default();
         let reduce_motion = roster.presentation.reduce_motion;
         let pair = |s: &BattleSnapshot| -> Vec<(Contender, Profile)> {
             s.contenders
@@ -169,11 +176,10 @@ impl Table {
             turn_began: 0.0,
             shown: None,
             log: Vec::new(),
-            colony_id,
-            notebook: Notebook::default(),
-            notebook_folder: None,
+            record,
+            session: None,
             match_events: Vec::new(),
-            new_moments: Vec::new(),
+            earned: Vec::new(),
             you: Side::Left,
             board_teams: [Vec::new(), Vec::new()],
             other_name: "The visiting team".to_owned(),
@@ -184,47 +190,47 @@ impl Table {
         }
     }
 
-    /// Keeps the notebook in `folder` from now on, starting from what is already there.
-    pub fn keep_notebook_in(&mut self, folder: PathBuf) {
-        self.notebook = store::load(&folder);
-        self.notebook_folder = Some(folder);
+    /// A companion's notebook page, if it has played a friend: read from what Desktop keeps.
+    pub fn page(&self, creature_id: u64) -> Option<Page> {
+        let page = self
+            .record
+            .notebook
+            .iter()
+            .find(|p| p.creature_id == creature_id && p.matches > 0)?;
+        let teammates: Vec<(u64, String)> = self
+            .home
+            .iter()
+            .map(|(c, _)| (c.traveler.id.0, c.traveler.name.clone()))
+            .collect();
+        Some(rewards::page_for_showing(page, &teammates))
     }
 
-    /// A companion's page, if it has played.
-    pub fn page(&self, creature_id: u64) -> Option<&Page> {
-        self.notebook
-            .page(&self.colony_id, creature_id)
-            .filter(|p| p.matches > 0)
-    }
-
-    /// Writes what the match showed of the Handler's team into the notebook.
-    fn note_the_match(&mut self) {
+    /// What the match earned, applied to the record here and written for Desktop.
+    fn finish_match(&mut self) {
         let Some(m) = &self.m else {
             return;
         };
-        let won = m.outcome().and_then(|o| o.winner) == Some(self.you);
-        let team: Vec<(u64, String)> = m.rosters[self.you.index()]
-            .iter()
-            .map(|p| (p.creature_id, p.name.clone()))
-            .collect();
-        self.new_moments.clear();
-        for seen in observe(m, self.you, &self.match_events) {
-            let name = team
-                .iter()
-                .find(|(id, _)| *id == seen.creature_id)
-                .map(|(_, n)| n.clone())
-                .unwrap_or_default();
-            for moment in &seen.moments {
-                self.new_moments.push((name.clone(), moment.clone()));
+        let now = time::OffsetDateTime::now_utc();
+        let earned = match &self.friend {
+            Some(friend) => rewards::friend_match(
+                m,
+                self.you,
+                &self.match_events,
+                &self.record,
+                &friend.handlers[self.you.other().index()],
+                now,
+            ),
+            None => rewards::ai_match(m, self.you, &self.record),
+        };
+        self.record.apply(&earned.result);
+        self.earned = earned.lines;
+        if let Some(session) = &mut self.session {
+            session.result.matches.push(earned.result);
+            if let Err(error) = session.result.write(&session.directory) {
+                self.notice = Some(format!(
+                    "What this match earned could not be kept for Desktop: {error}"
+                ));
             }
-            self.notebook
-                .page_mut(&self.colony_id, seen.creature_id)
-                .record(&seen, won, &name, &team);
-        }
-        if let Some(folder) = &self.notebook_folder
-            && let Err(error) = store::save(folder, &self.notebook)
-        {
-            eprintln!("formiga-battle: the notebook could not be kept: {error:#}");
         }
     }
 
@@ -304,7 +310,7 @@ impl Table {
         self.begin_orders(now);
         self.log.clear();
         self.match_events.clear();
-        self.new_moments.clear();
+        self.earned.clear();
         self.ended_because = None;
     }
 
@@ -509,7 +515,7 @@ impl Table {
         {
             m.forfeit(side);
             self.ended_because = Some(ending.reason);
-            self.note_the_match();
+            self.finish_match();
         }
     }
 
@@ -595,7 +601,7 @@ impl Table {
         self.selected = None;
         self.verb = None;
         if over {
-            self.note_the_match();
+            self.finish_match();
         }
     }
 
@@ -934,12 +940,20 @@ mod tests {
     }
 
     #[test]
-    fn a_finished_match_is_written_into_the_notebook_and_kept() {
-        let folder =
-            std::env::temp_dir().join(format!("formiga-battle-table-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&folder);
+    fn an_ai_match_earns_its_rewards_and_writes_them_into_desktops_session() {
+        let dir = std::env::temp_dir().join(format!("formiga-battle-table-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
-        t.keep_notebook_in(folder.clone());
+        t.session = Some(Session {
+            directory: dir.clone(),
+            result: BattleResult::new(
+                formiga_battle_contract::SessionId::parse("00000000000000000000000000000000")
+                    .unwrap(),
+                "0".repeat(64),
+                "0.1.0",
+            ),
+        });
         t.start(0.0).unwrap();
         let mut now = 0.0;
         while !t.finished(now) {
@@ -948,15 +962,14 @@ mod tests {
             now += 20.0;
             t.frame(now);
         }
-        let ours: Vec<u64> = t.m.as_ref().unwrap().rosters[0]
-            .iter()
-            .map(|p| p.creature_id)
-            .collect();
-        for id in &ours {
-            assert_eq!(t.page(*id).map(|p| p.matches), Some(1));
-        }
-        let kept = store::load(&folder);
-        assert_eq!(kept, t.notebook);
+        assert!(!t.earned.is_empty());
+        assert_eq!(t.record.circuit_points, 0, "the AI gives no points");
+        let written = BattleResult::decode(
+            &std::fs::read(dir.join(formiga_battle_contract::RESULT_FILE)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(written.matches.len(), 1);
+        assert_eq!(written.matches[0].mode, formiga_battle_contract::Mode::Ai);
     }
 
     #[test]

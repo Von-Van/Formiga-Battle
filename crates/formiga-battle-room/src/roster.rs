@@ -79,6 +79,7 @@ fn as_roster(team: &[Contender], bonds: &[TravelRelationship]) -> BattleSnapshot
         contenders: team.to_vec(),
         relationships: bonds.to_vec(),
         presentation: Default::default(),
+        record: None,
     }
 }
 

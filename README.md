@@ -23,6 +23,8 @@ opens Battle from its tray on a Desktop branch not yet released; Battle's side o
   fairness tournament's results.
 - [docs/PERSONALITY.md](docs/PERSONALITY.md): every part of Desktop's record of a companion, and
   what Battle does with it.
+- [docs/REWARDS.md](docs/REWARDS.md): what a match earns, against a friend or the visitors, and
+  how Desktop keeps it.
 - [docs/FRIENDS.md](docs/FRIENDS.md): playing a friend: a match through the relay, and exactly
   what is shared and kept.
 - [docs/RELAY.md](docs/RELAY.md): the relay's contract, request by request, for the one on the
@@ -86,7 +88,7 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
   at the board without the window: picking, orders, locking, the turn being shown), `playback`
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
   `formiga-art`'s tools at pixel scale), `look` (each creature's own frames), `app` (the egui
-  window), `store` (the notebook in Battle's data folder) and `cli` (the headless commands).
+  window), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
 by one release tag (`v0.67.6`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is

@@ -8,8 +8,8 @@ mod host;
 mod iso;
 mod look;
 mod playback;
+mod rewards;
 mod scene;
-mod store;
 mod table;
 
 use anyhow::{Context, Result, bail};
@@ -36,8 +36,8 @@ WINDOW:
     --at <SECONDS>           With --snap
     --review <STAGE>         With --snap: picking (the team choice), orders (a turn's orders
                              half given, MOVE chosen), playing (the AI giving your orders too,
-                             every turn locked at once; the default) or notebook (four matches
-                             played out of sight, then the notebook open) or room (a room
+                             every turn locked at once; the default) or notebook (the sample
+                             colony's notebook, as Desktop would send it, open) or room (a room
                              opened on the relay, its code showing; FORMIGA_BATTLE_RELAY points
                              at a local one from `formiga-battle relay`)
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
@@ -133,11 +133,19 @@ fn window(args: Vec<String>) -> Result<()> {
     if let Some(path) = args.render {
         return render_board(&path, &mut table, args.turns, args.into, args.scale);
     }
-    // A review picture changes nothing, the notebook included.
-    if args.snap.is_none()
-        && let Some(folder) = store::folder()
+    if let host::Host::Visit {
+        directory,
+        snapshot_sha256,
+    } = &host
     {
-        table.keep_notebook_in(folder);
+        table.session = Some(table::Session {
+            directory: directory.clone(),
+            result: formiga_battle_contract::BattleResult::new(
+                session_of(directory)?,
+                snapshot_sha256.clone(),
+                env!("CARGO_PKG_VERSION"),
+            ),
+        });
     }
     let snap = args.snap.map(|path| app::Snap {
         path,
@@ -167,6 +175,14 @@ fn window(args: Vec<String>) -> Result<()> {
         }),
     )
     .map_err(|error| anyhow::anyhow!("the window could not open: {error}"))
+}
+
+fn session_of(directory: &Path) -> Result<formiga_battle_contract::SessionId> {
+    directory
+        .file_name()
+        .and_then(|n| n.to_str())
+        .and_then(formiga_battle_contract::SessionId::parse)
+        .context("the session directory is not named after a session")
 }
 
 /// The board as the window would show it, without one.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- What a match earns, kept by Desktop: a friend match earns Open Circuit points, a match-history
+  line, notebook entries and a match played for each of the three; a match against the visitors
+  earns Backyard Cup progress (three wins win the cup, a trophy and a medal, and unlock the
+  Woodland Cup) and a journal entry. Battle writes it into Desktop's session after every match
+  and keeps nothing of its own: the notebook now lives in Desktop's record. Contract version 2.
 - Play a friend: one Handler opens a room and reads out its six-character code; the other joins.
   Formiga's relay passes each turn's orders on once both are in or at the deadline, never runs
   the rules, and deletes the room when the match ends. Both windows work out every turn and

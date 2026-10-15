@@ -110,20 +110,8 @@ impl BattleApp {
                 app.table.choose_verb(Verb::Move);
             }
             Some(Review::Notebook) => {
-                let mut now = 0.0;
-                for _ in 0..4 {
-                    if app.table.start(now).is_err() {
-                        break;
-                    }
-                    while !app.table.finished(now) {
-                        app.table.coach_orders();
-                        app.table.lock(now);
-                        now += 30.0;
-                        app.table.frame(now);
-                    }
-                    app.table.shown = None;
-                    app.table.seed = app.table.seed.wrapping_add(1);
-                }
+                // A colony that has played a little with friends, as Desktop would send it.
+                app.table.record = formiga_battle_contract::sample::record();
                 app.begin();
                 app.notebook_open = true;
             }
@@ -342,6 +330,30 @@ impl BattleApp {
             RichText::new(
                 "You are their Handler: each turn you give each of them one order, and they carry it out their own way.",
             )
+            .color(FAINT),
+        );
+        let record = &self.table.record;
+        let mut standing = vec![format!("Open Circuit points: {}", record.circuit_points)];
+        standing.push(format!(
+            "Backyard Cup: {} of {} wins",
+            record
+                .cup_wins(crate::rewards::BACKYARD_CUP)
+                .min(crate::rewards::CUP_WINS),
+            crate::rewards::CUP_WINS
+        ));
+        if record
+            .unlocked
+            .iter()
+            .any(|u| u == crate::rewards::WOODLAND_CUP)
+        {
+            standing.push("Woodland Cup unlocked".to_owned());
+        }
+        ui.label(RichText::new(standing.join("   ·   ")).color(NOTE));
+        ui.label(
+            RichText::new(
+                "Friend matches earn Open Circuit points, match history and notebook entries. Matches against the visitors earn cup progress, journal entries and keepsakes.",
+            )
+            .size(12.0)
             .color(FAINT),
         );
         ui.add_space(10.0);
@@ -758,16 +770,18 @@ impl BattleApp {
             self.portraits.clear();
             self.stage = Stage::Picking;
         }
-        if !self.table.new_moments.is_empty() {
+        if !self.table.earned.is_empty() {
             ui.add_space(10.0);
-            ui.label(RichText::new("New in your notebook").size(15.0).color(NOTE));
-            for (name, moment) in &self.table.new_moments {
-                ui.label(
-                    RichText::new(format!("{name}: {moment}"))
-                        .size(13.0)
-                        .color(FAINT),
-                );
+            ui.label(RichText::new("Earned").size(15.0).color(NOTE));
+            for line in &self.table.earned {
+                ui.label(RichText::new(format!("· {line}")).size(13.0).color(FAINT));
             }
+            let kept = if self.table.session.is_some() {
+                "Kept in your colony when Battle closes."
+            } else {
+                "A rehearsal: nothing is kept."
+            };
+            ui.label(RichText::new(kept).size(12.0).italics().color(FAINT));
         }
         ui.add_space(10.0);
         ui.separator();
@@ -855,7 +869,7 @@ impl BattleApp {
             for i in 0..TEAM_SIZE {
                 let contender = self.table.board_teams[self.table.you.index()][i].clone();
                 let texture = self.portrait(ctx, &contender);
-                let page = self.table.page(contender.traveler.id.0).cloned();
+                let page = self.table.page(contender.traveler.id.0);
                 egui::Frame::new()
                     .fill(CARD)
                     .corner_radius(8.0)

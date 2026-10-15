@@ -52,6 +52,53 @@ pub enum Sign {
     HungBack,
 }
 
+impl Sign {
+    pub const ALL: [Self; 15] = [
+        Self::KeptOutOfReach,
+        Self::WentRoundTheYard,
+        Self::KeptNearFriend,
+        Self::KeptApart,
+        Self::TookTheEdge,
+        Self::KeptToCover,
+        Self::ChangedItsMind,
+        Self::WalkedRightPast,
+        Self::ShuffledToFriend,
+        Self::TuckedAway,
+        Self::SteppedBack,
+        Self::TookAChance,
+        Self::HeldFirm,
+        Self::CaughtSomeone,
+        Self::HungBack,
+    ];
+
+    /// Its name in Desktop's keeping, the same as it is written in JSON. Never changed: a page
+    /// Desktop keeps names signs this way.
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::KeptOutOfReach => "kept_out_of_reach",
+            Self::WentRoundTheYard => "went_round_the_yard",
+            Self::KeptNearFriend => "kept_near_friend",
+            Self::KeptApart => "kept_apart",
+            Self::TookTheEdge => "took_the_edge",
+            Self::KeptToCover => "kept_to_cover",
+            Self::ChangedItsMind => "changed_its_mind",
+            Self::WalkedRightPast => "walked_right_past",
+            Self::ShuffledToFriend => "shuffled_to_friend",
+            Self::TuckedAway => "tucked_away",
+            Self::SteppedBack => "stepped_back",
+            Self::TookAChance => "took_a_chance",
+            Self::HeldFirm => "held_firm",
+            Self::CaughtSomeone => "caught_someone",
+            Self::HungBack => "hung_back",
+        }
+    }
+
+    /// A sign by that name; `None` for one a newer Battle wrote that this one does not know.
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|s| s.id() == id)
+    }
+}
+
 /// What one match showed of one creature.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Showing {
@@ -442,6 +489,14 @@ mod tests {
         }
         assert!(page.notes().is_empty());
         assert_eq!(page.matches, 1 + MATCHES_KEPT as u32);
+    }
+
+    #[test]
+    fn every_sign_is_named_as_it_is_written() {
+        for sign in Sign::ALL {
+            assert_eq!(serde_json::to_value(sign).unwrap(), sign.id());
+            assert_eq!(Sign::from_id(sign.id()), Some(sign));
+        }
     }
 
     #[test]
