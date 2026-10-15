@@ -778,6 +778,7 @@ impl Table {
             choices: self.choices(),
             hover,
             orders: Vec::new(),
+            ..Marks::default()
         };
         match &self.shown {
             // While a turn is shown, both teams' orders, until the first tick.

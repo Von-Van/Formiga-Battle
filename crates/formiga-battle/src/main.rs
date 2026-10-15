@@ -2,8 +2,10 @@
 //! command it opens the window; the headless commands are in `cli`.
 
 mod app;
+mod chrome;
 mod cli;
 mod friend;
+mod garden;
 mod host;
 mod iso;
 mod look;
@@ -217,13 +219,16 @@ fn render_board(
     let marks = table.marks(None, now);
     let m = table.m.as_ref().context("a match is on")?;
     let view = iso::View::new(m.arena.width, m.arena.height);
+    let garden = garden::Garden::new(&m.arena, &view);
     let canvas = scene::paint(
         &m.arena,
+        &garden,
         &frame,
         &mut table.looks,
         &marks,
         m.ruleset.capture_ticks,
         now,
+        table.reduce_motion,
         &view,
     );
     write_png(path, &canvas, scale)
