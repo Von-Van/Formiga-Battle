@@ -955,7 +955,10 @@ impl BattleApp {
     fn top_bar(&mut self, ui: &mut egui::Ui, layout: &Layout, now: f32) {
         let u = layout.unit;
         let words = self.tab_words();
-        for (i, rect) in layout.tabs.iter().enumerate() {
+        // The tabs were laid out at the start of the frame, and a page drawn since may have left
+        // for somewhere with other tabs, or none: the station's button on a first page, or after
+        // a match. Only the tabs there still are get drawn; the next frame lays out the rest.
+        for (i, (rect, word)) in layout.tabs.iter().zip(&words).enumerate() {
             let open = i == layout.open_tab;
             let reachable = match self.stage {
                 Stage::Journal => self.reachable(self.steps()[i]).is_ok(),
@@ -991,7 +994,7 @@ impl BattleApp {
             };
             let galley = ui
                 .painter()
-                .layout_job(label_job(&words[i], chrome::LABEL, colour));
+                .layout_job(label_job(word, chrome::LABEL, colour));
             ui.painter()
                 .galley(rect.center() - galley.size() / 2.0, galley, colour);
             if self.stage == Stage::Journal
@@ -1590,15 +1593,8 @@ impl BattleApp {
                 if c.rank != rank || c.headline.is_none() || anchor(c).is_none() {
                     continue;
                 }
-                // The first moment from its own on that keeps clear of every line already
-                // placed.
-                let mut shown = *born;
-                while let Some((_, other)) = told
-                    .iter()
-                    .find(|(_, other)| (shown - other).abs() < HEADLINE_SECS)
-                {
-                    shown = other + HEADLINE_SECS;
-                }
+                let placed: Vec<f32> = told.iter().map(|(_, at)| *at).collect();
+                let shown = headline_moment(*born, &placed);
                 if shown - born <= 1.0 {
                     told.push((c, shown));
                 }
@@ -2970,6 +2966,24 @@ impl eframe::App for BattleApp {
     }
 }
 
+/// When a line over the board born at `born` is shown: the first moment from then on that keeps
+/// `HEADLINE_SECS` clear of every line already placed. The placed lines are passed over once,
+/// earliest first, so it always settles: stepping past a line by adding `HEADLINE_SECS` can land
+/// a hair under `HEADLINE_SECS` from it in floating point, and asking again whether that line is
+/// too close would step to the same moment for ever. Two lines born in the same frame did just
+/// that, and the window stopped answering.
+fn headline_moment(born: f32, placed: &[f32]) -> f32 {
+    let mut placed = placed.to_vec();
+    placed.sort_by(f32::total_cmp);
+    let mut shown = born;
+    for other in placed {
+        if (shown - other).abs() < HEADLINE_SECS {
+            shown = other + HEADLINE_SECS;
+        }
+    }
+    shown
+}
+
 /// The cup before an arena's own, which opens it.
 fn locked_behind(arena: &str) -> &'static str {
     let cups = &crate::rewards::CUPS;
@@ -3708,4 +3722,147 @@ fn texture(ctx: &egui::Context, name: &str, canvas: &Canvas) -> egui::TextureHan
         &canvas.rgba_bytes(),
     );
     ctx.load_texture(name, image, egui::TextureOptions::NEAREST)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use formiga_battle_contract::sample;
+
+    /// The app driven frame by frame through egui alone, with no window: what each frame drew,
+    /// and clicks on what it drew.
+    struct Headless {
+        ctx: egui::Context,
+        app: BattleApp,
+        time: f64,
+        drawn: Vec<(String, Rect)>,
+    }
+
+    impl Headless {
+        fn new() -> Self {
+            let table = Table::new(sample::snapshot(), sample::visitors(9), 5);
+            let host = Host::Rehearsal {
+                from: "a test".to_owned(),
+            };
+            Self {
+                ctx: egui::Context::default(),
+                app: BattleApp::new(host, table, None, None, Sound::silent()),
+                time: 0.0,
+                drawn: Vec::new(),
+            }
+        }
+
+        fn frame(&mut self, events: Vec<egui::Event>) {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(1280.0, 780.0))),
+                time: Some(self.time),
+                events,
+                ..Default::default()
+            };
+            let app = &mut self.app;
+            let mut output = self.ctx.run_ui(input, |ui| app.frame(ui));
+            output.textures_delta.clear();
+            self.drawn.clear();
+            for clipped in &output.shapes {
+                words(&clipped.shape, &mut self.drawn);
+            }
+            self.time += 0.05;
+        }
+
+        fn frames(&mut self, n: usize) {
+            for _ in 0..n {
+                self.frame(Vec::new());
+            }
+        }
+
+        /// A click on the `nth` thing drawn with these words.
+        fn click(&mut self, label: &str, nth: usize) {
+            let label = label.to_uppercase();
+            let Some(at) = self
+                .drawn
+                .iter()
+                .filter(|(w, _)| w.to_uppercase() == label)
+                .nth(nth)
+                .map(|(_, r)| r.center())
+            else {
+                panic!("nothing says {label:?}");
+            };
+            let button = |pressed| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::default(),
+            };
+            self.frame(vec![egui::Event::PointerMoved(at)]);
+            self.frame(vec![button(true)]);
+            self.frame(vec![button(false)]);
+        }
+    }
+
+    fn words(shape: &egui::epaint::Shape, out: &mut Vec<(String, Rect)>) {
+        match shape {
+            egui::epaint::Shape::Text(text) => {
+                out.push((text.galley.text().to_owned(), text.visual_bounding_rect()));
+            }
+            egui::epaint::Shape::Vec(shapes) => shapes.iter().for_each(|s| words(s, out)),
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn the_station_button_on_the_handlers_first_page_goes_back_to_the_station() {
+        let mut h = Headless::new();
+        h.frames(2);
+        h.app.open_journal(Outing::Home, Step::Handler);
+        h.frames(10);
+        // The way back along the top, then the button under the way on.
+        for nth in [0, 1] {
+            h.click("‹ The station", nth);
+            h.frames(2);
+            assert_eq!(h.app.stage, Stage::Station);
+            h.app.open_journal(Outing::Home, Step::Handler);
+            h.frames(10);
+        }
+    }
+
+    #[test]
+    fn back_to_the_station_after_a_match_goes_back_to_the_station() {
+        let mut h = Headless::new();
+        h.frames(2);
+        h.app.begin();
+        let mut now = h.time as f32 + READY_SECS;
+        while !h.app.table.finished(now) {
+            h.app.table.coach_orders();
+            h.app.table.lock(now);
+            now += 20.0;
+            h.app.table.frame(now);
+        }
+        h.time = f64::from(now) + 1.0;
+        h.frames(4);
+        h.click("Back to the station", 0);
+        h.frames(2);
+        assert_eq!(h.app.stage, Stage::Station);
+    }
+
+    #[test]
+    fn a_line_over_the_board_always_finds_its_moment() {
+        // Two lines born in the same frame: half of all moments are ones where stepping past
+        // the first lands a hair too close to it, which once stepped to the same moment for ever.
+        for k in 0..2000 {
+            let born = k as f32 * 0.05;
+            let shown = headline_moment(born, &[born]);
+            assert!(
+                shown > born && shown - born <= HEADLINE_SECS + 0.001,
+                "{born}"
+            );
+            let third = headline_moment(born, &[born, shown]);
+            assert!(
+                third > shown && third - shown <= HEADLINE_SECS + 0.001,
+                "{born}"
+            );
+        }
+        // Clear of every line already placed, it is shown when it is born.
+        assert_eq!(headline_moment(5.0, &[1.0, 9.0]), 5.0);
+        assert_eq!(headline_moment(5.0, &[5.5, 4.6]), 5.5 + HEADLINE_SECS);
+    }
 }
