@@ -360,21 +360,23 @@ fn a_wave_washes_whoever_stands_on_the_sandbars_ends_toward_the_middle_of_the_be
 }
 
 #[test]
-fn the_pond_rises_over_the_jettys_sides_for_the_rest_of_the_turn_washing_off_whoever_is_there() {
+fn the_pond_rises_over_the_banks_by_the_jetty_for_the_rest_of_the_turn_washing_off_whoever_is_there()
+ {
     let arena = Arena::by_id("millpond").unwrap();
     let tiles = arena.scenery_tiles(&[]);
-    let mut m = board_on(arena, &[(L0, (3, 3)), (R0, (8, 5))]);
+    let mut m = board_on(arena, &[(L0, (3, 2)), (R0, (8, 5))]);
     coming(&mut m, tiles, Vec::new());
-    m.resolve_orders(orders(&[(L0, hold(3, 3)), (R0, hold(8, 5))]));
-    assert_eq!(at(&m, L0), (3, 2));
-    assert!(!m.walkable(Tile::new(3, 3)) && !m.walkable(Tile::new(5, 3)));
-    let report = m.resolve_orders(orders(&[(L0, hold(3, 2)), (R0, hold(8, 5))]));
+    m.resolve_orders(orders(&[(L0, hold(3, 2)), (R0, hold(8, 5))]));
+    // Off the bank, and never onto the jetty.
+    assert_eq!(at(&m, L0), (2, 2));
+    assert!(!m.walkable(Tile::new(3, 2)) && !m.walkable(Tile::new(5, 4)));
+    let report = m.resolve_orders(orders(&[(L0, hold(2, 2)), (R0, hold(8, 5))]));
     assert!(
         kinds(&report)
             .iter()
             .any(|k| matches!(k, EventKind::GroundReopened { .. }))
     );
-    assert!(m.walkable(Tile::new(3, 3)));
+    assert!(m.walkable(Tile::new(3, 2)));
 }
 
 #[test]

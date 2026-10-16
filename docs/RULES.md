@@ -2,14 +2,15 @@
 
 How a match of Formiga Battle resolves, as `formiga-battle-core` plays it. Every number here lives
 in `Ruleset` (`crates/formiga-battle-core/src/ruleset.rs`), travels with every recorded match, and
-is provisional until playtests settle it. `RULES_VERSION` is 6.
+is provisional until playtests settle it. `RULES_VERSION` is 7.
 
 ## A match
 
-Two teams of three companions on an arena of flat tiles. Each turn, each Handler gives each of
-their creatures one order; when the timer runs out, any order not given (or one that cannot be
-carried out at all) is filled by the fallback, the same for both teams. Both teams' orders are
-locked together and the turn resolves in `ticks_per_turn` ticks.
+Two teams of three companions on an arena of flat tiles. Each turn, each Handler gives their
+whole team up to three orders (see [Team orders](#team-orders)), and the team shares them out
+among itself: nobody is told who goes where. Both teams' plans are locked together and the turn
+resolves in `ticks_per_turn` ticks. A Handler who gives no orders before the timer runs out
+leaves each creature to the fallback, the same for both teams.
 
 | Setting | Value | What it means |
 |---|---|---|
@@ -23,7 +24,61 @@ locked together and the turn resolves in `ticks_per_turn` ticks.
 | `detour_budget` | 2 | Steps a creature may take in a turn that bring it no closer |
 | `turn_seconds` | 40 | For clients and the room service; the rules never look at a clock |
 
-## The orders
+## Team orders
+
+A Handler's plan is up to `PLAN_SIZE` (three) orders, in any mix, repeats allowed:
+
+| Order | Aimed at | What the team does |
+|---|---|---|
+| TAKE | One to five squares | Gets them and holds them: someone walks onto an empty one and holds it; one of theirs standing on one is contested, and one of theirs holding there is flanked by two |
+| DEFEND | One to five squares | Keeps them: someone holds each, and whoever is free guards beside one or heads off one of theirs coming at it. A lever or a switch named is guarded from beside it |
+| INTERACT | One thing | A found thing on the ground or glinting is fetched; the lever or the arena's switch is pulled (or, while it rests, waited by); one of theirs carrying something is contested, so it drops it; one of ours carrying something uses it |
+
+An order with nothing it can be aimed at (a square off the board or in a wall, an INTERACT with
+nothing there) is left out, as is a fourth order and beyond (`OrderDropped`), so a room never has
+to trust what a client sends.
+
+### Sharing out the plan
+
+At the start of the turn, from one picture of the board, each team turns its plan into jobs
+(`muster`). A square named in one order is worth `NEED` (1000) to the team; named in two orders,
+twice that, and it brings a guard beside it, a second guard if it is named in three. Taking a
+square one of theirs holds is two jobs, a side each, worth a square apiece; with only one of them
+taken it is worth `LONE` (450). Whoever is left over guards a square of the plan (more for a
+DEFEND than a TAKE), heads off one of theirs coming at a square to defend, picks up something
+lying within four steps, or uses what it carries where that plainly serves the plan.
+
+Each creature weighs the jobs it could do: the job's worth, less `STEP` (90) for every step it
+would walk, plus `ON_TIME` (200) if it can be there this turn and `STICK` (80) if it is already
+there or already doing that job; a job on ground marked for the map event or a puff is worth 150
+less to stand on. Then, last, who it is (see [PERSONALITY.md](PERSONALITY.md)), never more than
+`LEANING_CAP` (180, about two steps) either way. The team takes the sharing out worth the most in
+all, each creature weighing its best eight. Two jobs that stand on one tile are never both taken,
+and one of ours already holding a square of the plan keeps it: swapping holders would leave it
+empty while one walks off and the other walks on.
+
+Each job becomes one of the four orders below for the creature that took it. A flank's two sides
+walk into place and hold there; once both stand in place at the start of a turn, both contest
+together. Alone where two were needed, a creature much keener to meet the other team than it is
+wary (`RECKLESS`, 150) goes at the holder anyway and is likely turned away; any other stands beside
+it, keeping the square contested, until help comes.
+
+Every creature's job is an event (`Assigned`): the job, the order it comes to, and why it was this
+creature rather than the one a creature with no leanings would have been (nearest, already at it,
+bold, careful, beside a friend, away from one it avoids, curious, on a whim, alone).
+
+### Thinking again
+
+After whatever lands at the start of each tick, a creature whose job has just come to nothing
+thinks again from the same plan, once a turn, keeping to jobs nobody else of its team is on
+(`Rethought`): what it went for was picked up or is gone; it picked up what it went for; the one it
+went after was knocked out, or started holding before it got there; the one of theirs on its
+square stepped off; someone got to its square first; its ground was marked for something about to
+land; a teammate was knocked out and left its job undone; something turned up nearby while it had
+nothing to do. A contest already spent this turn is not taken again. Thinking again about ground
+about to be hit, a wary creature finds another job and a bold one often stays.
+
+## The orders each creature carries out
 
 | Order | Intent | Target |
 |---|---|---|
@@ -33,7 +88,7 @@ locked together and the turn resolves in `ticks_per_turn` ticks.
 | USE | Use what it carries | A tile. Only for a creature carrying something it found (see [Found things](#found-things)). Walks until the tile is within the item's reach, uses it there once a turn, and the item is gone |
 
 There are no move sets, abilities, power ratings or Battle stats. Every creature has the same
-composure, the same pace and one order a turn. USE comes from something lying on the board,
+composure, the same pace and one job a turn. USE comes from something lying on the board,
 which any creature can pick up, never from the creature.
 
 ## A tick
@@ -43,7 +98,7 @@ Every tick works from one shared picture of the board. Nobody moves first.
 1. A gate whose swing was telegraphed last tick swings. Then whatever was marked to land this
    tick lands: a leaf umbrella or a twig whose time is up folds or falls, things glinting since
    last turn turn up (on a turn's first tick), items used last tick take effect, and the map event
-   comes.
+   comes. Anyone whose job has just come to nothing thinks again (see [Thinking again](#thinking-again)).
 2. Contests already next to their target are settled, so a creature walking away from a contester
    beside it is caught before it can step.
 3. Each creature still carrying out its order picks one step (see [How a creature walks](#how-a-creature-walks)).
@@ -161,7 +216,7 @@ composure.
 |---|---|---|---|---|---|
 | Backyard | The sprinkler | Soak | The whole yard | Turns 4, 8 and 12 | A garden tap on each side of the near edge |
 | Sandy Cove | A wave | Wash | The sandbar's two ends and the sand either side of them | Turns 3, 6, 9 and 12 | A big shell on each side of the near edge |
-| Millpond | The pond rising | Close | The jetty's two sides, leaving the yard a line for the rest of the turn | Turns 5 and 10 | A sluice on each bank |
+| Millpond | The pond rising | Close | The four banks either side of the jetty, from which its sides are come at | Turns 5 and 10 | A sluice on each bank |
 | Woodland Glade | A tree shaken | Soak, and a twig falls beside the tree | The open ground touching the tree | Turns 4, 8 and 12, on a pair of trees across from each other drawn at random | Each of the four old trees by the lanes (`event_tiles: around`) |
 
 Backyard's is a sprinkler that soaks the whole yard on turns 4, 8 and 12, with a tap on each side
@@ -300,18 +355,22 @@ arenas/<arena>.arena`), against the same arena with its event, switches and item
 |---|---|---|---|---|
 | Backyard | 0.502 | 0.108 | 25% | 0.107, 14% |
 | Sandy Cove | 0.495 | 0.107 | 67% | 0.107, 57% |
-| Millpond | 0.498 | 0.151 | 61% | 0.147, 34% |
+| Millpond | 0.497 | 0.141 (0.133 with seed 8) | 32% | 0.147 (0.139), 34% (32%) |
 | Woodland Glade | 0.507 | 0.152 (0.123 with seed 8) | 29% | 0.130 (0.114), 23% |
 
 Each event decides more matches at the beacon without moving the kinds apart, except in the
 glade, where found things leave Wallflowers about 0.02 lower than without them, close to what
-chance alone moves between seeds.
+chance alone moves between seeds. It is not their wariness of marked ground: with it taken out,
+they score the same.
 
 Knowing your creatures (`--coach familiar,generic --pairings 1000 --seed 7`) is worth as much as
 it was on Sandy Cove (0.594, against 0.593 without the event and items) and a little less in the
-glade (0.601, against 0.624) and at the Millpond (0.554, against 0.580), where three matches in
-four between thinking coaches are now won at the beacon. While the pond stayed up through the
-turn after it rose, that was 84% and 0.540.
+glade (0.601, against 0.624) and at the Millpond (0.559, against 0.580).
+
+The Millpond's water first rose over the jetty's own two sides, leaving the yard a single line:
+61% of Exhibition matches were then won at the beacon, and 84% of matches between thinking
+coaches while it stayed up through the turn after. Rising over the banks beside the jetty
+instead, it catches whoever waits there to flank and leaves the yard whole.
 
 Rules version 6 added Backyard's sprinkler and found things. Before it, under version 5, 13% of
 Exhibition matches were won at the beacon and the kinds were 0.098 apart; with familiar coaching,

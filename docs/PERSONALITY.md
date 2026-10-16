@@ -5,11 +5,11 @@ its own, no Battle stats and nothing it remembers about a creature that could ma
 This page lists every part of Desktop's record that says who a companion is, as of Desktop 0.67.6
 (`formiga-core`), and what Battle does with it.
 
-A profile changes how a creature carries out an order and nothing else. It never changes what
-MOVE, HOLD and CONTEST do to each other, composure, pace, the one order a turn, or whether a
-creature does what it was told. Every leaning is a preference between ways and moments, paid for in
-time when it costs a detour, so being more likely to do one thing is always being less likely to do
-another.
+A profile changes which job a creature takes on from its team's plan, how it carries it out, and
+nothing else. It never changes what MOVE, HOLD and CONTEST do to each other, composure, pace, the
+one job a turn, or whether a creature does what its team asked. Every leaning is a preference
+between jobs, ways and moments, paid for in steps or time, so being more likely to do one thing is
+always being less likely to do another.
 
 ## Where it comes from
 
@@ -64,6 +64,42 @@ each turn about one creature of a team's three does something of its own.
 | play | opportunism |
 | home affinity | wanderlust |
 | routine | patience |
+
+## Who takes which job
+
+When a team shares out its Handler's plan (`muster`, see [RULES.md](RULES.md#sharing-out-the-plan)),
+what the plan needs comes first, then how far each creature would walk and what it is already
+doing. Who it is counts last, and never for more than `LEANING_CAP` (180, about two steps' walk)
+either way, so it decides between jobs that are nearly as good as each other and never takes a
+creature off a job only it is near. The same leanings that pick its way pick its job:
+
+| Kind of job | Leaning toward it |
+|---|---|
+| Meeting the other team: moving one of theirs off a square, flanking, heading one off | (opportunism − caution) / 4 |
+| Standing and holding a square | (caution + patience) / 5 |
+| Guarding beside a square | togetherness / 4 + caution / 8 |
+| Fetching something lying on the ground | (wanderlust + opportunism / 2) / 4 |
+| The lever, a switch, using something carried | opportunism / 6 |
+| Any job beside a teammate | +60 or +30 for a strong or a fair liking, −120 or −60 for a strong or a fair avoidance |
+| Any job | a whim, from 0 to `variability` + 1, rolled from the seed |
+
+A creature already doing a job, or already standing where it is done, keeps to it by `STICK` (80)
+and a fifth of its patience above zero. Ground marked for the map event or a puff is 150 less
+worth standing on, and half its caution less again.
+
+Two more places show who it is. Alone where two were needed to flank a holder, one whose
+opportunism beats its caution by more than 150 goes at the holder anyway and is likely turned away;
+any other stands beside it and waits. And thinking again partway through a turn about ground
+marked for something about to land, the warier it is, the likelier it finds another job.
+
+Every job a creature takes says why (`muster::Why`): the job a creature with no leanings would
+have taken in its place was the same (nearest, or already at it), or the leaning that made the
+most difference against it (bold, careful, beside a friend, away from one it avoids, curious, on a
+whim), or it was the only one free for a job meant for two.
+
+With the Exhibition coach on Backyard, about one job in eleven goes to a different creature than
+it would without leanings; nearly all the rest of what a creature does of its own is still the way
+it walks there.
 
 ## Explaining it
 

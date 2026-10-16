@@ -1330,13 +1330,25 @@ mod tests {
 
     #[test]
     fn two_tables_play_a_whole_match_through_a_relay() {
-        let relay =
-            formiga_battle_room::serve_relay("127.0.0.1:0", formiga_battle_room::Limits::default())
-                .unwrap();
+        // A relay named in FORMIGA_BATTLE_RELAY, such as the site's, or one of our own.
+        let named = std::env::var(formiga_battle_room::RELAY_ENV)
+            .ok()
+            .filter(|v| !v.trim().is_empty());
+        let local = match named {
+            Some(_) => None,
+            None => Some(
+                formiga_battle_room::serve_relay(
+                    "127.0.0.1:0",
+                    formiga_battle_room::Limits::default(),
+                )
+                .unwrap(),
+            ),
+        };
+        let base = named.unwrap_or_else(|| local.as_ref().unwrap().base());
         let mut host = Table::new(sample::snapshot(), sample::visitors(9), 1);
         let mut guest = Table::new(sample::visitors(11), sample::visitors(9), 2);
-        host.relay = relay.base();
-        guest.relay = relay.base();
+        host.relay = base.clone();
+        guest.relay = base;
         host.open_room("Jake", None);
         let mut now = 0.0;
         // Opening a room first fingerprints this program, which takes a while in a debug build
@@ -1415,7 +1427,9 @@ mod tests {
                 t.earned
             );
         }
-        relay.stop();
+        if let Some(relay) = local {
+            relay.stop();
+        }
     }
 
     #[test]
