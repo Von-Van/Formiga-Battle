@@ -362,10 +362,14 @@ pub fn splash(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, fade: u8) 
     }
 }
 
-/// A creature the sprinkler has soaked, for the rest of the turn: drops running off it and a
-/// puddle at its feet. `(x, y)` is the top of its head, `feet` the floor under it.
-pub fn dripping(canvas: &mut Canvas, (x, y): (i32, i32), feet: (i32, i32), now: f32, still: bool) {
+/// The puddle at a soaked creature's feet, laid on the ground before anyone stands on it.
+pub fn puddle(canvas: &mut Canvas, feet: (i32, i32)) {
     paint::ellipse(canvas, feet.0, feet.1, 9, 3, rgba(0x7fb8c8, 110));
+}
+
+/// A creature the sprinkler has soaked, for the rest of the turn: drops running off it (its
+/// puddle is `puddle`, on the ground). `(x, y)` is the top of its head.
+pub fn dripping(canvas: &mut Canvas, (x, y): (i32, i32), now: f32, still: bool) {
     for k in 0..3 {
         let fall = if still {
             0.3 * k as f32

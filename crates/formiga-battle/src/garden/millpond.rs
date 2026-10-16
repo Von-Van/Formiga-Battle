@@ -538,16 +538,18 @@ pub(super) fn back(
 ) -> (Points, Vec<Perch>, (i32, i32)) {
     let f = FAR_BORDER;
     let mut layer = Canvas::new(canvas.width(), canvas.height());
-    // The fence along the back left, and along the back right as far as the mill.
+    // The fence along the back left, and along the back right as far as the mill, both from one
+    // post in the far corner (behind the willow's trunk), so the two runs meet rather than stop
+    // short of each other.
     let mut perches = Vec::new();
     let mut posts = Vec::new();
-    let mut t = 0.3;
+    let mut t = -0.5;
     while t < d - 0.5 {
         posts.push((-0.5, t));
         t += 0.75;
     }
-    let mut fence_r = Vec::new();
-    let mut t = 0.4;
+    let mut fence_r = vec![(-0.5, -0.5)];
+    let mut t = 0.25;
     while t < w - 2.8 {
         fence_r.push((t, -0.5));
         t += 0.75;
@@ -569,6 +571,10 @@ pub(super) fn back(
             }
         }
         for (k, &(x, y)) in run.iter().enumerate() {
+            // The corner post is the left run's; the right run only takes its rails from it.
+            if k == 0 && std::ptr::eq(run, &fence_r) {
+                continue;
+            }
             let (sx, sy) = view.pixel(x, y);
             paint::ellipse(canvas, sx + 2, sy + 1, 3, 1, SHADOW);
             paint::rect(&mut layer, sx - 1, sy - 13, 3, 13, PLANK.base);
