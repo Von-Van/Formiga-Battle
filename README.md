@@ -60,7 +60,7 @@ opens the window behind everything, pictures it and closes. Either takes `--aren
 backyard|woodland|millpond|cove`. Look at them after changing anything
 visual.
 
-The gate, run locally (the repository is private, so nothing runs on GitHub):
+The gate, run locally (Battle has no GitHub Actions, so nothing runs on GitHub):
 
 ```bash
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
@@ -68,6 +68,21 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 
 The developer toolkit in Desktop runs Battle's tests against a Desktop checkout's own crates:
 `devtools/formiga validate --expansions --step battle`.
+
+## Releasing
+
+Battle is released with Formiga Desktop, under the same version. Its repository runs no Actions:
+Formiga-World-Releases builds it from its tag `vX.Y.Z` and keeps the downloads, and the website
+offers them from there. A release needs its `## [X.Y.Z] - date` section in `CHANGELOG.md`, and
+`scripts/set-version.sh X.Y.Z vX.Y.Z` to move the version and Desktop's tag together
+(`scripts/set-version.sh --check` says whether every place agrees).
+
+`scripts/package-macos.sh` builds the universal app, its zip and DMG into `dist/`, and
+`scripts/package-windows.ps1` the Windows zip and per-user installer. Both name Battle the way
+`formiga-battle-contract`'s `discovery` module says Desktop looks for it: the bundle id and
+`FormigaBattleVersion` on macOS, the `Software\Formiga\Battle` registry values on Windows, with
+the battle version and the icon asked of the program itself (`--battle-version`, `--icon <dir>`).
+Each prints its program's SHA-256 last: that is how the site's friend-match relay knows a release.
 
 ## Crates
 
@@ -80,9 +95,8 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
 - **`formiga-battle-contract`**: what Desktop hands Battle, a read-only roster built from
   Desktop's own trip projection (`formiga-travel`) plus the learned leanings a trip leaves at
   home, and Battle's acknowledgement, read and written through `formiga-expansion-rulebook` like
-  every companion app's documents. It is Desktop's: this is a copy of it as Desktop has adopted
-  it, kept here byte for byte until a Desktop release carries it, when Battle takes it by tag
-  like the other Desktop crates.
+  every companion app's documents. It is Desktop's, taken from Desktop's release tag like its
+  other shared crates.
 - **`formiga-battle-room`**: playing a friend. `relay` (the relay as a state machine: rooms,
   seats, deadlines, forfeits; the reference the site's relay follows), `http` (the client Battle
   uses, and a local relay), `code` (invite codes) and `roster` (a team of Desktop's companions
@@ -98,5 +112,5 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
   window), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
-by one release tag (`v0.67.6`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
+by one release tag (`v0.67.8`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
 authoritative for the colony; Battle never writes a colony file.

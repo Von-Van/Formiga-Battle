@@ -164,7 +164,8 @@ fn load_roster(args: &mut Args) -> Result<Vec<Profile>> {
                 &save,
                 local_session(),
                 save.maximum_seen_utc,
-                "0.67.7",
+                // Battle shares its version with the Desktop release it is built on.
+                env!("CARGO_PKG_VERSION"),
             )?
         }
         (None, Some(path)) => BattleSnapshot::read(path.as_ref())?,

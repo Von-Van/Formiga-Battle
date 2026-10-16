@@ -7,6 +7,7 @@ mod cli;
 mod friend;
 mod garden;
 mod host;
+mod icon;
 mod iso;
 mod look;
 mod playback;
@@ -16,7 +17,7 @@ mod table;
 
 use anyhow::{Context, Result, bail};
 use formiga_art::Canvas;
-use formiga_battle_contract::{LAUNCH_ARGUMENT, sample};
+use formiga_battle_contract::{BATTLE_FORMAT_VERSION, LAUNCH_ARGUMENT, sample};
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "\
@@ -52,6 +53,22 @@ WINDOW:
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // For the packaging scripts: the newest battle contract version this Battle reads, which goes
+    // in the macOS bundle and the Windows registry for Desktop to find.
+    if args.first().is_some_and(|a| a == "--battle-version") {
+        println!("{BATTLE_FORMAT_VERSION}");
+        return Ok(());
+    }
+    // For the packaging scripts too: Battle's icon, for the bundle and the installer.
+    if args.first().is_some_and(|a| a == "--icon") {
+        let folder = args
+            .get(1)
+            .map(PathBuf::from)
+            .context("--icon needs a folder to write the icon into")?;
+        icon::write(&folder)?;
+        println!("Wrote Battle's icon to {}", folder.display());
+        return Ok(());
+    }
     if args.iter().any(|a| a == "--help" || a == "-h") {
         print!("{USAGE}\n{}", cli::HELP);
         return Ok(());
@@ -176,7 +193,8 @@ fn window(args: Vec<String>) -> Result<()> {
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title("Formiga Battle")
         .with_inner_size([1280.0, 780.0])
-        .with_min_inner_size([1024.0, 640.0]);
+        .with_min_inner_size([1024.0, 640.0])
+        .with_icon(icon::window());
     if reviewing {
         // A window for review only: it stays behind whatever the owner is doing.
         viewport = viewport.with_active(false);
