@@ -10,8 +10,14 @@ use formiga_battle_contract::{MatchSummary, Mode};
 
 /// The keys Battle answers to, for the settings page.
 const KEYS: [(&str, &str); 7] = [
-    ("Space, Enter or a click", "hurries the train in at the station"),
-    ("T, D, I", "picks up a Take, Defend or Interact order in a match"),
+    (
+        "Space, Enter or a click",
+        "hurries the train in at the station",
+    ),
+    (
+        "T, D, I",
+        "picks up a Take, Defend or Interact order in a match",
+    ),
     ("1, 2, 3", "chooses one of your three on the board"),
     ("Enter", "locks in your orders"),
     ("L", "opens the whole match, turn by turn"),
