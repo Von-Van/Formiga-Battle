@@ -151,7 +151,7 @@ fn a_team_that_only_ever_holds_the_beacon_loses_to_one_that_walks_round_it() {
         &Arena::backyard(),
         Ruleset::default(),
         5,
-        60,
+        150,
         [Coach::Exhibition, Coach::Turtle],
     );
     assert!(

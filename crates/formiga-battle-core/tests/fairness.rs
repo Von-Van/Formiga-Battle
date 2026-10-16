@@ -41,8 +41,10 @@ fn matches_end_inside_the_turn_cap_and_the_beacon_decides_some_outright() {
         [Coach::Exhibition; 2],
     );
     assert!(s.average_turns() <= f64::from(Ruleset::default().turn_cap));
+    // One in eight: since rules version 5, creatures taking their own way round arrive later
+    // and fewer matches are won at the beacon (about 13%, from 21% under version 4).
     assert!(
-        s.by_capture * 6 > s.matches,
+        s.by_capture * 8 > s.matches,
         "captures {} of {}",
         s.by_capture,
         s.matches

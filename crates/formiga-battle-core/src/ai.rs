@@ -5,6 +5,7 @@ use crate::arena::TEAM_SIZE;
 use crate::game::Match;
 use crate::grid::Tile;
 use crate::interpret::distances;
+use crate::items::Item;
 use crate::order::{Order, Orders, Side, Slot, Target};
 use crate::rng::{self, Purpose};
 
@@ -36,7 +37,8 @@ pub fn fallback(m: &Match, slot: Slot) -> Order {
 }
 
 /// The free zone tile this creature can reach soonest, the zone's middle first among equals,
-/// passing over any already `taken` by a teammate's order.
+/// passing over any already `taken` by a teammate's order, and over any marked for the map event
+/// while another will do.
 pub fn nearest_free_zone_tile(m: &Match, slot: Slot, taken: &[Tile]) -> Option<Tile> {
     let dist = walks(m, slot);
     let w = m.arena.width as usize;
@@ -47,7 +49,15 @@ pub fn nearest_free_zone_tile(m: &Match, slot: Slot, taken: &[Tile]) -> Option<T
         .copied()
         .filter(|t| m.occupant(*t).is_none_or(|o| o == slot) && !taken.contains(t))
         .filter_map(|t| dist[t.y as usize * w + t.x as usize].map(|d| (t, d)))
-        .min_by_key(|(t, d)| (*d, t.distance(centre), t.y, m.arena.across(slot.side, *t)))
+        .min_by_key(|(t, d)| {
+            (
+                crate::interpret::warned(m, *t),
+                *d,
+                t.distance(centre),
+                t.y,
+                m.arena.across(slot.side, *t),
+            )
+        })
         .map(|(t, _)| t)
 }
 
@@ -70,8 +80,9 @@ pub enum Coach {
     /// Gives no orders at all, so every creature falls back on its own.
     Absent,
     /// Plays the beacon: one creature holds it, two press a holder of the other team in it who
-    /// has nobody holding beside it, and the rest guard, chase or try the lever, chosen with a
-    /// little chance so it cannot be read like a script. It knows nothing about any creature's
+    /// has nobody holding beside it, and the rest guard, chase, pick things up or try the lever
+    /// or the tap, chosen with a little chance so it cannot be read like a script. Whoever carries
+    /// something uses it when there is a plain use for it. It knows nothing about any creature's
     /// temperament.
     Exhibition,
     /// Thinks each turn through, knowing exactly how each of its creatures carries out an order.
@@ -199,7 +210,10 @@ fn exhibition(m: &Match, side: Side) -> Orders {
     let holding_in_zone = free
         .iter()
         .copied()
-        .filter(|s| m.fighter(*s).holding && m.arena.in_zone(m.fighter(*s).at))
+        .filter(|s| {
+            let at = m.fighter(*s).at;
+            m.fighter(*s).holding && m.arena.in_zone(at) && !crate::interpret::warned(m, at)
+        })
         .min_by_key(|s| (m.fighter(*s).at.distance(centre), *s));
     let (anchor, anchor_tile) = match holding_in_zone {
         Some(s) => (s, m.fighter(s).at),
@@ -305,6 +319,35 @@ fn exhibition(m: &Match, side: Side) -> Orders {
             .first()
             .copied()
             .filter(|_| m.lever_ready() && m.board.gates_open.iter().any(|open| !open));
+        // The tap is worth turning while the other team holds where the sprinkler sweeps and
+        // nobody of ours does.
+        let soaks = |sd: Side| {
+            m.team(sd)
+                .filter(|x| m.arena.in_scenery(m.fighter(*x).at))
+                .count()
+        };
+        let tap = m
+            .arena
+            .switches
+            .iter()
+            .copied()
+            .filter(|_| m.switch_ready() && soaks(side.other()) > 0 && soaks(side) == 0)
+            .min_by_key(|t| {
+                let reach = t
+                    .steps()
+                    .into_iter()
+                    .filter(|n| m.arena.contains(*n))
+                    .map(|n| steps(s, n))
+                    .min();
+                (reach, *t)
+            });
+        let find = m
+            .board
+            .ground
+            .iter()
+            .map(|(t, _)| *t)
+            .filter(|t| m.fighter(s).carrying.is_none() && steps(s, *t) <= 3)
+            .min_by_key(|t| (steps(s, *t), *t));
         let r = roll(10 + k as u64);
         // Corner to corner with the anchor, where a flank on either is turned away by both.
         let guard = m
@@ -326,6 +369,14 @@ fn exhibition(m: &Match, side: Side) -> Orders {
                 )
             });
         let order = match (chase, lever, guard) {
+            _ if tap.is_some() && r >= 60 => Order::Contest {
+                target: Target::Lever {
+                    at: tap.expect("checked"),
+                },
+            },
+            _ if find.is_some() && r < 35 => Order::Move {
+                to: find.expect("checked"),
+            },
             (Some(enemy), _, _) if r < 45 => Order::Contest {
                 target: Target::Creature { slot: enemy },
             },
@@ -341,6 +392,58 @@ fn exhibition(m: &Match, side: Side) -> Orders {
             taken.push(at);
         }
         put(&mut orders, s, order);
+    }
+
+    // Whoever carries something uses it, when there is a plain use for it, unless it is about to
+    // flank: a puff on one of theirs in the zone, a twig on a side of a holder of ours that they
+    // could come at it from, a leaf over one of ours the sprinkler is about to sweep.
+    for s in m.team(side) {
+        let Some(item) = m.fighter(s).carrying else {
+            continue;
+        };
+        if matches!(
+            orders[s.index as usize],
+            Some(Order::Contest {
+                target: Target::Creature { .. }
+            })
+        ) {
+            continue;
+        }
+        let at = m.fighter(s).at;
+        let near = |t: Tile| at.distance(t) <= item.reach() + 2;
+        let target = match item {
+            Item::Puff => m
+                .team(side.other())
+                .map(|e| m.fighter(e).at)
+                .filter(|t| m.arena.in_zone(*t) && near(*t) && *t != at)
+                .min_by_key(|t| (at.distance(*t), *t)),
+            Item::Twig => m
+                .team(side)
+                .filter(|h| {
+                    matches!(orders[h.index as usize], Some(Order::Hold { at }) if m.arena.in_zone(at))
+                })
+                .flat_map(|h| m.fighter(h).at.steps())
+                .filter(|t| {
+                    near(*t)
+                        && m.walkable(*t)
+                        && m.occupant(*t).is_none()
+                        && !m.arena.in_zone(*t)
+                        && m.team(side.other()).any(|e| m.fighter(e).at.distance(*t) <= 3)
+                })
+                .min_by_key(|t| (at.distance(*t), *t)),
+            Item::Leaf => m
+                .team(side)
+                .map(|x| m.fighter(x).at)
+                .filter(|t| {
+                    m.board.event_at.is_some() && m.arena.in_scenery(*t) && at.distance(*t) <= 1
+                })
+                .min_by_key(|t| (at.distance(*t), *t)),
+        };
+        if let Some(target) = target
+            && roll(30 + u64::from(s.index)) < 75
+        {
+            put(&mut orders, s, Order::Use { at: target });
+        }
     }
     orders
 }

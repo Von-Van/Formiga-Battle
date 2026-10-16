@@ -35,7 +35,13 @@ pub enum Choice {
     Walk,
     Hold,
     Contest,
+    /// Where what it carries could be used.
+    Use,
 }
+
+/// A cartoon word to paint over the board: its picture, where its top-left corner goes, and how
+/// much of it shows, out of 255.
+pub type Lettered = (Canvas, i32, i32, u8);
 
 /// What the window lays over the board: who is chosen, where an order could go, the orders given
 /// so far, and the little flourish wherever the Handler last clicked.
@@ -49,7 +55,7 @@ pub struct Marks {
     pub pokes: Vec<(Tile, f32)>,
     /// Cartoon words (`lettering`), over everything: each picture, where its top-left corner
     /// goes, and how much of it shows, out of 255.
-    pub lettering: Vec<(Canvas, i32, i32, u8)>,
+    pub lettering: Vec<Lettered>,
 }
 
 /// The board at one moment, as a picture of `view.size`. `still` holds the garden's own motion
@@ -330,6 +336,7 @@ fn floor_marks(
             Choice::Walk => (rgb(0xfffcf2), CREAM),
             Choice::Hold => (rgb(0xbfe6ff), rgb(0xdff3ff)),
             Choice::Contest => (rgb(0xff8a6a), rgb(0xffc0a8)),
+            Choice::Use => (GOLD, rgb(0xfff0a0)),
         };
         diamond_fill(
             canvas,
@@ -398,6 +405,12 @@ fn order_marks(
                 pennant(canvas, b, team, now, still);
             }
             Order::Hold { .. } => {}
+            // Where something is to be used: a gold diamond on its tile, in the team's light.
+            Order::Use { at } => {
+                let team = TEAM[slot.side.index()];
+                diamond_fill(canvas, view, *at, 0.2, paint::faded(team.light, 70));
+                brackets(canvas, view, *at, 0.12, 0.3, GOLD);
+            }
             Order::Contest { target } => {
                 let (at, lever) = match target {
                     Target::Creature { slot } => (frame.figure(*slot).tile, false),
