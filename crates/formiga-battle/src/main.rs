@@ -14,6 +14,7 @@ mod icon;
 mod iso;
 mod lettering;
 mod look;
+mod masthead;
 mod playback;
 mod rewards;
 mod scene;

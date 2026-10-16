@@ -199,6 +199,9 @@ pub struct BattleApp {
     /// The Battleground, once there is a page to size it to; and its picture this frame.
     station: Option<crate::station::Station>,
     station_picture: Option<(i64, egui::TextureHandle)>,
+    /// The picture at the head of the station's page, and its picture this frame.
+    masthead: Option<crate::masthead::Masthead>,
+    masthead_picture: Option<(i64, egui::TextureHandle)>,
     /// The friend's room was asked for by its code, not opened.
     joining: bool,
     /// What was felt away from the window's context, told with the rest at the next frame.
@@ -318,6 +321,8 @@ impl BattleApp {
             turn: None,
             station: None,
             station_picture: None,
+            masthead: None,
+            masthead_picture: None,
             joining: false,
             felt: Vec::new(),
             preview: None,
