@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Rules version 8: a flank in the yard takes the ground. When two of a team break a hold in the
+  yard, those of them standing in the yard start holding where they stand, and the beacon goes up
+  a tick for the breakthrough as well as for holding the yard alone. Before, about half of all
+  matches on Backyard, the Millpond and the glade ended without anyone ever lighting a tick of the
+  beacon, decided on composure or drawn; now about a quarter to a third do, more are won from
+  behind, and matches are no shorter. A team that only digs in loses more often than before.
+  Knowing your companions counts for a little less (59% for the coach who knows them on
+  Backyard, from 63%). Matches recorded under version 7 no longer replay, and friends need the
+  same version to play.
 - While you give orders, faint footprints show who of your three would probably take which job
   with the plan as it stands, and pointing at one says what it would probably do and why
   ("probably flanks, keen to go"). It is your own team's sharing out only: how each walks, who

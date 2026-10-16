@@ -2,7 +2,7 @@
 
 How a match of Formiga Battle resolves, as `formiga-battle-core` plays it. Every number here lives
 in `Ruleset` (`crates/formiga-battle-core/src/ruleset.rs`), travels with every recorded match, and
-is provisional until playtests settle it. `RULES_VERSION` is 7.
+is provisional until playtests settle it. `RULES_VERSION` is 8.
 
 ## A match
 
@@ -107,7 +107,7 @@ Every tick works from one shared picture of the board. Nobody moves first.
 5. Anyone who has reached the tile it was told to hold starts holding.
 6. Contests that have just come into reach are settled. A USE, a pull or a turn of a tap in reach
    is settled with them.
-7. The beacon counts.
+7. The beacon counts, a breakthrough included (see [The beacon](#the-beacon)).
 8. The match ends by knockout, then by capture.
 
 Composure is taken as each contest is settled, never more than `damage_cap` from one creature in a
@@ -146,6 +146,11 @@ its four sides at once.
   sides block each other's), it is knocked off balance where it stands.
 - **Off balance.** Either way it stops for the rest of the turn, is not holding, and does not count
   in the zone. Next turn it can hold again.
+- **Taking the ground.** Flankers standing in the zone when the hold breaks start holding where
+  they stand, so the ground they won counts for them at once. A flanker outside the zone does
+  not.
+- **Breakthrough.** A hold in the zone broken by a flank is worth a tick of beacon progress to
+  the flankers (see [The beacon](#the-beacon)).
 - **Side by side.** Two holders corner to corner share the two tiles they both touch: a
   contester on either is turned away by both, so it takes three to break one of them.
 - **Already in place.** Contests already beside their target settle before anyone steps, so
@@ -155,7 +160,7 @@ its four sides at once.
 
 The counterplay is the defender's: hold beside a friend, contest a flanker on its way, or move
 before the flankers are in place. Being flanked costs a little composure; what it really costs is
-the zone.
+the zone, and since rules version 8 a tick of the beacon besides.
 
 `ai::flank_threatened` says whether a holder would be flanked if everyone of the other team beside
 it contested it now, and `ai::flank_places` finds two sides to flank it from.
@@ -172,6 +177,11 @@ The zone (`Z` tiles) is the beacon. At the end of every tick:
   than the other team has in it unbroken, holding or not.
 
 Walking through the zone is not holding it. Reaching `capture_ticks` wins at once.
+
+**Breakthrough.** A team that breaks a hold in the zone by flanking it gains a tick of progress for
+it, on top of any tick for holding the zone alone that same tick (`BrokeThrough`), so a flank in
+the yard can be worth two. Only one team gains in a tick: if both would, the zone is contested and
+neither does.
 
 Before rules version 4 the default was `majority`, because under `uncontested` both teams nearly
 always had someone in the zone and almost nothing was won by capture. Flanking gives a team a way
@@ -343,27 +353,52 @@ Over 10,000 Exhibition-coached matches with the default rules (`--pairings 5000 
 
 | | |
 |---|---|
-| Left side | 0.502 |
-| Kinds, highest to lowest | Scholar 0.538, Guardian 0.530, Grump 0.516, Lazybones 0.513, Sweetheart 0.503, Explorer 0.496, Oddball 0.484, Wallflower 0.476, Showoff 0.469, Troublemaker 0.469 |
-| Spread between kinds | 0.069 (0.081 with seed 8), each kind over 3,600 to 7,000 matches |
-| Won by capture, knockout, at the cap, drawn | 26%, 0%, 56%, 18%, in 10.9 turns |
+| Left side | 0.501 |
+| Kinds, highest to lowest | Scholar 0.542, Guardian 0.522, Grump 0.517, Lazybones 0.515, Explorer 0.498, Sweetheart 0.498, Oddball 0.486, Troublemaker 0.474, Wallflower 0.474, Showoff 0.469 |
+| Spread between kinds | 0.073 (0.090 with seed 8), each kind over 3,600 to 7,000 matches |
+| Won by capture, knockout, at the cap, drawn | 32%, 0%, 52%, 16%, in 10.7 turns |
+| Beacon never lit; won from behind on the beacon | 30%; 8% |
+| Flanks | 0.95 a match, 81% followed by beacon progress that turn |
 
-With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500 --seed 7`),
-kinds score within 0.083 of each other, Sweethearts highest (0.525) and Wallflowers lowest
-(0.442); 41% of those matches are won by capture, in about 10.4 turns.
+With both teams coached by `familiar` (`--coach familiar,familiar --pairings 800 --seed 9`),
+kinds score within 0.076 of each other, Grumps highest (0.533) and Oddballs lowest (0.458); 59%
+of those matches are won by capture, in about 9.3 turns, the beacon is never lit in 8% of them,
+and 18% are won from behind on the beacon.
 
 On every arena, over 4,000 Exhibition-coached matches each (`--pairings 2000 --seed 7 --file
 arenas/<arena>.arena`), with seed 8 in brackets:
 
-| Arena | Left side | Spread between kinds | Won by capture |
-|---|---|---|---|
-| Backyard | 0.502 | 0.069 (0.081) | 26% |
-| Sandy Cove | 0.505 | 0.113 (0.104) | 63% |
-| Millpond | 0.495 | 0.069 (0.055) | 29% |
-| Woodland Glade | 0.489 | 0.117 (0.097) | 34% |
+| Arena | Left side | Spread between kinds | Won by capture | Beacon never lit | Won from behind |
+|---|---|---|---|---|---|
+| Backyard | 0.501 | 0.073 (0.090) | 32% | 30% | 8% |
+| Sandy Cove | 0.506 | 0.114 (0.104) | 66% | 9% | 11% |
+| Millpond | 0.503 | 0.075 (0.055) | 31% | 29% | 6% |
+| Woodland Glade | 0.488 | 0.118 (0.127) | 41% | 26% | 8% |
 
-Knowing your creatures (`--coach familiar,generic --pairings 1000 --seed 7`) is worth 0.629 on
-Backyard, 0.637 on Sandy Cove, 0.649 at the Millpond and 0.595 in the glade.
+Knowing your creatures (`--coach familiar,generic --pairings 1000 --seed 7`) is worth 0.594 on
+Backyard, 0.621 on Sandy Cove, 0.605 at the Millpond and 0.525 in the glade.
+
+Rules version 8 let a flank in the yard take the ground and break through (see
+[Encirclement](#encirclement)). Before it, with the same seeds, the yard was held by both teams
+for 24 to 29 of a match's 33 or so ticks, most often two of one team holding against one of the
+other: one holder was enough to stop the beacon, and a flank that broke it left the flankers
+standing beside it, not holding, so only about two flanks in five led to progress that turn. The
+beacon was never lit in 45% of Exhibition matches on Backyard, 10% on Sandy Cove, 52% at the
+Millpond and 59% in the glade, those matches being decided on composure or drawn, and the winner
+had been behind on the beacon in 1% to 3% of them (10% on Sandy Cove). Under thinking coaches
+(familiar against familiar) 39% of Backyard matches were won by capture, 19% at the Millpond and
+20% in the glade, against 59%, 36% and 52% now. Matches are no shorter: 10.9 turns on Backyard
+before, 10.7 now.
+
+Rules that let holding count for more ended matches too, but handed them to a team that only
+holds, and were dropped: counting the zone by `majority` won 98% of Backyard matches at the
+beacon in about 4 turns, and the turtle beat Exhibition with it; counting it when a team has two
+more holding in it than the other has in it, or by `majority` on the last two turns only, let the
+turtle beat Exhibition 0.92 and 0.77 of the time. Taking the ground and breaking through reward
+only a team that comes at a holder, and the turtle loses more often than before (see [Holding
+still](#holding-still)). What it costs is a little of what knowing your creatures is worth: 0.629
+to 0.594 on Backyard and 0.595 to 0.525 in the glade, because a flank that lands now counts
+for so much whoever planned it. Jake chose this on 2026-10-16.
 
 Rules version 7 replaced an order for each creature with three orders for the team, and halved
 the pull (see [How a creature walks](#how-a-creature-walks)). Under version 6, with an order each
@@ -392,20 +427,14 @@ coaching kept kinds within 0.037): every way a profile chooses past the first on
 time, and the kinds that lean hardest pay most for it. Jake chose this on 2026-10-16, for about
 one creature in three doing something of its own each turn.
 
-Most matches now go to the turn cap. With good holding on both sides the zone stays contested,
-and the cap's order (beacon progress, then composure, then creatures standing) decides them;
-flanks are what move composure. Every tie between equal tiles, in the rules and in the coaches,
+About half of Exhibition matches still go to the turn cap. With good holding on both sides the
+zone stays contested, and the cap's order (beacon progress, then composure, then creatures
+standing) decides them; flanks are what move the beacon and composure both. Every tie between equal tiles, in the rules and in the coaches,
 is broken from each team's own side of the board, so the board plays the same from both sides.
 
 `tournament` also says how its matches ended: how many never lit the beacon at all, how many were
 won by a team that had been behind on the beacon, and how often a flank was followed by beacon
-progress that turn. Over 4,000 Exhibition matches each (`--pairings 2000 --seed 7`), the beacon
-was never lit in 45% of matches on Backyard, 10% on Sandy Cove, 52% at the Millpond and 59% in the
-glade, and the winner had been behind on the beacon in 1% to 3% of them (10% on Sandy Cove). The
-zone is held by both teams for 24 to 29 of a match's 33 or so ticks, most often two of one team
-holding against one of the other: one holder is enough to stop the beacon, and a flank that
-breaks it leaves the flankers standing beside it, not holding, so only about two flanks in five
-lead to progress that turn.
+progress that turn.
 
 Before rules version 2, under strong coaching, a bold creature went out of its way to walk into
 the other team's reach, and a social one detoured to stay beside its teammates because company
@@ -423,9 +452,11 @@ when it gave each creature its own HOLD, the turtle never contested at all and E
 
 | Against turtle | Score | How |
 |---|---|---|
-| exhibition | 0.661 | 60% won or lost at the cap, 39% drawn, 1% by capture |
-| familiar | 0.790 | 68% at the cap, 20% by capture, 12% drawn |
-| generic | 0.695 | 64% at the cap, 20% by capture, 16% drawn |
+| exhibition | 0.760 | 54% won or lost at the cap, 32% drawn, 15% by capture |
+| familiar | 0.829 | 65% at the cap, 25% by capture, 10% drawn |
+| generic | 0.751 | 62% at the cap, 25% by capture, 13% drawn |
+
+Under rules version 7, before a flank took the ground, they scored 0.661, 0.790 and 0.695.
 
 Three holders in a five-tile cross keep it contested for as long as they stand, so they are
 almost never beaten by capture; they are beaten on the cap, because a team that only holds never
@@ -444,11 +475,13 @@ generic one imagines every creature as one that leans no way at all.
 
 | Coaches | Familiar's score |
 |---|---|
-| familiar against generic, 2,000 matches | 0.629 |
-| familiar against Exhibition, 2,000 matches | 0.980 |
-| generic against Exhibition, 2,000 matches | 0.933 |
+| familiar against generic, 2,000 matches | 0.594 |
+| familiar against Exhibition, 2,000 matches | 0.981 |
+| generic against Exhibition, 2,000 matches | 0.932 |
 
-Under rules version 7 the coach who knows its creatures wins 62.9% on Backyard (62.1% under
+Under rules version 8 the coach who knows its creatures wins 59.4% on Backyard (62.9% under
+version 7: a flank that lands counts for more now, whoever planned it). Under rules version 7 it
+won 62.9% (62.1% under
 version 6, with an order for each creature): it cannot say who goes where, but it knows who will
 take which job and how each will walk there. Knowing your creatures was worth more under rules
 version 5 than before it: the coach who knows them
