@@ -47,6 +47,8 @@ WINDOW:
     --snap <PNG>             Open, save a picture of the window after --at seconds (default 6)
                              and close
     --at <SECONDS>           With --snap
+    --size <W>x<H>           The window's size in points (default 1280x780; the smallest it
+                             can be is 1024x640)
     --review <STAGE>         With --snap: station (the train in at the Battleground, everyone
                              aboard), where (choosing a place), picking or who (the team
                              choice), friend (a friend's room about to be opened), history,
@@ -107,6 +109,8 @@ struct Parsed {
     turns: u32,
     into: Option<f32>,
     scale: u32,
+    /// The window's size, in points.
+    size: [f32; 2],
 }
 
 fn parse(args: Vec<String>) -> Result<Parsed> {
@@ -122,6 +126,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
         turns: 0,
         into: None,
         scale: 3,
+        size: [1280.0, 780.0],
     };
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -158,6 +163,16 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
             "--turns" => parsed.turns = value()?.parse().context("--turns takes a number")?,
             "--into" => parsed.into = Some(value()?.parse().context("--into takes seconds")?),
             "--scale" => parsed.scale = value()?.parse().context("--scale takes a number")?,
+            "--size" => {
+                let text = value()?;
+                let (w, h) = text
+                    .split_once('x')
+                    .context("--size takes WIDTHxHEIGHT, such as 1024x640")?;
+                parsed.size = [
+                    w.parse().context("--size takes WIDTHxHEIGHT")?,
+                    h.parse().context("--size takes WIDTHxHEIGHT")?,
+                ];
+            }
             other => bail!("unknown option {other:?}; see --help"),
         }
     }
@@ -211,7 +226,7 @@ fn window(args: Vec<String>) -> Result<()> {
     let reviewing = review.is_some();
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title("Formiga Battle")
-        .with_inner_size([1280.0, 780.0])
+        .with_inner_size(args.size)
         .with_min_inner_size([1024.0, 640.0])
         .with_icon(icon::window());
     if reviewing {
