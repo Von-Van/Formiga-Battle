@@ -349,6 +349,9 @@ fn a_wary_creature_sent_to_contest_goes_without_hanging_back() {
         vec![plain(4), plain(5), plain(6)],
     ];
     let mut m = board_with(field(), teams, &[(L0, (0, 2)), (R0, (3, 2))]);
+    // Kept to the plain way, as the others are: a creature this wary would otherwise keep to
+    // the walls on its way.
+    m.ruleset.detour_budget = 0;
     let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(3, 2))]));
     assert!(
         !report

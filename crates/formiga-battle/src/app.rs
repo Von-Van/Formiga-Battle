@@ -846,6 +846,7 @@ impl BattleApp {
             (egui::Key::M, Verb::Move),
             (egui::Key::H, Verb::Hold),
             (egui::Key::C, Verb::Contest),
+            (egui::Key::U, Verb::Use),
         ] {
             if pressed(key) && self.table.selected.is_some() {
                 self.table.choose_verb(verb);
@@ -1214,6 +1215,9 @@ impl BattleApp {
                         .name
                         .clone())
                 ),
+                (Some(_), Some(Verb::Use)) => {
+                    "Click where to use it. Right-click or Escape cancels.".to_owned()
+                }
                 (None, _) => "Click one of yours on the board to give it an order.".to_owned(),
             },
         };
@@ -1516,7 +1520,7 @@ impl BattleApp {
                 "choose {}",
                 m.profile(Slot::new(self.table.you, i)).name
             )),
-            Aim::Give(order) => Some(speak(m, &order)),
+            Aim::Give(order) => Some(speak(m, &order, self.table.carrying())),
             Aim::Nothing => None,
         };
         let mut lines = Vec::new();
@@ -2025,13 +2029,18 @@ impl BattleApp {
             let texture = self.portrait(ctx, &contender);
             let chosen = giving && self.table.selected == Some(i);
             let order = self.table.orders[i as usize];
+            let carried = self
+                .table
+                .m
+                .as_ref()
+                .and_then(|m| m.fighter(Slot::new(you, i)).carrying);
             let order_text = match (standing[i as usize], order) {
                 (false, _) => "Sitting out, dizzy".to_owned(),
-                (true, Some(order)) => speak(self.table.m.as_ref().expect("on"), &order),
+                (true, Some(order)) => speak(self.table.m.as_ref().expect("on"), &order, carried),
                 (true, None) => match self.table.fallback(i) {
                     Some(f) => format!(
                         "No order: will {}",
-                        speak(self.table.m.as_ref().expect("on"), &f)
+                        speak(self.table.m.as_ref().expect("on"), &f, carried)
                     ),
                     None => "No order".to_owned(),
                 },
@@ -2060,6 +2069,14 @@ impl BattleApp {
                             });
                             let colour = if has_order { ink::PAGE } else { ink::MUTED };
                             ui.label(RichText::new(&order_text).size(12.5).color(colour));
+                            if let Some(item) = carried {
+                                ui.label(
+                                    RichText::new(format!("Carrying the {}", item.name()))
+                                        .size(11.5)
+                                        .italics()
+                                        .color(ink::FOREST),
+                                );
+                            }
                             let mut picked = None;
                             let mut cleared = false;
                             if giving && up {
@@ -2067,6 +2084,9 @@ impl BattleApp {
                                 ui.horizontal(|ui| {
                                     ui.spacing_mut().item_spacing.x = u * 2.0;
                                     for v in Verb::ALL {
+                                        if v == Verb::Use && carried.is_none() {
+                                            continue;
+                                        }
                                         let on = chosen && verb == Some(v);
                                         if chrome::button(
                                             ui,
@@ -2233,6 +2253,12 @@ impl BattleApp {
                     "CONTEST".to_owned(),
                     "bump theirs, or pull the lever".to_owned(),
                     Verb::Contest.hint().to_owned(),
+                ),
+                (
+                    Glyph::Stars,
+                    "USE".to_owned(),
+                    "what it found on the ground".to_owned(),
+                    Verb::Use.hint().to_owned(),
                 ),
             ],
             Guide::Marks => scene::Key::ALL
@@ -2572,7 +2598,9 @@ fn tally(m: &Match) -> Tally {
 }
 
 /// An order in the Handler's words: where, by what is there, never by coordinates.
-pub fn speak(m: &Match, order: &Order) -> String {
+/// An order in the Handler's words: where, by what is there, never by coordinates. `carrying`
+/// is what the one given it carries, for a USE.
+pub fn speak(m: &Match, order: &Order, carrying: Option<formiga_battle_core::Item>) -> String {
     let place = |tile: Tile| -> (&'static str, &'static str) {
         let arena = &m.arena;
         if arena.in_zone(tile) {
@@ -2592,7 +2620,14 @@ pub fn speak(m: &Match, order: &Order) -> String {
     match order {
         Order::Move { to } => format!("MOVE {}", place(*to).0),
         Order::Hold { at } => format!("HOLD {}", place(*at).1),
+        Order::Contest {
+            target: formiga_battle_core::Target::Lever { at },
+        } if m.arena.switches.contains(at) => "CONTEST: turn the tap".to_owned(),
         Order::Contest { .. } => describe(m, order),
+        Order::Use { at } => match carrying {
+            Some(item) => format!("USE the {} {}", item.name(), place(*at).1),
+            None => format!("USE what it carries {}", place(*at).1),
+        },
     }
 }
 

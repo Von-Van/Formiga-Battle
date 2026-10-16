@@ -1,4 +1,5 @@
-//! The three universal orders. They say what a Handler intends; the creature works out how.
+//! The three universal orders, and USE for whoever is carrying something found on the board. They
+//! say what a Handler intends; the creature works out how.
 
 use crate::grid::Tile;
 use serde::{Deserialize, Serialize};
@@ -59,7 +60,7 @@ impl Slot {
 pub enum Target {
     /// A creature on the other team.
     Creature { slot: Slot },
-    /// A lever, from a tile next to it.
+    /// A lever, or a switch that sets off the arena's map event, from a tile next to it.
     Lever { at: Tile },
 }
 
@@ -74,6 +75,10 @@ pub enum Order {
     /// Disrupt a creature of the other team, or pull a lever. Interrupts someone moving; loses
     /// to someone holding.
     Contest { target: Target },
+    /// Use what it is carrying on a tile: walks until it is in reach, and the item's effect lands
+    /// on that tile a tick later. Only for a creature carrying something; the item belongs to
+    /// the board, never to the creature, and is gone once used.
+    Use { at: Tile },
 }
 
 impl Order {
@@ -82,6 +87,7 @@ impl Order {
             Self::Move { .. } => "MOVE",
             Self::Hold { .. } => "HOLD",
             Self::Contest { .. } => "CONTEST",
+            Self::Use { .. } => "USE",
         }
     }
 }

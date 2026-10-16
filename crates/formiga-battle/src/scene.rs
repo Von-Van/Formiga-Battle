@@ -35,6 +35,8 @@ pub enum Choice {
     Walk,
     Hold,
     Contest,
+    /// Where what it carries could be used.
+    Use,
 }
 
 /// What the window lays over the board: who is chosen, where an order could go, the orders given
@@ -293,6 +295,7 @@ fn floor_marks(
             Choice::Walk => (rgb(0xfffcf2), CREAM),
             Choice::Hold => (rgb(0xbfe6ff), rgb(0xdff3ff)),
             Choice::Contest => (rgb(0xff8a6a), rgb(0xffc0a8)),
+            Choice::Use => (GOLD, rgb(0xfff0a0)),
         };
         diamond_fill(
             canvas,
@@ -361,6 +364,12 @@ fn order_marks(
                 pennant(canvas, b, team, now, still);
             }
             Order::Hold { .. } => {}
+            // Where something is to be used: a gold diamond on its tile, in the team's light.
+            Order::Use { at } => {
+                let team = TEAM[slot.side.index()];
+                diamond_fill(canvas, view, *at, 0.2, paint::faded(team.light, 70));
+                brackets(canvas, view, *at, 0.12, 0.3, GOLD);
+            }
             Order::Contest { target } => {
                 let (at, lever) = match target {
                     Target::Creature { slot } => (frame.figure(*slot).tile, false),

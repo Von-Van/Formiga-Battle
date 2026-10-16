@@ -192,6 +192,9 @@ pub fn observe(m: &Match, side: crate::order::Side, events: &[Event]) -> Vec<See
                     Reason::FollowedUpToCover => Some(Sign::TuckedAway),
                     Reason::SteppedBack => Some(Sign::SteppedBack),
                     Reason::HungBack => Some(Sign::HungBack),
+                    // Kept out of harm's way, as it keeps out of reach.
+                    Reason::SkirtedWarning => Some(Sign::KeptOutOfReach),
+                    Reason::WentForItem => None,
                 };
                 if let Some(sign) = sign {
                     signs.push((*slot, sign));
