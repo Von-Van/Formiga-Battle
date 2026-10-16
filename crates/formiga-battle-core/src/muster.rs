@@ -1,11 +1,13 @@
 //! How a team shares out its Handler's plan.
 //!
-//! A Handler never tells a creature what to do. They give the team up to three orders (TAKE some
-//! squares, DEFEND some squares, INTERACT with something) and the team works out among itself
-//! who goes where. Each order becomes a few jobs: walking onto a square and holding it, moving one
-//! of theirs off it, two taking a side each of a holder to flank it, standing guard beside a
-//! square, heading off one of theirs coming at it, fetching a found thing, pulling the lever,
-//! using what one carries. Each creature then takes the job that suits the team best.
+//! A Handler never tells a creature what to do. They give the team up to three orders (PRESS some
+//! squares, HOLD some squares facing one way, TRICK whoever holds some squares, INTERACT with
+//! something) and the team works out among itself who goes where. Each order becomes a few jobs:
+//! walking onto a square and holding it, pushing one of theirs off it, two taking a side each of a
+//! holder to flank it, going round to a holder's side to trick it, standing guard beside a square,
+//! heading off one of theirs coming at it, fetching a found thing, pulling the lever. Each creature
+//! then takes the job that suits the team best. A USE ITEM is given to the one carrying, by name,
+//! and is no job at all: it is used at the start of the turn, and the user goes on to its job.
 //!
 //! What suits the team is, first, what the plan asks for: a square named in two orders is worth
 //! twice one named once, and brings a second creature to stand guard beside it. Then how far
@@ -32,7 +34,7 @@ use crate::game::Match;
 use crate::grid::Tile;
 use crate::items::{self, Item};
 use crate::order::{
-    Directive, MAX_SQUARES, Order, Orders, PLAN_SIZE, Side, Slot, Target, TeamPlan,
+    Directive, Facing, MAX_SQUARES, Order, Orders, PLAN_SIZE, Quarter, Side, Slot, TeamPlan,
 };
 use crate::rng::{self, Purpose};
 use serde::{Deserialize, Serialize};
@@ -43,11 +45,13 @@ use serde::{Deserialize, Serialize};
 pub enum Role {
     /// Walk onto the square and hold it, or keep holding it.
     Claim,
-    /// Contest one of theirs: the one on a square of the plan, or one carrying something.
+    /// Press one of theirs off a square of the plan.
     Oust,
-    /// Take a side of a holder of theirs, then contest it together with another from the other
+    /// Take a side of a holder of theirs, then press it together with another from the other
     /// side.
     Flank,
+    /// Go round to the side or the back of one of theirs holding, and trick it.
+    Trick,
     /// Alone where two were needed to flank: stand beside the holder, keeping it company until
     /// help comes.
     Pin,
@@ -63,8 +67,6 @@ pub enum Role {
     /// The lever or the tap is resting: stand by it until it is ready, and keep the other team
     /// off it.
     Wait,
-    /// Use what it carries.
-    Use,
     /// Nothing in the plan for it: it does what it would on its own.
     Spare,
 }
@@ -116,7 +118,7 @@ pub enum Because {
     GotIt,
     /// The one it went after was knocked out.
     TargetDown,
-    /// The one it went after started holding before it got there, and a contest alone would be
+    /// The one it went after started holding before it got there, and a press alone would be
     /// turned away.
     DugIn { target: Slot },
     /// The one of theirs on its square stepped off it.
@@ -141,16 +143,14 @@ const LONE: i32 = 450;
 /// Each guard beside a square named more than once.
 const EXTRA: i32 = 600;
 /// Guarding or heading off for a square named once, by whoever has nothing better to do: more
-/// for DEFEND, which asks for it, than for TAKE.
+/// for HOLD, which asks for it, than for PRESS.
 const BACKUP_DEFEND: i32 = 400;
 const BACKUP_TAKE: i32 = 250;
 /// Heading off one of theirs coming at a square to defend: less than guarding it, since one that
-/// starts holding before it is reached turns the contest away.
+/// starts holding before it is reached turns the press away.
 const INTERCEPT: i32 = 250;
 /// Something lying near, picked up by whoever has nothing better to do.
 const FIND: i32 = 150;
-/// A plain use for what a creature carries, by one with nothing better to do.
-const USE: i32 = 350;
 /// The lever or the tap is resting: waiting by it is worth less than pulling it.
 const WAIT: i32 = 500;
 /// One step's walk.
@@ -173,23 +173,25 @@ const INTERCEPT_REACH: u8 = 3;
 /// The most jobs one creature weighs, best first, when the team shares out the plan.
 const SHORTLIST: usize = 8;
 
-/// Where a job sends a creature.
+/// Where a job sends a creature. A hold's facing is the Handler's, or `None` for whichever way
+/// the other team is coming from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Goal {
-    HoldAt(Tile),
+    HoldAt(Tile, Option<Facing>),
     /// Hold on whichever of these it can reach soonest.
-    HoldNear(Vec<Tile>),
-    Contest(Slot),
-    /// Go at a holder of theirs that cannot be flanked: alone, a contest is turned away.
+    HoldNear(Vec<Tile>, Option<Facing>),
     Press(Slot),
+    /// Go at a holder of theirs that cannot be flanked: alone, a press is turned away.
+    Lone(Slot),
     /// A flank's side `at`, against the holder `of`.
     Flank {
         at: Tile,
         of: Slot,
     },
+    /// Round to the side or back of one of theirs, and trick it.
+    Trick(Slot),
     Pull(Tile),
     Fetch(Tile),
-    Use(Tile),
 }
 
 /// What kind of job, for the leanings.
@@ -203,8 +205,10 @@ enum Lean {
     Guard,
     /// Goes for something lying there.
     Find,
-    /// Works the lever, the tap or something carried.
+    /// Works the lever or the tap.
     Work,
+    /// Slips round one of theirs.
+    Sly,
 }
 
 #[derive(Clone, Debug)]
@@ -224,7 +228,7 @@ impl Seat {
     /// taken.
     fn place(&self) -> Option<Tile> {
         match self.goal {
-            Goal::HoldAt(t) | Goal::Flank { at: t, .. } => Some(t),
+            Goal::HoldAt(t, _) | Goal::Flank { at: t, .. } => Some(t),
             _ => None,
         }
     }
@@ -232,20 +236,25 @@ impl Seat {
     fn contests(&self) -> bool {
         matches!(
             self.goal,
-            Goal::Contest(_) | Goal::Press(_) | Goal::Flank { .. } | Goal::Pull(_)
+            Goal::Press(_) | Goal::Lone(_) | Goal::Flank { .. } | Goal::Trick(_) | Goal::Pull(_)
         )
     }
 }
 
-/// A team's plan as it will be carried out: every order that can be carried out at all, the
-/// first `PLAN_SIZE` of them, each with its place in the plan as given; and the places of those
-/// dropped.
+/// A team's plan as it will be carried out: every tactical order that can be carried out at all,
+/// the first `PLAN_SIZE` of them, each with its place in the plan as given; and the places of
+/// those dropped. USE ITEMs are no part of it (see [`uses`]).
 pub fn checked(m: &Match, side: Side, plan: &TeamPlan) -> (Vec<(u8, Directive)>, Vec<u8>) {
     let mut kept = Vec::new();
     let mut dropped = Vec::new();
+    let mut given = 0;
     for (i, d) in plan.iter().enumerate() {
         let i = i as u8;
-        if usize::from(i) >= PLAN_SIZE {
+        if !d.tactical() {
+            continue;
+        }
+        given += 1;
+        if given > PLAN_SIZE {
             dropped.push(i);
             continue;
         }
@@ -257,9 +266,33 @@ pub fn checked(m: &Match, side: Side, plan: &TeamPlan) -> (Vec<(u8, Directive)>,
     (kept, dropped)
 }
 
+/// The USE ITEMs in a team's plan that can be carried out, as a tile for each creature, and the
+/// places of those that cannot: a creature not on the team or not carrying anything when the turn
+/// began, a tile out of its item's reach, or a second for the same creature.
+pub fn uses(m: &Match, side: Side, plan: &TeamPlan) -> ([Option<Tile>; TEAM_SIZE], Vec<u8>) {
+    let mut using = [None; TEAM_SIZE];
+    let mut dropped = Vec::new();
+    for (i, d) in plan.iter().enumerate() {
+        let Directive::UseItem { by, at } = *d else {
+            continue;
+        };
+        let slot = Slot::new(side, by);
+        let fits = usize::from(by) < TEAM_SIZE
+            && using[usize::from(by)].is_none()
+            && m.standing(slot)
+            && m.can_use(slot, at);
+        if fits {
+            using[usize::from(by)] = Some(at);
+        } else {
+            dropped.push(i as u8);
+        }
+    }
+    (using, dropped)
+}
+
 /// An order as it can be carried out: its squares on the board and on ground (or a lever or a
 /// tap), each once, no more than `MAX_SQUARES`; or `None` if nothing is left.
-fn tidy(m: &Match, side: Side, d: &Directive) -> Option<Directive> {
+fn tidy(m: &Match, _side: Side, d: &Directive) -> Option<Directive> {
     let fits = |t: &Tile| {
         m.arena.contains(*t) && matches!(m.arena.terrain(*t), Terrain::Open | Terrain::Gate)
             || m.arena.levers.contains(t)
@@ -275,22 +308,21 @@ fn tidy(m: &Match, side: Side, d: &Directive) -> Option<Directive> {
         (!out.is_empty()).then_some(out)
     };
     match d {
-        Directive::Take { squares } => clean(squares).map(|squares| Directive::Take { squares }),
-        Directive::Defend { squares } => {
-            clean(squares).map(|squares| Directive::Defend { squares })
-        }
+        Directive::Press { squares } => clean(squares).map(|squares| Directive::Press { squares }),
+        Directive::Hold { squares, facing } => clean(squares).map(|squares| Directive::Hold {
+            squares,
+            facing: *facing,
+        }),
+        Directive::Trick { squares } => clean(squares).map(|squares| Directive::Trick { squares }),
         Directive::Interact { at } => {
             let at = *at;
             let thing = m.board.ground.iter().any(|(g, _)| *g == at)
                 || m.board.glint.iter().any(|(g, _)| *g == at)
                 || m.arena.levers.contains(&at)
-                || m.arena.switches.contains(&at)
-                || m.occupant(at).is_some_and(|o| {
-                    m.fighter(o).carrying.is_some()
-                        && (o.side != side || use_for(m, o, &[], true).is_some())
-                });
+                || m.arena.switches.contains(&at);
             thing.then_some(Directive::Interact { at })
         }
+        Directive::UseItem { .. } => None,
     }
 }
 
@@ -325,7 +357,7 @@ pub fn muster(
     let mut taken: Vec<Tile> = Vec::new();
     // Squares to hold are spoken for first, so a guard never stands where a claim is going.
     for i in chosen.iter().flatten() {
-        if let Goal::HoldAt(t) = seats[*i].goal {
+        if let Goal::HoldAt(t, _) = seats[*i].goal {
             taken.push(t);
         }
     }
@@ -334,8 +366,8 @@ pub fn muster(
             None => {
                 let order = spare(m, *slot, &taken);
                 let at = match order {
-                    Order::Hold { at } | Order::Move { to: at } | Order::Use { at } => at,
-                    Order::Contest { .. } => m.fighter(*slot).at,
+                    Order::Hold { at, .. } | Order::Move { to: at } => at,
+                    _ => m.fighter(*slot).at,
                 };
                 (
                     Task {
@@ -350,7 +382,7 @@ pub fn muster(
             Some(i) => {
                 let seat = &seats[i];
                 let alone = seat.pair.is_some_and(|p| !chosen.contains(&Some(p)))
-                    || matches!(seat.goal, Goal::Press(_));
+                    || matches!(seat.goal, Goal::Lone(_));
                 let (role, order) = order_for(
                     m, *slot, seat, &chosen, &team, &seats, &walks[k], &mut taken, alone,
                 );
@@ -398,112 +430,58 @@ pub fn muster(
 /// nothing better to do might take, nearest the team's own side of the board first.
 fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
     let mut seats: Vec<Seat> = Vec::new();
-    // How many orders name each square, and which order named it first.
-    let mut named: Vec<(Tile, u8, i32, bool)> = Vec::new();
+    // How many PRESS and HOLD orders name each square, which named it first, and the facing of
+    // the first HOLD to name it.
+    let mut named: Vec<(Tile, u8, i32, Option<Facing>)> = Vec::new();
     for (i, d) in plan {
-        for t in d.squares() {
+        let (squares, facing) = match d {
+            Directive::Press { squares } => (squares, None),
+            Directive::Hold { squares, facing } => (squares, Some(*facing)),
+            _ => continue,
+        };
+        for t in squares {
             match named.iter_mut().find(|(s, ..)| s == t) {
                 Some(entry) => {
                     entry.2 += 1;
-                    entry.3 |= matches!(d, Directive::Defend { .. });
+                    entry.3 = entry.3.or(facing);
                 }
-                None => named.push((*t, *i, 1, matches!(d, Directive::Defend { .. }))),
+                None => named.push((*t, *i, 1, facing)),
             }
         }
     }
-    let kind_of = |i: u8| plan.iter().find(|(j, _)| *j == i).map(|(_, d)| d.clone());
-    for (t, i, weight, defended) in named.clone() {
+    for (t, i, weight, held) in named.clone() {
         let task = |role| Task {
             directive: Some(i),
             role,
             at: t,
         };
-        let interact = matches!(kind_of(i), Some(Directive::Interact { .. }));
+        let defended = held.is_some();
         let lever = m.arena.levers.contains(&t);
         let switch = m.arena.switches.contains(&t);
         if lever || switch {
-            let ready = if lever {
-                m.lever_ready()
-            } else {
-                m.switch_ready()
-            };
             let beside = open_steps(m, t);
-            if defended && !interact {
+            if defended {
                 // Keep the other team off it: holding beside it shoos off whoever pulls it.
                 seats.push(Seat {
                     task: task(Role::Guard),
-                    goal: Goal::HoldNear(beside),
+                    goal: Goal::HoldNear(beside, held),
                     value: NEED * weight,
                     only: None,
                     pair: None,
                     lean: Lean::Guard,
-                });
-            } else if ready {
-                seats.push(Seat {
-                    task: task(Role::Pull),
-                    goal: Goal::Pull(t),
-                    value: NEED * weight,
-                    only: None,
-                    pair: None,
-                    lean: Lean::Work,
                 });
             } else {
-                seats.push(Seat {
-                    task: task(Role::Wait),
-                    goal: Goal::HoldNear(beside),
-                    value: WAIT * weight,
-                    only: None,
-                    pair: None,
-                    lean: Lean::Guard,
-                });
+                seats.push(work(m, t, task, weight));
             }
             continue;
         }
-        let occupant = m.occupant(t);
-        if interact {
-            if m.board.ground.iter().any(|(g, _)| *g == t)
-                || m.board.glint.iter().any(|(g, _)| *g == t)
-            {
-                seats.push(Seat {
-                    task: task(Role::Fetch),
-                    goal: Goal::Fetch(t),
-                    value: NEED * weight,
-                    only: None,
-                    pair: None,
-                    lean: Lean::Find,
-                });
-            } else if let Some(o) = occupant {
-                if o.side == side {
-                    if let Some(on) = use_for(m, o, &squares_of(plan), true) {
-                        seats.push(Seat {
-                            task: task(Role::Use),
-                            goal: Goal::Use(on),
-                            value: NEED * weight,
-                            only: Some(o),
-                            pair: None,
-                            lean: Lean::Work,
-                        });
-                    }
-                } else {
-                    seats.push(Seat {
-                        task: task(Role::Oust),
-                        goal: Goal::Contest(o),
-                        value: NEED * weight,
-                        only: None,
-                        pair: None,
-                        lean: Lean::Meet,
-                    });
-                }
-            }
-            continue;
-        }
-        match occupant {
+        match m.occupant(t) {
             // One of ours is on it already. Holding there, it keeps it: swapping a holder for
             // another leaves the square empty while one walks off and the other walks on. Only
             // passing through, it steps off for whoever comes if it is needed elsewhere more.
             Some(o) if o.side == side => seats.push(Seat {
                 task: task(Role::Claim),
-                goal: Goal::HoldAt(t),
+                goal: Goal::HoldAt(t, held),
                 value: NEED * weight,
                 only: holds(m, o).then_some(o),
                 pair: None,
@@ -533,9 +511,9 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
                     None => seats.push(Seat {
                         task: task(Role::Oust),
                         goal: if digs_in {
-                            Goal::Press(e)
+                            Goal::Lone(e)
                         } else {
-                            Goal::Contest(e)
+                            Goal::Press(e)
                         },
                         value: NEED * weight,
                         only: None,
@@ -546,7 +524,7 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
             }
             None => seats.push(Seat {
                 task: task(Role::Claim),
-                goal: Goal::HoldAt(t),
+                goal: Goal::HoldAt(t, held),
                 value: NEED * weight,
                 only: None,
                 pair: None,
@@ -562,7 +540,7 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
             for value in values {
                 seats.push(Seat {
                     task: task(Role::Guard),
-                    goal: Goal::HoldNear(guard_tiles.clone()),
+                    goal: Goal::HoldNear(guard_tiles.clone(), held),
                     value,
                     only: None,
                     pair: None,
@@ -582,7 +560,7 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
             for e in coming {
                 seats.push(Seat {
                     task: task(Role::Intercept),
-                    goal: Goal::Contest(e),
+                    goal: Goal::Press(e),
                     value: INTERCEPT,
                     only: None,
                     pair: None,
@@ -592,8 +570,67 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
         }
     }
 
-    // Jobs nobody was given: something lying near, and a plain use for what one carries.
-    let named_tiles: Vec<Tile> = named.iter().map(|(t, ..)| *t).collect();
+    // TRICK: whoever of theirs is on a square named, from its side or its back. Named in two
+    // orders, it is worth twice as much.
+    let mut tricked: Vec<(Tile, u8, i32)> = Vec::new();
+    for (i, d) in plan {
+        if let Directive::Trick { squares } = d {
+            for t in squares {
+                match tricked.iter_mut().find(|(s, ..)| s == t) {
+                    Some(entry) => entry.2 += 1,
+                    None => tricked.push((*t, *i, 1)),
+                }
+            }
+        }
+    }
+    for (t, i, weight) in tricked {
+        if let Some(e) = m.occupant(t).filter(|o| o.side != side) {
+            seats.push(Seat {
+                task: Task {
+                    directive: Some(i),
+                    role: Role::Trick,
+                    at: t,
+                },
+                goal: Goal::Trick(e),
+                value: NEED * weight,
+                only: None,
+                pair: None,
+                lean: Lean::Sly,
+            });
+        }
+    }
+
+    // INTERACT: fetch what lies or glints there, or work the lever or the tap.
+    for (i, d) in plan {
+        let Directive::Interact { at } = *d else {
+            continue;
+        };
+        let task = |role| Task {
+            directive: Some(*i),
+            role,
+            at,
+        };
+        if m.arena.levers.contains(&at) || m.arena.switches.contains(&at) {
+            seats.push(work(m, at, task, 1));
+        } else if m.board.ground.iter().any(|(g, _)| *g == at)
+            || m.board.glint.iter().any(|(g, _)| *g == at)
+        {
+            seats.push(Seat {
+                task: task(Role::Fetch),
+                goal: Goal::Fetch(at),
+                value: NEED,
+                only: None,
+                pair: None,
+                lean: Lean::Find,
+            });
+        }
+    }
+
+    // Jobs nobody was given: something lying near.
+    let named_tiles: Vec<Tile> = plan
+        .iter()
+        .flat_map(|(_, d)| d.squares().to_vec())
+        .collect();
     let mut finds: Vec<Tile> = m
         .board
         .ground
@@ -620,44 +657,78 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
             lean: Lean::Find,
         });
     }
-    let squares = squares_of(plan);
-    for s in m.team(side) {
-        let named_use = seats
-            .iter()
-            .any(|seat| seat.only == Some(s) && seat.task.role == Role::Use);
-        if named_use {
-            continue;
+    seats
+}
+
+/// Working the lever or a switch at `t`: pulling it if it is ready, or waiting by it if it is
+/// resting.
+fn work(m: &Match, t: Tile, task: impl Fn(Role) -> Task, weight: i32) -> Seat {
+    let ready = if m.arena.levers.contains(&t) {
+        m.lever_ready()
+    } else {
+        m.switch_ready()
+    };
+    if ready {
+        Seat {
+            task: task(Role::Pull),
+            goal: Goal::Pull(t),
+            value: NEED * weight,
+            only: None,
+            pair: None,
+            lean: Lean::Work,
         }
-        if let Some(on) = use_for(m, s, &squares, false) {
-            seats.push(Seat {
-                task: Task {
-                    directive: None,
-                    role: Role::Use,
-                    at: m.fighter(s).at,
-                },
-                goal: Goal::Use(on),
-                value: USE,
-                only: Some(s),
-                pair: None,
-                lean: Lean::Work,
-            });
+    } else {
+        Seat {
+            task: task(Role::Wait),
+            goal: Goal::HoldNear(open_steps(m, t), None),
+            value: WAIT * weight,
+            only: None,
+            pair: None,
+            lean: Lean::Guard,
         }
     }
-    seats
 }
 
 /// Whether one of theirs holds where it stands, or will as soon as the turn starts: it was
 /// holding, or was told to hold just there and was knocked off balance before it could.
 pub(crate) fn holds(m: &Match, e: Slot) -> bool {
     let f = m.fighter(e);
-    f.holding || f.order == Some(Order::Hold { at: f.at })
+    f.holding || f.order.and_then(|o| o.hold_at()) == Some(f.at)
 }
 
-/// The squares a plan names to take or defend.
-fn squares_of(plan: &[(u8, Directive)]) -> Vec<Tile> {
-    plan.iter()
-        .filter(|(_, d)| !matches!(d, Directive::Interact { .. }))
-        .flat_map(|(_, d)| d.squares().to_vec())
+/// The way one holding, or about to hold where it stands, faces; `None` for anyone else.
+pub fn facing_of(m: &Match, e: Slot) -> Option<Facing> {
+    let f = m.fighter(e);
+    if f.holding {
+        return Some(f.facing);
+    }
+    match f.order {
+        Some(Order::Hold { at, facing }) if at == f.at => Some(facing),
+        _ => None,
+    }
+}
+
+/// A holder of `team` facing `tile`, standing just behind it: a TRICK from there is seen coming.
+pub fn faced_by(m: &Match, team: Side, tile: Tile) -> Option<Slot> {
+    m.team(team).find(|h| {
+        let f = m.fighter(*h);
+        f.holding && f.facing.ahead(f.at) == tile
+    })
+}
+
+/// Where to trick one of theirs from: the tiles touching it that it does not face and no holder
+/// of its team faces, if it holds; any touching it otherwise.
+fn trick_places(m: &Match, e: Slot) -> Vec<Tile> {
+    let there = m.fighter(e).at;
+    let facing = facing_of(m, e);
+    open_steps(m, there)
+        .into_iter()
+        .filter(|t| {
+            facing.is_none_or(|f| {
+                Quarter::of(there, f, *t) != Some(Quarter::Front)
+                    && faced_by(m, e.side, *t).is_none()
+            })
+        })
         .collect()
 }
 
@@ -689,11 +760,12 @@ fn guard_places(m: &Match, side: Side, t: Tile) -> Vec<Tile> {
     corners
 }
 
-/// A use for what this creature carries that serves the plan: a puff on one of theirs on or next
-/// to a square of the plan, a twig on the way the other team would come at one, a leaf over one
-/// of ours about to be soaked. Asked for in so many words (`asked`), it looks further: a puff on
-/// any of theirs in reach, a leaf over whichever of ours the other team is nearest.
-fn use_for(m: &Match, slot: Slot, squares: &[Tile], asked: bool) -> Option<Tile> {
+/// A use for what this creature carries that serves `squares` (the zone, if none): a puff on one
+/// of theirs on or next to one, a twig on the way the other team would come at one, a leaf over
+/// one of ours about to be soaked. With `keen` set, it looks further: a puff on any of theirs in
+/// reach, a leaf over whichever of ours the other team is nearest. Always within the item's reach
+/// of where it stands, since a USE ITEM is used from there.
+pub fn use_for(m: &Match, slot: Slot, squares: &[Tile], asked: bool) -> Option<Tile> {
     let f = m.fighter(slot);
     let item = f.carrying?;
     let at = f.at;
@@ -703,7 +775,7 @@ fn use_for(m: &Match, slot: Slot, squares: &[Tile], asked: bool) -> Option<Tile>
     } else {
         squares.to_vec()
     };
-    let near = |t: Tile| at.distance(t) <= item.reach() + 2;
+    let near = |t: Tile| at.distance(t) <= item.reach();
     let by = |t: &Tile| (at.distance(*t), m.arena.across(side, *t), t.y);
     match item {
         Item::Puff => m
@@ -806,32 +878,29 @@ fn reach(m: &Match, slot: Slot, seat: &Seat, walk: &[Option<u8>]) -> Option<(u8,
             .min_by_key(|(d, t)| (*d, m.arena.across(side, *t), t.y))
     };
     match &seat.goal {
-        Goal::HoldAt(t) | Goal::Fetch(t) | Goal::Flank { at: t, .. } => steps(*t).map(|d| (d, *t)),
-        Goal::HoldNear(tiles) => nearest(tiles.clone()),
-        Goal::Contest(e) | Goal::Press(e) => {
+        Goal::HoldAt(t, _) | Goal::Fetch(t) | Goal::Flank { at: t, .. } => {
+            steps(*t).map(|d| (d, *t))
+        }
+        Goal::HoldNear(tiles, _) => nearest(tiles.clone()),
+        Goal::Press(e) | Goal::Lone(e) => {
             let there = m.fighter(*e).at;
             if here.touches(there) {
                 return Some((0, here));
             }
             nearest(open_steps(m, there))
         }
+        Goal::Trick(e) => {
+            let places = trick_places(m, *e);
+            if places.contains(&here) {
+                return Some((0, here));
+            }
+            nearest(places)
+        }
         Goal::Pull(t) => {
             if here.touches(*t) {
                 return Some((0, here));
             }
             nearest(open_steps(m, *t))
-        }
-        Goal::Use(t) => {
-            let item = m.fighter(slot).carrying?;
-            if here.distance(*t) <= item.reach() {
-                return Some((0, here));
-            }
-            nearest(
-                m.arena
-                    .tiles()
-                    .filter(|x| x.distance(*t) <= item.reach() && m.walkable(*x))
-                    .collect(),
-            )
         }
     }
 }
@@ -875,6 +944,9 @@ fn leaning(m: &Match, slot: Slot, seat: &Seat, from: Tile, turn: u8) -> Leaning 
         }
         Lean::Find => l.find = (wander + opportunism / 2) / 4,
         Lean::Work => l.find = opportunism / 6,
+        // Slipping round a holder is meeting the other team too, but more for the playful than
+        // the bold.
+        Lean::Sly => l.meet = (opportunism + wander / 2 - caution) / 6,
     }
     let me = m.profile(slot);
     let mut best = 0;
@@ -971,7 +1043,7 @@ fn can_take(m: &Match, slot: Slot, seat: &Seat, midturn: bool) -> bool {
         return false;
     }
     if seat.only.is_none()
-        && let Goal::HoldAt(t) = seat.goal
+        && let Goal::HoldAt(t, _) = seat.goal
         && m.occupant(t).is_some_and(|o| {
             o != slot && (o.side != slot.side || (midturn && m.fighter(o).holding))
         })
@@ -1081,44 +1153,62 @@ fn order_for(
     alone: bool,
 ) -> (Role, Order) {
     let role = seat.task.role;
+    let w = m.arena.width as usize;
+    let nearest = |tiles: &[Tile], taken: &[Tile]| {
+        tiles
+            .iter()
+            .copied()
+            .filter(|t| !taken.contains(t))
+            .filter_map(|t| walk[t.y as usize * w + t.x as usize].map(|d| (d, t)))
+            .min_by_key(|(d, t)| (*d, m.arena.across(slot.side, *t), t.y))
+            .map(|(_, t)| t)
+    };
     match &seat.goal {
-        Goal::HoldAt(t) => (role, Order::Hold { at: *t }),
-        Goal::HoldNear(tiles) => {
-            let w = m.arena.width as usize;
-            let at = tiles
-                .iter()
-                .copied()
-                .filter(|t| !taken.contains(t))
-                .filter_map(|t| walk[t.y as usize * w + t.x as usize].map(|d| (d, t)))
-                .min_by_key(|(d, t)| (*d, m.arena.across(slot.side, *t), t.y))
-                .map_or(m.fighter(slot).at, |(_, t)| t);
+        Goal::HoldAt(t, facing) => (
+            role,
+            Order::Hold {
+                at: *t,
+                facing: facing.unwrap_or_else(|| ai::face(m, slot.side, *t)),
+            },
+        ),
+        Goal::HoldNear(tiles, facing) => {
+            let at = nearest(tiles, taken).unwrap_or(m.fighter(slot).at);
             taken.push(at);
-            (role, Order::Hold { at })
-        }
-        Goal::Contest(e) => (
-            role,
-            Order::Contest {
-                target: Target::Creature { slot: *e },
-            },
-        ),
-        Goal::Press(e) => press(m, slot, *e, walk, taken),
-        Goal::Pull(t) => (
-            role,
-            Order::Contest {
-                target: Target::Lever { at: *t },
-            },
-        ),
-        Goal::Fetch(t) => (role, Order::Move { to: *t }),
-        Goal::Use(t) => (role, Order::Use { at: *t }),
-        Goal::Flank { at, of } => {
-            let contest = Order::Contest {
-                target: Target::Creature { slot: *of },
+            let facing = match (facing, role) {
+                (Some(f), _) => *f,
+                // Waiting by the lever or the tap faces it.
+                (None, Role::Wait) => {
+                    Facing::toward(at, seat.task.at).unwrap_or_else(|| ai::face(m, slot.side, at))
+                }
+                (None, _) => ai::face(m, slot.side, at),
             };
+            (role, Order::Hold { at, facing })
+        }
+        Goal::Press(e) => (role, Order::Press { target: *e }),
+        Goal::Lone(e) => press(m, slot, *e, walk, taken),
+        Goal::Trick(e) => {
+            // Standing in front of a holder, a trick would be read: it walks round first.
+            let here = m.fighter(slot).at;
+            let there = m.fighter(*e).at;
+            let front = facing_of(m, *e).map(|f| f.ahead(there));
+            if front == Some(here) {
+                let places = trick_places(m, *e);
+                if let Some(to) = nearest(&places, taken) {
+                    taken.push(to);
+                    return (Role::Trick, Order::Move { to });
+                }
+            }
+            (role, Order::Trick { target: *e })
+        }
+        Goal::Pull(t) => (role, Order::Interact { at: *t }),
+        Goal::Fetch(t) => (role, Order::Move { to: *t }),
+        Goal::Flank { at, of } => {
+            let push = Order::Press { target: *of };
             if alone {
                 return press(m, slot, *of, walk, taken);
             }
-            // Both in place: they contest together. Otherwise each walks into place and holds
-            // there, ready: contests already in reach land before anyone steps, so walking up
+            // Both in place: they press together. Otherwise each walks into place and holds
+            // there, ready: presses already in reach land before anyone steps, so walking up
             // first is what makes a flank work.
             let partner = seat.pair.and_then(|p| {
                 chosen
@@ -1133,19 +1223,27 @@ fn order_for(
                     _ => false,
                 });
             if both {
-                (Role::Flank, contest)
+                (Role::Flank, push)
             } else {
                 taken.push(*at);
-                (Role::Flank, Order::Hold { at: *at })
+                (Role::Flank, flank_hold(m, *at, *of))
             }
         }
+    }
+}
+
+/// Waiting in place to flank: holding there, facing the one it is to flank.
+fn flank_hold(m: &Match, at: Tile, of: Slot) -> Order {
+    Order::Hold {
+        at,
+        facing: Facing::toward(at, m.fighter(of).at).unwrap_or(Facing::across(of.side.other())),
     }
 }
 
 /// How much keener to meet the other team than wary a creature must be to go at a holder alone.
 const RECKLESS: i16 = 150;
 
-/// Alone against a holder, where two were needed: a creature much keener than it is wary goes at
+/// Alone against a holder, where two were needed: a creature much keener than it is wary presses
 /// it anyway and is likely turned away; any other stands beside it, keeping the square contested,
 /// until help comes.
 fn press(
@@ -1157,12 +1255,7 @@ fn press(
 ) -> (Role, Order) {
     let b = m.behavior(slot);
     if b.opportunism - b.caution > RECKLESS {
-        return (
-            Role::Oust,
-            Order::Contest {
-                target: Target::Creature { slot: holder },
-            },
-        );
+        return (Role::Oust, Order::Press { target: holder });
     }
     let w = m.arena.width as usize;
     let here = m.fighter(slot).at;
@@ -1178,16 +1271,20 @@ fn press(
             .map_or(here, |(_, t)| t)
     };
     taken.push(at);
-    (Role::Pin, Order::Hold { at })
+    (Role::Pin, flank_hold(m, at, holder))
 }
 
 /// With nothing in the plan for it: what it would do on its own, keeping off squares a teammate
 /// is going to.
 fn spare(m: &Match, slot: Slot, taken: &[Tile]) -> Order {
     match ai::fallback(m, slot) {
-        Order::Hold { at } if taken.contains(&at) && at != m.fighter(slot).at => Order::Hold {
-            at: ai::nearest_free_zone_tile(m, slot, taken).unwrap_or(m.fighter(slot).at),
-        },
+        Order::Hold { at, .. } if taken.contains(&at) && at != m.fighter(slot).at => {
+            let at = ai::nearest_free_zone_tile(m, slot, taken).unwrap_or(m.fighter(slot).at);
+            Order::Hold {
+                at,
+                facing: ai::face(m, slot.side, at),
+            }
+        }
         order => order,
     }
 }
@@ -1244,7 +1341,8 @@ fn explain(
 impl Match {
     /// Partway through a turn, before anyone steps: each creature whose job has just come to
     /// nothing thinks again, once a turn, from its team's plan. It keeps to jobs nobody else of
-    /// its team is on, and a contest it has already spent this turn is not taken again.
+    /// its team is on, and a PRESS, TRICK or pull it has already spent this turn is not taken
+    /// again.
     pub(crate) fn rethink(&mut self, turn: u8, tick: u8, events: &mut Vec<Event>) {
         let news: Vec<EventKind> = events
             .iter()
@@ -1278,11 +1376,13 @@ impl Match {
         }
         for (slot, because) in rethinking {
             let side = slot.side;
+            // Nothing left in the plan it could do: it does what it would on its own.
             let (kept, _) = checked(self, side, &self.plans[side.index()].clone());
-            if kept.is_empty() {
-                continue;
-            }
-            let seats = seats(self, side, &kept);
+            let seats = if kept.is_empty() {
+                Vec::new()
+            } else {
+                seats(self, side, &kept)
+            };
             let walk = ai::walks(self, slot);
             let others: Vec<Task> = self
                 .team(side)
@@ -1309,10 +1409,7 @@ impl Match {
             let taken: Vec<Tile> = self
                 .team(side)
                 .filter(|s| *s != slot)
-                .filter_map(|s| match self.fighter(s).order {
-                    Some(Order::Hold { at }) => Some(at),
-                    _ => None,
-                })
+                .filter_map(|s| self.fighter(s).order.and_then(|o| o.hold_at()))
                 .collect();
             let (task, order) = match best {
                 Some((i, _)) => {
@@ -1321,7 +1418,7 @@ impl Match {
                     let (role, order) = match &seat.goal {
                         // Partway through a turn there is no flanking together: it walks into
                         // place and holds there.
-                        Goal::Flank { at, .. } => (Role::Flank, Order::Hold { at: *at }),
+                        Goal::Flank { at, of } => (Role::Flank, flank_hold(self, *at, *of)),
                         _ => {
                             order_for(self, slot, seat, &[], &[], &seats, &walk, &mut taken, false)
                         }
@@ -1338,8 +1435,8 @@ impl Match {
                 None => {
                     let order = spare(self, slot, &taken);
                     let at = match order {
-                        Order::Hold { at } | Order::Move { to: at } | Order::Use { at } => at,
-                        Order::Contest { .. } => self.fighter(slot).at,
+                        Order::Hold { at, .. } | Order::Move { to: at } => at,
+                        _ => self.fighter(slot).at,
                     };
                     (
                         Task {
@@ -1360,7 +1457,8 @@ impl Match {
             f.order = Some(order);
             f.arrived = false;
             f.hung_back = false;
-            f.holding = matches!(order, Order::Hold { at } if at == f.at) && f.holding;
+            // Holding still, it keeps facing the way it was: a facing is fixed for the turn.
+            f.holding = order.hold_at() == Some(f.at) && f.holding;
             events.push(Event {
                 turn,
                 tick,
@@ -1413,11 +1511,15 @@ impl Match {
                     return Some(Because::ItemGone);
                 }
             }
-            Role::Oust | Role::Intercept | Role::Flank => {
-                if let Order::Contest {
-                    target: Target::Creature { slot: target },
-                } = order
+            Role::Trick => {
+                if let Some(target) = order.target()
+                    && !self.standing(target)
                 {
+                    return Some(Because::TargetDown);
+                }
+            }
+            Role::Oust | Role::Intercept | Role::Flank => {
+                if let Order::Press { target } = order {
                     if !self.standing(target) {
                         return Some(Because::TargetDown);
                     }
@@ -1431,7 +1533,9 @@ impl Match {
                     let square = task.directive.is_some_and(|d| {
                         self.plans[slot.side.index()]
                             .get(usize::from(d))
-                            .is_some_and(|d| !matches!(d, Directive::Interact { .. }))
+                            .is_some_and(|d| {
+                                matches!(d, Directive::Press { .. } | Directive::Hold { .. })
+                            })
                     });
                     if task.role == Role::Oust
                         && square
@@ -1445,11 +1549,12 @@ impl Match {
             }
             _ => {}
         }
-        if let Order::Hold { at } = order {
+        if let Order::Hold { at, .. } = order {
             if !f.holding
                 && let Some(by) = self.occupant(at).filter(|o| *o != slot)
                 && (self.fighter(by).holding
-                    || (by.side != slot.side && self.fighter(by).order == Some(Order::Hold { at })))
+                    || (by.side != slot.side
+                        && self.fighter(by).order.and_then(|o| o.hold_at()) == Some(at)))
             {
                 return Some(Because::SquareTaken { by });
             }

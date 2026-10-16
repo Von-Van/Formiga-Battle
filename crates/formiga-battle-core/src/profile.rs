@@ -5,7 +5,7 @@
 //! A profile changes how a creature carries out an order (which way it walks, whether it keeps
 //! close to a friend, what it does with a moment to spare) and nothing else. Every creature has
 //! the same composure, the same pace and one order a turn, and no profile changes what MOVE, HOLD
-//! and CONTEST do to each other. `docs/PERSONALITY.md` maps every Desktop field to what Battle
+//! PRESS and TRICK do to each other. `docs/PERSONALITY.md` maps every Desktop field to what Battle
 //! does with it.
 
 use formiga_core::{LearnedTendencies, Temperament, TemperamentKind, Tension};
@@ -180,7 +180,7 @@ pub struct Behavior {
     /// Takes the outside lanes rather than the middle. From curiosity and how much it has come to
     /// explore, less how much it has come to love home.
     pub wanderlust: i16,
-    /// On the way to one contest, takes another that walks into reach. From feistiness,
+    /// On the way to press one of theirs, presses another that walks into reach. From feistiness,
     /// impulsiveness, playfulness and how much it has come to play.
     pub opportunism: i16,
     /// With a moment to spare, stays where it was told rather than shifting. From patience, calm
@@ -189,12 +189,12 @@ pub struct Behavior {
     /// In thousandths, 10 to 60: how often it takes its second-best step instead of its best.
     /// From impulsiveness, the same side Desktop's `decision_temperature` comes from.
     pub variability: u16,
-    /// Steps back after a contest. Brave-but-nervous and dramatic-but-cowardly creatures always
+    /// Steps back after its PRESS is turned away. Brave-but-nervous and dramatic-but-cowardly creatures always
     /// do; anyone else only if it is very cautious.
     pub steps_back: bool,
 }
 
-/// How cautious a creature must be to step back after a contest, whatever its tension.
+/// How cautious a creature must be to step back after a press turned away, whatever its tension.
 const WARY_STEPS_BACK: i16 = 250;
 
 impl Behavior {

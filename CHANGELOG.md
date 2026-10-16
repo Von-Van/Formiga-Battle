@@ -1,10 +1,29 @@
 # Changelog
 
-## [Unreleased]
+## Unreleased
 
-- Field Lessons, from the station: six short lessons on the Backyard, under the real rules, on
-  lighting the beacon, holding and contesting, flanks, team orders, the sprinkler and found
-  things, and who your companions are. Each begins from a board set up part way through a match,
+- Rules version 9, a new circle of orders: PRESS, HOLD and TRICK take the place of TAKE, DEFEND
+  and INTERACT. A PRESS pushes anyone not holding one tile back, stops it for the turn and takes
+  what it carries; two presses meeting cost each one composure and stop both; a HOLD turns a
+  press away. Two presses from different sides still flank a lone holder. A HOLD now faces north,
+  east, south or west, chosen when the order is given and shown on the board, and costs a presser
+  coming at it head on one composure. A TRICK slips round a holder's side or back, costs it one
+  composure and breaks its hold for the turn without moving it; from the front, or from where
+  another holder of its team faces, it is read and comes to nothing, and anyone pressing catches
+  a trickster. See docs/RULES.md.
+- INTERACT is its own command for the board: levers, taps and switches, and fetching what turns
+  up. A press stops a creature working one.
+- USE ITEM is a bonus beyond the three orders, for a Formiga carrying something: it is used at the
+  start of the turn from where the carrier stands, which takes its first step, and then it gets on
+  with its job. Something taken from the other team can be used from the next turn.
+- A switch can no longer set the map event off again in the turn it came round by itself, so a
+  wave, the pond rising or a shaken tree comes at most once a turn.
+- Recorded matches from earlier rules versions are refused rather than replayed differently, and
+  Battles on rules version 8 and 9 do not meet in friend matches. The relay protocol stays 3; a
+  plan may now carry a USE ITEM for each creature besides its three orders.
+- Field Lessons, from the station: seven short lessons on the Backyard, under the real rules, on
+  lighting the beacon, holding and which way a holder faces, flanks, tricks, team orders, the
+  sprinkler and USE ITEM, and who your companions are. Each begins from a board set up part way through a match,
   with a goal, the squares that matter marked, notes where the field guide would be, and a few
   turns to do it in; the timer waits, and a lesson earns and keeps nothing. Your own three play
   them, doing exactly as told until the last lesson, where they are themselves. A colony that has

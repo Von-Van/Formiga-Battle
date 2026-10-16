@@ -391,7 +391,7 @@ pub fn card(painter: &egui::Painter, rect: egui::Rect, unit: f32, fill: Color32,
 /// How a button looks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
-    /// A card-coloured button for an everyday choice: MOVE, HOLD, CONTEST.
+    /// A card-coloured button for an everyday choice: PRESS, HOLD, TRICK.
     Plain,
     /// The one thing the page is for: forest green with cream lettering and a brass rim.
     Primary,

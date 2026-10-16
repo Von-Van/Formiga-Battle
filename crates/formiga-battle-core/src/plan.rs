@@ -11,7 +11,7 @@
 
 use crate::ai::Coach;
 use crate::game::Match;
-use crate::order::{Directive, PLAN_SIZE, Side, TeamPlan};
+use crate::order::{Directive, Facing, PLAN_SIZE, Side, TeamPlan};
 use crate::profile::{Leanings, Nature, Profile};
 
 /// Each of the plan's orders is revisited this many times, each time with the others' best so
@@ -30,23 +30,35 @@ fn imagined_plainly(m: &Match, side: Side) -> Match {
     m.imagining(side, plain)
 }
 
-/// The orders worth trying: a square of the zone to take, the square of any of theirs to take,
-/// a square of ours to defend, and anything to interact with.
+/// The orders worth trying: a square of the zone to press onto, the square of any of theirs to
+/// press, the square of any of theirs holding to trick, a square of ours to hold facing the other
+/// team or its side of the board, and anything to interact with.
 fn options(m: &Match, side: Side) -> Vec<Directive> {
     let mut options = Vec::new();
     for t in &m.arena.zone {
-        options.push(Directive::Take { squares: vec![*t] });
+        options.push(Directive::Press { squares: vec![*t] });
     }
     for e in m.team(side.other()) {
         let at = m.fighter(e).at;
         if !m.arena.in_zone(at) {
-            options.push(Directive::Take { squares: vec![at] });
+            options.push(Directive::Press { squares: vec![at] });
+        }
+        if crate::muster::holds(m, e) {
+            options.push(Directive::Trick { squares: vec![at] });
         }
     }
     for s in m.team(side) {
         let at = m.fighter(s).at;
         if m.arena.in_zone(at) {
-            options.push(Directive::Defend { squares: vec![at] });
+            for facing in [crate::ai::face(m, side, at), Facing::across(side)] {
+                let d = Directive::Hold {
+                    squares: vec![at],
+                    facing,
+                };
+                if !options.contains(&d) {
+                    options.push(d);
+                }
+            }
         }
     }
     let things = m
@@ -62,11 +74,6 @@ fn options(m: &Match, side: Side) -> Vec<Directive> {
                 .iter()
                 .copied()
                 .filter(|_| m.switch_ready()),
-        )
-        .chain(
-            m.team(side)
-                .filter(|s| m.fighter(*s).carrying.is_some())
-                .map(|s| m.fighter(s).at),
         );
     for at in things {
         let d = Directive::Interact { at };
@@ -122,12 +129,18 @@ pub fn think_ahead(m: &Match, side: Side, familiar: bool) -> TeamPlan {
     };
     // What the other team will do: what the Exhibition coach would.
     let theirs = Coach::Exhibition.plan(&model, side.other());
-    let mut ours = Coach::Exhibition.plan(&model, side);
+    // Its USE ITEMs are the Exhibition coach's; only the three orders are thought through.
+    let (mut ours, uses): (TeamPlan, TeamPlan) = Coach::Exhibition
+        .plan(&model, side)
+        .into_iter()
+        .partition(Directive::tactical);
     let play = |ours: &TeamPlan| {
         let mut sim = model.clone();
+        let mut ours = ours.clone();
+        ours.extend(uses.iter().cloned());
         let plans = match side {
-            Side::Left => [ours.clone(), theirs.clone()],
-            Side::Right => [theirs.clone(), ours.clone()],
+            Side::Left => [ours, theirs.clone()],
+            Side::Right => [theirs.clone(), ours],
         };
         sim.resolve_turn(plans);
         score(&sim, side)
@@ -154,5 +167,6 @@ pub fn think_ahead(m: &Match, side: Side, familiar: bool) -> TeamPlan {
             }
         }
     }
+    ours.extend(uses);
     ours
 }

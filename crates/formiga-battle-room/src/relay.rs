@@ -727,9 +727,12 @@ impl Relay {
 }
 
 /// Whether a plan is no bigger than any plan Battle sends: the relay never runs the rules, so it
-/// checks only that a plan is small enough to keep.
+/// checks only that a plan is small enough to keep. A plan is up to `PLAN_SIZE` orders, and a
+/// USE ITEM for each creature besides.
 pub fn plan_well_formed(plan: &TeamPlan) -> bool {
-    plan.len() <= formiga_battle_core::PLAN_SIZE
+    let uses = plan.iter().filter(|d| !d.tactical()).count();
+    plan.len() - uses <= formiga_battle_core::PLAN_SIZE
+        && uses <= TEAM_SIZE
         && plan
             .iter()
             .all(|d| d.squares().len() <= formiga_battle_core::order::MAX_SQUARES)

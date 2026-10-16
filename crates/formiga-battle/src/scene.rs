@@ -15,7 +15,7 @@ use crate::playback::{Burst, Figure, Frame};
 use formiga_art::paint::{self, Ramp, rgb, rgba};
 use formiga_art::{Canvas, FRAME_SIZE, Rgba};
 use formiga_battle_core::arena::{Effect, Terrain};
-use formiga_battle_core::{Arena, Order, Side, Slot, TEAM_SIZE, Target, Tile};
+use formiga_battle_core::{Arena, Facing, Order, Side, Slot, TEAM_SIZE, Tile};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
 /// Each team's colours: left, then right. Warm coral and sea teal, as before, a touch softened to
@@ -34,7 +34,11 @@ const GOLD: Rgba = rgb(0xf5d25e);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Choice {
     /// Something the team could go and get or set off: an INTERACT's choices.
-    Use,
+    Interact,
+    /// Within reach of the one chosen to USE ITEM: where it could use what it carries.
+    Reach,
+    /// One of the team carrying something, who could be told to USE ITEM.
+    Carrier,
 }
 
 /// A cartoon word to paint over the board: its picture, where its top-left corner goes, and how
@@ -74,9 +78,12 @@ pub type Trail = ((f32, f32), (f32, f32), Option<u8>);
 /// What kind of order names a square.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlanKind {
-    Take,
-    Defend,
+    Press,
+    Hold,
+    Trick,
     Interact,
+    /// A bonus USE ITEM: where it is used.
+    UseItem,
 }
 
 /// One order's mark on a square of the plan. A square named by more than one order is marked
@@ -84,13 +91,18 @@ pub enum PlanKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlanMark {
     pub tile: Tile,
-    /// Which of the three orders, by its place in the plan: its colour.
+    /// Which of the three orders, by its place in the plan: its colour. For a USE ITEM, its
+    /// user's place in the roster.
     pub order: u8,
     pub kind: PlanKind,
     /// How many orders before this one name the same square.
     pub stack: u8,
     /// The order being given just now: its marks breathe.
     pub chosen: bool,
+    /// The way a HOLD faces on this square.
+    pub facing: Option<Facing>,
+    /// Where a USE ITEM's user stands.
+    pub from: Option<Tile>,
 }
 
 /// Each of the three orders' colours: gold, sky and plum, so they read apart from both teams'.
@@ -99,6 +111,18 @@ pub const ORDER_COLOURS: [Ramp; 3] = [
     Ramp::new(0x1d4a6e, 0x2f6fa0, 0x4f97cf, 0x86c0ea, 0xc4e4fa),
     Ramp::new(0x4a2358, 0x7a3d8e, 0xa65fbd, 0xc98fdc, 0xe9c8f2),
 ];
+
+/// A USE ITEM's colour: leaf green, apart from the three orders' and both teams', since it is a
+/// bonus beside them.
+pub const USE_COLOUR: Ramp = Ramp::new(0x29502a, 0x3f7a3a, 0x67a85a, 0x98cf84, 0xd2f0c0);
+
+/// The colour of a plan mark.
+fn mark_colour(mark: &PlanMark) -> Ramp {
+    match mark.kind {
+        PlanKind::UseItem => USE_COLOUR,
+        _ => ORDER_COLOURS[usize::from(mark.order) % ORDER_COLOURS.len()],
+    }
+}
 
 /// The board at one moment, as a picture of `view.size`. `still` holds the garden's own motion
 /// and the marks' pulsing, for reduced motion.
@@ -453,7 +477,9 @@ fn floor_marks(
     let breath = pulse(now, still, 3.2);
     for (tile, choice) in &marks.choices {
         let (fill, edge) = match choice {
-            Choice::Use => (GOLD, rgb(0xfff0a0)),
+            Choice::Interact => (GOLD, rgb(0xfff0a0)),
+            Choice::Reach => (USE_COLOUR.light, USE_COLOUR.shine),
+            Choice::Carrier => (CREAM, CREAM),
         };
         diamond_fill(
             canvas,
@@ -489,12 +515,14 @@ fn floor_marks(
         brackets(canvas, view, tile, 0.04 + lift, 0.34, GOLD);
         brackets(canvas, view, tile, 0.1 + lift, 0.3, paint::faded(GOLD, 120));
     }
-    // A hold is marked on its tile, under whoever stands there.
+    // A hold is marked on its tile, under whoever stands there, its front edge bright and an
+    // arrow pointing out of it the way it will face.
     for (slot, order) in &marks.orders {
-        if let Order::Hold { at } = order {
+        if let Order::Hold { at, facing } = order {
             let team = TEAM[slot.side.index()];
             diamond_fill(canvas, view, *at, 0.14, paint::faded(team.light, 60));
             diamond_outline(canvas, view, *at, 0.14, paint::faded(team.shine, 220));
+            facing_edge(canvas, view, *at, *facing, 0.14, team.shine, team.edge);
         }
     }
 }
@@ -531,42 +559,125 @@ fn order_marks(
                 pennant(canvas, b, team, now, still);
             }
             Order::Hold { .. } => {}
-            // Where something is to be used: a gold diamond on its tile, in the team's light.
-            Order::Use { at } => {
-                let team = TEAM[slot.side.index()];
+            // Where something is to be worked: a gold diamond on its tile, in the team's light.
+            Order::Interact { at } => {
                 diamond_fill(canvas, view, *at, 0.2, paint::faded(team.light, 70));
                 brackets(canvas, view, *at, 0.12, 0.3, GOLD);
             }
-            Order::Contest { target } => {
-                let (at, lever) = match target {
-                    Target::Creature { slot } => (frame.figure(*slot).tile, false),
-                    Target::Lever { at } => (*at, true),
-                };
-                let (x, y) = view.centre(at);
-                // A ring round the target's feet, turning, and a chevron over its head.
-                let turn = if still { 0.0 } else { now * 1.6 };
-                for k in 0..12 {
-                    if k % 3 == 2 {
-                        continue;
-                    }
-                    let a = turn + k as f32 / 12.0 * TAU;
-                    let p = (
-                        x + (a.cos() * 13.0).round() as i32,
-                        y + (a.sin() * 6.0).round() as i32,
-                    );
-                    paint::put(canvas, p.0, p.1, team.shine);
-                    paint::put(canvas, p.0 + 1, p.1, team.light);
-                }
+            // A PRESS: a ring round the target's feet, turning, and a chevron over its head.
+            Order::Press { target } => {
+                let (x, y) = view.centre(frame.figure(*target).tile);
+                target_ring(canvas, (x, y), team, now, still, 3);
                 let bob = if still {
                     0
                 } else {
                     ((now * 4.0).sin() * 1.5).round() as i32
                 };
-                let over = if lever { 32 } else { 52 };
-                chevron(canvas, (x, y - over + bob), team);
+                chevron(canvas, (x, y - 52 + bob), team);
+            }
+            // A TRICK: a sparser ring, turning the other way, and a hook curling round to the
+            // target's side over its head.
+            Order::Trick { target } => {
+                let (x, y) = view.centre(frame.figure(*target).tile);
+                target_ring(canvas, (x, y), team, -now, still, 2);
+                let bob = if still {
+                    0
+                } else {
+                    ((now * 4.0).sin() * 1.5).round() as i32
+                };
+                hook(canvas, (x, y - 54 + bob), team);
             }
         }
     }
+}
+
+/// A dotted ring round a target's feet, turning, with every `gap`th dot left out.
+fn target_ring(
+    canvas: &mut Canvas,
+    (x, y): (i32, i32),
+    team: Ramp,
+    now: f32,
+    still: bool,
+    gap: i32,
+) {
+    let turn = if still { 0.0 } else { now * 1.6 };
+    for k in 0..12 {
+        if k % gap == gap - 1 {
+            continue;
+        }
+        let a = turn + k as f32 / 12.0 * TAU;
+        let p = (
+            x + (a.cos() * 13.0).round() as i32,
+            y + (a.sin() * 6.0).round() as i32,
+        );
+        paint::put(canvas, p.0, p.1, team.shine);
+        paint::put(canvas, p.0 + 1, p.1, team.light);
+    }
+}
+
+/// A hook over a TRICK's target: an arrow curling round from one side to come in at the other.
+fn hook(canvas: &mut Canvas, (x, y): (i32, i32), team: Ramp) {
+    let mut last: Option<(i32, i32)> = None;
+    for k in 0..=14 {
+        let a = std::f32::consts::PI * (0.15 + 1.25 * k as f32 / 14.0);
+        let p = (
+            x + (a.cos() * 6.0).round() as i32,
+            y + (a.sin() * 4.0).round() as i32,
+        );
+        if last != Some(p) {
+            paint::rect(canvas, p.0, p.1, 2, 2, team.edge);
+            paint::put(canvas, p.0, p.1, team.shine);
+        }
+        last = Some(p);
+    }
+    // Its head, coming in at the right.
+    let tip = (x + 5, y - 3);
+    paint::rect(canvas, tip.0 - 1, tip.1 - 3, 2, 2, team.edge);
+    paint::rect(canvas, tip.0 + 2, tip.1 - 1, 2, 2, team.edge);
+    paint::put(canvas, tip.0, tip.1 - 2, team.light);
+    paint::put(canvas, tip.0 + 2, tip.1, team.light);
+}
+
+/// The side of a tile facing this way, bright, and an arrow out through it from the middle:
+/// which way a HOLD on it faces.
+fn facing_edge(
+    canvas: &mut Canvas,
+    view: &View,
+    tile: Tile,
+    facing: Facing,
+    inset: f32,
+    light: Rgba,
+    dark: Rgba,
+) {
+    let c = view.diamond(tile, 0.0);
+    let mid = view.screen(f32::from(tile.x) + 0.5, f32::from(tile.y) + 0.5);
+    let pull = |p: (f32, f32)| (p.0 + (mid.0 - p.0) * inset, p.1 + (mid.1 - p.1) * inset);
+    let (a, b) = match facing {
+        Facing::North => (c[0], c[1]),
+        Facing::East => (c[1], c[2]),
+        Facing::South => (c[2], c[3]),
+        Facing::West => (c[3], c[0]),
+    };
+    let (a, b) = (pull(a), pull(b));
+    let px = |p: (f32, f32)| (p.0.round() as i32, p.1.round() as i32);
+    paint::line(canvas, (px(a).0, px(a).1 + 1), (px(b).0, px(b).1 + 1), dark);
+    paint::line(canvas, px(a), px(b), light);
+    // The arrow: from just off the middle to the edge, its head at the edge.
+    let edge = ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+    let (dx, dy) = (edge.0 - mid.0, edge.1 - mid.1);
+    let at = |t: f32| (mid.0 + dx * t, mid.1 + dy * t);
+    paint::line(canvas, px(at(0.25)), px(at(0.8)), light);
+    let length = (dx * dx + dy * dy).sqrt().max(1.0);
+    let (ux, uy) = (dx / length, dy / length);
+    let head = at(0.85);
+    for side in [-1.0, 1.0] {
+        let back = (
+            head.0 - ux * 4.0 - uy * 3.0 * side,
+            head.1 - uy * 4.0 + ux * 3.0 * side,
+        );
+        paint::line(canvas, px(head), px(back), light);
+    }
+    paint::put(canvas, px(head).0, px(head).1 + 1, dark);
 }
 
 /// A pennant on a garden cane, where a move is going.
@@ -575,7 +686,18 @@ fn order_marks(
 fn plan_floor(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: bool) {
     let breath = pulse(now, still, 3.0);
     for mark in &marks.plan {
-        let ramp = ORDER_COLOURS[usize::from(mark.order) % ORDER_COLOURS.len()];
+        let ramp = mark_colour(mark);
+        // A USE ITEM's user and where it is to use it, joined by a dotted line on the ground.
+        if let Some(from) = mark.from.filter(|f| *f != mark.tile) {
+            let (a, b) = (view.centre(from), view.centre(mark.tile));
+            let steps = ((b.0 - a.0).abs().max((b.1 - a.1).abs()) / 3).max(1);
+            for i in 1..steps {
+                let x = a.0 + (b.0 - a.0) * i / steps;
+                let y = a.1 + (b.1 - a.1) * i / steps;
+                paint::put(canvas, x, y + 1, paint::faded(ramp.edge, 160));
+                paint::put(canvas, x, y, ramp.shine);
+            }
+        }
         let inset = 0.08 + 0.1 * f32::from(mark.stack);
         let wash = if mark.chosen {
             (60.0 + 40.0 * breath) as u8
@@ -598,6 +720,11 @@ fn plan_floor(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: 
             inset,
             paint::faded(ramp.light, 230),
         );
+        if let Some(facing) = mark.facing {
+            facing_edge(
+                canvas, view, mark.tile, facing, inset, ramp.shine, ramp.edge,
+            );
+        }
     }
 }
 
@@ -649,11 +776,11 @@ fn trails(canvas: &mut Canvas, marks: &Marks, view: &View) {
 }
 
 /// Each order's sign over its square, standing up out of the ground so it reads over whoever
-/// is there: a flag for TAKE, a shield for DEFEND, a sparkle for INTERACT. Stacked side by
-/// side when more than one order names a square.
+/// is there: a flag for PRESS, a shield for HOLD, a hook for TRICK, a sparkle for INTERACT and a
+/// little bag for USE ITEM. Stacked side by side when more than one order names a square.
 fn plan_signs(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: bool) {
     for mark in &marks.plan {
-        let ramp = ORDER_COLOURS[usize::from(mark.order) % ORDER_COLOURS.len()];
+        let ramp = mark_colour(mark);
         let (cx, cy) = view.centre(mark.tile);
         let bob = if mark.chosen && !still {
             ((now * 4.0).sin() * 1.2).round() as i32
@@ -663,7 +790,7 @@ fn plan_signs(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: 
         let x = cx - 9 + 7 * i32::from(mark.stack);
         let y = cy - 3 + bob;
         match mark.kind {
-            PlanKind::Take => {
+            PlanKind::Press => {
                 paint::vline(canvas, x, y - 13, 13, ramp.edge);
                 paint::polygon(
                     canvas,
@@ -677,7 +804,7 @@ fn plan_signs(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: 
                 paint::line(canvas, (x + 1, y - 13), (x + 7, y - 10), ramp.shine);
                 paint::put(canvas, x, y - 14, ramp.shine);
             }
-            PlanKind::Defend => {
+            PlanKind::Hold => {
                 let top = y - 13;
                 let shield = [
                     (x as f32 - 3.0, top as f32),
@@ -713,6 +840,18 @@ fn plan_signs(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: 
                     sy - 5,
                     paint::faded(ramp.edge, 140),
                 );
+            }
+            PlanKind::Trick => {
+                hook(canvas, (x + 1, y - 9), ramp);
+            }
+            PlanKind::UseItem => {
+                // A little drawstring bag.
+                let top = y - 12;
+                paint::rect(canvas, x - 3, top + 3, 8, 6, ramp.edge);
+                paint::rect(canvas, x - 2, top + 4, 6, 4, ramp.base);
+                paint::rect(canvas, x - 1, top + 1, 4, 2, ramp.edge);
+                paint::put(canvas, x, top + 2, ramp.light);
+                paint::put(canvas, x - 1, top + 5, ramp.shine);
             }
         }
     }
@@ -759,7 +898,7 @@ fn pennant(canvas: &mut Canvas, at: (i32, i32), team: Ramp, now: f32, still: boo
     paint::put(canvas, x, y - 15, team.shine);
 }
 
-/// A downward chevron over a contest's target.
+/// A downward chevron over a PRESS's target.
 fn chevron(canvas: &mut Canvas, at: (i32, i32), team: Ramp) {
     let (x, y) = at;
     for (i, row) in (0..5).enumerate() {
@@ -841,6 +980,7 @@ fn footing(
                 paint::faded(team.shine, alpha),
             );
         }
+        front(canvas, (fx, fy - 1), (16.0, 7.0), f.facing, team, alpha);
     }
     if chosen {
         let grow = if still { 0.0 } else { (now * 3.2).sin() * 1.0 };
@@ -855,6 +995,69 @@ fn footing(
             0,
         );
     }
+}
+
+/// Where a facing points on screen, as a unit vector: east is down and to the right and north up
+/// and to the right, as the board is drawn.
+pub fn screen_way(facing: Facing) -> (f32, f32) {
+    let (dx, dy) = facing.step();
+    let (sx, sy) = (f32::from(dx - dy) * 2.0, f32::from(dx + dy));
+    let length = (sx * sx + sy * sy).sqrt();
+    (sx / length, sy / length)
+}
+
+/// The front of a hold, the way it faces: its ring raised bright on that side like a shield's
+/// rim, and an arrowhead pointing out past it. A PRESS from there is turned away and hurt; a
+/// TRICK from anywhere else breaks the hold.
+fn front(
+    canvas: &mut Canvas,
+    (cx, cy): (i32, i32),
+    (rx, ry): (f32, f32),
+    facing: Facing,
+    team: Ramp,
+    alpha: u8,
+) {
+    let (ux, uy) = screen_way(facing);
+    let middle = (uy / ry).atan2(ux / rx);
+    for k in -8..=8 {
+        let a = middle + k as f32 * 0.09;
+        let p = (
+            cx + (a.cos() * rx).round() as i32,
+            cy + (a.sin() * ry).round() as i32,
+        );
+        paint::rect(canvas, p.0 - 1, p.1, 3, 1, paint::faded(team.edge, alpha));
+        paint::rect(
+            canvas,
+            p.0 - 1,
+            p.1 - 1,
+            3,
+            1,
+            paint::faded(team.shine, alpha),
+        );
+    }
+    // How far the ring is along the way it faces, and the arrowhead just past it.
+    let ring = 1.0 / ((ux / rx).powi(2) + (uy / ry).powi(2)).sqrt();
+    let (ox, oy) = (cx as f32, cy as f32);
+    let tip = (ox + ux * (ring + 10.0), oy + uy * (ring + 10.0));
+    let base = (ox + ux * (ring + 1.0), oy + uy * (ring + 1.0));
+    let (px, py) = (-uy * 5.0, ux * 5.0);
+    let head = [tip, (base.0 + px, base.1 + py), (base.0 - px, base.1 - py)];
+    paint::polygon(canvas, &head, paint::faded(team.base, alpha));
+    let pixel = |p: (f32, f32)| (p.0.round() as i32, p.1.round() as i32);
+    for i in 0..3 {
+        paint::line(
+            canvas,
+            pixel(head[i]),
+            pixel(head[(i + 1) % 3]),
+            paint::faded(team.edge, alpha),
+        );
+    }
+    paint::put(
+        canvas,
+        pixel(tip).0,
+        pixel(tip).1,
+        paint::faded(team.shine, alpha),
+    );
 }
 
 /// Off balance, it sways a pixel either way until the turn is over.
@@ -1105,20 +1308,142 @@ fn burst(
                 paint::rect(canvas, cx - 4 + k * 3, cy - 40, 2, 2, rgba(0xfff8e4, fade));
             }
         }
-        Burst::Scuffle | Burst::Bump => {
-            for (k, (dx, dy)) in [(-6, -4), (5, -6), (0, -10), (-3, -14), (7, -12)]
-                .iter()
-                .enumerate()
-            {
-                if effect.burst == Burst::Bump && k > 2 {
-                    break;
-                }
+        Burst::Bump => {
+            for (dx, dy) in [(-6, -4), (5, -6), (0, -10)] {
                 let grow = (age * 6.0) as i32;
                 let (x, y) = (cx + dx + dx.signum() * grow, cy + dy);
                 let r = 2 + grow / 2;
                 paint::ellipse(canvas, x, y, r, r, rgba(0xe8e0cc, fade / 2 + 40));
                 paint::put(canvas, x - r / 2, y - r / 2, rgba(0xfffcf2, fade / 2 + 40));
             }
+        }
+        Burst::Shove { to } => {
+            // Pushed on: speed lines streaming back from where it stood, away from where it
+            // went, and puffs of dust kicked up at its heels.
+            let (tx, ty) = view.centre(to);
+            let (dx, dy) = ((tx - cx) as f32, (ty - cy) as f32);
+            let length = (dx * dx + dy * dy).sqrt().max(1.0);
+            let (ux, uy) = (dx / length, dy / length);
+            let along = age * 30.0;
+            for (k, lift) in [(-1.0f32, 10.0f32), (0.0, 16.0), (1.0, 22.0)] {
+                let side = (-uy * k * 3.0, ux * k * 3.0);
+                let start = (
+                    cx as f32 + ux * along + side.0,
+                    cy as f32 - lift + uy * along + side.1,
+                );
+                let end = (start.0 - ux * 10.0, start.1 - uy * 10.0);
+                paint::line(
+                    canvas,
+                    (start.0 as i32, start.1 as i32),
+                    (end.0 as i32, end.1 as i32),
+                    rgba(0xfff8e4, fade),
+                );
+            }
+            for (k, (ox, oy)) in [(-5, 1), (4, 2), (0, -1)].into_iter().enumerate() {
+                let grow = (age * 8.0) as i32 + k as i32;
+                let (x, y) = (cx + ox - (ux * grow as f32) as i32, cy + oy);
+                paint::ellipse(
+                    canvas,
+                    x,
+                    y,
+                    2 + grow / 3,
+                    1 + grow / 4,
+                    rgba(0xd8c8a4, fade / 2 + 30),
+                );
+            }
+        }
+        Burst::Counter { from } => {
+            // Head on: a sharp jab out of the holder's front into the presser, and a crack of
+            // light where it lands.
+            let (fx, fy) = view.centre(from);
+            let (a, b) = ((fx, fy - 18), (cx, cy - 18));
+            let reach = (age / 0.2).min(1.0);
+            let tip = (
+                a.0 + ((b.0 - a.0) as f32 * reach) as i32,
+                a.1 + ((b.1 - a.1) as f32 * reach) as i32,
+            );
+            paint::line(
+                canvas,
+                (a.0, a.1 + 1),
+                (tip.0, tip.1 + 1),
+                rgba(0x7a4a2a, fade),
+            );
+            paint::line(canvas, a, tip, rgba(0xfff3b0, fade));
+            if reach >= 1.0 {
+                for k in 0..6 {
+                    let ang = k as f32 / 6.0 * TAU + 0.5;
+                    let r = 3.0 + age * 12.0;
+                    let p = (
+                        b.0 + (ang.cos() * r) as i32,
+                        b.1 + (ang.sin() * r * 0.7) as i32,
+                    );
+                    paint::line(canvas, b, p, rgba(0xffd27a, fade));
+                }
+                star(canvas, b, rgba(0xffffff, fade));
+            }
+        }
+        Burst::Collide { partner } => {
+            // Press met press: a bonk halfway between their heads, and stars round both.
+            let (px, py) = view.centre(partner);
+            let (mx, my) = ((cx + px) / 2, (cy + py) / 2 - 24);
+            let r = 3.0 + age * 10.0;
+            for k in 0..10 {
+                let ang = k as f32 / 10.0 * TAU;
+                let long = if k % 2 == 0 { 1.0 } else { 0.55 };
+                let p = (
+                    mx + (ang.cos() * r * long) as i32,
+                    my + (ang.sin() * r * long * 0.8) as i32,
+                );
+                paint::line(canvas, (mx, my), p, rgba(0xffe9a8, fade));
+            }
+            star(canvas, (mx, my), rgba(0xffffff, fade));
+            for (x, y) in [(cx, cy), (px, py)] {
+                let ang = age * 9.0;
+                let p = (
+                    x + (ang.cos() * 7.0) as i32,
+                    y - 34 + (ang.sin() * 2.0) as i32,
+                );
+                star(canvas, p, rgba(0xffe066, fade));
+            }
+        }
+        Burst::Sneak { from } => {
+            // Round the side: a dashed swoosh curling from where the trickster stood in to the
+            // holder, quickest at its end.
+            let (fx, fy) = view.centre(from);
+            let (a, b) = ((fx as f32, fy as f32 - 14.0), (cx as f32, cy as f32 - 14.0));
+            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+            let bow = (-dy * 0.6, dx * 0.6);
+            let drawn = (age / 0.3).min(1.0);
+            let steps = 16;
+            for i in 0..=steps {
+                let t = i as f32 / steps as f32;
+                if t > drawn || i % 3 == 2 {
+                    continue;
+                }
+                let lift = 4.0 * t * (1.0 - t);
+                let p = (a.0 + dx * t + bow.0 * lift, a.1 + dy * t + bow.1 * lift);
+                paint::rect(canvas, p.0 as i32, p.1 as i32, 2, 1, rgba(0xe9c8f2, fade));
+            }
+            if drawn >= 1.0 {
+                star(canvas, (cx, cy - 14), rgba(0xffffff, fade));
+            }
+        }
+        Burst::Read => {
+            // Seen coming: a bright "!" over its head.
+            let (x, y) = (cx + 1, cy - 50 - (age * 4.0) as i32);
+            paint::rect(canvas, x - 2, y - 1, 5, 11, rgba(0x6e4f1c, fade));
+            paint::rect(canvas, x - 1, y, 3, 6, rgba(0xfff3b0, fade));
+            paint::rect(canvas, x - 1, y + 7, 3, 2, rgba(0xfff3b0, fade));
+            paint::put(canvas, x - 1, y, rgba(0xffffff, fade));
+        }
+        Burst::Snatch { to, item } => {
+            // Snatched: what it carried arcs over from its side to the presser's.
+            let (tx, ty) = view.centre(to);
+            let t = (age / crate::playback::SNATCH_SECS).min(1.0);
+            let hop = 4.0 * t * (1.0 - t) * 14.0;
+            let x = cx as f32 + (tx - cx) as f32 * t;
+            let y = (cy - 32) as f32 + (ty - cy) as f32 * t - hop;
+            found::icon(canvas, (x.round() as i32, y.round() as i32), item, false);
         }
         Burst::Stars => {
             for k in 0..3 {
@@ -1159,15 +1484,17 @@ pub enum Key {
     Holding,
     OffBalance,
     Move,
-    Contest,
+    Press,
+    Trick,
     Beacon,
 }
 
 impl Key {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Move,
         Self::Holding,
-        Self::Contest,
+        Self::Press,
+        Self::Trick,
         Self::OffBalance,
         Self::Beacon,
     ];
@@ -1175,8 +1502,9 @@ impl Key {
     pub const fn words(self) -> &'static str {
         match self {
             Self::Move => "Moving there",
-            Self::Holding => "Holding its ground",
-            Self::Contest => "Contesting",
+            Self::Holding => "Holding, facing the arrow",
+            Self::Press => "Pressing",
+            Self::Trick => "Tricking",
             Self::OffBalance => "Off balance this turn",
             Self::Beacon => "The beacon",
         }
@@ -1199,6 +1527,7 @@ impl Key {
                     );
                     paint::rect(&mut canvas, p.0 - 1, p.1 - 1, 2, 2, team.shine);
                 }
+                front(&mut canvas, (cx, cy), (11.0, 4.0), Facing::East, team, 255);
             }
             Self::OffBalance => {
                 ellipse_ring(&mut canvas, cx, cy, 12, 4, team.base, true, 0);
@@ -1213,9 +1542,10 @@ impl Key {
                 }
                 pennant(&mut canvas, (22, 20), team, 0.0, true);
             }
-            Self::Contest => {
+            Self::Press | Self::Trick => {
+                let gap = if self == Self::Press { 3 } else { 2 };
                 for k in 0..12 {
-                    if k % 3 == 2 {
+                    if k % gap == gap - 1 {
                         continue;
                     }
                     let a = k as f32 / 12.0 * TAU;
@@ -1226,7 +1556,11 @@ impl Key {
                     paint::put(&mut canvas, p.0, p.1, team.shine);
                     paint::put(&mut canvas, p.0 + 1, p.1, team.light);
                 }
-                chevron(&mut canvas, (cx, 3), team);
+                if self == Self::Press {
+                    chevron(&mut canvas, (cx, 3), team);
+                } else {
+                    hook(&mut canvas, (cx, 7), team);
+                }
             }
             Self::Beacon => {
                 let stone = garden::STONE;
@@ -1249,5 +1583,55 @@ impl Key {
             }
         }
         canvas
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::playback::Effect;
+
+    #[test]
+    fn every_press_hold_and_trick_burst_draws_something_where_it_happens() {
+        let arena = Arena::backyard();
+        let view = View::new(arena.width, arena.height);
+        let tile = arena.zone_centre();
+        let next = Tile::new(tile.x + 1, tile.y);
+        for kind in [
+            Burst::Hit,
+            Burst::Shove { to: next },
+            Burst::Counter { from: next },
+            Burst::Collide { partner: next },
+            Burst::Sneak { from: next },
+            Burst::Read,
+            Burst::Snatch {
+                to: next,
+                item: formiga_battle_core::Item::Twig,
+            },
+        ] {
+            for age in [0.05, 0.35] {
+                let mut canvas = Canvas::new(view.size.0, view.size.1);
+                let effect = Effect {
+                    burst: kind,
+                    tile,
+                    age,
+                };
+                burst(&mut canvas, &arena, &view, &effect, 0.0);
+                let drawn = (0..canvas.height() as i32)
+                    .flat_map(|y| (0..canvas.width() as i32).map(move |x| (x, y)))
+                    .any(|(x, y)| canvas.get(x, y).a > 0);
+                assert!(drawn, "{kind:?} at {age}");
+            }
+        }
+    }
+
+    #[test]
+    fn each_facing_points_its_own_way_on_screen() {
+        let ways: Vec<(f32, f32)> = Facing::ALL.iter().map(|f| screen_way(*f)).collect();
+        // East and north are to the right, south and west to the left; north and west up.
+        assert!(ways[0].0 > 0.0 && ways[0].1 < 0.0);
+        assert!(ways[1].0 > 0.0 && ways[1].1 > 0.0);
+        assert!(ways[2].0 < 0.0 && ways[2].1 > 0.0);
+        assert!(ways[3].0 < 0.0 && ways[3].1 < 0.0);
     }
 }

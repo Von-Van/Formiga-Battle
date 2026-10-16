@@ -32,7 +32,7 @@ use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Str
 use formiga_art::Canvas;
 use formiga_battle_contract::Contender;
 use formiga_battle_core::lesson::{Lesson, Verdict};
-use formiga_battle_core::{Match, Tile};
+use formiga_battle_core::{Directive, Facing, Match, Tile};
 use formiga_battle_core::{PLAN_SIZE, Side, Slot, TEAM_SIZE, Victory};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -282,6 +282,8 @@ pub struct BattleApp {
     /// The Field Lesson chosen, and the ones learned this sitting.
     lesson: Lesson,
     learned: Vec<Lesson>,
+    /// How far the mouse wheel has turned over the board since it last turned a HOLD, in points.
+    wheel: f32,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -330,6 +332,9 @@ const HEADLINE_SECS: f32 = 0.8;
 const READY_SECS: f32 = 1.5;
 /// When in it "Go!" comes.
 const GO_AT: f32 = 0.85;
+
+/// How far the mouse wheel turns, in points, to turn a HOLD a quarter.
+const WHEEL_NOTCH: f32 = 24.0;
 
 impl BattleApp {
     pub fn new(
@@ -403,6 +408,7 @@ impl BattleApp {
             orders_heard: 0.0,
             lesson: Lesson::Beacon,
             learned: Vec::new(),
+            wheel: 0.0,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -414,15 +420,17 @@ impl BattleApp {
                 app.begin();
                 // A few turns in, so the card says what came of last turn's orders.
                 app.table.play_ahead(3);
-                // One order as the coach would give it, a DEFEND of two of the yard's squares
-                // (one named twice), and TAKE in hand for the third.
+                // One order as the coach would give it, a HOLD of two of the yard's squares
+                // (one named twice) facing across, and PRESS in hand for the third.
                 app.table.coach_orders();
                 let zone = app.table.arena.zone.clone();
-                app.table.orders[1] = Some(formiga_battle_core::Directive::Defend {
+                app.table.orders[1] = Some(Directive::Hold {
                     squares: zone.iter().take(2).copied().collect(),
+                    facing: Facing::across(app.table.you),
                 });
+                app.table.turning = Some(1);
                 app.table.orders[2] = None;
-                app.table.take_token(Verb::Take);
+                app.table.take_token(Verb::Press);
             }
             Some(Review::Notebook) => {
                 // A colony that has played a little with friends, as Desktop would send it.
@@ -966,7 +974,7 @@ impl BattleApp {
             if self.account_open {
                 self.toggle_account_by_key();
             } else if self.table.verb.is_some() {
-                self.table.verb = None;
+                self.table.put_down();
                 self.sound.play(Cue::Cancel);
             }
         }
@@ -974,12 +982,21 @@ impl BattleApp {
             return;
         }
         for (key, verb) in [
-            (egui::Key::T, Verb::Take),
-            (egui::Key::D, Verb::Defend),
+            (egui::Key::P, Verb::Press),
+            (egui::Key::H, Verb::Hold),
+            (egui::Key::T, Verb::Trick),
             (egui::Key::I, Verb::Interact),
+            (egui::Key::U, Verb::UseItem),
         ] {
             if pressed(key) && self.table.take_token(verb) {
                 self.sound.play(Cue::Click);
+            }
+        }
+        // R turns the HOLD in hand, or the one last given, a quarter clockwise; with Shift, back.
+        if pressed(egui::Key::R) {
+            let back = ctx.input(|i| i.modifiers.shift);
+            if self.table.turn_hold(back) {
+                self.sound.play(Cue::Select);
             }
         }
         if pressed(egui::Key::Enter) {
@@ -1374,18 +1391,26 @@ impl BattleApp {
             }
             Stage::Playing if self.table.shown.is_some() => "The turn plays out…".to_owned(),
             Stage::Playing => match (self.table.selected, self.table.verb) {
-                (Some(_), Some(Verb::Take)) => {
-                    "Click squares for the team to take. Right-click or Escape is done.".to_owned()
+                (_, Some(Verb::UseItem)) => match self.table.user {
+                    Some(_) => "USE ITEM: click a green square in reach to use it there, at the start of the turn. A bonus: it takes none of the three. Escape is done.".to_owned(),
+                    None => "USE ITEM: click one of yours carrying something, or press U to go round them.".to_owned(),
+                },
+                (Some(_), Some(Verb::Press)) => {
+                    "PRESS: click squares to push theirs off and take them. Right-click or Escape is done.".to_owned()
                 }
-                (Some(_), Some(Verb::Defend)) => {
-                    "Click squares for the team to defend. Right-click or Escape is done."
+                (Some(_), Some(Verb::Hold)) => {
+                    "HOLD: click squares to keep, facing the arrow. R or the mouse wheel turns it. Right-click or Escape is done."
+                        .to_owned()
+                }
+                (Some(_), Some(Verb::Trick)) => {
+                    "TRICK: click squares where theirs hold, to go round their side or back. Right-click or Escape is done."
                         .to_owned()
                 }
                 (Some(_), Some(Verb::Interact)) => {
-                    "Click something to go and get: a found thing, the lever, a switch, or one carrying something.".to_owned()
+                    "INTERACT: click a lever, a tap or switch, or a found thing to fetch.".to_owned()
                 }
-                (Some(i), None) => format!(
-                    "Order {}: click a square to TAKE it, something to INTERACT with it; right-click to DEFEND. Enter locks in.",
+                (Some(i), _) => format!(
+                    "Order {}: click a square to PRESS it, something to INTERACT with; right-click to HOLD it. R turns a HOLD. Enter locks in.",
                     i + 1
                 ),
                 (None, _) => "Choose one of your three orders.".to_owned(),
@@ -1517,7 +1542,7 @@ impl BattleApp {
         {
             // An order picked by its button or key is let go by a right click, as before.
             if hold && self.table.verb.is_some() {
-                self.table.verb = None;
+                self.table.put_down();
                 self.sound.play(Cue::Cancel);
             } else {
                 match self.table.press(tile, hold) {
@@ -1525,11 +1550,26 @@ impl BattleApp {
                         self.pokes.push((tile, now));
                         self.sound.play(Cue::Order);
                     }
+                    Aim::Carrier(_) => self.sound.play(Cue::Select),
                     Aim::Nothing => {}
                 }
             }
         }
-        // Dragging across the board with TAKE or DEFEND in hand adds every square it passes.
+        // The mouse wheel over the board turns the HOLD in hand, or the one last given: a notch
+        // a quarter turn, up clockwise and down back.
+        if giving && response.hovered() {
+            self.wheel += ctx.input(|i| i.smooth_scroll_delta.y);
+            if self.wheel.abs() >= WHEEL_NOTCH {
+                let back = self.wheel < 0.0;
+                self.wheel = 0.0;
+                if self.table.turn_hold(back) {
+                    self.sound.play(Cue::Select);
+                }
+            }
+        } else {
+            self.wheel = 0.0;
+        }
+        // Dragging across the board with PRESS, HOLD or TRICK in hand adds every square it passes.
         if giving
             && response.dragged_by(egui::PointerButton::Primary)
             && let Some(tile) = ctx.pointer_latest_pos().and_then(to_tile)
@@ -1992,10 +2032,17 @@ impl BattleApp {
             return;
         };
         let say = |aim: &Aim| match aim {
+            Aim::Give(order @ Directive::UseItem { .. }) => {
+                Some(format!("Bonus. {}", speak_order(m, self.table.you, order)))
+            }
             Aim::Give(order) => Some(match self.table.selected {
                 Some(i) => format!("{}. {}", i + 1, speak_order(m, self.table.you, order)),
                 None => speak_order(m, self.table.you, order),
             }),
+            Aim::Carrier(by) => Some(format!(
+                "USE ITEM: {}",
+                carried(m, Slot::new(self.table.you, *by))
+            )),
             Aim::Nothing => None,
         };
         let mut lines = Vec::new();
@@ -2509,9 +2556,10 @@ impl BattleApp {
             ui.add_space(u);
             let row = egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true);
             let mut picked = None;
+            let carriers = self.table.carriers();
             ui.with_layout(row, |ui| {
                 ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
-                for (v, key) in Verb::ALL.into_iter().zip(["T", "D", "I"]) {
+                for v in Verb::ALL {
                     let on = self.table.verb == Some(v);
                     let can = left > 0
                         || self
@@ -2520,11 +2568,33 @@ impl BattleApp {
                             .and_then(|i| self.table.orders[usize::from(i)].as_ref())
                             .is_some_and(|d| d.verb() == v.word());
                     if chrome::button(ui, v.word(), Kind::Plain, on, can, None, u)
-                        .on_hover_text(format!("{} ({key})", v.hint()))
+                        .on_hover_text(format!("{} ({})", v.hint(), v.key()))
                         .clicked()
                     {
                         picked = Some(v);
                     }
+                }
+                // USE ITEM, a bonus beside the three: it can be picked while someone of yours
+                // carries something.
+                let v = Verb::UseItem;
+                let hover = if carriers.is_empty() {
+                    format!("{} Nobody of yours carries anything just now.", v.hint())
+                } else {
+                    format!("{} ({})", v.hint(), v.key())
+                };
+                if chrome::button(
+                    ui,
+                    v.word(),
+                    Kind::Plain,
+                    self.table.verb == Some(v),
+                    !carriers.is_empty(),
+                    None,
+                    u,
+                )
+                .on_hover_text(hover)
+                .clicked()
+                {
+                    picked = Some(v);
                 }
             });
             if let Some(v) = picked {
@@ -2544,7 +2614,11 @@ impl BattleApp {
                 None => ("Empty".to_owned(), "Not given yet.".to_owned()),
             };
             let has_order = order.is_some();
-            let (response, cleared) = card(
+            let facing = match &order {
+                Some(Directive::Hold { facing, .. }) => Some(*facing),
+                _ => None,
+            };
+            let (response, (cleared, turned)) = card(
                 ui,
                 Id::new(("order-card", i)),
                 chosen,
@@ -2553,7 +2627,7 @@ impl BattleApp {
                 u,
                 |ui| {
                     ui.horizontal(|ui| {
-                        token(ui, i, has_order || chosen, u);
+                        token(ui, i, has_order || chosen, facing, u);
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             ui.label(label_job(
@@ -2573,13 +2647,104 @@ impl BattleApp {
                                 ink::MUTED
                             }));
                         });
-                        let mut cleared = false;
+                        let (mut cleared, mut turned) = (false, false);
                         if giving && has_order {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     if chrome::button(ui, "clear", Kind::Back, false, true, None, u)
                                         .on_hover_text("Take this order back")
+                                        .clicked()
+                                    {
+                                        cleared = true;
+                                    }
+                                    // A HOLD turns a quarter clockwise each click, as R does.
+                                    if facing.is_some()
+                                        && chrome::button(ui, "turn", Kind::Plain, false, true, None, u)
+                                            .on_hover_text(
+                                                "Turn which way it faces, a quarter clockwise (R, or the mouse wheel over the board)",
+                                            )
+                                            .clicked()
+                                    {
+                                        turned = true;
+                                    }
+                                },
+                            );
+                        }
+                        (cleared, turned)
+                    })
+                    .inner
+                },
+            );
+            if cleared {
+                self.table.clear_order(i);
+                if self.table.selected == Some(i) {
+                    self.table.put_down();
+                }
+            } else if turned {
+                if self.table.turn_order(i, false) {
+                    self.sound.play(Cue::Select);
+                }
+            } else if giving && response.clicked() {
+                // A placed order picked up again, to add squares or move it.
+                self.table.select(i);
+                if let Some(v) = order.as_ref().map(Verb::of) {
+                    self.table.choose_verb(v);
+                }
+            }
+            ui.add_space(u * 2.0);
+        }
+        // The bonus USE ITEMs: one for each of the team carrying something, beside the three.
+        for by in self.table.carriers() {
+            let Some(m) = self.table.m.as_ref() else {
+                break;
+            };
+            let slot = Slot::new(you, by);
+            let given = self.table.uses[usize::from(by)];
+            let chosen =
+                giving && self.table.verb == Some(Verb::UseItem) && self.table.user == Some(by);
+            let line = match given {
+                Some(at) => speak_order(m, you, &Directive::UseItem { by, at }),
+                None if chosen => "Click a green square in reach.".to_owned(),
+                None => format!("{}: not used yet.", carried(m, slot)),
+            };
+            let words = line
+                .strip_prefix("USE ITEM: ")
+                .map_or(line.clone(), str::to_owned);
+            let (response, cleared) = card(
+                ui,
+                Id::new(("use-card", by)),
+                chosen,
+                true,
+                giving,
+                u,
+                |ui| {
+                    ui.horizontal(|ui| {
+                        bonus_token(ui, given.is_some() || chosen, u);
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            ui.label(label_job(
+                                "USE ITEM · bonus",
+                                chrome::LABEL,
+                                if given.is_some() {
+                                    ink::PAGE
+                                } else {
+                                    ink::MUTED
+                                },
+                            ));
+                            ui.label(RichText::new(words).size(12.0).color(if given.is_some() {
+                                ink::PAGE
+                            } else {
+                                ink::MUTED
+                            }));
+                        });
+                        let mut cleared = false;
+                        if giving && given.is_some() {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if chrome::button(ui, "clear", Kind::Back, false, true, None, u)
+                                        .on_hover_text("Take this USE ITEM back")
                                         .clicked()
                                     {
                                         cleared = true;
@@ -2593,20 +2758,9 @@ impl BattleApp {
                 },
             );
             if cleared {
-                self.table.clear_order(i);
-                if self.table.selected == Some(i) {
-                    self.table.verb = None;
-                }
-            } else if giving && response.clicked() {
-                // A placed order picked up again, to add squares or move it.
-                self.table.select(i);
-                if let Some(v) = order.as_ref().map(|d| match d {
-                    formiga_battle_core::Directive::Take { .. } => Verb::Take,
-                    formiga_battle_core::Directive::Defend { .. } => Verb::Defend,
-                    formiga_battle_core::Directive::Interact { .. } => Verb::Interact,
-                }) {
-                    self.table.choose_verb(v);
-                }
+                self.table.clear_use(by);
+            } else if giving && response.clicked() && self.table.pick_user(by) {
+                self.sound.play(Cue::Select);
             }
             ui.add_space(u * 2.0);
         }
@@ -2848,28 +3002,40 @@ impl BattleApp {
             ],
             Guide::Orders => vec![
                 (
-                    key(scene::Key::Contest),
-                    "TAKE".to_owned(),
-                    "get squares and hold them".to_owned(),
-                    Verb::Take.hint().to_owned(),
+                    key(scene::Key::Press),
+                    "PRESS".to_owned(),
+                    Verb::Press.gloss().to_owned(),
+                    Verb::Press.hint().to_owned(),
                 ),
                 (
                     key(scene::Key::Holding),
-                    "DEFEND".to_owned(),
-                    "keep squares, keep theirs off".to_owned(),
-                    Verb::Defend.hint().to_owned(),
+                    "HOLD".to_owned(),
+                    Verb::Hold.gloss().to_owned(),
+                    Verb::Hold.hint().to_owned(),
+                ),
+                (
+                    key(scene::Key::Trick),
+                    "TRICK".to_owned(),
+                    Verb::Trick.gloss().to_owned(),
+                    Verb::Trick.hint().to_owned(),
                 ),
                 (
                     Glyph::Stars,
                     "INTERACT".to_owned(),
-                    "found things, the lever, a switch".to_owned(),
+                    Verb::Interact.gloss().to_owned(),
                     Verb::Interact.hint().to_owned(),
+                ),
+                (
+                    Glyph::Stars,
+                    "USE ITEM".to_owned(),
+                    Verb::UseItem.gloss().to_owned(),
+                    Verb::UseItem.hint().to_owned(),
                 ),
                 (
                     key(scene::Key::Move),
                     "Up to three".to_owned(),
-                    "the team shares them out".to_owned(),
-                    "Name a square in two orders and more of the team goes to it. Who goes where is up to them: who is nearest, what each is already doing, and a little of who each one is.".to_owned(),
+                    "PRESS beats TRICK, HOLD beats PRESS, TRICK beats HOLD".to_owned(),
+                    "Name a square in two orders and more of the team goes to it. Who goes where is up to them: who is nearest, what each is already doing, and a little of who each one is. USE ITEMs come on top of the three.".to_owned(),
                 ),
             ],
             Guide::Marks => scene::Key::ALL
@@ -3267,15 +3433,23 @@ pub fn speak_order(m: &Match, you: Side, order: &formiga_battle_core::Directive)
             (n, _) => format!("{n} squares"),
         }
     };
+    let theirs = |ts: &[Tile]| match ts {
+        [t] => m.occupant(*t).filter(|o| o.side != you),
+        _ => None,
+    };
     match order {
-        Directive::Take { squares: ts } => match ts.as_slice() {
-            [t] => match m.occupant(*t).filter(|o| o.side != you) {
-                Some(o) => format!("TAKE {}'s square", m.profile(o).name),
-                None => format!("TAKE {}", squares(ts)),
-            },
-            _ => format!("TAKE {}", squares(ts)),
+        Directive::Press { squares: ts } => match theirs(ts) {
+            Some(o) => format!("PRESS {} off its square", m.profile(o).name),
+            None => format!("PRESS {}", squares(ts)),
         },
-        Directive::Defend { squares: ts } => format!("DEFEND {}", squares(ts)),
+        Directive::Hold {
+            squares: ts,
+            facing,
+        } => format!("HOLD {}, facing {}", squares(ts), facing.name()),
+        Directive::Trick { squares: ts } => match theirs(ts) {
+            Some(o) => format!("TRICK {} from its side or back", m.profile(o).name),
+            None => format!("TRICK whoever holds {}", squares(ts)),
+        },
         Directive::Interact { at } => {
             let thing = m
                 .board
@@ -3284,18 +3458,35 @@ pub fn speak_order(m: &Match, you: Side, order: &formiga_battle_core::Directive)
                 .chain(m.board.glint.iter())
                 .find(|(g, _)| g == at)
                 .map(|(_, i)| i.name());
-            match (thing, m.occupant(*at)) {
-                (Some(item), _) => format!("INTERACT: fetch the {item}"),
-                (None, Some(o)) if o.side == you => {
-                    format!("INTERACT: {} uses what it carries", m.profile(o).name)
-                }
-                (None, Some(o)) => format!("INTERACT: go after what {} carries", m.profile(o).name),
-                (None, None) if m.arena.levers.contains(at) => {
-                    "INTERACT: pull the lever".to_owned()
-                }
-                (None, None) => "INTERACT: set off the switch".to_owned(),
+            match thing {
+                Some(item) => format!("INTERACT: fetch the {item}"),
+                None if m.arena.levers.contains(at) => "INTERACT: pull the lever".to_owned(),
+                None => "INTERACT: set off the switch".to_owned(),
             }
         }
+        Directive::UseItem { by, at } => {
+            let slot = Slot::new(you, *by);
+            let user = m.fighter(slot).at;
+            let place = if *at == user {
+                "where it stands".to_owned()
+            } else {
+                match m.occupant(*at) {
+                    Some(o) if o.side == you => format!("over {}", m.profile(o).name),
+                    Some(o) => format!("on {}", m.profile(o).name),
+                    None => "on a square in reach".to_owned(),
+                }
+            };
+            format!("USE ITEM: {} {place}", carried(m, slot))
+        }
+    }
+}
+
+/// One of the team and what it carries, in a few words: "Pip's twig".
+fn carried(m: &Match, slot: Slot) -> String {
+    let name = &m.profile(slot).name;
+    match m.fighter(slot).carrying {
+        Some(item) => format!("{name}'s {}", item.name()),
+        None => name.clone(),
     }
 }
 
@@ -3592,13 +3783,13 @@ fn likely_words(
         Role::Claim => "holds",
         Role::Oust => "moves one off",
         Role::Flank => "flanks",
+        Role::Trick => "tricks",
         Role::Pin => "waits beside",
         Role::Guard => "guards",
         Role::Intercept => "heads one off",
         Role::Fetch => "fetches",
         Role::Pull => "pulls it",
         Role::Wait => "waits by it",
-        Role::Use => "uses what it has",
         Role::Spare => "sees for itself",
     };
     let leaning = match why {
@@ -3744,8 +3935,8 @@ fn pointer_arrow(painter: &egui::Painter, tip: egui::Pos2, fill: Color32, u: f32
 }
 
 /// One of the three orders as a token: a disc in its colour with its number, pale until it is
-/// given.
-fn token(ui: &mut egui::Ui, order: u8, given: bool, u: f32) {
+/// given. A HOLD's has an arrowhead on its rim, pointing the way it faces as the board is drawn.
+fn token(ui: &mut egui::Ui, order: u8, given: bool, facing: Option<Facing>, u: f32) {
     let (rect, _) = ui.allocate_exact_size(vec2(u * 14.0, u * 14.0), Sense::hover());
     let ramp = scene::ORDER_COLOURS[usize::from(order) % scene::ORDER_COLOURS.len()];
     let painter = ui.painter();
@@ -3764,6 +3955,39 @@ fn token(ui: &mut egui::Ui, order: u8, given: bool, u: f32) {
     }
     let galley = painter.layout_job(label_job(&format!("{}", order + 1), 11.0, edge));
     painter.galley(c - galley.size() / 2.0 + vec2(u * 0.3, 0.0), galley, edge);
+    if let Some(facing) = facing {
+        let (x, y) = scene::screen_way(facing);
+        let way = vec2(x, y);
+        let across = vec2(-y, x);
+        let tip = c + way * (r + u * 1.5);
+        let base = c + way * (r - u * 2.0);
+        painter.add(egui::Shape::convex_polygon(
+            vec![tip, base + across * u * 2.6, base - across * u * 2.6],
+            color(ramp.shine),
+            Stroke::new(u * 0.6, edge),
+        ));
+    }
+}
+
+/// A USE ITEM's token: a leaf-green disc with a plus, for a bonus beside the three.
+fn bonus_token(ui: &mut egui::Ui, given: bool, u: f32) {
+    let (rect, _) = ui.allocate_exact_size(vec2(u * 14.0, u * 14.0), Sense::hover());
+    let ramp = scene::USE_COLOUR;
+    let painter = ui.painter();
+    let c = rect.center();
+    let r = u * 6.0;
+    painter.circle_filled(c + vec2(u, u), r, ink::SHADOW);
+    let (fill, edge) = if given {
+        (color(ramp.base), color(ramp.edge))
+    } else {
+        (color(ramp.shine).gamma_multiply(0.6), color(ramp.light))
+    };
+    painter.circle_filled(c, r, fill);
+    painter.circle_stroke(c, r, Stroke::new(u * 0.8, edge));
+    let arm = u * 3.0;
+    let stroke = Stroke::new(u * 1.4, edge);
+    painter.line_segment([c - vec2(arm, 0.0), c + vec2(arm, 0.0)], stroke);
+    painter.line_segment([c - vec2(0.0, arm), c + vec2(0.0, arm)], stroke);
 }
 
 /// A five-pointed star, for the dizzy.
@@ -3841,10 +4065,13 @@ fn mouse(painter: &egui::Painter, rect: Rect, right: bool, u: f32) {
 /// and a right click do, and the keys.
 fn controls(painter: &egui::Painter, page: Rect, u: f32) {
     let rows: [(Option<bool>, &str); 4] = [
-        (Some(false), "Take a square, or what is there"),
-        (Some(true), "Defend a square"),
-        (None, "Drag to name more squares"),
-        (None, "T D I pick  ·  Enter lock in  ·  L whole match"),
+        (Some(false), "Press a square, or work what is there"),
+        (Some(true), "Hold a square"),
+        (
+            None,
+            "Drag to name more squares  ·  R or wheel turns a HOLD",
+        ),
+        (None, "P H T I U pick  ·  Enter lock in  ·  L whole match"),
     ];
     let galleys: Vec<_> = rows
         .iter()

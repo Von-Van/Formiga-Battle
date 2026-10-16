@@ -9,14 +9,22 @@ use eframe::egui::{self, Id, RichText};
 use formiga_battle_contract::{MatchSummary, Mode};
 
 /// The keys Battle answers to, for the settings page.
-const KEYS: [(&str, &str); 7] = [
+const KEYS: [(&str, &str); 9] = [
     (
         "Space, Enter or a click",
         "hurries the train in at the station",
     ),
     (
-        "T, D, I",
-        "picks up a Take, Defend or Interact order in a match",
+        "P, H, T, I",
+        "picks up a Press, Hold, Trick or Interact order in a match",
+    ),
+    (
+        "U",
+        "picks up a Use Item for one of yours carrying something, a bonus beside the three",
+    ),
+    (
+        "R, or the mouse wheel",
+        "turns a Hold a quarter, to face another way (Shift+R turns it back)",
     ),
     ("1, 2, 3", "chooses one of your three on the board"),
     ("Enter", "locks in your orders"),
