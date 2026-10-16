@@ -24,8 +24,18 @@ pub struct Callout {
     /// Whose good news it is, for the headline's colour.
     pub good_for: Option<Side>,
     pub cue: Option<Cue>,
-    /// A big moment: a knockout, the beacon lit. Its word is drawn larger.
-    pub big: bool,
+    pub style: Style,
+}
+
+/// How a callout's word is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Style {
+    /// A cartoon word over whoever it happened to.
+    Word,
+    /// A big moment: a knockout, the beacon lit. Its word is drawn larger, and stays longer.
+    Big,
+    /// Composure lost, as a number: "-1" by whoever lost it, rising and fading.
+    Damage,
 }
 
 impl Callout {
@@ -37,7 +47,7 @@ impl Callout {
             headline: None,
             good_for: None,
             cue: None,
-            big: false,
+            style: Style::Word,
         }
     }
 }
@@ -48,8 +58,11 @@ const HIT: [&str; 4] = ["POW!", "BONK!", "WHAP!", "BIFF!"];
 const TURNED: [&str; 3] = ["CLANG!", "TONK!", "DONG!"];
 const SHOVE: [&str; 2] = ["WHAM!", "SHOVE!"];
 const OUT: [&str; 3] = ["BOOM!", "KER-FLOP!", "BWOMP!"];
-const TUSSLE: [&str; 2] = ["SCUFFLE!", "TUSSLE!"];
+const WHIFF: [&str; 2] = ["MISS!", "WHIFF!"];
 const BUMP: [&str; 2] = ["BOINK", "BOING"];
+
+/// Composure lost, as it is shown.
+const DAMAGE: [&str; 3] = ["-1", "-2", "-3"];
 
 fn pick(words: &'static [&'static str], turn: u8, k: usize) -> &'static str {
     words[(usize::from(turn) + k) % words.len()]
@@ -138,19 +151,19 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
                 c.headline = Some(format!("{} is dizzy and sits out!", name(slot)));
                 c.good_for = Some(slot.side.other());
                 c.cue = Some(Cue::Boom);
-                c.big = true;
+                c.style = Style::Big;
             }
             EventKind::Scuffle {
                 contester, target, ..
             } => {
                 c.place = Some(at(*target));
-                c.word = Some(pick(&TUSSLE, turn, k));
+                c.word = Some(pick(&WHIFF, turn, k));
                 c.headline = Some(format!(
-                    "{} and {} got tangled up!",
+                    "{} missed: {} was busy with a contest of its own!",
                     name(contester),
                     name(target)
                 ));
-                c.cue = Some(Cue::Scuffle);
+                c.cue = Some(Cue::Miss);
             }
             EventKind::TookOpportunity { slot, took, .. } => {
                 c.headline = Some(format!("{} went for {} instead!", name(slot), name(took)));
@@ -215,7 +228,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
                     c.headline = Some(format!("Beacon lit for {}!", teams[side.index()]));
                     c.good_for = Some(side);
                     c.cue = Some(Cue::Fwoosh);
-                    c.big = true;
+                    c.style = Style::Big;
                 }
                 (Some(side), Some(Victory::Knockout)) => {
                     c.headline = Some(format!(
@@ -229,6 +242,11 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
                     c.cue = Some(Cue::Whistle);
                 }
             },
+            EventKind::Composure { slot, lost, .. } if *lost > 0 => {
+                c.place = Some(at(*slot));
+                c.word = Some(DAMAGE[usize::from(*lost).min(DAMAGE.len()) - 1]);
+                c.style = Style::Damage;
+            }
             // Orders filled come before the first tick, and are told in the full account.
             EventKind::OrderFilled { .. }
             | EventKind::Holding { .. }
@@ -290,6 +308,21 @@ mod tests {
             all.iter()
                 .filter(|c| c.word.is_some())
                 .all(|c| c.place.is_some())
+        );
+    }
+
+    #[test]
+    fn composure_lost_is_shown_as_a_number_by_whoever_lost_it() {
+        let all: Vec<Callout> = (1..8).flat_map(|seed| played(seed, 12)).collect();
+        let damage: Vec<&Callout> = all.iter().filter(|c| c.style == Style::Damage).collect();
+        assert!(
+            !damage.is_empty(),
+            "somebody loses composure in seven matches"
+        );
+        assert!(
+            damage
+                .iter()
+                .all(|c| c.place.is_some() && c.word.is_some_and(|w| w.starts_with('-')))
         );
     }
 

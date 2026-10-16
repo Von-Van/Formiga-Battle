@@ -14,9 +14,23 @@ use super::synth::{
 /// Something that makes a sound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Cue {
-    // The window's own controls, used sparingly.
+    // The window's own controls, used sparingly; the menus' too.
+    /// The pointer coming onto a button or a card: the softest tick.
+    Hover,
     /// A button pressed.
     Click,
+    /// A choice confirmed: up and bright, unlike `Back`.
+    Confirm,
+    /// Going back, or a choice put away: down and soft.
+    Back,
+    /// A page of the journal turned.
+    PageTurn,
+    /// The train pulling in: its whistle, its chuffs slowing, the brakes.
+    TrainArrive,
+    /// The train pulling out: the whistle, and its chuffs gathering pace.
+    TrainDepart,
+    /// A companion saying it is ready: a little chirp up.
+    Ready,
     /// A companion chosen for the team, or a page opened.
     Pick,
     /// A companion let go from the team, or a page closed.
@@ -33,8 +47,10 @@ pub enum Cue {
     Reveal,
     /// The timer's last seconds.
     Tick,
-    /// The referee's whistle: a match begins.
+    /// The referee's whistle: go!
     Whistle,
+    /// A match about to begin: a quick run up the marimba, before the ready-up.
+    Begin,
 
     // The board, as the turn plays out.
     /// A soft footstep.
@@ -47,8 +63,8 @@ pub enum Cue {
     Wham,
     /// Knocked out, dizzy.
     Boom,
-    /// Two caught up in a scuffle.
-    Scuffle,
+    /// A contest that came to nothing, the two caught up in a scuffle: a whiff of air.
+    Miss,
     /// Two wanting the same tile.
     Boink,
     /// Hanging back.
@@ -76,8 +92,15 @@ pub enum Cue {
 }
 
 impl Cue {
-    pub const ALL: [Cue; 27] = [
+    pub const ALL: [Cue; 35] = [
+        Cue::Hover,
         Cue::Click,
+        Cue::Confirm,
+        Cue::Back,
+        Cue::PageTurn,
+        Cue::TrainArrive,
+        Cue::TrainDepart,
+        Cue::Ready,
         Cue::Pick,
         Cue::Unpick,
         Cue::Select,
@@ -87,12 +110,13 @@ impl Cue {
         Cue::Reveal,
         Cue::Tick,
         Cue::Whistle,
+        Cue::Begin,
         Cue::Step,
         Cue::Pow,
         Cue::Clang,
         Cue::Wham,
         Cue::Boom,
-        Cue::Scuffle,
+        Cue::Miss,
         Cue::Boink,
         Cue::Hmm,
         Cue::Clunk,
@@ -109,7 +133,14 @@ impl Cue {
     /// Its name, for a file of it.
     pub fn name(self) -> &'static str {
         match self {
+            Cue::Hover => "hover",
             Cue::Click => "click",
+            Cue::Confirm => "confirm",
+            Cue::Back => "back",
+            Cue::PageTurn => "page-turn",
+            Cue::TrainArrive => "train-arrive",
+            Cue::TrainDepart => "train-depart",
+            Cue::Ready => "ready",
             Cue::Pick => "pick",
             Cue::Unpick => "unpick",
             Cue::Select => "select",
@@ -119,12 +150,13 @@ impl Cue {
             Cue::Reveal => "reveal",
             Cue::Tick => "tick",
             Cue::Whistle => "whistle",
+            Cue::Begin => "begin",
             Cue::Step => "step",
             Cue::Pow => "pow",
             Cue::Clang => "clang",
             Cue::Wham => "wham",
             Cue::Boom => "boom",
-            Cue::Scuffle => "scuffle",
+            Cue::Miss => "miss",
             Cue::Boink => "boink",
             Cue::Hmm => "hmm",
             Cue::Clunk => "clunk",
@@ -151,6 +183,7 @@ impl Cue {
     pub fn spacing(self) -> f32 {
         match self {
             Cue::Step => 0.09,
+            Cue::Hover => 0.04,
             Cue::Click | Cue::Tick => 0.05,
             Cue::Pow | Cue::Clang | Cue::Boink => 0.08,
             Cue::Glow | Cue::Hmm => 0.15,
@@ -161,9 +194,18 @@ impl Cue {
     /// How loud it is beside the others: the controls and the footsteps are kept small.
     fn level(self) -> f32 {
         match self {
+            Cue::Hover => 0.12,
             Cue::Step => 0.18,
             Cue::Click | Cue::Tick => 0.3,
-            Cue::Select | Cue::Order | Cue::Cancel | Cue::Pick | Cue::Unpick => 0.38,
+            Cue::Select
+            | Cue::Order
+            | Cue::Cancel
+            | Cue::Pick
+            | Cue::Unpick
+            | Cue::Back
+            | Cue::Ready
+            | Cue::PageTurn => 0.38,
+            Cue::Confirm => 0.45,
             Cue::Hmm | Cue::Glow => 0.4,
             _ => 0.6,
         }
@@ -177,7 +219,23 @@ impl Cue {
         // A little higher or lower each time, in five steps either side of the note.
         let vary = 1.0 + (seed % 9) as f32 * 0.012 - 0.048;
         let voice = match self {
+            Cue::Hover => struck(rate, BLOCK, &[(0.0, 2600.0 * vary, 1.0)], 0.05),
             Cue::Click => struck(rate, BLOCK, &[(0.0, 1900.0 * vary, 1.0)], 0.08),
+            Cue::Confirm => struck(
+                rate,
+                BAR,
+                &[
+                    (0.0, n(79.0), 0.7),
+                    (0.06, n(84.0), 0.8),
+                    (0.12, n(91.0), 1.0),
+                ],
+                0.7,
+            ),
+            Cue::Back => struck(rate, BAR, &[(0.0, n(76.0), 0.8), (0.07, n(69.0), 0.7)], 0.5),
+            Cue::PageTurn => page_turn(rate, seed),
+            Cue::TrainArrive => train(rate, seed, true),
+            Cue::TrainDepart => train(rate, seed, false),
+            Cue::Ready => glide(rate, 660.0 * vary, 990.0 * vary, 0.05, 0.09, 0.22),
             Cue::Pick => struck(rate, BAR, &[(0.0, n(84.0), 0.8), (0.07, n(91.0), 1.0)], 0.5),
             Cue::Unpick => struck(rate, BAR, &[(0.0, n(79.0), 0.9), (0.07, n(72.0), 0.8)], 0.5),
             Cue::Select => glide(rate, 520.0, 780.0, 0.07, 0.1, 0.3),
@@ -192,12 +250,25 @@ impl Cue {
             Cue::Reveal => slide_whistle(rate, seed, 620.0, 1500.0, 0.36),
             Cue::Tick => struck(rate, BLOCK, &[(0.0, 1250.0 * vary, 1.0)], 0.1),
             Cue::Whistle => whistle(rate, seed),
+            Cue::Begin => struck(
+                rate,
+                BAR,
+                &[
+                    (0.0, n(72.0), 0.7),
+                    (0.06, n(76.0), 0.75),
+                    (0.12, n(79.0), 0.8),
+                    (0.18, n(84.0), 0.9),
+                    (0.3, n(88.0), 0.85),
+                ],
+                1.0,
+            )
+            .louder(0.85),
             Cue::Step => step(rate, seed, vary),
             Cue::Pow => pow(rate, seed, vary),
             Cue::Clang => clang(rate, seed, vary),
             Cue::Wham => wham(rate, seed),
             Cue::Boom => boom(rate, seed),
-            Cue::Scuffle => scuffle(rate, seed),
+            Cue::Miss => miss(rate, seed),
             Cue::Boink => boink(rate, vary),
             Cue::Hmm => horn(rate, &[(0.0, 0.16, 64.0), (0.2, 0.28, 67.0)], 1500.0, 0.5),
             Cue::Clunk => clunk(rate),
@@ -405,7 +476,7 @@ fn pow(rate: f32, seed: u32, vary: f32) -> Voice {
         } else {
             0.0
         };
-        body + snap + boing
+        (body + snap + boing) * 0.85
     })
 }
 
@@ -455,6 +526,63 @@ fn boom(rate: f32, seed: u32) -> Voice {
             }
         }
         body + roar + tweet
+    })
+}
+
+/// A miss: a quick whiff of air, and a little rustle of the two tangled up.
+fn miss(rate: f32, seed: u32) -> Voice {
+    let mut whiff = whoosh(rate, seed, 0.18, 4200.0);
+    let mut rustle = scuffle(rate, seed ^ 0x77);
+    Voice::new(rate, 0.6, move |t| {
+        whiff.next().unwrap_or(0.0) * 0.9
+            + if t > 0.12 {
+                rustle.next().unwrap_or(0.0) * 0.6
+            } else {
+                0.0
+            }
+    })
+}
+
+/// A page of the journal turned: a papery flick, rising as it lifts and settling as it lands.
+fn page_turn(rate: f32, seed: u32) -> Voice {
+    let mut paper = Hiss::new(seed, rate);
+    let mut grain = Noise::new(seed ^ 0x33);
+    Voice::new(rate, 0.42, move |t| {
+        let hz = 1500.0 + 2500.0 * sine((t / 0.32).min(1.0) * 0.5);
+        let crackle = if grain.unit() > 0.985 { 2.0 } else { 1.0 };
+        let lift = swell(t, 0.08, 0.2, 0.12);
+        let land = strike(t - 0.3, 0.003, 0.03) * 0.8;
+        paper.band(hz, 0.8) * (lift + land) * crackle * 0.9
+    })
+}
+
+/// The train: two notes of its whistle together, then its chuffs, slowing as it pulls in with a
+/// hiss of brakes, or gathering pace as it pulls out.
+fn train(rate: f32, seed: u32, arriving: bool) -> Voice {
+    let mut whistle = horn(rate, &[(0.0, 0.5, 74.0)], 3200.0, 0.4);
+    let mut whistle_low = horn(rate, &[(0.0, 0.5, 70.0)], 3200.0, 0.35);
+    let mut steam = Hiss::new(seed, rate);
+    let mut brakes = Hiss::new(seed ^ 0x99, rate);
+    let chuffs: Vec<f32> = (0..8)
+        .scan(0.55f32, |at, k| {
+            let gap = if arriving {
+                0.12 + 0.04 * k as f32
+            } else {
+                0.36 - 0.035 * k as f32
+            };
+            *at += gap;
+            Some(*at)
+        })
+        .collect();
+    let end = chuffs.last().copied().unwrap_or(1.0) + 0.6;
+    Voice::new(rate, end + if arriving { 0.6 } else { 0.0 }, move |t| {
+        let mut out = whistle.next().unwrap_or(0.0) + whistle_low.next().unwrap_or(0.0);
+        let puff: f32 = chuffs.iter().map(|at| strike(t - at, 0.01, 0.06)).sum();
+        out += steam.band(900.0, 0.9) * puff.min(1.0) * 0.8;
+        if arriving {
+            out += brakes.band(5200.0, 1.5) * swell(t - end + 0.2, 0.05, 0.45, 0.3) * 0.5;
+        }
+        out
     })
 }
 
@@ -643,7 +771,13 @@ mod tests {
     fn every_cue_is_heard_and_none_is_too_loud_or_runs_on() {
         for cue in Cue::ALL {
             let voice = cue.voice(0, RATE);
-            assert!(voice.seconds() < 2.5, "{cue:?} runs on");
+            // The train takes its time pulling in and out; nothing else does.
+            let most = if matches!(cue, Cue::TrainArrive | Cue::TrainDepart) {
+                4.5
+            } else {
+                2.5
+            };
+            assert!(voice.seconds() < most, "{cue:?} runs on");
             let peak = loudest(cue, 0);
             assert!(peak > 0.02, "{cue:?} is silent: {peak}");
             assert!(peak < 0.9, "{cue:?} is too loud: {peak}");
@@ -652,7 +786,7 @@ mod tests {
 
     #[test]
     fn a_cue_played_again_is_the_same_the_nth_time() {
-        for cue in [Cue::Pow, Cue::Step, Cue::Scuffle] {
+        for cue in [Cue::Pow, Cue::Step, Cue::Miss, Cue::PageTurn] {
             let a: Vec<f32> = cue.voice(3, RATE).collect();
             let b: Vec<f32> = cue.voice(3, RATE).collect();
             assert_eq!(a, b);

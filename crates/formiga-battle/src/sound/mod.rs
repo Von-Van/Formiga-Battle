@@ -3,7 +3,7 @@
 //! happened (`play`) or what should be playing (`music`); the speaker thread does the rest.
 //!
 //! Nothing here keeps a file: Desktop keeps Battle's record and has no sound setting to send, so
-//! the setting lasts as long as the window.
+//! the levels last as long as the window.
 
 mod cues;
 mod mixer;
@@ -19,54 +19,36 @@ use mixer::{Command, Mixer};
 use std::path::Path;
 use std::sync::mpsc::{Sender, channel};
 
-/// What is heard.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Setting {
-    /// Music and sounds.
-    All,
-    /// The sounds, without the music.
-    Sounds,
-    /// Nothing.
-    Off,
+/// How loud the music and the sounds are, each from 0 to 1, and whether everything is muted.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Levels {
+    pub music: f32,
+    pub sounds: f32,
+    pub muted: bool,
 }
 
-impl Setting {
-    /// The next, for a button that goes round them.
-    pub fn next(self) -> Self {
-        match self {
-            Setting::All => Setting::Sounds,
-            Setting::Sounds => Setting::Off,
-            Setting::Off => Setting::All,
-        }
-    }
-
-    /// In a word or two, for the button.
-    pub fn words(self) -> &'static str {
-        match self {
-            Setting::All => "Music on",
-            Setting::Sounds => "Sounds only",
-            Setting::Off => "Quiet",
-        }
-    }
-
-    /// How loud the music and the sounds are, from 0 to 1.
-    fn levels(self) -> (f32, f32) {
-        match self {
-            // The music sits under the sounds, so a pow is never lost in the band.
-            Setting::All => (0.45, 1.0),
-            Setting::Sounds => (0.0, 1.0),
-            Setting::Off => (0.0, 0.0),
+impl Default for Levels {
+    fn default() -> Self {
+        Self {
+            music: 0.7,
+            sounds: 0.9,
+            muted: false,
         }
     }
 }
 
-/// The window's handle on the speaker. Quiet, and costs nothing, if there is no speaker to play
-/// on, or none was wanted (a review picture).
+/// The music at full on its slider still sits under the sounds, so a pow is never lost in the
+/// band.
+const MUSIC_UNDER: f32 = 0.6;
+
+/// The window's handle on the speaker, for the match and the menus alike: say what happened
+/// (`play`), what should be playing (`music`), and how loud (`set_levels`). Quiet, and costs
+/// nothing, if there is no speaker to play on, or none was wanted (a review picture).
 pub struct Sound {
     commands: Option<Sender<Command>>,
     /// Dropped with the window, which lets the speaker thread close the device.
     _hush: Option<Sender<()>>,
-    setting: Setting,
+    levels: Levels,
     track: Option<Track>,
 }
 
@@ -85,10 +67,10 @@ impl Sound {
         let mut sound = Self {
             commands: spawned.ok().map(|_| commands),
             _hush: Some(hush),
-            setting: Setting::All,
+            levels: Levels::default(),
             track: None,
         };
-        sound.set(Setting::All);
+        sound.set_levels(Levels::default());
         sound
     }
 
@@ -97,7 +79,10 @@ impl Sound {
         Self {
             commands: None,
             _hush: None,
-            setting: Setting::Off,
+            levels: Levels {
+                muted: true,
+                ..Levels::default()
+            },
             track: None,
         }
     }
@@ -116,7 +101,7 @@ impl Sound {
 
     /// A cue, `loudness` as loud as it is made.
     pub fn play_at(&self, cue: Cue, loudness: f32) {
-        if self.setting != Setting::Off {
+        if !self.levels.muted && self.levels.sounds > 0.0 {
             self.send(Command::Play { cue, loudness });
         }
     }
@@ -130,13 +115,21 @@ impl Sound {
         }
     }
 
-    pub fn setting(&self) -> Setting {
-        self.setting
+    pub fn levels(&self) -> Levels {
+        self.levels
     }
 
-    pub fn set(&mut self, setting: Setting) {
-        self.setting = setting;
-        let (music, sounds) = setting.levels();
+    pub fn set_levels(&mut self, levels: Levels) {
+        self.levels = Levels {
+            music: levels.music.clamp(0.0, 1.0),
+            sounds: levels.sounds.clamp(0.0, 1.0),
+            muted: levels.muted,
+        };
+        let (music, sounds) = if self.levels.muted {
+            (0.0, 0.0)
+        } else {
+            (self.levels.music * MUSIC_UNDER, self.levels.sounds)
+        };
         self.send(Command::Levels { music, sounds });
     }
 }
@@ -220,15 +213,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_setting_goes_round_all_three() {
-        let mut setting = Setting::All;
-        let mut seen = Vec::new();
-        for _ in 0..3 {
-            seen.push(setting);
-            setting = setting.next();
-        }
-        assert_eq!(setting, Setting::All);
-        assert_eq!(seen, [Setting::All, Setting::Sounds, Setting::Off]);
+    fn levels_are_kept_within_nothing_and_full() {
+        let mut sound = Sound::silent();
+        sound.set_levels(Levels {
+            music: 3.0,
+            sounds: -1.0,
+            muted: false,
+        });
+        assert_eq!(sound.levels().music, 1.0);
+        assert_eq!(sound.levels().sounds, 0.0);
     }
 
     #[test]
@@ -236,8 +229,7 @@ mod tests {
         let mut sound = Sound::silent();
         sound.play(Cue::Pow);
         sound.music(Some(Track::Match));
-        sound.set(Setting::All);
-        assert_eq!(sound.setting(), Setting::All);
+        assert!(sound.levels().muted);
     }
 
     #[test]

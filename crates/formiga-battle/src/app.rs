@@ -7,14 +7,14 @@
 //! in the board's corner, and the whole match, in full sentences, opens from there. The right
 //! page keeps the orders and a field guide to the arena, the rules and the controls.
 
-use crate::announce::Callout;
+use crate::announce::{Callout, Style};
 use crate::chrome::{self, Kind, ink, label_job};
 use crate::garden::Garden;
 use crate::host::Host;
 use crate::iso::View;
 use crate::look::Look;
 use crate::scene::{self, TEAM};
-use crate::sound::{Cue, Setting, Sound, Track};
+use crate::sound::{Cue, Sound, Track};
 use crate::table::{Aim, Table, Verb};
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
 use formiga_art::Canvas;
@@ -144,7 +144,18 @@ pub struct BattleApp {
     ticked: Option<u32>,
     /// The end of the match has been heard.
     ended_heard: bool,
+    /// The card of sound volumes is open.
+    sound_open: bool,
+    /// When the match's ready-up began, and whether its "Go!" has been heard.
+    ready: Option<(f32, bool)>,
+    /// The turn whose orders began last, as the table's clock has it, for its chirp.
+    orders_heard: f32,
 }
+
+/// How long the ready-up takes: "Ready?", then "Go!".
+const READY_SECS: f32 = 1.5;
+/// When in it "Go!" comes.
+const GO_AT: f32 = 0.85;
 
 impl BattleApp {
     pub fn new(
@@ -193,6 +204,9 @@ impl BattleApp {
             account_open: false,
             ticked: None,
             ended_heard: false,
+            sound_open: false,
+            ready: None,
+            orders_heard: 0.0,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -226,16 +240,24 @@ impl BattleApp {
     }
 
     fn begin(&mut self) {
-        match self.table.start(self.clock) {
+        // The first turn's clock starts once the ready-up is over.
+        match self.table.start(self.clock + READY_SECS) {
             Ok(()) => {
                 self.stage = Stage::Playing;
                 self.error = None;
                 self.turned = self.clock;
-                self.sound.play(Cue::Whistle);
                 self.fresh_match();
+                self.ready_up();
             }
             Err(error) => self.error = Some(format!("{error:#}")),
         }
+    }
+
+    /// "Ready?", then "Go!" over the board as a match begins.
+    fn ready_up(&mut self) {
+        self.ready = Some((self.clock, false));
+        self.orders_heard = self.table.turn_began;
+        self.sound.play(Cue::Begin);
     }
 
     /// Forgets what was announced in the last match.
@@ -266,8 +288,7 @@ impl BattleApp {
     /// Fires whatever of the turn being shown has come due: its sound, its word on the board and
     /// its headline, which also goes on the card of the last two.
     fn announce(&mut self, now: f32) {
-        self.live
-            .retain(|(c, born)| now - born < if c.big { 1.6 } else { 2.4 });
+        self.live.retain(|(_, born)| now - born < 2.4);
         let Some(shown) = &self.table.shown else {
             return;
         };
@@ -312,6 +333,21 @@ impl BattleApp {
         self.sound.music(Some(track));
         if self.stage != Stage::Playing {
             return;
+        }
+        if let Some((at, go)) = &mut self.ready
+            && !*go
+            && now - *at >= GO_AT
+        {
+            *go = true;
+            self.sound.play(Cue::Whistle);
+        }
+        // Each new turn's orders begin with a chirp from the team, ready for them.
+        if self.table.shown.is_none()
+            && self.table.outcome().is_none()
+            && self.table.turn_began != self.orders_heard
+        {
+            self.orders_heard = self.table.turn_began;
+            self.sound.play(Cue::Ready);
         }
         if self.table.shown.is_none() && self.table.outcome().is_none() {
             let left = self.table.time_left(now);
@@ -494,9 +530,13 @@ impl BattleApp {
             self.stage = Stage::Playing;
             self.notebook_open = false;
             self.turned = now;
+            self.fresh_match();
+            self.ready_up();
         }
         if self.stage == Stage::Playing {
-            if self.autoplay && self.table.shown.is_none() && !self.table.finished(now) {
+            let readying = self.ready.is_some_and(|(at, _)| now - at < READY_SECS);
+            if self.autoplay && !readying && self.table.shown.is_none() && !self.table.finished(now)
+            {
                 self.table.coach_orders();
                 self.lock_in(now);
             }
@@ -717,14 +757,15 @@ impl BattleApp {
         });
     }
 
-    /// The sound's setting, on the leather at the top right: a little speaker and a word, going
-    /// round music and sound, sound only, and quiet with each click.
+    /// The sound, on the leather at the top right: a little speaker that opens a card with the
+    /// music's and the sounds' volumes and a mute.
     fn sound_button(&mut self, ui: &mut egui::Ui, layout: &Layout) {
         let u = layout.unit;
-        let setting = self.sound.setting();
-        let galley =
-            ui.painter()
-                .layout_job(label_job(setting.words(), chrome::LABEL, ink::DEBOSS));
+        let levels = self.sound.levels();
+        let word = if levels.muted { "Muted" } else { "Sound" };
+        let galley = ui
+            .painter()
+            .layout_job(label_job(word, chrome::LABEL, ink::DEBOSS));
         let size = vec2(galley.size().x + u * 23.0, layout.patch.height());
         let rect = Rect::from_min_size(
             pos2(layout.right.max.x - size.x - u * 2.0, layout.patch.min.y),
@@ -732,55 +773,30 @@ impl BattleApp {
         );
         let response = ui
             .interact(rect, Id::new("sound"), Sense::click())
-            .on_hover_text("Music and sound, sound only, or quiet");
+            .on_hover_text("Music and sound volume");
         let painter = ui.painter();
-        let colour = if response.hovered() {
+        let colour = if response.hovered() || self.sound_open {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             chrome::stepped(painter, rect, u, Color32::from_rgb(0x87, 0x60, 0x4a));
             ink::COVER
         } else {
             ink::DEBOSS
         };
-        // A speaker: a box and a cone, with a wave or two coming off it, or a cross when quiet.
-        let c = pos2(rect.min.x + u * 7.0, rect.center().y);
-        painter.rect_filled(
-            Rect::from_center_size(c - vec2(u * 1.5, 0.0), vec2(u * 2.0, u * 3.0)),
-            0.0,
-            colour,
-        );
-        painter.add(egui::Shape::convex_polygon(
-            vec![
-                c + vec2(-u * 0.5, -u * 1.5),
-                c + vec2(u * 2.0, -u * 3.5),
-                c + vec2(u * 2.0, u * 3.5),
-                c + vec2(-u * 0.5, u * 1.5),
-            ],
-            colour,
-            Stroke::NONE,
-        ));
-        let waves = match setting {
-            Setting::All => 2,
-            Setting::Sounds => 1,
-            Setting::Off => 0,
+        let waves = if levels.muted || levels.music + levels.sounds == 0.0 {
+            0
+        } else if levels.music.max(levels.sounds) < 0.5 {
+            1
+        } else {
+            2
         };
-        for k in 0..waves {
-            let r = u * (4.0 + 2.0 * k as f32);
-            let arc: Vec<egui::Pos2> = (0..=8)
-                .map(|i| {
-                    let a = -0.8 + 1.6 * i as f32 / 8.0;
-                    c + vec2(u * 1.5 + a.cos() * r, a.sin() * r)
-                })
-                .collect();
-            painter.add(egui::Shape::line(arc, Stroke::new(u * 0.8, colour)));
-        }
-        if waves == 0 {
-            let x = c + vec2(u * 5.0, 0.0);
-            for d in [vec2(u * 1.6, u * 1.6), vec2(u * 1.6, -u * 1.6)] {
-                painter.line_segment([x - d, x + d], Stroke::new(u * 0.8, colour));
-            }
-        }
-        let job = label_job(setting.words(), chrome::LABEL, colour);
-        let galley = painter.layout_job(job);
+        speaker(
+            painter,
+            pos2(rect.min.x + u * 7.0, rect.center().y),
+            waves,
+            colour,
+            u,
+        );
+        let galley = painter.layout_job(label_job(word, chrome::LABEL, colour));
         painter.galley(
             pos2(
                 rect.min.x + u * 18.0,
@@ -790,8 +806,87 @@ impl BattleApp {
             colour,
         );
         if response.clicked() {
-            self.sound.set(setting.next());
-            self.sound.play(Cue::Click);
+            self.sound_open = !self.sound_open;
+            self.sound.play(if self.sound_open {
+                Cue::Pick
+            } else {
+                Cue::Unpick
+            });
+        }
+        if self.sound_open {
+            self.sound_card(ui.ctx(), rect, u);
+        }
+    }
+
+    /// The card of volumes under the speaker: music, sounds, and a mute for everything.
+    fn sound_card(&mut self, ctx: &egui::Context, under: Rect, u: f32) {
+        let mut levels = self.sound.levels();
+        let before = levels;
+        let width = 230.0;
+        let mut close = false;
+        egui::Area::new(Id::new("sound-card"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos2(under.max.x - width, under.max.y + u * 3.0))
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(ink::CARD)
+                    .stroke(Stroke::new(u, ink::LINE))
+                    .shadow(egui::Shadow {
+                        offset: [2, 3],
+                        blur: 0,
+                        spread: 0,
+                        color: Color32::from_black_alpha(60),
+                    })
+                    .inner_margin(egui::Margin::same((u * 6.0).round() as i8))
+                    .show(ui, |ui| {
+                        ui.set_width(width - u * 12.0);
+                        ui.horizontal(|ui| {
+                            chrome::kicker(ui, "Sound");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if chrome::button(
+                                        ui,
+                                        "close",
+                                        Kind::Quiet,
+                                        false,
+                                        true,
+                                        None,
+                                        u,
+                                    )
+                                    .clicked()
+                                    {
+                                        close = true;
+                                    }
+                                },
+                            );
+                        });
+                        ui.spacing_mut().slider_width = width - u * 12.0 - 70.0;
+                        for (word, level) in
+                            [("Music", &mut levels.music), ("Sounds", &mut levels.sounds)]
+                        {
+                            ui.horizontal(|ui| {
+                                ui.add_sized(
+                                    vec2(56.0, 18.0),
+                                    egui::Label::new(RichText::new(word).size(12.5)),
+                                );
+                                ui.add(egui::Slider::new(level, 0.0..=1.0).show_value(false));
+                            });
+                        }
+                        ui.checkbox(&mut levels.muted, "Mute everything");
+                    });
+            });
+        if levels != before {
+            let louder = levels.sounds > before.sounds || (before.muted && !levels.muted);
+            self.sound.set_levels(levels);
+            // A sound to hear how loud the sounds now are.
+            if louder || levels.sounds < before.sounds {
+                self.sound.play(Cue::Tick);
+            }
+        }
+        if close {
+            self.sound_open = false;
+            self.sound.play(Cue::Unpick);
         }
     }
 
@@ -1209,24 +1304,140 @@ impl BattleApp {
             name_tag(&painter, at, &look.name, state, TEAM[slot.side.index()], u);
         }
         self.board_scale = scale;
+        if self.table.shown.is_none()
+            && self.table.outcome().is_none()
+            && let Some(slot) = marks.selected
+        {
+            let f = frame.figure(slot);
+            let look = &self.table.looks[slot.side.index()][slot.index as usize];
+            let (hx, hy) = scene::head(&self.view, f, look);
+            let bob = if self.table.reduce_motion {
+                0.0
+            } else {
+                (now * 5.0).sin().abs() * 3.0
+            };
+            let tip =
+                rect.min + vec2(hx as f32, hy as f32 - 7.0) * scale - vec2(0.0, u * 22.0 + bob * u);
+            pointer_arrow(&painter, tip, color(TEAM[slot.side.index()].light), u);
+        }
         self.words(&painter, rect, scale, now, u);
+        self.confetti(&painter, rect, now, u);
         self.result_stamp(&painter, rect, now, u);
+        self.ready_words(&painter, rect, now, u);
         if let (Some(pointer), Some((plain, right))) = (response.hover_pos(), aims) {
             self.cursor_hint(&painter, pointer, plain, right, u);
         }
     }
 
+    /// "Ready?" and then "Go!", big over the middle of the board, as a match begins.
+    fn ready_words(&self, painter: &egui::Painter, board: Rect, now: f32, u: f32) {
+        let Some((at, _)) = self.ready else {
+            return;
+        };
+        let age = now - at;
+        if age > READY_SECS {
+            return;
+        }
+        let (word, since, fill) = if age < GO_AT {
+            ("READY?", age, Color32::from_rgb(0xff, 0xf3, 0xc4))
+        } else {
+            ("GO!", age - GO_AT, ink::BRASS_LIGHT)
+        };
+        let pop = if self.table.reduce_motion {
+            1.0
+        } else {
+            let t = (since / 0.14).min(1.0);
+            0.5 + 0.6 * (1.0 - (1.0 - t).powi(3)) - 0.1 * ((since - 0.14) / 0.1).clamp(0.0, 1.0)
+        };
+        let alpha = if age < GO_AT {
+            1.0
+        } else {
+            1.0 - ((age - READY_SECS + 0.25) / 0.25).clamp(0.0, 1.0)
+        };
+        let centre = pos2(board.center().x, board.min.y + board.height() * 0.42);
+        comic(painter, centre, word, 46.0 * pop, fill, -0.06, alpha, u);
+    }
+
+    /// Confetti over the board when the Handler's team wins: a short shower, the same every time.
+    fn confetti(&self, painter: &egui::Painter, board: Rect, now: f32, u: f32) {
+        let (Some(at), Some(outcome)) = (self.finished_at, self.table.outcome()) else {
+            return;
+        };
+        if outcome.winner != Some(self.table.you) || self.table.reduce_motion {
+            return;
+        }
+        let age = now - at;
+        if age > 3.0 {
+            return;
+        }
+        let team = TEAM[self.table.you.index()];
+        let colours = [
+            color(team.light),
+            color(team.shine),
+            ink::BRASS_LIGHT,
+            ink::MINT,
+            Color32::from_rgb(0xff, 0xf3, 0xc4),
+        ];
+        let fade = 1.0 - ((age - 2.2) / 0.8).clamp(0.0, 1.0);
+        for k in 0..70u32 {
+            // A scrap's own numbers, from its index alone.
+            let h = k.wrapping_mul(2_654_435_761).rotate_left(7) ^ 0x5bd1_e995;
+            let unit = |shift: u32| ((h >> shift) & 0xff) as f32 / 255.0;
+            let start = unit(0) * 0.6;
+            let t = age - start;
+            if t < 0.0 {
+                continue;
+            }
+            let x = board.min.x
+                + board.width() * (0.1 + 0.8 * unit(8))
+                + (t * (2.0 + 3.0 * unit(16))).sin() * u * 6.0;
+            let y =
+                board.min.y + board.height() * 0.05 + t * board.height() * (0.25 + 0.15 * unit(24));
+            if y > board.max.y {
+                continue;
+            }
+            let spin = (t * (4.0 + 6.0 * unit(4))).sin();
+            let size = vec2(u * 3.0 * spin.abs().max(0.25), u * 2.0);
+            painter.rect_filled(
+                Rect::from_center_size(pos2(x, y), size),
+                0.0,
+                colours[(h % colours.len() as u32) as usize].gamma_multiply(fade),
+            );
+        }
+    }
+
     /// The cartoon words over the board, each popping up where its moment happened, rising a
-    /// little and fading: "POW!", "CLANG!", "BOOM!".
+    /// little and fading: "POW!", "CLANG!", "BOOM!", and composure lost as a number. No more than
+    /// three words at once, so the board is never buried in them.
     fn words(&self, painter: &egui::Painter, board: Rect, scale: f32, now: f32, u: f32) {
         let reduce = self.table.reduce_motion;
-        for (k, (c, born)) in self.live.iter().enumerate() {
+        let mut words = 0;
+        for (k, (c, born)) in self.live.iter().enumerate().rev() {
             let (Some(word), Some((x, y))) = (c.word, c.place) else {
                 continue;
             };
             let age = now - born;
-            let life = if c.big { 1.5 } else { 1.0 };
+            let life = match c.style {
+                Style::Big => 1.5,
+                Style::Word => 1.0,
+                Style::Damage => 1.1,
+            };
             if age > life {
+                continue;
+            }
+            if c.style != Style::Damage {
+                words += 1;
+                if words > 3 {
+                    continue;
+                }
+            }
+            let alpha = 1.0 - ((age - life * 0.65) / (life * 0.35)).clamp(0.0, 1.0);
+            let (sx, sy) = self.view.screen(x, y);
+            if c.style == Style::Damage {
+                // Beside whoever lost it, floating up.
+                let rise = if reduce { 0.0 } else { age * 18.0 };
+                let centre = board.min + vec2(sx + 16.0, sy - 26.0 - rise) * scale;
+                comic(painter, centre, word, 19.0, ink::STAMP, 0.0, alpha, u);
                 continue;
             }
             let pop = if reduce {
@@ -1238,17 +1449,16 @@ impl BattleApp {
                 1.25 - 0.25 * ((age - 0.16) / 0.12).min(1.0)
             };
             let rise = if reduce { 0.0 } else { age * 10.0 };
-            let alpha = 1.0 - ((age - life * 0.65) / (life * 0.35)).clamp(0.0, 1.0);
-            let (sx, sy) = self.view.screen(x, y);
             // Above the head of whoever is there, a little to one side.
             let lean = if k % 2 == 0 { 1.0 } else { -1.0 };
             let centre = board.min + vec2(sx + lean * 6.0, sy - 40.0 - rise) * scale;
+            let big = c.style == Style::Big;
             let fill = match c.good_for {
-                _ if c.big => ink::BRASS_LIGHT,
+                _ if big => ink::BRASS_LIGHT,
                 Some(side) => color(TEAM[side.index()].light),
                 None => Color32::from_rgb(0xff, 0xf3, 0xc4),
             };
-            let size = if c.big { 32.0 } else { 24.0 } * pop;
+            let size = if big { 32.0 } else { 24.0 } * pop;
             comic(painter, centre, word, size, fill, lean * 0.12, alpha, u);
         }
     }
@@ -1330,6 +1540,7 @@ impl BattleApp {
     fn board_page(&mut self, ui: &mut egui::Ui, page: Rect, now: f32, u: f32) {
         let painter = ui.painter().clone();
         self.turn_banner(&painter, page, now, u);
+        self.orders_banner(&painter, page, now, u);
         self.headlines(&painter, page, now, u);
         let card = self.recent_card(ui, page, u);
         if self.account_open {
@@ -1604,6 +1815,51 @@ impl BattleApp {
             );
         }
         painter.galley(rect.center() - galley.size() / 2.0, galley, ink::FOREST);
+    }
+
+    /// As each turn's orders begin, a slip in the Handler's colour says so: whose move it is.
+    fn orders_banner(&self, painter: &egui::Painter, page: Rect, now: f32, u: f32) {
+        let Some(m) = &self.table.m else {
+            return;
+        };
+        let age = now - self.table.turn_began;
+        let life = 1.4;
+        if self.table.shown.is_some() || m.outcome().is_some() || !(0.0..life).contains(&age) {
+            return;
+        }
+        let (drop, alpha) = if self.table.reduce_motion {
+            (0.0, 1.0)
+        } else {
+            let t = (age / 0.22).min(1.0);
+            let out = ((life - age) / 0.3).clamp(0.0, 1.0);
+            ((1.0 - (1.0 - t).powi(3)) * 14.0 * u - 14.0 * u, out)
+        };
+        let galley = painter.layout_job(label_job(
+            &format!("Turn {}: your orders", m.board.turn + 1),
+            13.0,
+            ink::FOREST,
+        ));
+        let size = galley.size() + vec2(u * 22.0, u * 9.0);
+        let rect = Rect::from_min_size(
+            pos2(page.center().x - size.x / 2.0, page.min.y + u * 8.0 + drop),
+            size,
+        );
+        let rect = Rect::from_min_size(
+            pos2((rect.min.x / u).round() * u, (rect.min.y / u).round() * u),
+            rect.size(),
+        );
+        let mut painter = painter.clone();
+        painter.set_opacity(alpha);
+        chrome::card(&painter, rect, u, ink::MINT, ink::FOREST);
+        tick(&painter, rect, Some(self.table.you), u);
+        painter.galley(
+            pos2(
+                rect.min.x + u * 13.0,
+                rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            ink::FOREST,
+        );
     }
 
     /// When the match is over, a rubber stamp comes down on the board saying how it ended.
@@ -2756,6 +3012,58 @@ fn comic(
     let heavy = vec2((size * 0.03).max(0.5), 0.0);
     painter.add(egui::epaint::TextShape::new(at(-heavy), face.clone(), fill).with_angle(angle));
     painter.add(egui::epaint::TextShape::new(at(heavy), face, fill).with_angle(angle));
+}
+
+/// A little speaker, a box and a cone, with `waves` coming off it, or a cross when there are none.
+fn speaker(painter: &egui::Painter, c: egui::Pos2, waves: u8, colour: Color32, u: f32) {
+    painter.rect_filled(
+        Rect::from_center_size(c - vec2(u * 1.5, 0.0), vec2(u * 2.0, u * 3.0)),
+        0.0,
+        colour,
+    );
+    painter.add(egui::Shape::convex_polygon(
+        vec![
+            c + vec2(-u * 0.5, -u * 1.5),
+            c + vec2(u * 2.0, -u * 3.5),
+            c + vec2(u * 2.0, u * 3.5),
+            c + vec2(-u * 0.5, u * 1.5),
+        ],
+        colour,
+        Stroke::NONE,
+    ));
+    for k in 0..waves {
+        let r = u * (4.0 + 2.0 * f32::from(k));
+        let arc: Vec<egui::Pos2> = (0..=8)
+            .map(|i| {
+                let a = -0.8 + 1.6 * i as f32 / 8.0;
+                c + vec2(u * 1.5 + a.cos() * r, a.sin() * r)
+            })
+            .collect();
+        painter.add(egui::Shape::line(arc, Stroke::new(u * 0.8, colour)));
+    }
+    if waves == 0 {
+        let x = c + vec2(u * 5.0, 0.0);
+        for d in [vec2(u * 1.6, u * 1.6), vec2(u * 1.6, -u * 1.6)] {
+            painter.line_segment([x - d, x + d], Stroke::new(u * 0.8, colour));
+        }
+    }
+}
+
+/// A little arrow pointing down at whoever is chosen, in its team's colour on a dark edge.
+fn pointer_arrow(painter: &egui::Painter, tip: egui::Pos2, fill: Color32, u: f32) {
+    let shape = |grow: f32| {
+        vec![
+            tip + vec2(-u * 5.0 - grow, -u * 6.0 - grow),
+            tip + vec2(u * 5.0 + grow, -u * 6.0 - grow),
+            tip + vec2(0.0, grow),
+        ]
+    };
+    painter.add(egui::Shape::convex_polygon(
+        shape(u * 1.2),
+        ink::LINE,
+        Stroke::NONE,
+    ));
+    painter.add(egui::Shape::convex_polygon(shape(0.0), fill, Stroke::NONE));
 }
 
 /// A tick of whose good news it is down a slip's left side: the team's colour, or the ink.
