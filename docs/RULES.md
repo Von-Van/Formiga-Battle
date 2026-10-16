@@ -155,13 +155,13 @@ composure.
 |---|---|
 | Soak | Off balance, as when boxed in by a flank: it stops for the rest of the turn, stops holding, does not count in the zone, and drops what it carries. Under a leaf umbrella it stays dry |
 | Wash | Pushed one tile onto the free open ground beside it nearest the board's middle row, off the event's tiles (upper first among equals, then nearer its own side), then off balance as for a soak; off balance where it stands if there is nowhere to go. Under a leaf umbrella it stays put |
-| Close | The tiles go under until the end of the next turn: nobody can stand there, and whatever lay or stood wedged there floats off. Anyone on them is washed off first, never onto the yard; a leaf umbrella does not help |
+| Close | The tiles go under for the rest of the turn: nobody can stand there, and whatever lay or stood wedged there floats off. Anyone on them is washed off first, never onto the yard; a leaf umbrella does not help |
 
 | Arena | Event | Effect | Tiles | By itself | Switches |
 |---|---|---|---|---|---|
 | Backyard | The sprinkler | Soak | The whole yard | Turns 4, 8 and 12 | A garden tap on each side of the near edge |
 | Sandy Cove | A wave | Wash | The sandbar's two ends and the sand either side of them | Turns 3, 6, 9 and 12 | A big shell on each side of the near edge |
-| Millpond | The pond rising | Close | The jetty's two sides, leaving the yard a line | Turns 5 and 10 | A sluice on each bank |
+| Millpond | The pond rising | Close | The jetty's two sides, leaving the yard a line for the rest of the turn | Turns 5 and 10 | A sluice on each bank |
 | Woodland Glade | A tree shaken | Soak, and a twig falls beside the tree | The open ground touching the tree | Turns 4, 8 and 12, on a pair of trees across from each other drawn at random | Each of the four old trees by the lanes (`event_tiles: around`) |
 
 Backyard's is a sprinkler that soaks the whole yard on turns 4, 8 and 12, with a tap on each side
@@ -300,12 +300,18 @@ arenas/<arena>.arena`), against the same arena with its event, switches and item
 |---|---|---|---|---|
 | Backyard | 0.502 | 0.108 | 25% | 0.107, 14% |
 | Sandy Cove | 0.495 | 0.107 | 67% | 0.107, 57% |
-| Millpond | 0.497 | 0.142 | 60% | 0.147, 34% |
+| Millpond | 0.498 | 0.151 | 61% | 0.147, 34% |
 | Woodland Glade | 0.507 | 0.152 (0.123 with seed 8) | 29% | 0.130 (0.114), 23% |
 
 Each event decides more matches at the beacon without moving the kinds apart, except in the
 glade, where found things leave Wallflowers about 0.02 lower than without them, close to what
 chance alone moves between seeds.
+
+Knowing your creatures (`--coach familiar,generic --pairings 1000 --seed 7`) is worth as much as
+it was on Sandy Cove (0.594, against 0.593 without the event and items) and a little less in the
+glade (0.601, against 0.624) and at the Millpond (0.554, against 0.580), where three matches in
+four between thinking coaches are now won at the beacon. While the pond stayed up through the
+turn after it rose, that was 84% and 0.540.
 
 Rules version 6 added Backyard's sprinkler and found things. Before it, under version 5, 13% of
 Exhibition matches were won at the beacon and the kinds were 0.098 apart; with familiar coaching,

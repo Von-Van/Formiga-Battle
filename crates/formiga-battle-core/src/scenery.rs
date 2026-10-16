@@ -206,7 +206,7 @@ impl Match {
             }
             let mut fell = Vec::new();
             if scenery.effect == Effect::Close {
-                let until = self.clock(turn.saturating_add(1), self.ruleset.ticks_per_turn);
+                let until = self.clock(turn, self.ruleset.ticks_per_turn);
                 for tile in &tiles {
                     // What lay or stood there floats off.
                     self.board.ground.retain(|(g, _)| g != tile);

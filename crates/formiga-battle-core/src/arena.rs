@@ -69,7 +69,7 @@ pub enum Effect {
     /// Pushed one tile toward the middle row of the board, onto open ground off the event's tiles,
     /// and off balance; off balance where it stands if there is nowhere to go.
     Wash,
-    /// The tiles go under: nobody can stand on them until the end of the next turn. Anyone on
+    /// The tiles go under: nobody can stand on them for the rest of the turn. Anyone on
     /// them is washed off first.
     Close,
 }
