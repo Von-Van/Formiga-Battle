@@ -190,34 +190,43 @@ impl BattleApp {
             self.turn = None;
         }
         ui.add_space(u * 4.0);
-        let sound = &mut self.sound;
+        let mut levels = self.sound.levels();
         crate::feel::dropping(ui, since, 1, u, |ui| {
             card(ui, Id::new("settings-sound"), false, true, false, u, |ui| {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.label(label_job("Sound", chrome::LABEL + 1.0, ink::FOREST));
-                        ui.label(RichText::new("Music and effects, or none at all.").size(12.5));
+                        ui.label(
+                            RichText::new(
+                                "Music and sounds, or none at all: the same as the speaker on the cover.",
+                            )
+                            .size(12.5),
+                        );
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let mut on = !sound.muted;
+                        let mut on = !levels.muted;
                         chrome::switch(ui, &mut on, u);
-                        sound.muted = !on;
+                        levels.muted = !on;
                     });
                 });
                 ui.add_space(u * 3.0);
                 let width = (ui.available_width() - 110.0).max(120.0);
-                for (label, value) in [("Music", &mut sound.music), ("Effects", &mut sound.effects)]
+                let muted = levels.muted;
+                for (label, value) in [("Music", &mut levels.music), ("Sounds", &mut levels.sounds)]
                 {
                     ui.horizontal(|ui| {
                         ui.add_sized(
                             [100.0, u * 12.0],
                             egui::Label::new(RichText::new(label).size(13.0).color(ink::PAGE)),
                         );
-                        chrome::dial(ui, value, width, !sound.muted, u);
+                        chrome::dial(ui, value, width, !muted, u);
                     });
                 }
             });
         });
+        if levels != self.sound.levels() {
+            self.sound.set_levels(levels);
+        }
     }
 
     /// Beside the settings: the keys, and which Battle this is.

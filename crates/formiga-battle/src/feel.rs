@@ -25,8 +25,10 @@ pub enum Feedback {
     Cancel,
     /// A page of the notebook turned.
     PageTurn,
-    /// A companion hopped: aboard the train, or chosen.
+    /// A companion hopped, chosen for the team.
     Hop,
+    /// A companion taken out of the team.
+    Unpick,
     /// The train whistled as it came in for the companions.
     TrainIn,
     /// The train let off steam as it stopped at the platform.

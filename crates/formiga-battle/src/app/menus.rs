@@ -837,6 +837,8 @@ impl BattleApp {
                                 self.table.toggle_pick(place);
                                 if !was && self.table.picked.contains(&place) {
                                     crate::feel::start_hop(ui.ctx(), hop_id(place));
+                                } else if was {
+                                    crate::feel::emit(ui.ctx(), Feedback::Unpick);
                                 }
                             }
                         }
@@ -914,6 +916,7 @@ impl BattleApp {
         }
         if let Some(place) = take_out {
             self.table.toggle_pick(place);
+            self.felt.push(Feedback::Unpick);
         }
         ui.add_space(u * 2.0);
         dashed_rule(ui, u);

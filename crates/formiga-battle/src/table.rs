@@ -2,6 +2,7 @@
 //! and faces, the orders the Handler has given so far, and the turn being shown. The window only
 //! asks this what to show and tells it what was clicked, so tests drive the same code.
 
+use crate::announce::Callout;
 use crate::friend::{Ask, Line, Told};
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
@@ -84,8 +85,20 @@ impl Verb {
     }
 }
 
+/// What a click on the board does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Aim {
+    /// Chooses one of the Handler's to give an order to.
+    Choose(u8),
+    /// Gives the chosen one this order.
+    Give(Order),
+    Nothing,
+}
+
 pub struct Shown {
     pub playback: Playback,
+    /// What is announced over the board as it plays, in order.
+    pub callouts: Vec<Callout>,
     pub report: TurnReport,
     /// When it began showing, on the window's clock.
     pub started: f32,
@@ -688,8 +701,18 @@ impl Table {
         self.log
             .push((report.turn, recap_naming(m, &report.events, names)));
         self.match_events.extend(report.events.iter().cloned());
+        let other = self.other_short();
+        let mut teams = ["", ""];
+        teams[self.you.index()] = "you";
+        teams[self.you.other().index()] = if self.friend.is_some() {
+            &other
+        } else {
+            "the visitors"
+        };
+        let callouts = crate::announce::callouts(m, &playback, teams);
         let over = m.outcome().is_some();
         self.shown = Some(Shown {
+            callouts,
             playback,
             report,
             started: now,
@@ -749,88 +772,132 @@ impl Table {
         }
     }
 
-    /// The tiles the chosen order could be aimed at, as the board marks them.
+    /// The tiles the chosen order could be aimed at, as the board marks them. With someone chosen
+    /// and no order picked yet, a click does what the tile suggests (`aim`), so the board marks
+    /// where it can walk to and whom it can contest.
     pub fn choices(&self) -> Vec<(Tile, Choice)> {
-        let (Some(m), Some(index), Some(verb)) = (&self.m, self.selected, self.verb) else {
+        let (Some(m), Some(index)) = (&self.m, self.selected) else {
             return Vec::new();
         };
         let slot = Slot::new(self.you, index);
-        match verb {
-            Verb::Move | Verb::Hold => {
-                let from = m.fighter(slot).at;
-                let dist = distances(m, slot, &[from], false);
-                let w = m.arena.width as usize;
-                let choice = if verb == Verb::Move {
-                    Choice::Walk
-                } else {
-                    Choice::Hold
-                };
-                m.arena
-                    .tiles()
-                    .filter(|t| m.walkable(*t))
-                    .filter(|t| {
-                        dist[t.y as usize * w + t.x as usize]
-                            .is_some_and(|d| d <= m.ruleset.ticks_per_turn)
-                    })
-                    .map(|t| (t, choice))
-                    .collect()
-            }
-            Verb::Contest => m
-                .team(self.you.other())
+        let reach = |choice: Choice| -> Vec<(Tile, Choice)> {
+            let from = m.fighter(slot).at;
+            let dist = distances(m, slot, &[from], false);
+            let w = m.arena.width as usize;
+            m.arena
+                .tiles()
+                .filter(|t| m.walkable(*t))
+                .filter(|t| {
+                    dist[t.y as usize * w + t.x as usize]
+                        .is_some_and(|d| d <= m.ruleset.ticks_per_turn)
+                })
+                .map(|t| (t, choice))
+                .collect()
+        };
+        let contests = || {
+            m.team(self.you.other())
                 .map(|e| (m.fighter(e).at, Choice::Contest))
                 .chain(m.arena.levers.iter().map(|l| (*l, Choice::Contest)))
-                .collect(),
+        };
+        match self.verb {
+            Some(Verb::Move) => reach(Choice::Walk),
+            Some(Verb::Hold) => reach(Choice::Hold),
+            Some(Verb::Contest) => contests().collect(),
+            None => {
+                let mut all = reach(Choice::Walk);
+                all.retain(|(t, _)| m.occupant(*t).is_none_or(|s| s.side == self.you));
+                all.extend(contests());
+                all
+            }
         }
     }
 
-    /// A click on a tile, while giving orders: aims the chosen order there, or chooses whoever of
-    /// the Handler's stands there. True if it changed anything.
-    pub fn click(&mut self, tile: Tile) -> bool {
+    /// What a click on `tile` would do while giving orders: a plain click (`hold` false) or a
+    /// right click (`hold` true). On one of the Handler's own it chooses that one. Otherwise,
+    /// with an order picked (by its button or its key) it aims that order; with none, a plain
+    /// click contests whoever of theirs or the lever is there, holds where the chosen one already
+    /// stands, or walks there, and a right click holds there.
+    pub fn aim(&self, tile: Tile, hold: bool) -> Aim {
         let Some(m) = &self.m else {
-            return false;
+            return Aim::Nothing;
         };
-        let own = m.occupant(tile).filter(|s| s.side == self.you);
-        let (Some(index), Some(verb)) = (self.selected, self.verb) else {
-            if let Some(s) = own {
-                self.select(s.index);
-                return true;
+        if self.shown.is_some() || m.outcome().is_some() {
+            return Aim::Nothing;
+        }
+        let selected = self.selected.map(|i| Slot::new(self.you, i));
+        let own = m
+            .occupant(tile)
+            .filter(|s| s.side == self.you && m.standing(*s));
+        if let Some(s) = own
+            && Some(s) != selected
+        {
+            return Aim::Choose(s.index);
+        }
+        let Some(slot) = selected else {
+            return Aim::Nothing;
+        };
+        let enemy = m
+            .occupant(tile)
+            .filter(|s| s.side != self.you && m.standing(*s));
+        let contest = || {
+            if let Some(enemy) = enemy {
+                Some(Order::Contest {
+                    target: Target::Creature { slot: enemy },
+                })
+            } else if m.arena.levers.contains(&tile) {
+                Some(Order::Contest {
+                    target: Target::Lever { at: tile },
+                })
+            } else {
+                None
             }
-            return false;
         };
-        let slot = Slot::new(self.you, index);
-        let order = match verb {
-            Verb::Move => Order::Move { to: tile },
-            Verb::Hold => Order::Hold { at: tile },
-            Verb::Contest => {
-                if let Some(enemy) = m.occupant(tile).filter(|s| s.side != self.you) {
-                    Order::Contest {
-                        target: Target::Creature { slot: enemy },
-                    }
-                } else if m.arena.levers.contains(&tile) {
-                    Order::Contest {
-                        target: Target::Lever { at: tile },
-                    }
-                } else {
-                    if let Some(s) = own {
-                        self.select(s.index);
-                        return true;
-                    }
-                    return false;
+        let order = match (self.verb, hold) {
+            (Some(Verb::Move), _) => Some(Order::Move { to: tile }),
+            (Some(Verb::Hold), _) | (None, true) => Some(Order::Hold { at: tile }),
+            (Some(Verb::Contest), _) => contest(),
+            (None, false) => contest().or(Some(if m.fighter(slot).at == tile {
+                Order::Hold { at: tile }
+            } else {
+                Order::Move { to: tile }
+            })),
+        };
+        match order {
+            Some(order) if m.valid(slot, &order) => Aim::Give(order),
+            _ => Aim::Nothing,
+        }
+    }
+
+    /// A click on a tile while giving orders, as `aim` says: chooses one of the Handler's, or
+    /// gives the chosen one its order and moves on to the next still without one.
+    pub fn press(&mut self, tile: Tile, hold: bool) -> Aim {
+        let aim = self.aim(tile, hold);
+        match aim {
+            Aim::Choose(index) => self.select(index),
+            Aim::Give(order) => {
+                let index = self
+                    .selected
+                    .expect("an order is aimed for whoever is chosen");
+                self.orders[index as usize] = Some(order);
+                self.verb = None;
+                // On to the next creature still without an order.
+                if let Some(m) = &self.m {
+                    self.selected = m
+                        .team(self.you)
+                        .map(|s| s.index)
+                        .find(|i| self.orders[*i as usize].is_none())
+                        .or(Some(index));
                 }
             }
-        };
-        if !m.valid(slot, &order) {
-            return false;
+            Aim::Nothing => {}
         }
-        self.orders[index as usize] = Some(order);
-        self.verb = None;
-        // On to the next creature still without an order.
-        self.selected = m
-            .team(self.you)
-            .map(|s| s.index)
-            .find(|i| self.orders[*i as usize].is_none())
-            .or(Some(index));
-        true
+        aim
+    }
+
+    /// A plain click on a tile. True if it changed anything.
+    #[cfg(test)]
+    pub fn click(&mut self, tile: Tile) -> bool {
+        self.press(tile, false) != Aim::Nothing
     }
 
     pub fn clear_order(&mut self, index: u8) {
@@ -992,6 +1059,49 @@ mod tests {
         t.choose_verb(Verb::Contest);
         assert!(t.click(enemy));
         assert!(matches!(t.orders[1], Some(Order::Contest { .. })));
+    }
+
+    #[test]
+    fn with_no_order_picked_a_click_does_what_the_tile_suggests() {
+        let mut t = table();
+        let m = t.m.as_ref().unwrap();
+        let own = m.fighter(Slot::new(Side::Left, 0)).at;
+        let enemy_slot = Slot::new(Side::Right, 0);
+        let enemy = m.fighter(enemy_slot).at;
+        let (ground, _) = *t
+            .choices()
+            .iter()
+            .find(|(tile, choice)| *choice == Choice::Walk && *tile != own)
+            .expect("somewhere to walk");
+        assert_eq!(t.aim(own, false), Aim::Give(Order::Hold { at: own }));
+        assert_eq!(t.aim(ground, false), Aim::Give(Order::Move { to: ground }));
+        assert_eq!(t.aim(ground, true), Aim::Give(Order::Hold { at: ground }));
+        assert_eq!(
+            t.aim(enemy, false),
+            Aim::Give(Order::Contest {
+                target: Target::Creature { slot: enemy_slot }
+            })
+        );
+        assert_eq!(t.press(ground, true), Aim::Give(Order::Hold { at: ground }));
+        assert_eq!(t.orders[0], Some(Order::Hold { at: ground }));
+        assert_eq!(t.selected, Some(1));
+    }
+
+    #[test]
+    fn a_click_on_a_teammate_chooses_it_whatever_the_button() {
+        let mut t = table();
+        let mate = t.m.as_ref().unwrap().fighter(Slot::new(Side::Left, 2)).at;
+        assert_eq!(t.press(mate, true), Aim::Choose(2));
+        assert_eq!(t.selected, Some(2));
+        assert_eq!(t.orders, [None; TEAM_SIZE]);
+    }
+
+    #[test]
+    fn nothing_can_be_aimed_while_a_turn_plays_out() {
+        let mut t = table();
+        let own = t.m.as_ref().unwrap().fighter(Slot::new(Side::Left, 0)).at;
+        t.lock(0.0);
+        assert_eq!(t.aim(own, false), Aim::Nothing);
     }
 
     #[test]
