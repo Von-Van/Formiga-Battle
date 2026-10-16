@@ -189,6 +189,9 @@ pub struct BattleApp {
     /// The Handler's painted pictures (tiles, plates, rosettes, team pictures, banners), each
     /// painted once under its key.
     art: HashMap<String, egui::TextureHandle>,
+    /// The ruled page's lines, in points: where the first is on the screen, and how far apart
+    /// they are, for writing that sits on them.
+    rules: (f32, f32),
     /// A name for the three picked, as typed.
     trio_draft: String,
     /// A trio being renamed.
@@ -332,6 +335,7 @@ impl BattleApp {
             draft_style: crate::identity::Style::default(),
             flags: HashMap::new(),
             art: HashMap::new(),
+            rules: (0.0, 21.0),
             trio_draft: String::new(),
             renaming: None,
             join_code: String::new(),
@@ -724,6 +728,10 @@ impl BattleApp {
                 .collect(),
             rules: (24, 14),
         };
+        self.rules = (
+            layout.full.min.y + (spread.right.1 + spread.rules.0) as f32 * u,
+            spread.rules.1 as f32 * u,
+        );
         if self.cover.spread.as_ref() != Some(&spread) || self.cover.texture.is_none() {
             let canvas = chrome::paint(&spread);
             let image = egui::ColorImage::from_rgba_unmultiplied(

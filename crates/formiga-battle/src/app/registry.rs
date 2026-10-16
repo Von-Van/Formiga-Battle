@@ -3,7 +3,7 @@
 //! named as a trio there, or take a place in a trio that has the other two. Everything here is
 //! kept by Desktop with the colony's Battle record, and none of it changes how a match is played.
 
-use super::{BattleApp, Kind, dashed_rule, sticky, texture};
+use super::{BattleApp, Kind, sticky, texture};
 use crate::chrome::{self, ink, label_job};
 use crate::heraldry::{self, Part};
 use crate::identity::{self, FIELDS, SHAPES, SYMBOLS, Standing, Style, TRIMS};
@@ -343,42 +343,47 @@ impl BattleApp {
     pub(super) fn standing_and_trios(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         let standing = Standing::of(&self.table.record);
         let _ = ctx;
-        chrome::kicker(ui, "Standing");
-        ui.add_space(u);
-        ui.label(
-            RichText::new(format!(
-                "{} · {} Open Circuit points · {}",
-                standing.title,
-                standing.points,
-                standing.circuit()
-            ))
-            .size(12.5)
-            .color(ink::PAGE),
+        let rules = self.rules;
+        on_rules(ui, rules, label_job("Standing", chrome::LABEL, ink::FOREST));
+        on_rules(
+            ui,
+            rules,
+            hand(
+                &format!(
+                    "{} · {} Open Circuit points · {}",
+                    standing.title,
+                    standing.points,
+                    standing.circuit()
+                ),
+                13.0,
+                ink::PAGE,
+                false,
+            ),
         );
-        ui.label(RichText::new(standing.how()).size(11.5).color(ink::MUTED));
-        ui.add_space(u * 4.0);
-        dashed_rule(ui, u);
-        ui.add_space(u * 2.0);
-        chrome::kicker(ui, "Your trios");
-        ui.add_space(u * 2.0);
+        on_rules(ui, rules, hand(&standing.how(), 12.0, ink::MUTED, false));
+        on_rules(ui, rules, hand("", 12.0, ink::MUTED, false));
+        on_rules(
+            ui,
+            rules,
+            label_job("Your trios", chrome::LABEL, ink::FOREST),
+        );
         let trios: Vec<Trio> = self.table.record.trios.iter().rev().cloned().collect();
         if trios.is_empty() {
-            ui.label(
-                RichText::new(
+            on_rules(
+                ui,
+                rules,
+                hand(
                     "None yet. Pick three on the Who page and name them: a trio keeps its own record, and its name and pennant go with it into every match.",
-                )
-                .size(12.5)
-                .italics()
-                .color(ink::MUTED),
+                    12.5,
+                    ink::MUTED,
+                    true,
+                ),
             );
             return;
         }
-        let since = self.turned;
-        for (i, trio) in trios.iter().enumerate() {
-            crate::feel::dropping(ui, since, (i + 2).min(9), u, |ui| {
-                self.trio_card(ui, ctx, trio, u);
-            });
-            ui.add_space(u * 3.0);
+        for trio in &trios {
+            self.trio_card(ui, ctx, trio, u);
+            on_rules(ui, rules, hand("", 12.0, ink::MUTED, false));
         }
     }
 
@@ -400,8 +405,10 @@ impl BattleApp {
         let may_return = identity::can_name(&self.table.record).is_ok();
         let mut update: Option<TrioCard> = None;
         let mut rename_to: Option<Option<Renaming>> = None;
-        self.team_picture(ui, trio, 72, u);
-        ui.add_space(u * 2.0);
+        let rules = self.rules;
+        // The picture sits on the rules: its card from one rule down to another.
+        to_rule(ui, rules);
+        self.team_picture(ui, trio, 84, u);
         ui.horizontal(|ui| {
             ui.add_space(u * 6.0);
             ui.vertical(|ui| {
@@ -428,16 +435,12 @@ impl BattleApp {
                         }
                     });
                 }
-                ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new(identity::record_words(trio))
-                            .size(12.5)
-                            .color(ink::PAGE),
-                    );
-                    if trio.retired {
-                        ui.label(label_job("Retired", 9.0, ink::MUTED));
-                    }
-                });
+                let record = if trio.retired {
+                    format!("{} · retired", identity::record_words(trio))
+                } else {
+                    identity::record_words(trio)
+                };
+                on_rules(ui, rules, hand(&record, 13.0, ink::PAGE, false));
                 let split = format!(
                     "Friends {} · Visitors {}",
                     identity::tally_words(
@@ -453,19 +456,21 @@ impl BattleApp {
                     )
                     .to_lowercase(),
                 );
-                ui.label(RichText::new(split).size(11.0).color(ink::MUTED));
+                on_rules(ui, rules, hand(&split, 12.0, ink::MUTED, false));
                 if missing {
-                    ui.label(
-                        RichText::new(
+                    on_rules(
+                        ui,
+                        rules,
+                        hand(
                             "Someone in this trio is no longer in your colony. Its record stays.",
-                        )
-                        .size(11.0)
-                        .italics()
-                        .color(ink::MUTED),
+                            12.0,
+                            ink::MUTED,
+                            true,
+                        ),
                     );
                 }
                 for line in &earlier {
-                    ui.label(RichText::new(line).size(11.0).color(ink::MUTED));
+                    on_rules(ui, rules, hand(line, 12.0, ink::MUTED, false));
                 }
                 let cups: Vec<String> = trio
                     .cups
@@ -478,12 +483,21 @@ impl BattleApp {
                     })
                     .collect();
                 if !cups.is_empty() {
-                    ui.label(
-                        RichText::new(format!("Cup wins together: {}", cups.join(", ")))
-                            .size(11.0)
-                            .color(ink::FOREST),
+                    on_rules(
+                        ui,
+                        rules,
+                        hand(
+                            &format!("Cup wins together: {}", cups.join(", ")),
+                            12.0,
+                            ink::FOREST,
+                            false,
+                        ),
                     );
                 }
+                // The trio's actions sit on the next rule, as the words do.
+                let y = ui.cursor().min.y;
+                let rule = rule_below(rules, y + rules.1);
+                ui.add_space((rule - rules.1 * 0.85 - y).max(0.0));
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = u * 3.0;
                     if !renaming
@@ -604,11 +618,11 @@ impl BattleApp {
             let _ = ctx;
             chrome::kicker(ui, "Playing as");
             ui.add_space(u);
-            self.team_picture(ui, &trio, 68, u);
-            ui.label(
-                RichText::new(identity::record_words(&trio))
-                    .size(12.0)
-                    .color(ink::MUTED),
+            self.team_picture(ui, &trio, 84, u);
+            on_rules(
+                ui,
+                self.rules,
+                hand(&identity::record_words(&trio), 12.5, ink::MUTED, false),
             );
             return;
         }
@@ -874,6 +888,71 @@ fn pick_tile(
         Color32::WHITE,
     );
     response.on_hover_text(name).clicked()
+}
+
+/// The first rule at or below `y`, on a page ruled from `first`, `pitch` apart.
+fn rule_below((first, pitch): (f32, f32), y: f32) -> f32 {
+    if y <= first {
+        first
+    } else {
+        first + ((y - first) / pitch - 0.001).ceil() * pitch
+    }
+}
+
+/// Writing on the ruled page, as a hand writes in a ruled notebook: each line of `job` with its
+/// foot on a rule, the first on the next rule there is room above, wrapped to the page.
+fn on_rules(ui: &mut egui::Ui, rules: (f32, f32), mut job: egui::text::LayoutJob) {
+    let pitch = rules.1;
+    for section in &mut job.sections {
+        section.format.line_height = Some(pitch);
+        section.format.valign = egui::Align::BOTTOM;
+    }
+    job.wrap.max_width = ui.available_width();
+    let galley = ui.painter().layout_job(job);
+    let baseline = galley
+        .rows
+        .first()
+        .and_then(|r| r.row.glyphs.first().map(|g| r.pos.y + g.pos.y))
+        .unwrap_or(pitch * 0.8);
+    let at = ui.cursor().min;
+    let rule = rule_below(rules, at.y + baseline);
+    let top = rule - baseline;
+    let colour = galley
+        .job
+        .sections
+        .first()
+        .map_or(ink::PAGE, |s| s.format.color);
+    // The page goes on from the last line's rule, so the next words take the rule after it.
+    let last = rule + (galley.rows.len().max(1) - 1) as f32 * pitch;
+    let spacing = ui.spacing().item_spacing.y;
+    let height = (last + 1.0 - spacing - at.y).max(0.0);
+    ui.painter().galley(pos2(at.x, top), galley, colour);
+    ui.allocate_space(vec2(ui.available_width(), height));
+}
+
+/// Words in the page's hand, for writing on its rules.
+fn hand(text: &str, size: f32, colour: Color32, italic: bool) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        text,
+        0.0,
+        egui::TextFormat {
+            font_id: FontId::proportional(size),
+            color: colour,
+            italics: italic,
+            ..Default::default()
+        },
+    );
+    job
+}
+
+/// Brings the page down to the next rule, so what comes next starts on it.
+fn to_rule(ui: &mut egui::Ui, rules: (f32, f32)) {
+    let y = ui.cursor().min.y;
+    let rule = rule_below(rules, y);
+    if rule > y {
+        ui.add_space(rule - y);
+    }
 }
 
 /// How tall a row of sample tiles is, in notebook pixels.

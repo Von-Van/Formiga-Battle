@@ -504,8 +504,10 @@ pub fn team_picture(
     paint::rect(&mut canvas, cx + 2, cy + 2, cw, ch, SHADOW);
     paint::rect(&mut canvas, cx, cy, cw, ch, CARD.edge);
     paint::rect(&mut canvas, cx + 1, cy + 1, cw - 2, ch - 2, CARD.base);
-    let (sx, sy, sw, sh) = (cx + 4, cy + 4, cw - 8, ch - 20);
-    let ground = sy + sh * 4 / 5;
+    // The scene sits well inside the card's margin, so neither the tape nor the card's edge
+    // crosses it.
+    let (sx, sy, sw, sh) = (cx + 6, cy + 7, cw - 12, ch - 25);
+    let ground = sy + sh - 8;
     for y in sy..sy + sh {
         for x in sx..sx + sw {
             let tone = if y < ground {
@@ -579,7 +581,7 @@ pub fn team_picture(
     paint::vline(&mut canvas, sx + sw, sy - 1, sh + 2, CARD.shine);
     for (tx, lean) in [(cx - 3, 1), (cx + cw - 13, -1)] {
         for i in 0..16 {
-            let y0 = cy - 2 + if lean > 0 { i / 4 } else { 3 - i / 4 };
+            let y0 = cy - 3 + if lean > 0 { i / 6 } else { 2 - i / 6 };
             paint::vline(&mut canvas, tx + i, y0, 5, TAPE);
         }
     }
