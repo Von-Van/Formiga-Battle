@@ -84,20 +84,28 @@ A side with no orders in three locked turns running forfeits: the room is `over`
 - **Board** reports are kept per side as `(turn, hash, finished)`. When both sides have reported
   the same turn: different hashes set `out_of_step`; the same hash with both `finished` makes the
   room `over` with `reason: "The match is over."`.
-- **Leave** while waiting closes the room. While playing, the leaver forfeits:
+- **Leave** while waiting closes the room at once: the next request, even a join, finds no room.
+  While playing, the leaver forfeits:
   `ending: {"forfeited": side, "reason": "<name> left the match."}`.
 
 A **View** is everything one side may see: `relay`, `code`, `stage`, `you` (`"left"` or
 `"right"`), `entrants` (both, once joined), `seed`, `ruleset` (Battle's default ruleset, as JSON),
 `turn`, `deadline_ms`, `opponent_ready` (whether the other side has sent orders this turn, never
 what they are), `opponent_quiet_ms` (since the other side last asked), `locked` (every locked turn,
-oldest first: `{"turn", "submitted": [left orders, right orders]}`), `out_of_step`, and `ending`
-once over.
+oldest first: `{"turn", "submitted": [left orders, right orders]}`), `out_of_step`, `confirmed`,
+and `ending` once over.
+
+`confirmed` is true once the room is `over`, both sides have reported the board after the last
+locked turn, those two boards are the same and no turn was ever `out_of_step`. A window keeps what
+a match with a friend earned to itself until it sees `confirmed`, and drops it if it sees
+`out_of_step` or the room goes first; a match that ended by a forfeit has no last board to wait
+for.
 
 ## Keeping nothing
 
-A room is deleted, with everything in it, at the first request after any of: both sides have seen
-it `over` having reported their board for the last locked turn (or it ended by a forfeit); 15
+A room is deleted, with everything in it, at the first request after any of: each side has asked
+about it since it was `over` with both sides' boards for the last locked turn in, so each has been
+told whether they were `confirmed` (or it ended by a forfeit); 15
 minutes waiting; 5 minutes without a request from either side; 2 minutes `over`; 2 hours since it
 opened. The store's own expiry should be set to match, so a room nobody asks about again is still
 gone. A seat is stored only as its SHA-256 digest, compared in constant time. The relay logs

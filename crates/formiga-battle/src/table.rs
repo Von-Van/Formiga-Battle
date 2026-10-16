@@ -46,6 +46,9 @@ pub struct Friend {
     pub opponent_away: bool,
     /// When this turn locks, on the window's clock.
     pub deadline: f32,
+    /// What the match earned, kept back until the relay confirms both windows came to the same
+    /// board after its last turn.
+    pub held: Option<rewards::Earned>,
 }
 
 impl Friend {
@@ -239,6 +242,39 @@ impl Table {
             ),
             None => rewards::ai_match(m, self.you, &self.record),
         };
+        // A match with a friend that ended on the board counts once the relay has both windows'
+        // boards after the last turn and they are the same. One that ended by someone leaving or
+        // being away has no last board to wait for.
+        let forfeit =
+            m.outcome().and_then(|o| o.victory) == Some(formiga_battle_core::Victory::Forfeit);
+        let confirmed = self
+            .friend
+            .as_ref()
+            .map(|f| f.view.as_ref().is_some_and(|v| v.confirmed));
+        match (confirmed, &mut self.friend) {
+            (Some(false), Some(friend)) if !forfeit => {
+                self.earned = vec!["Checking your board against your friend's…".to_owned()];
+                friend.held = Some(earned);
+            }
+            _ => self.keep(earned),
+        }
+    }
+
+    /// What a friend match earned and was kept back, now that the relay has said how the two
+    /// boards came out: kept if they were the same, dropped if not, or if the room closed first.
+    fn settle_held(&mut self, confirmed: bool, why_not: &str) {
+        let Some(earned) = self.friend.as_mut().and_then(|f| f.held.take()) else {
+            return;
+        };
+        if confirmed {
+            self.keep(earned);
+        } else {
+            self.earned = vec![why_not.to_owned()];
+        }
+    }
+
+    /// Applies what a match earned to the record here and writes it for Desktop.
+    fn keep(&mut self, earned: rewards::Earned) {
         self.record.apply(&earned.result);
         self.earned = earned.lines;
         if let Some(session) = &mut self.session {
@@ -375,6 +411,7 @@ impl Table {
             opponent_ready: false,
             opponent_away: false,
             deadline: 0.0,
+            held: None,
         });
     }
 
@@ -410,6 +447,11 @@ impl Table {
                     if self.outcome().is_none() {
                         self.notice = Some(why);
                     }
+                    self.settle_held(
+                        false,
+                        "The room closed before both boards could be checked, so this match \
+                         earned nothing.",
+                    );
                     let playing = self.friend.as_ref().is_some_and(|f| f.seated);
                     if !playing || self.outcome().is_some() {
                         self.friend = None;
@@ -450,6 +492,16 @@ impl Table {
                     .to_owned(),
             );
         }
+        if friend.held.is_some() && (view.confirmed || view.out_of_step) {
+            let confirmed = view.confirmed;
+            self.settle_held(
+                confirmed,
+                "Your board and your friend's came out differently, so this match earned nothing.",
+            );
+        }
+        let Some(friend) = &mut self.friend else {
+            return false;
+        };
         let mut began = false;
         if !friend.seated
             && let Some([a, b]) = &view.entrants
@@ -1058,6 +1110,23 @@ mod tests {
         let (a, b) = (host.m.as_ref().unwrap(), guest.m.as_ref().unwrap());
         assert_eq!(a.board, b.board, "both see the same board");
         assert!(a.outcome().is_some());
+        // What it earned is kept once the relay has confirmed both boards.
+        let held = |t: &Table| t.friend.as_ref().is_some_and(|f| f.held.is_some());
+        while held(&host) || held(&guest) {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            now += 1.0;
+            host.poll(now);
+            guest.poll(now);
+            rounds += 1;
+            assert!(rounds < 700, "the boards are confirmed");
+        }
+        for t in [&host, &guest] {
+            assert!(
+                t.earned.iter().any(|l| l.contains("Open Circuit points")),
+                "{:?}",
+                t.earned
+            );
+        }
         relay.stop();
     }
 

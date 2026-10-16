@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A friend match earns only once the relay confirms both windows came to the same board after its
+  last turn: a match whose boards first differ on the last turn no longer counts on one side. A
+  room its opener leaves before anyone joins closes at once, and the development relay answers a
+  request too big to read with a refusal rather than dropping the connection. Battle's whole-match
+  relay test runs against the relay `FORMIGA_BATTLE_RELAY` names, when it names one.
 - Only matching, unaltered copies play a friend: a joiner must have the same Battle, opened by
   the same Desktop, and the same copy of Battle (its program's SHA-256) as the friend who opened
   the room, or both copies must be builds the relay knows as that version's release. Someone with

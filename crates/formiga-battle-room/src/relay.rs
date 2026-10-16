@@ -143,6 +143,11 @@ pub struct View {
     pub locked: Vec<Locked>,
     /// The two sides reported different boards after the same turn.
     pub out_of_step: bool,
+    /// The match is over, both sides have reported the board after its last turn, and every
+    /// board both reported was the same. Until then a window keeps what the match earned to
+    /// itself.
+    #[serde(default)]
+    pub confirmed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ending: Option<Ending>,
 }
@@ -296,6 +301,24 @@ struct Room {
     out_of_step: bool,
     ending: Option<Ending>,
     over_since: Option<Millis>,
+}
+
+impl Room {
+    /// Both sides have reported the board after the last locked turn.
+    fn both_reported(&self) -> bool {
+        let last = self.locked.len();
+        self.boards
+            .iter()
+            .all(|b| b.is_some_and(|(turn, ..)| usize::from(turn) == last))
+    }
+
+    /// The match is over and both windows came to the same board after every turn.
+    fn confirmed(&self) -> bool {
+        self.stage == Stage::Over
+            && !self.out_of_step
+            && self.both_reported()
+            && self.boards[0].map(|b| b.1) == self.boards[1].map(|b| b.1)
+    }
 }
 
 pub struct Relay {
@@ -531,9 +554,9 @@ impl Relay {
             Request::Leave { code, seat } => {
                 let answer = self.with_seat(&code, &seat, now, |room, side, now| {
                     if room.stage == Stage::Waiting {
+                        // Nobody else is in it: it closes at once.
                         room.stage = Stage::Over;
-                        room.over_since = Some(0);
-                        return Ok(());
+                        room.over_since = Some(now);
                     }
                     if room.stage == Stage::Playing {
                         let name = room.sides[side.index()]
@@ -551,6 +574,7 @@ impl Relay {
                     }
                     Ok(())
                 });
+                self.sweep(now);
                 match answer {
                     Answer::View(_) => Answer::Gone {},
                     other => other,
@@ -590,14 +614,12 @@ impl Relay {
         if let Err(r) = f(room, side, now) {
             return refused(r);
         }
-        // A side has seen the end once the match is over and it has reported its board after the
-        // last turn, or the match ended by someone leaving or being away, when there is no
-        // board left to report.
-        let reported = room.boards[side.index()]
-            .is_some_and(|(turn, ..)| usize::from(turn) == room.locked.len());
+        // A side has seen the end once the match is over and it has been told how the boards
+        // came out: both sides have reported the board after the last turn. Or the match ended
+        // by someone leaving or being away, when there is no board left to report.
         let walked_out = room.ending.as_ref().is_some_and(|e| e.forfeited.is_some());
         if room.stage == Stage::Over
-            && (reported || walked_out)
+            && (room.both_reported() || walked_out)
             && let Some(s) = room.sides[side.index()].as_mut()
         {
             s.saw_end = true;
@@ -716,6 +738,7 @@ fn view(code: &str, room: &Room, side: Side, now: Millis) -> View {
         opponent_quiet_ms: other.map_or(0, |s| now.saturating_sub(s.seen)),
         locked: room.locked.clone(),
         out_of_step: room.out_of_step,
+        confirmed: room.confirmed(),
         ending: room.ending.clone(),
     }
 }

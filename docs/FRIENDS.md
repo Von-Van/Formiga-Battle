@@ -40,7 +40,7 @@ between unaltered copies, as far as the relay can tell:
 | Battle's digest must be the opener's, unless the relay knows both as builds of that version's release | A copy built somewhere else, or changed |
 | Once a version's released builds are known, only they may open or join | A changed copy of a released version |
 | Each window checks the other's versions, and that the relay's ruleset is its own | A relay or a friend's window that has fallen out of step with this Battle |
-| Both windows report the board after every turn; a match whose boards differ earns nothing | A copy changed to play by other rules |
+| Both windows report the board after every turn; a match earns only once the relay confirms both windows came to the same board after its last turn | A copy changed to play by other rules, even on the last turn |
 
 None of this can stop a copy changed on purpose to report what a released one reports: whatever a
 program says about itself, a changed program can say too. The checks keep out honest mistakes and

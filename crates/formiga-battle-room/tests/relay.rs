@@ -451,6 +451,181 @@ fn a_finished_match_is_deleted_once_both_have_seen_its_end() {
     assert_eq!(relay.rooms(), 0);
 }
 
+/// Both sides give no orders for `turn` and report `hashes` after it.
+fn play_turn(
+    relay: &mut Relay,
+    (code, host, guest): (&str, &str, &str),
+    turn: u8,
+    hashes: [u64; 2],
+    now: u64,
+) -> [View; 2] {
+    for seat in [host, guest] {
+        relay.handle(
+            Request::Orders {
+                code: code.to_owned(),
+                seat: seat.to_owned(),
+                turn,
+                orders: [None; TEAM_SIZE],
+            },
+            now,
+        );
+    }
+    let mut views = Vec::new();
+    for (seat, hash) in [host, guest].into_iter().zip(hashes) {
+        views.push(viewed(relay.handle(
+            Request::Board {
+                code: code.to_owned(),
+                seat: seat.to_owned(),
+                turn,
+                hash,
+                finished: false,
+            },
+            now + 1,
+        )));
+    }
+    let [a, b]: [View; 2] = views.try_into().expect("two views");
+    [a, b]
+}
+
+#[test]
+fn a_match_is_confirmed_to_both_only_once_both_boards_after_its_last_turn_are_in() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let (code, host, guest) = room(&mut relay);
+    for (seat, at) in [(&host, 10), (&guest, 20)] {
+        relay.handle(
+            Request::Orders {
+                code: code.clone(),
+                seat: seat.clone(),
+                turn: 1,
+                orders: [None; TEAM_SIZE],
+            },
+            at,
+        );
+    }
+    let v = viewed(relay.handle(
+        Request::Board {
+            code: code.clone(),
+            seat: host.clone(),
+            turn: 1,
+            hash: 9,
+            finished: true,
+        },
+        30,
+    ));
+    assert!(!v.confirmed, "the friend's board is not in yet");
+    let v = viewed(relay.handle(
+        Request::Board {
+            code: code.clone(),
+            seat: guest.clone(),
+            turn: 1,
+            hash: 9,
+            finished: true,
+        },
+        40,
+    ));
+    assert!(v.confirmed && v.stage == Stage::Over);
+    let v = viewed(relay.handle(
+        Request::Look {
+            code: code.clone(),
+            seat: host.clone(),
+        },
+        50,
+    ));
+    assert!(v.confirmed, "the first to report hears it too");
+    assert_eq!(relay.rooms(), 1, "kept until the next request");
+    relay.handle(Request::Look { code, seat: host }, 60);
+    assert_eq!(relay.rooms(), 0);
+}
+
+#[test]
+fn boards_that_differ_after_the_last_turn_reach_both_windows_before_the_room_goes() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let (code, host, guest) = room(&mut relay);
+    let seats = (code.as_str(), host.as_str(), guest.as_str());
+    let cap = formiga_battle_core::Ruleset::default().turn_cap;
+    for turn in 1..cap {
+        let [a, b] = play_turn(&mut relay, seats, turn, [5, 5], u64::from(turn) * 100);
+        assert!(!a.out_of_step && !b.out_of_step);
+    }
+    // The last turn locks the match over before either board is in; the boards then differ.
+    let [a, b] = play_turn(&mut relay, seats, cap, [5, 6], u64::from(cap) * 100);
+    assert_eq!(a.stage, Stage::Over);
+    assert!(
+        !a.confirmed && !a.out_of_step,
+        "the friend's board was not in yet"
+    );
+    assert!(b.out_of_step && !b.confirmed);
+    let v = viewed(relay.handle(
+        Request::Look {
+            code: code.clone(),
+            seat: host.clone(),
+        },
+        u64::from(cap) * 100 + 10,
+    ));
+    assert!(
+        v.out_of_step && !v.confirmed,
+        "the first to report hears it"
+    );
+}
+
+#[test]
+fn a_room_its_opener_leaves_before_anyone_joins_closes_at_once() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let (code, host) = seated(relay.handle(
+        Request::Open {
+            entrant: entrant(0, "Jake"),
+        },
+        0,
+    ));
+    assert!(matches!(
+        relay.handle(
+            Request::Leave {
+                code: code.clone(),
+                seat: host
+            },
+            5
+        ),
+        Answer::Gone {}
+    ));
+    assert_eq!(relay.rooms(), 0);
+    assert_eq!(
+        refusal(relay.handle(
+            Request::Join {
+                code,
+                entrant: entrant(9, "Friend"),
+            },
+            6,
+        )),
+        Refusal::NoSuchRoom
+    );
+}
+
+#[test]
+fn a_body_too_big_to_read_is_answered_with_a_refusal_rather_than_a_reset() {
+    use std::io::{Read, Write};
+    let relay = serve_relay("127.0.0.1:0", Limits::default()).unwrap();
+    let addr = relay.base();
+    let host = addr
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap()
+        .to_owned();
+    let mut stream = std::net::TcpStream::connect(&host).unwrap();
+    let body = vec![b'x'; 200 * 1024];
+    write!(
+        stream,
+        "POST /api/battle/rooms HTTP/1.1\r\nHost: {host}\r\nContent-Length: {}\r\n\r\n",
+        body.len()
+    )
+    .unwrap();
+    stream.write_all(&body).unwrap();
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer).unwrap();
+    assert!(answer.starts_with("HTTP/1.1 400"), "{answer}");
+    relay.stop();
+}
+
 #[test]
 fn a_room_gone_quiet_is_deleted() {
     let mut relay = Relay::with_entropy(Limits::default(), counting());
@@ -530,10 +705,19 @@ impl Window {
     }
 }
 
+/// A whole match through the relay `FORMIGA_BATTLE_RELAY` names, for checking another relay
+/// (the site's) against this one, or else through a local one.
 #[test]
-fn two_windows_play_a_whole_match_through_a_local_relay_and_agree_on_every_board() {
-    let relay = serve_relay("127.0.0.1:0", Limits::default()).unwrap();
-    let client = RelayClient::new(&relay.base());
+fn two_windows_play_a_whole_match_through_a_relay_and_agree_on_every_board() {
+    let named = std::env::var(formiga_battle_room::RELAY_ENV)
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let local = match named {
+        Some(_) => None,
+        None => Some(serve_relay("127.0.0.1:0", Limits::default()).unwrap()),
+    };
+    let base = named.unwrap_or_else(|| local.as_ref().unwrap().base());
+    let client = RelayClient::new(&base);
     let (code, host_seat) = client.open(&entrant(0, "Jake")).unwrap();
     let (_, guest_seat) = client.join(&code, &entrant(9, "Friend")).unwrap();
     let mut host = Window {
@@ -580,9 +764,13 @@ fn two_windows_play_a_whole_match_through_a_local_relay_and_agree_on_every_board
     let (a, b) = (host.m.as_ref().unwrap(), guest.m.as_ref().unwrap());
     assert!(a.outcome().is_some());
     assert_eq!(a.board, b.board);
-    // Both reported the end; once both have looked, the relay keeps nothing.
-    let _ = host.client.look(&host.code, &host.seat);
+    // Both reported the end, and both boards were the same; once both have looked, the relay
+    // keeps nothing.
+    let v = host.client.look(&host.code, &host.seat).unwrap();
+    assert!(v.confirmed && !v.out_of_step);
     let _ = guest.client.look(&guest.code, &guest.seat);
     assert!(host.client.look(&host.code, &host.seat).is_err());
-    relay.stop();
+    if let Some(relay) = local {
+        relay.stop();
+    }
 }

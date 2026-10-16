@@ -262,6 +262,9 @@ pub fn serve_relay(
     })
 }
 
+/// The most of an oversized body the local relay reads and throws away before refusing it.
+const DRAIN_BYTES: usize = 1024 * 1024;
+
 fn serve_one(stream: TcpStream, relay: &Mutex<Relay>, now: Millis) -> io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut line = String::new();
@@ -284,6 +287,12 @@ fn serve_one(stream: TcpStream, relay: &Mutex<Relay>, now: Millis) -> io::Result
         }
     }
     let answer = if length > MAX_BODY_BYTES {
+        // Read what was sent, up to a limit, before answering: closing with it unread would
+        // reset the connection, and the client would never see why.
+        let _ = io::copy(
+            &mut reader.by_ref().take(length.min(DRAIN_BYTES) as u64),
+            &mut io::sink(),
+        );
         Answer::Refused(Refusal::Malformed)
     } else {
         let mut body = vec![0; length];

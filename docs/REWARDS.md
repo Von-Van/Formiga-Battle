@@ -14,6 +14,10 @@ Nothing else earns anything, and nothing earned changes how a match is played.
 
 ## Friend matches
 
+A friend match's earnings are kept back until the relay confirms that both windows came to the
+same board after the last turn (`docs/RELAY.md`). If the boards differ, or the room closes before
+both are in, the match earns nothing. A match ended by a forfeit counts as it stands.
+
 | | |
 |---|---|
 | Open Circuit points | 10 for finishing, 5 more for a win or 2 for a draw. From the sixth friend match in one day (UTC), 2 each, so playing the same friend over and over is never the way to points. A Handler who forfeits earns none |
