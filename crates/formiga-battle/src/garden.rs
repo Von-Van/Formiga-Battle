@@ -17,6 +17,7 @@ use formiga_battle_core::{Arena, Tile};
 use std::collections::HashMap;
 use std::f32::consts::{PI, TAU};
 
+mod cove;
 mod millpond;
 mod woodland;
 
@@ -60,6 +61,8 @@ pub enum Dressing {
     Woodland,
     /// A meadow by a watermill: the pond on the board, a footbridge, and a jetty.
     Millpond,
+    /// A beach at low tide: sand, sea-worn rocks, a sandbar, the sea and a lighthouse.
+    Cove,
 }
 
 impl Dressing {
@@ -69,6 +72,7 @@ impl Dressing {
             Self::Garden => "Hedges, a garden wall, and a gate the lever swings.",
             Self::Woodland => "Old stumps and boulders cut the glade into lanes. No gate.",
             Self::Millpond => "A jetty between the pools, and a footbridge the winch lowers.",
+            Self::Cove => "The beacon on a long sandbar between the rocks, open on both sides.",
         }
     }
 
@@ -76,6 +80,7 @@ impl Dressing {
         match arena.id.as_str() {
             "woodland" => Self::Woodland,
             "millpond" => Self::Millpond,
+            "cove" => Self::Cove,
             _ => Self::Garden,
         }
     }
@@ -161,6 +166,11 @@ pub struct Garden {
     water: Vec<Tile>,
     paddle: Option<((f32, f32), (f32, f32))>,
     wheel: Option<(i32, i32)>,
+    /// Sandy Cove: the lighthouse's lamp, and the strip of sea the waves roll along.
+    lamp: Option<(i32, i32)>,
+    sea: Option<[(f32, f32); 2]>,
+    /// The board's size, in tiles.
+    size: (f32, f32),
 }
 
 impl Garden {
@@ -184,6 +194,7 @@ impl Garden {
             Dressing::Garden => beds(&mut ground, view, w, d, &mut flowers),
             Dressing::Woodland => woodland::beds(&mut ground, view, w, d, &mut flowers),
             Dressing::Millpond => millpond::beds(&mut ground, view, w, d, &mut flowers),
+            Dressing::Cove => cove::beds(&mut ground, view, w, d, &mut flowers),
         }
         if dressing == Dressing::Millpond {
             millpond::water(&mut ground, arena, view, &water);
@@ -193,10 +204,11 @@ impl Garden {
                 Dressing::Garden => paving(&mut ground, arena, view, tile),
                 Dressing::Woodland => woodland::earth(&mut ground, arena, view, tile),
                 Dressing::Millpond => millpond::deck(&mut ground, arena, view, tile, &water),
+                Dressing::Cove => cove::bar(&mut ground, arena, view, tile),
             }
         }
         beacon_bowl(&mut ground, view, arena.zone_centre());
-        if dressing == Dressing::Woodland {
+        if matches!(dressing, Dressing::Woodland | Dressing::Cove) {
             woodland::fire_ring(&mut ground, view, arena.zone_centre());
         }
         // Shadows, before anything that casts them.
@@ -205,6 +217,7 @@ impl Garden {
                 (Dressing::Millpond, _) => continue,
                 (Dressing::Garden, Terrain::Obstacle) => HEDGE_HEIGHT,
                 (Dressing::Woodland, Terrain::Obstacle) => 12.0,
+                (Dressing::Cove, Terrain::Obstacle) => 14.0,
                 (_, Terrain::Gate) => 10.0,
                 _ => continue,
             };
@@ -219,6 +232,7 @@ impl Garden {
 
         // The back of the place, furthest first.
         let (mut bunting, mut bath, mut drops, mut wheel) = (None, None, Vec::new(), None);
+        let (mut lamp, mut sea) = (None, None);
         let (leaves, perches) = match dressing {
             Dressing::Garden => {
                 let gaps = arena
@@ -242,6 +256,12 @@ impl Garden {
                 wheel = Some(turning);
                 (leaves, perches)
             }
+            Dressing::Cove => {
+                let (light, perches, strip) = cove::back(&mut ground, view, w, d);
+                lamp = light.first().copied();
+                sea = Some(strip);
+                (Vec::new(), perches)
+            }
         };
 
         let mut pieces = HashMap::new();
@@ -264,6 +284,9 @@ impl Garden {
                 }
                 (Dressing::Woodland, Terrain::Obstacle) => {
                     pieces.insert(tile, woodland::piece(view, tile));
+                }
+                (Dressing::Cove, Terrain::Obstacle) => {
+                    pieces.insert(tile, cove::rock(view, tile));
                 }
                 (Dressing::Millpond, Terrain::Gate) => {
                     gates.insert(
@@ -304,6 +327,9 @@ impl Garden {
             water,
             paddle,
             wheel,
+            lamp,
+            sea,
+            size: (w, d),
         }
     }
 
@@ -341,13 +367,30 @@ impl Garden {
                     millpond::wheel(canvas, wheel, t, still);
                 }
             }
+            Dressing::Cove => {
+                if let Some(strip) = self.sea {
+                    cove::waves(canvas, view, strip, t, still);
+                }
+                // The lighthouse's lamp, brightening as its beam comes round.
+                if let Some((x, y)) = self.lamp {
+                    let beam = if still { 0.5 } else { (t * 1.2).sin().max(0.0) };
+                    let glow = (beam * 150.0) as u8;
+                    paint::ellipse(canvas, x, y, 6, 4, rgba(0xffe9a0, glow / 2));
+                    paint::ellipse(canvas, x, y, 3, 2, rgba(0xffffff, glow));
+                }
+                cove::gulls(canvas, view, t, still);
+            }
             Dressing::Garden => {}
         }
         robin(canvas, &self.perches, t, still);
     }
 
     /// What moves in front of everything: butterflies over the beds, or dragonflies by the pond.
-    pub fn over(&self, canvas: &mut Canvas, now: f32, still: bool) {
+    pub fn over(&self, canvas: &mut Canvas, view: &View, now: f32, still: bool) {
+        if self.dressing == Dressing::Cove {
+            cove::crab(canvas, view, self.size.0, self.size.1, now, still);
+            return;
+        }
         if self.flowers.is_empty() {
             return;
         }
@@ -362,7 +405,7 @@ impl Garden {
                 (rgb(0xfbf6ee), rgb(0xa8a2b0)),
                 (rgb(0xd8a0c8), rgb(0x8a5a80)),
             ],
-            Dressing::Millpond => [
+            Dressing::Millpond | Dressing::Cove => [
                 (rgb(0x9fe0f0), rgb(0x2a7a9a)),
                 (rgb(0xb8f0c0), rgb(0x3a8a5a)),
                 (rgb(0xf6e08a), rgb(0xb89a3a)),
@@ -638,12 +681,14 @@ fn floor(canvas: &mut Canvas, arena: &Arena, view: &View, dressing: Dressing, wa
                 Dressing::Garden => lawn(px, py, fx, fy, tile),
                 Dressing::Woodland => woodland::moss(px, py, fx, fy, tile),
                 Dressing::Millpond => millpond::meadow(px, py, fx, fy, tile),
+                Dressing::Cove => cove::sand(px, py, fx, fy, tile),
             }
         } else {
             match dressing {
                 Dressing::Garden => rough(px, py),
                 Dressing::Woodland => woodland::litter(px, py),
                 Dressing::Millpond => millpond::long_grass(px, py),
+                Dressing::Cove => cove::dunes(px, py),
             }
         };
         paint::put(canvas, px, py, lit(c, GRASS, light));
@@ -669,6 +714,7 @@ fn floor(canvas: &mut Canvas, arena: &Arena, view: &View, dressing: Dressing, wa
                 Dressing::Garden => clover(canvas, x, y),
                 Dressing::Woodland => woodland::corner(canvas, x, y, m),
                 Dressing::Millpond => millpond::corner(canvas, x, y, m),
+                Dressing::Cove => cove::corner(canvas, x, y, m),
             }
         }
     }
@@ -681,6 +727,7 @@ fn floor(canvas: &mut Canvas, arena: &Arena, view: &View, dressing: Dressing, wa
             k += 1;
             match dressing {
                 Dressing::Woodland => woodland::sprig(canvas, px, py, k),
+                Dressing::Cove => cove::marram(canvas, px, py, k),
                 _ => tuft(canvas, px, py, k),
             }
         }
@@ -1823,7 +1870,7 @@ mod tests {
                 if arena.terrain(tile) != Terrain::Open || arena.in_zone(tile) {
                     continue;
                 }
-                // Round its middle the ground is green, give or take a fleck of grain: no
+                // Round its middle is the ground's own colour, give or take a fleck of grain: no
                 // flower, stone or toadstool.
                 let (x, y) = view.centre(tile);
                 let mut green = 0;
@@ -1831,7 +1878,13 @@ mod tests {
                     for dx in -2..=2 {
                         let c = garden.ground.get(x + dx, y + dy);
                         assert_eq!(c.a, 255, "{} {tile:?}", arena.id);
-                        green += i32::from(c.g >= c.r && c.g >= c.b);
+                        // Sand is warm, every other ground green.
+                        let ground = if Dressing::of(&arena) == Dressing::Cove {
+                            c.r >= c.g && c.g >= c.b
+                        } else {
+                            c.g >= c.r && c.g >= c.b
+                        };
+                        green += i32::from(ground);
                     }
                 }
                 assert!(green >= 12, "{} {tile:?}: {green} of 15", arena.id);

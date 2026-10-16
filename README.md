@@ -9,9 +9,10 @@ trio is not.
 
 Battle opens as the Handler's notebook, in the leather, paper and stitching of Formiga Home's,
 where you choose three of your companions and play the visitors, three companions from a
-neighbouring colony, in one of three arenas, each a little isometric place of its own: the
+neighbouring colony, in one of four arenas, each a little isometric place of its own: the
 Backyard (a garden of hedges, a brick wall and a potting shed), Woodland Glade (stumps, boulders
-and pines) and Millpond (a meadow with a footbridge, a jetty and a watermill). The creatures are
+and pines), Millpond (a meadow with a footbridge, a jetty and a watermill) and Sandy Cove (a
+beach with a sandbar, sea-worn rocks and a lighthouse). The creatures are
 drawn exactly as Desktop draws them. Each turn you give your orders on their
 cards and the board (or let the timer run out and they choose for themselves), lock in, and watch
 the turn play out tick by tick with a recap that says why each of them did what it did. The
@@ -56,7 +57,7 @@ or a creature on the board; Enter locks in, right-click or Escape cancels.
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
 window (`--turns`, `--into`, `--scale`); `--snap <png> --review picking|orders|playing --at <s>`
 opens the window behind everything, pictures it and closes. Either takes `--arena
-backyard|woodland|millpond`. Look at them after changing anything
+backyard|woodland|millpond|cove`. Look at them after changing anything
 visual.
 
 The gate, run locally (the repository is private, so nothing runs on GitHub):

@@ -33,7 +33,7 @@ WINDOW:
     --formiga-battle <DIR>   A session Desktop opened (how Desktop starts Battle)
     --seed <N>               The match seed (default: from the clock)
     --arena <ID>             Which arena the visitors are played in: backyard (the default),
-                             woodland or millpond
+                             woodland, millpond or cove
     --visitors <N>           Which neighbouring colony visits, 0 to 255 (default 9)
     --snap <PNG>             Open, save a picture of the window after --at seconds (default 6)
                              and close

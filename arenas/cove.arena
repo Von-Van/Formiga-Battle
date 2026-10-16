@@ -1,0 +1,12 @@
+// Sandy Cove: a beach at low tide. The beacon stands halfway along a sandbar, a yard one tile
+// wide and five long, so whoever holds it can be come at from either side; sea-worn rocks
+// break up the sand either side of it, and the bar's two ends run out into the rocks.
+id: cove
+name: Sandy Cove
+. . . . # . . . .
+1 . # . Z . # . 2
+. . . . Z . . . .
+1 . # . Z . # . 2
+. . . . Z . . . .
+1 . # . Z . # . 2
+. . . . # . . . .

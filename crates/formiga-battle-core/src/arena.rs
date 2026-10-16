@@ -33,6 +33,7 @@ const BUILT_IN: &[(&str, &str)] = &[
     ("backyard", include_str!("../../../arenas/backyard.arena")),
     ("woodland", include_str!("../../../arenas/woodland.arena")),
     ("millpond", include_str!("../../../arenas/millpond.arena")),
+    ("cove", include_str!("../../../arenas/cove.arena")),
 ];
 use serde::{Deserialize, Serialize};
 

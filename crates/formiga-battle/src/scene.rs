@@ -147,7 +147,7 @@ pub fn paint(
     for &(tile, age) in &marks.pokes {
         poke(&mut canvas, view, tile, age, still);
     }
-    garden.over(&mut canvas, now, still);
+    garden.over(&mut canvas, view, now, still);
     canvas
 }
 
