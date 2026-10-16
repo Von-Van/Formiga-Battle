@@ -1115,20 +1115,23 @@ impl Match {
         }
     }
 
+    /// What the turn cap weighs for a team, in its order: beacon progress, composure left across
+    /// the team, creatures standing.
+    pub fn cap_tally(&self, side: Side) -> (u8, u32, usize) {
+        let team: Vec<_> = self.team(side).collect();
+        (
+            self.board.capture[side.index()],
+            team.iter()
+                .map(|s| u32::from(self.fighter(*s).composure))
+                .sum::<u32>(),
+            team.len(),
+        )
+    }
+
     /// At the turn cap: more beacon progress wins, then more composure left across the team, then
     /// more creatures standing. Anything level after that is a draw.
     fn decide_at_cap(&self) -> Outcome {
-        let score = |side: Side| {
-            let team: Vec<_> = self.team(side).collect();
-            (
-                self.board.capture[side.index()],
-                team.iter()
-                    .map(|s| u32::from(self.fighter(*s).composure))
-                    .sum::<u32>(),
-                team.len(),
-            )
-        };
-        let (left, right) = (score(Side::Left), score(Side::Right));
+        let (left, right) = (self.cap_tally(Side::Left), self.cap_tally(Side::Right));
         let winner = match left.cmp(&right) {
             std::cmp::Ordering::Greater => Some(Side::Left),
             std::cmp::Ordering::Less => Some(Side::Right),

@@ -532,7 +532,27 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                     format!("{} is the last team standing and wins!", team_name(side))
                 }
                 (Some(side), _) => {
-                    format!("Time's up: {} wins on the beacon tally.", team_name(side))
+                    // Says which of the cap's three counts decided it, and by how much.
+                    let (won, lost) = (m.cap_tally(side), m.cap_tally(side.other()));
+                    let winner = team_name(side);
+                    if won.0 != lost.0 {
+                        format!(
+                            "Time's up: {winner} wins, ahead on the beacon {} to {}.",
+                            won.0, lost.0
+                        )
+                    } else if won.1 != lost.1 {
+                        format!(
+                            "Time's up, level on the beacon: {winner} wins with more composure \
+                             left, {} to {}.",
+                            won.1, lost.1
+                        )
+                    } else {
+                        format!(
+                            "Time's up, level on the beacon and composure: {winner} wins with \
+                             more still standing, {} to {}.",
+                            won.2, lost.2
+                        )
+                    }
                 }
                 (None, _) => "It's a draw.".to_owned(),
             }),

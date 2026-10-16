@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A match won when time runs out says which count decided it and by how much: ahead on the
+  beacon, or level on it with more composure left, or with more still standing. It used to say
+  "on the beacon tally" whatever decided it.
 - `formiga-battle tournament` says how its matches ended: how many never lit the beacon, how
   many were won from behind on the beacon, and how many flanks led to beacon progress that turn.
 - Rules version 7: team orders. Each turn a Handler gives the whole team up to three orders
