@@ -4,7 +4,6 @@
 
 - A fourth arena, Sandy Cove: the beacon halfway along a sandbar one tile wide, open to both
   sides, between columns of sea-worn rocks, with the sea, a lighthouse and beach huts round it.
-  Until it has a cup of its own it is played with friends.
 - Battle looks like Formiga's own: the window is the Handler's notebook in Home's leather,
   paper and stitching, with Battle's name on a cloth patch, the board on the left page, the
   orders and the notebook as tabs on the cover, and cards, buttons, a brass watch for the timer
