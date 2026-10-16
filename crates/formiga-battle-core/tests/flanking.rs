@@ -1,4 +1,4 @@
-//! Encirclement: two contesters from different sides break a hold, holders side by side turn
+//! Encirclement: two presses from different sides break a hold, holders side by side turn
 //! them away, and a team that only ever holds the beacon is beaten by one that walks round it.
 
 mod common;
@@ -8,15 +8,15 @@ use formiga_battle_core::tournament::run;
 use formiga_battle_core::*;
 
 #[test]
-fn a_flanked_holder_is_pushed_away_from_a_contester_and_out_of_the_zone_if_it_can_be() {
+fn a_flanked_holder_is_pushed_away_from_a_presser_and_out_of_the_zone_if_it_can_be() {
     // R0 holds the top arm of the cross; L0 comes from the middle below it, L1 from its left.
     let mut m = board_on(
         Arena::backyard(),
         &[(L0, (4, 3)), (L1, (3, 2)), (R0, (4, 2))],
     );
     let report = m.resolve_orders(orders(&[
-        (L0, contest(R0)),
-        (L1, contest(R0)),
+        (L0, press(R0)),
+        (L1, press(R0)),
         (R0, hold(4, 2)),
     ]));
     // Away from L0 is (4, 1), out of the zone; away from L1 is (5, 2), out of it too. The upper
@@ -36,8 +36,8 @@ fn a_flanked_holder_is_pushed_away_from_a_contester_and_out_of_the_zone_if_it_ca
 fn a_flanked_holder_stays_off_balance_for_the_rest_of_the_turn_and_holds_again_after() {
     let mut m = board(&[(L0, (0, 2)), (L1, (2, 2)), (R0, (1, 2))]);
     let report = m.resolve_orders(orders(&[
-        (L0, contest(R0)),
-        (L1, contest(R0)),
+        (L0, press(R0)),
+        (L1, press(R0)),
         (R0, hold(1, 2)),
     ]));
     assert!(m.fighter(R0).interrupted && !m.fighter(R0).holding);
@@ -63,16 +63,16 @@ fn a_flanked_holder_stays_off_balance_for_the_rest_of_the_turn_and_holds_again_a
 }
 
 #[test]
-fn one_contester_alone_is_still_turned_away() {
+fn one_presser_alone_is_still_turned_away() {
     let mut m = board(&[(L0, (0, 2)), (R0, (1, 2))]);
-    m.resolve_orders(orders(&[(L0, contest(R0)), (R0, hold(1, 2))]));
+    m.resolve_orders(orders(&[(L0, press(R0)), (R0, facing(1, 2, Facing::West))]));
     assert!(m.fighter(R0).holding);
-    assert_eq!(composure(&m, L0), 2);
+    assert_eq!(composure(&m, L0), 2, "head on, it costs the presser one");
 }
 
 #[test]
 fn a_holder_beside_the_one_flanked_turns_the_flank_away_with_it() {
-    // R1 holds corner to corner with R0 and touches both contesters.
+    // R1 holds corner to corner with R0 and touches both pressers.
     let mut m = board(&[(L0, (1, 0)), (L1, (0, 1)), (R0, (1, 1)), (R1, (0, 0))]);
     assert!(!flank_threatened(&m, R0), "nobody is holding yet");
     m.resolve_orders(orders(&[
@@ -83,8 +83,8 @@ fn a_holder_beside_the_one_flanked_turns_the_flank_away_with_it() {
     ]));
     assert!(!flank_threatened(&m, R0), "guarded by R1");
     let report = m.resolve_orders(orders(&[
-        (L0, contest(R0)),
-        (L1, contest(R0)),
+        (L0, press(R0)),
+        (L1, press(R0)),
         (R0, hold(1, 1)),
         (R1, hold(0, 0)),
     ]));
@@ -117,14 +117,14 @@ fn three_against_a_holder_and_its_neighbour_still_break_it() {
         "three on its sides, two to turn them away"
     );
     m.resolve_orders(orders(&[
-        (L0, contest(R0)),
-        (L1, contest(R0)),
-        (L2, contest(R0)),
+        (L0, press(R0)),
+        (L1, press(R0)),
+        (L2, press(R0)),
         (R0, hold(1, 1)),
         (R1, hold(0, 0)),
     ]));
     assert!(!m.fighter(R0).holding);
-    assert!(m.fighter(R1).holding, "only the one contested breaks");
+    assert!(m.fighter(R1).holding, "only the one pressed breaks");
 }
 
 #[test]
@@ -136,12 +136,14 @@ fn a_flank_already_in_place_lands_before_the_holder_can_step_away() {
         (R0, hold(1, 2)),
     ]));
     m.resolve_orders(orders(&[
-        (L0, contest(R0)),
-        (L1, contest(R0)),
+        (L0, press(R0)),
+        (L1, press(R0)),
         (R0, walk(1, 4)),
     ]));
-    // Not holding when it tried to leave, it is simply caught by both.
-    assert_eq!(composure(&m, R0), 1);
+    // Not holding when it tried to leave, it is simply caught by both: with both ways out
+    // blocked by the pressers, it is knocked off balance where it stands, and nobody is hurt.
+    assert_eq!(composure(&m, R0), 3);
+    assert!(m.fighter(R0).interrupted);
     assert_eq!(at(&m, R0), (1, 2));
 }
 
@@ -242,11 +244,12 @@ fn each_order_is_told_once_with_what_came_of_it() {
     .expect("a match");
     let centre = m.arena.zone_centre();
     let plan = vec![
-        Directive::Take {
+        Directive::Press {
             squares: vec![centre],
         },
-        Directive::Defend {
+        Directive::Hold {
             squares: vec![centre],
+            facing: Facing::East,
         },
     ];
     let report = m.resolve_turn([plan, Vec::new()]);
@@ -257,7 +260,7 @@ fn each_order_is_told_once_with_what_came_of_it() {
         "one square named twice is one line: {told:?}"
     );
     assert!(
-        told[0].starts_with("1 and 2. TAKE the middle of the yard"),
+        told[0].starts_with("1 and 2. PRESS the middle of the yard"),
         "{told:?}"
     );
     assert!(!told[0].contains('('), "no coordinates: {told:?}");
@@ -272,8 +275,8 @@ fn a_flank_in_the_zone_takes_the_ground_and_breaks_through() {
         &[(L0, (4, 3)), (L1, (3, 2)), (R0, (4, 2))],
     );
     let report = m.resolve_orders(orders(&[
-        (L0, contest(R0)),
-        (L1, contest(R0)),
+        (L0, press(R0)),
+        (L1, press(R0)),
         (R0, hold(4, 2)),
     ]));
     // L0, standing in the yard, holds where it stands; L1, outside it, does not.
@@ -304,8 +307,8 @@ fn a_flank_in_the_zone_takes_the_ground_and_breaks_through() {
 fn a_flank_outside_the_zone_is_no_breakthrough() {
     let mut m = board(&[(L0, (0, 2)), (L1, (2, 2)), (R0, (1, 2))]);
     let report = m.resolve_orders(orders(&[
-        (L0, contest(R0)),
-        (L1, contest(R0)),
+        (L0, press(R0)),
+        (L1, press(R0)),
         (R0, hold(1, 2)),
     ]));
     assert!(

@@ -205,10 +205,10 @@ pub fn observe(m: &Match, side: crate::order::Side, events: &[Event]) -> Vec<See
                 signs.push((*slot, Sign::TookAChance));
                 moment(
                     slot,
-                    format!("Spotted {} wandering past and went for them", name(took)),
+                    format!("Spotted {} wandering past and pressed them", name(took)),
                 );
             }
-            EventKind::Countered { holders, .. } => {
+            EventKind::Repelled { holders, .. } => {
                 for h in holders {
                     signs.push((*h, Sign::HeldFirm));
                 }
@@ -232,11 +232,43 @@ pub fn observe(m: &Match, side: crate::order::Side, events: &[Event]) -> Vec<See
                     }
                 }
             }
-            EventKind::Interrupted { target, by } => {
+            EventKind::Pressed {
+                target,
+                by,
+                tricking,
+                ..
+            } => {
                 for c in by {
                     signs.push((*c, Sign::CaughtSomeone));
+                    if *tricking {
+                        moment(c, format!("Saw through {}'s trick", name(target)));
+                    }
                 }
                 last_caught_by.insert(*target, by.clone());
+            }
+            EventKind::Collided { target, by } => {
+                let mut all = by.clone();
+                all.push(*target);
+                for c in by {
+                    last_caught_by.insert(*target, vec![*c]);
+                }
+                for c in &all {
+                    moment(c, "Bumped heads pushing into another".to_owned());
+                }
+            }
+            EventKind::Tricked { target, by, .. } => {
+                for c in by {
+                    signs.push((*c, Sign::CaughtSomeone));
+                    moment(
+                        c,
+                        format!("Slipped round {} and broke its hold", name(target)),
+                    );
+                }
+                last_caught_by.insert(*target, by.clone());
+            }
+            EventKind::TrickRead { target, .. } => {
+                signs.push((*target, Sign::HeldFirm));
+                moment(target, "Saw a trick coming and stood firm".to_owned());
             }
             EventKind::KnockedOut { slot } => {
                 if let Some(by) = last_caught_by.get(slot) {

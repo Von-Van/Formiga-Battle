@@ -4,34 +4,53 @@
 use crate::game::Match;
 use crate::grid::Tile;
 use crate::interpret::distances;
-use crate::order::{Directive, Order, Side, Slot, Target, TeamPlan};
+use crate::order::{Directive, Facing, Order, Side, Slot, TeamPlan};
 use crate::rng::{self, Purpose};
 
 /// The order a creature gives itself when its Handler gave none in time. It is the same for both
 /// teams and only looks at the board as it stands and at the creature's own temperament: in the
 /// zone it holds; next to someone of the other team who is not holding, a cautious creature holds
-/// its ground and a bold one contests them; anywhere else it heads for the nearest free tile of
-/// the zone to hold it.
+/// its ground and a bold one presses them; anywhere else it heads for the nearest free tile of
+/// the zone to hold it. It holds facing whichever way the other team is nearest.
 pub fn fallback(m: &Match, slot: Slot) -> Order {
     let f = m.fighter(slot);
+    let hold = |at: Tile| Order::Hold {
+        at,
+        facing: face(m, slot.side, at),
+    };
     if m.arena.in_zone(f.at) {
-        return Order::Hold { at: f.at };
+        return hold(f.at);
     }
     let open_enemy = m
         .team(slot.side.other())
         .find(|e| m.fighter(*e).at.touches(f.at) && !m.fighter(*e).holding);
     if let Some(enemy) = open_enemy {
         return if m.behavior(slot).caution > 0 {
-            Order::Hold { at: f.at }
+            hold(f.at)
         } else {
-            Order::Contest {
-                target: Target::Creature { slot: enemy },
-            }
+            Order::Press { target: enemy }
         };
     }
-    Order::Hold {
-        at: nearest_free_zone_tile(m, slot, &[]).unwrap_or(f.at),
-    }
+    hold(nearest_free_zone_tile(m, slot, &[]).unwrap_or(f.at))
+}
+
+/// The way to hold `at` facing: toward the nearest of the other team, the one nearer the middle
+/// of the board first among equals, then the upper one, then the one nearer its own side;
+/// toward the other team's side of the board if nobody of theirs is standing anywhere else.
+pub fn face(m: &Match, side: Side, at: Tile) -> Facing {
+    m.team(side.other())
+        .map(|e| m.fighter(e).at)
+        .filter(|t| *t != at)
+        .min_by_key(|t| {
+            (
+                t.distance(at),
+                t.distance(m.arena.zone_centre()),
+                t.y,
+                m.arena.across(side, *t),
+            )
+        })
+        .and_then(|t| Facing::toward(at, t))
+        .unwrap_or(Facing::across(side))
 }
 
 /// The free zone tile this creature can reach soonest, the zone's middle first among equals,
@@ -77,17 +96,18 @@ pub(crate) fn walks(m: &Match, slot: Slot) -> Vec<Option<u8>> {
 pub enum Coach {
     /// Gives no plan at all, so every creature falls back on its own.
     Absent,
-    /// Plays the beacon: takes a square of it (or defends the one already held), takes the square
-    /// of any of theirs in it, and with what is left goes for the tap, something lying near, the
-    /// lever, one of theirs wandering close, or has something carried used, chosen with a little
-    /// chance so it cannot be read like a script. It knows nothing about any creature's
+    /// Plays the beacon: presses onto a square of it (or holds the one already held, facing the
+    /// other team), flanks or tricks any of theirs holding in it and presses any of theirs in it
+    /// not holding, and with what is left goes for the tap, something lying near, the lever or one
+    /// of theirs wandering close, chosen with a little chance so it cannot be read like a script;
+    /// anything carried is used where it plainly helps. It knows nothing about any creature's
     /// temperament: the team shares the plan out by itself.
     Exhibition,
     /// Thinks each turn through, knowing exactly how each of its creatures will share out and
     /// carry out a plan.
     Familiar,
-    /// Digs in: defends a tile of the zone for every creature, and never leaves them. The
-    /// strategy the encirclement rules are tested against.
+    /// Digs in: holds a tile of the zone for every creature, all facing the other team's side,
+    /// and never leaves them. The strategy flanks and tricks are tested against.
     Turtle,
     /// Thinks each turn through the same way, imagining every creature as one that leans no way
     /// at all: the measure `Familiar` is held against.
@@ -138,9 +158,9 @@ pub fn flank_places(m: &Match, target: Slot, attackers: Side) -> Option<[Tile; 2
     opposite.or_else(|| (open.len() >= 2).then(|| [open[0], open[1]]))
 }
 
-/// Whether a holder would be flanked if everyone of the other team standing beside it contested
-/// it now: two or more on its sides, more than the holders of its own team, itself included,
-/// that would turn them away.
+/// Whether a holder would be flanked if everyone of the other team standing beside it pressed it
+/// now: two or more on its sides, more than the holders of its own team, itself included, that
+/// would turn them away.
 pub fn flank_threatened(m: &Match, target: Slot) -> bool {
     let f = m.fighter(target);
     if !f.holding {
@@ -180,7 +200,10 @@ fn turtle(m: &Match, side: Side) -> TeamPlan {
     if squares.is_empty() {
         return Vec::new();
     }
-    vec![Directive::Defend { squares }]
+    vec![Directive::Hold {
+        squares,
+        facing: Facing::across(side),
+    }]
 }
 
 fn exhibition(m: &Match, side: Side) -> TeamPlan {
@@ -202,8 +225,8 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
     };
     let nearest = |t: Tile| team.iter().map(|s| steps(*s, t)).min().unwrap_or(u32::MAX);
 
-    // The beacon: defend the square of it one of ours already holds, or take the free one the
-    // team can walk to soonest.
+    // The beacon: hold the square of it one of ours already holds, facing the other team, or press
+    // onto the free one the team can walk to soonest.
     let held = team
         .iter()
         .copied()
@@ -228,13 +251,16 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
     let anchor = match held {
         Some(s) => {
             let at = m.fighter(s).at;
-            anchor_order = Directive::Defend { squares: vec![at] };
+            anchor_order = Directive::Hold {
+                squares: vec![at],
+                facing: face(m, side, at),
+            };
             plan.push(anchor_order.clone());
             at
         }
         None => {
             let tile = free_square(&[]).unwrap_or(centre);
-            anchor_order = Directive::Take {
+            anchor_order = Directive::Press {
                 squares: vec![tile],
             };
             plan.push(anchor_order.clone());
@@ -242,8 +268,8 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         }
     };
 
-    // Clear the zone of the other team: the square of a holder of theirs in it, which the team
-    // flanks, or of one of theirs in it not holding, most of the time.
+    // Clear the zone of the other team: a holder of theirs in it, which the team flanks or tricks,
+    // or one of theirs in it not holding, which it presses, most of the time.
     let in_zone: Vec<Slot> = m
         .team(side.other())
         .filter(|e| m.arena.in_zone(m.fighter(*e).at))
@@ -254,6 +280,11 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         .copied()
         .filter(|e| holds(*e) && flank_places(m, *e, side).is_some())
         .min_by_key(|e| (m.fighter(*e).at.distance(centre), *e));
+    let dug_in = in_zone
+        .iter()
+        .copied()
+        .filter(|e| holds(*e))
+        .min_by_key(|e| (m.fighter(*e).at.distance(centre), *e));
     let loose = in_zone
         .iter()
         .copied()
@@ -261,20 +292,28 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         .min_by_key(|e| (m.fighter(*e).at.distance(centre), *e));
     // Each order takes a creature, a flank two; the team has only so many.
     let mut hands = team.len().saturating_sub(1);
-    let flanking = flankable.filter(|_| hands >= 2);
+    let flanking = flankable.filter(|_| hands >= 2 && roll(1) < 60);
     if let Some(e) = flanking {
         hands -= 2;
-        plan.push(Directive::Take {
+        plan.push(Directive::Press {
             squares: vec![m.fighter(e).at],
         });
         // The flank takes two; named twice, the beacon's square keeps the third where it is.
         plan.push(anchor_order.clone());
+    } else if let Some(e) = dug_in
+        && hands >= 1
+        && roll(4) < 75
+    {
+        hands -= 1;
+        plan.push(Directive::Trick {
+            squares: vec![m.fighter(e).at],
+        });
     } else if let Some(e) = loose
         && hands >= 1
         && roll(2) < 80
     {
         hands -= 1;
-        plan.push(Directive::Take {
+        plan.push(Directive::Press {
             squares: vec![m.fighter(e).at],
         });
     }
@@ -292,11 +331,11 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         && roll(3) < 70
     {
         hands -= 1;
-        plan.push(Directive::Take { squares: vec![t] });
+        plan.push(Directive::Press { squares: vec![t] });
     }
 
-    // With what is left: the tap, something lying near, something carried, one of theirs
-    // wandering close, the lever; or a second hand at the beacon.
+    // With what is left: the tap, something lying near, one of theirs wandering close, the lever;
+    // or a second hand at the beacon.
     let soaks = |sd: Side| {
         m.team(sd)
             .filter(|x| m.arena.in_scenery(m.fighter(*x).at))
@@ -328,22 +367,6 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
                 .any(|s| m.fighter(*s).carrying.is_none() && steps(*s, *t) <= 3)
         })
         .min_by_key(|t| (nearest(*t), m.arena.across(side, *t), t.y));
-    let carried = team
-        .iter()
-        .copied()
-        .filter(|s| m.fighter(*s).carrying.is_some())
-        .find(|s| {
-            crate::muster::checked(
-                m,
-                side,
-                &vec![Directive::Interact {
-                    at: m.fighter(*s).at,
-                }],
-            )
-            .0
-            .len()
-                == 1
-        });
     let chase = m
         .team(side.other())
         .filter(|e| {
@@ -365,26 +388,36 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
             Directive::Interact { at: t }
         } else if let Some(t) = find.filter(|_| r < 35) {
             Directive::Interact { at: t }
-        } else if let Some(s) = carried.filter(|_| r < 75) {
-            Directive::Interact {
-                at: m.fighter(s).at,
-            }
         } else if let Some(e) = chase.filter(|_| r < 45) {
-            Directive::Take {
+            Directive::Press {
                 squares: vec![m.fighter(e).at],
             }
         } else if let Some(t) = lever.filter(|_| r >= 85) {
             Directive::Interact { at: t }
         } else {
-            Directive::Defend {
+            Directive::Hold {
                 squares: vec![anchor],
+                facing: face(m, side, anchor),
             }
         };
-        if plan.contains(&next) && !matches!(next, Directive::Defend { .. }) {
+        if plan.contains(&next) && !matches!(next, Directive::Hold { .. }) {
             continue;
         }
         plan.push(next);
         hands -= 1;
     }
+    plan.extend(item_uses(m, side, &[], |k| roll(30 + k) < 75));
     plan
+}
+
+/// A USE ITEM for each of the team carrying something with a plain use for it near `squares` (the
+/// zone, if none), where `go` says so for its place in the team.
+pub fn item_uses(m: &Match, side: Side, squares: &[Tile], go: impl Fn(u64) -> bool) -> TeamPlan {
+    m.team(side)
+        .filter(|s| go(u64::from(s.index)))
+        .filter_map(|s| {
+            crate::muster::use_for(m, s, squares, false)
+                .map(|at| Directive::UseItem { by: s.index, at })
+        })
+        .collect()
 }

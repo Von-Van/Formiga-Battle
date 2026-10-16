@@ -1,5 +1,5 @@
-//! Team orders: a Handler gives the whole team TAKE, DEFEND and INTERACT, and the team shares
-//! them out by itself.
+//! Team orders: a Handler gives the whole team PRESS, HOLD, TRICK and INTERACT, and USE ITEM
+//! besides, and the team shares them out by itself.
 
 mod common;
 
@@ -7,18 +7,25 @@ use common::*;
 use formiga_battle_core::*;
 
 fn take(squares: &[(i8, i8)]) -> Directive {
-    Directive::Take {
+    Directive::Press {
         squares: squares.iter().map(|(x, y)| Tile::new(*x, *y)).collect(),
     }
 }
 
 fn defend(squares: &[(i8, i8)]) -> Directive {
-    Directive::Defend {
+    Directive::Hold {
+        squares: squares.iter().map(|(x, y)| Tile::new(*x, *y)).collect(),
+        facing: Facing::West,
+    }
+}
+
+fn outfox(squares: &[(i8, i8)]) -> Directive {
+    Directive::Trick {
         squares: squares.iter().map(|(x, y)| Tile::new(*x, *y)).collect(),
     }
 }
 
-fn interact(x: i8, y: i8) -> Directive {
+fn work(x: i8, y: i8) -> Directive {
     Directive::Interact {
         at: Tile::new(x, y),
     }
@@ -74,7 +81,11 @@ fn a_take_sends_whoever_is_nearest_to_hold_an_empty_square() {
     let (task, order, _) = job_of(&report, L0);
     assert_eq!(task.role, Role::Claim);
     assert_eq!(task.directive, Some(0));
-    assert_eq!(order, hold(3, 0));
+    assert_eq!(
+        order,
+        facing(3, 0, Facing::South),
+        "facing the nearest of the other team"
+    );
     assert_ne!(job_of(&report, L1).0.role, Role::Claim);
     assert!(m.fighter(L0).holding);
 }
@@ -96,7 +107,7 @@ fn taking_a_square_one_of_theirs_holds_sends_two_to_flank_it() {
     for slot in [L0, L1] {
         let (task, order, _) = job_of(&report, slot);
         assert_eq!(task.role, Role::Flank);
-        assert_eq!(order, contest(R0), "both in place: they contest together");
+        assert_eq!(order, press(R0), "both in place: they press together");
     }
     assert!(
         kinds(&report)
@@ -109,7 +120,7 @@ fn taking_a_square_one_of_theirs_holds_sends_two_to_flank_it() {
 fn interacting_with_something_on_the_ground_fetches_it() {
     let mut m = board(&[(L0, (0, 2)), (L1, (6, 0)), (R0, (6, 4))]);
     m.board.ground.push((Tile::new(2, 2), Item::Puff));
-    let report = m.resolve_turn([vec![interact(2, 2)], Vec::new()]);
+    let report = m.resolve_turn([vec![work(2, 2)], Vec::new()]);
     let (task, order, _) = job_of(&report, L0);
     assert_eq!(task.role, Role::Fetch);
     assert_eq!(order, walk(2, 2));
@@ -117,17 +128,102 @@ fn interacting_with_something_on_the_ground_fetches_it() {
 }
 
 #[test]
-fn interacting_with_one_of_ours_carrying_something_has_it_used() {
-    let mut m = board(&[(L0, (2, 2)), (R0, (3, 2))]);
-    m.board.fighters[0][0].carrying = Some(Item::Puff);
-    let report = m.resolve_turn([vec![interact(2, 2)], Vec::new()]);
+fn holding_a_square_holds_it_facing_the_way_the_handler_chose() {
+    let mut m = board(&[(L0, (2, 2)), (R0, (6, 4))]);
+    let report = m.resolve_turn([vec![defend(&[(3, 2)])], Vec::new()]);
     let (task, order, _) = job_of(&report, L0);
-    assert_eq!(task.role, Role::Use);
+    assert_eq!(task.role, Role::Claim);
+    assert_eq!(order, facing(3, 2, Facing::West));
+    assert!(m.fighter(L0).holding);
+    assert_eq!(m.fighter(L0).facing, Facing::West);
+}
+
+#[test]
+fn tricking_a_holder_sends_someone_round_to_its_side() {
+    // R0 holds at (3, 2) facing west; L0 stands right in front of it, L1 well off to the side.
+    let mut m = board(&[(L0, (2, 2)), (R0, (3, 2))]);
+    m.board.fighters[1][0].holding = true;
+    m.board.fighters[1][0].facing = Facing::West;
+    let report = m.resolve_turn([vec![outfox(&[(3, 2)])], vec![defend(&[(3, 2)])]]);
+    let (task, order, _) = job_of(&report, L0);
+    assert_eq!(task.role, Role::Trick);
+    assert!(
+        matches!(order, Order::Move { to } if to != Tile::new(2, 2)),
+        "in front of it, it walks round first rather than be read: {order:?}"
+    );
+    assert!(
+        !kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::TrickRead { .. }))
+    );
+    let report = m.resolve_turn([vec![outfox(&[(3, 2)])], vec![defend(&[(3, 2)])]]);
+    let (_, order, _) = job_of(&report, L0);
+    assert_eq!(order, trick(R0));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::Tricked { target: R0, .. }))
+    );
+}
+
+#[test]
+fn use_item_is_a_bonus_beyond_the_three_orders() {
+    let mut m = board(&[(L0, (1, 2)), (L1, (0, 0)), (L2, (0, 4)), (R0, (3, 2))]);
+    m.board.fighters[0][0].carrying = Some(Item::Puff);
+    let plan = vec![
+        defend(&[(1, 2)]),
+        defend(&[(0, 0)]),
+        defend(&[(0, 4)]),
+        Directive::UseItem {
+            by: 0,
+            at: Tile::new(3, 2),
+        },
+    ];
+    let report = m.resolve_turn([plan, Vec::new()]);
+    assert!(
+        !kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::OrderDropped { .. }))
+    );
+    assert!(
+        report
+            .events
+            .iter()
+            .any(|e| e.tick == 1 && matches!(e.kind, EventKind::ItemUsed { slot: L0, .. }))
+    );
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::Puffed { .. }))
+    );
+    assert!(m.fighter(L0).holding, "and it still did its job");
+}
+
+#[test]
+fn a_fourth_order_is_dropped_but_a_use_item_never_counts_toward_three() {
+    let mut m = board(&[(L0, (1, 2)), (R0, (6, 4))]);
+    let plan = vec![
+        defend(&[(1, 2)]),
+        take(&[(2, 2)]),
+        take(&[(3, 2)]),
+        Directive::UseItem {
+            by: 0,
+            at: Tile::new(2, 2),
+        },
+        take(&[(4, 2)]),
+    ];
+    let report = m.resolve_turn([plan, Vec::new()]);
+    let dropped: Vec<u8> = kinds(&report)
+        .iter()
+        .filter_map(|k| match k {
+            EventKind::OrderDropped { index, .. } => Some(*index),
+            _ => None,
+        })
+        .collect();
     assert_eq!(
-        order,
-        Order::Use {
-            at: Tile::new(3, 2)
-        }
+        dropped,
+        vec![4, 3],
+        "the fourth tactical order, and a USE ITEM with nothing to use"
     );
 }
 
@@ -172,7 +268,7 @@ fn who_a_creature_is_never_outweighs_a_job_only_it_is_near() {
 fn a_creature_whose_find_is_taken_first_thinks_again() {
     let mut m = board(&[(L0, (0, 2)), (L1, (0, 4)), (R0, (3, 1))]);
     m.board.ground.push((Tile::new(3, 2), Item::Twig));
-    let report = m.resolve_turn([vec![interact(3, 2)], vec![interact(3, 2)]]);
+    let report = m.resolve_turn([vec![work(3, 2)], vec![work(3, 2)]]);
     assert!(
         kinds(&report)
             .iter()
@@ -211,7 +307,7 @@ fn orders_past_three_or_with_nothing_to_aim_at_are_left_out() {
     let report = m.resolve_turn([
         vec![
             take(&[(1, 1)]),
-            interact(2, 2),
+            work(2, 2),
             take(&[(1, 2)]),
             take(&[(1, 3)]),
         ],
@@ -234,7 +330,7 @@ fn a_plan_replays_exactly_from_its_record() {
         vec![take(&[(6, 0)]), defend(&[(3, 2)])],
         vec![take(&[(3, 2)])],
     ]);
-    m.resolve_turn([vec![interact(3, 2)], vec![defend(&[(6, 0), (5, 0)])]]);
+    m.resolve_turn([vec![work(3, 2)], vec![defend(&[(6, 0), (5, 0)])]]);
     let record = m.record();
     let json = serde_json::to_string(&record).unwrap();
     let back: MatchRecord = serde_json::from_str(&json).unwrap();

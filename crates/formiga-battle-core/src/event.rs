@@ -35,7 +35,7 @@ pub enum Reason {
     FollowedUpToAlly { ally: Slot },
     /// With a moment to spare after arriving, moved out of reach or into cover.
     FollowedUpToCover,
-    /// Stepped back after a contest.
+    /// Stepped back after its PRESS was turned away.
     SteppedBack,
     /// Waited a tick rather than walk in among the other team.
     HungBack,
@@ -130,28 +130,61 @@ pub enum EventKind {
         slot: Slot,
         at: Tile,
     },
-    /// A contest stopped someone who was not holding. They lose one composure for each
-    /// contester, capped.
-    Interrupted {
+    /// A PRESS caught someone not holding: it was pushed one tile on, away from a presser
+    /// (`pushed_to`), or knocked off balance where it stood if the way on was blocked, and it
+    /// stops for the rest of the turn. Caught in the middle of a TRICK (`tricking`), the presser
+    /// read it. Nobody loses composure.
+    Pressed {
+        target: Slot,
+        by: Vec<Slot>,
+        pushed_to: Option<Tile>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        tricking: bool,
+    },
+    /// A presser took what the one it caught was carrying. It can use it from the next turn.
+    Stole {
+        by: Slot,
+        from: Slot,
+        item: Item,
+    },
+    /// Two PRESSes met: the one pressed was pressing too. Each loses one composure and both stop
+    /// for the rest of the turn.
+    Collided {
         target: Slot,
         by: Vec<Slot>,
     },
-    /// Someone holding turned a contest away, with any holders of its team beside it. Each
-    /// holder costs one contester a composure.
-    Countered {
+    /// Someone holding turned a PRESS away, with any holders of its team beside it. Each holder
+    /// facing a presser cost it one composure (`faced`); from the side or behind, nobody is hurt.
+    Repelled {
         target: Slot,
         holders: Vec<Slot>,
-        contesters: Vec<Slot>,
+        pressers: Vec<Slot>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        faced: Vec<Slot>,
     },
-    /// Contested from more sides than it had holders to turn them away, a holder's hold broke:
-    /// it was pushed off its tile away from a contester (`pushed_to`), or knocked off balance
-    /// where it stood if every way out was blocked. Nobody loses composure; it holds nothing more
+    /// Pressed from more sides than it had holders to turn them away, a holder's hold broke:
+    /// it was pushed off its tile away from a presser (`pushed_to`), or knocked off balance
+    /// where it stood if every way out was blocked. It loses one composure and holds nothing more
     /// this turn.
     Flanked {
         target: Slot,
         by: Vec<Slot>,
         from: Tile,
         pushed_to: Option<Tile>,
+    },
+    /// A TRICK from the side or behind broke a hold: the holder loses one composure, stays where
+    /// it stands, and holds nothing more this turn. Still on its feet, it still counts in the
+    /// zone, and is open to a PRESS like anyone not holding.
+    Tricked {
+        target: Slot,
+        by: Vec<Slot>,
+        from: Tile,
+    },
+    /// A TRICK from in front of a holder: `target`, the one it was aimed at or a holder of its
+    /// team beside it, saw it coming. Nobody is hurt and the hold stands.
+    TrickRead {
+        target: Slot,
+        by: Slot,
     },
     /// A flank broke a hold in the zone: the flankers' beacon goes up a tick for it, as well as
     /// for holding there.
@@ -160,13 +193,7 @@ pub enum EventKind {
         /// The one whose hold was broken.
         target: Slot,
     },
-    /// A contest met someone busy with a contest of their own. Nobody is hurt.
-    Scuffle {
-        contester: Slot,
-        target: Slot,
-        mutual: bool,
-    },
-    /// On the way to one contest, took another that walked into reach.
+    /// On the way to press one of theirs, pressed another that walked into reach.
     TookOpportunity {
         slot: Slot,
         meant: Slot,
@@ -309,8 +336,8 @@ pub enum EventKind {
     RaftSank {
         at: Tile,
     },
-    /// A pebble bell rang where its user stood: everyone in `hushed` lost the contest it had not
-    /// settled yet.
+    /// A pebble bell rang where its user stood: everyone in `hushed` lost the PRESS, TRICK or
+    /// INTERACT it had not settled yet.
     Rung {
         by: Slot,
         at: Tile,
@@ -347,7 +374,7 @@ pub enum EventKind {
         slots: Vec<Slot>,
         until_turn: u8,
     },
-    /// A contest bounced off a leaf umbrella: nobody is hurt and the one under it goes on.
+    /// A PRESS bounced off a leaf umbrella: nobody is hurt and the one under it goes on.
     Sheltered {
         target: Slot,
         by: Vec<Slot>,
@@ -355,7 +382,8 @@ pub enum EventKind {
     ShelterFolded {
         slot: Slot,
     },
-    /// What was used came to nothing: the tile was taken, or nobody was there to shelter.
+    /// What was used came to nothing: the tile was taken, nobody was there to shelter, or it was
+    /// out of reach.
     ItemFizzled {
         slot: Slot,
         item: Item,
@@ -377,6 +405,10 @@ pub struct Blown {
     pub to: Option<Tile>,
     /// It was under a leaf umbrella, which the puff caught like a sail.
     pub sailed: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
