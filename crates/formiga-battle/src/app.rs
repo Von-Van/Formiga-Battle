@@ -186,6 +186,9 @@ pub struct BattleApp {
     draft_style: crate::identity::Style,
     /// Each pennant's picture, painted once.
     flags: HashMap<crate::identity::Style, egui::TextureHandle>,
+    /// The Handler's painted pictures (tiles, plates, rosettes, team pictures, banners), each
+    /// painted once under its key.
+    art: HashMap<String, egui::TextureHandle>,
     /// A name for the three picked, as typed.
     trio_draft: String,
     /// A trio being renamed.
@@ -328,6 +331,7 @@ impl BattleApp {
                 .unwrap_or_default(),
             draft_style: crate::identity::Style::default(),
             flags: HashMap::new(),
+            art: HashMap::new(),
             trio_draft: String::new(),
             renaming: None,
             join_code: String::new(),
@@ -404,7 +408,11 @@ impl BattleApp {
                 app.club = "Hedge End Club".to_owned();
                 app.open_journal(Outing::Home, Step::Handler);
             }
-            Some(Review::Picking) => app.open_journal(Outing::Home, Step::Who),
+            Some(Review::Picking) => {
+                // A colony with a trio, its three picked.
+                app.table.record = formiga_battle_contract::sample::record();
+                app.open_journal(Outing::Home, Step::Who);
+            }
             Some(Review::Friend) => {
                 app.open_journal(Outing::World, Step::Room);
                 app.table.picked = (0..TEAM_SIZE.min(app.table.home.len())).collect();

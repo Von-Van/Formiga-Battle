@@ -9,6 +9,7 @@ mod feel;
 mod found;
 mod friend;
 mod garden;
+mod heraldry;
 mod host;
 mod icon;
 mod identity;
