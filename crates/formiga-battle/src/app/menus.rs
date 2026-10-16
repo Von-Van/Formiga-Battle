@@ -23,8 +23,8 @@ use formiga_battle_core::TEAM_SIZE;
 const STATION_ROWS: f32 = 216.0;
 /// How often the halt is repainted while anything moves at it.
 const STATION_FRAMES_PER_SECOND: f32 = 30.0;
-/// The halt's name, lettered on its board.
-const HALT: &str = "Battle Halt";
+/// The station's name, lettered on its board.
+const GROUNDS: &str = "The Battle Grounds";
 
 /// How long after a page starts turning its cards start dropping onto it: once the leaf is
 /// mostly over.
@@ -232,17 +232,59 @@ impl BattleApp {
         }
     }
 
-    /// The halt, filling the window: the train coming in for the companions, and once it has
-    /// stopped, the two places they can be off to, over it.
-    pub(super) fn station_page(&mut self, ui: &mut egui::Ui, full: Rect, now: f32) {
-        let ctx = ui.ctx().clone();
+    /// Keeps the station going, whatever is drawn: the keys that hurry the train in, what is
+    /// heard of it, and the notebook turning to the first page of an outing once it has gone.
+    pub(super) fn station_tick(&mut self, ctx: &egui::Context, now: f32) {
+        let Some(station) = &mut self.station else {
+            return;
+        };
+        let keyed = !ctx.egui_wants_keyboard_input()
+            && ctx.input(|i| {
+                i.key_pressed(egui::Key::Space)
+                    || i.key_pressed(egui::Key::Enter)
+                    || i.key_pressed(egui::Key::Escape)
+            });
+        if keyed && !station.stopped(now) && !station.leaving() {
+            station.skip(now);
+        }
+        let last = ctx
+            .data(|d| d.get_temp::<f32>(Id::new("station-heard")))
+            .unwrap_or(now);
+        for heard in station.heard(last, now) {
+            crate::feel::emit(
+                ctx,
+                match heard {
+                    Heard::Whistle => Feedback::TrainIn,
+                    Heard::Brakes => Feedback::TrainStops,
+                    Heard::Away => Feedback::TrainOut,
+                },
+            );
+        }
+        ctx.data_mut(|d| d.insert_temp(Id::new("station-heard"), now));
+        if station.seen_off(now) {
+            let outing = self.outing;
+            self.open_journal(outing, Step::Where);
+        }
+    }
+
+    /// The station's left page: the Battle Grounds as a big picture pasted onto it, the train
+    /// coming in with the companions at its windows. A click on it hurries the train in.
+    pub(super) fn station_left(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        u: f32,
+        now: f32,
+    ) {
+        let area = ui.max_rect();
         let ppp = ctx.pixels_per_point();
-        let u = chrome::unit(ppp);
-        let screen = full.size() * ppp;
+        let mat = u * 4.0;
+        let room = area.shrink(mat + u * 2.0);
+        let screen = room.size() * ppp;
         let scale = (screen.y / STATION_ROWS).floor().max(1.0);
         let size = (
-            (screen.x / scale).ceil() as i32,
-            (screen.y / scale).ceil() as i32,
+            (screen.x / scale).floor() as i32,
+            (screen.y / scale).floor() as i32,
         );
         let reduce = self.table.reduce_motion;
         let station = self.station.get_or_insert_with(|| {
@@ -255,17 +297,8 @@ impl BattleApp {
             Station::new(looks, size, now, reduce)
         });
         station.resize(size);
-        // Hurrying the train in: a click anywhere, or a key, while it is coming.
-        let hurry = ui.interact(full, Id::new("station-hurry"), Sense::click());
-        let keyed = ctx.input(|i| {
-            i.key_pressed(egui::Key::Space)
-                || i.key_pressed(egui::Key::Enter)
-                || i.key_pressed(egui::Key::Escape)
-        });
-        if (hurry.clicked() || keyed) && !station.stopped(now) && !station.leaving() {
-            station.skip(now);
-        }
-        // The picture, repainted only as often as anything at the halt moves.
+        let size = station.size();
+        // The picture, repainted only as often as anything at the station moves.
         let tick = if reduce && !station.leaving() {
             0
         } else {
@@ -290,197 +323,128 @@ impl BattleApp {
             }
         }
         let k = scale / ppp;
+        let drawn = vec2(size.0 as f32, size.1 as f32) * k;
+        let min = room.center() - drawn / 2.0;
+        let min = pos2((min.x * ppp).round() / ppp, (min.y * ppp).round() / ppp);
+        let photo = Rect::from_min_size(min, drawn);
         let painter = ui.painter().clone();
+        // Pasted in on a mat of card, as the places' pictures are.
+        chrome::card(
+            &painter,
+            photo.expand(mat),
+            u,
+            ink::CARD,
+            ink::LINE.gamma_multiply(0.55),
+        );
         if let Some((_, picture)) = &self.station_picture {
             painter.image(
                 picture.id(),
-                Rect::from_min_size(full.min, vec2(size.0 as f32, size.1 as f32) * k),
+                photo,
                 Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
                 Color32::WHITE,
             );
         }
-        let station = self.station.as_ref().expect("the halt");
-        let at = |x: i32, y: i32| full.min + vec2(x as f32, y as f32) * k;
-        // The halt's name on its board.
+        let station = self.station.as_mut().expect("the station");
+        let hurry = ui.interact(photo, Id::new("station-hurry"), Sense::click());
+        if hurry.clicked() && !station.stopped(now) && !station.leaving() {
+            station.skip(now);
+        }
+        // The station's name, lettered on its board.
+        let at = |x: i32, y: i32| photo.min + vec2(x as f32, y as f32) * k;
         let (sx, sy, sw, sh) = station.sign();
         let board = Rect::from_min_max(at(sx, sy), at(sx + sw, sy + sh));
-        let lettering = painter.layout_job(label_job(
-            HALT,
-            (board.height() * 0.42).clamp(9.0, 18.0),
-            Color32::from_rgb(0x7a, 0x2c, 0x33),
-        ));
+        let maroon = Color32::from_rgb(0x7a, 0x2c, 0x33);
+        let mut letters = (board.height() * 0.42).clamp(8.0, 18.0);
+        let mut lettering = painter.layout_job(label_job(GROUNDS, letters, maroon));
+        while lettering.size().x > board.width() * 0.88 && letters > 7.0 {
+            letters -= 0.5;
+            lettering = painter.layout_job(label_job(GROUNDS, letters, maroon));
+        }
         painter.galley(
             board.center() - lettering.size() / 2.0 + vec2(0.0, u * 0.5),
             lettering,
-            Color32::from_rgb(0x7a, 0x2c, 0x33),
+            maroon,
         );
-        // Above the train's steam, the title and the choices.
-        let clear = full.top() + station.clear_above() as f32 * k;
-        let sky = Rect::from_min_max(full.min, pos2(full.right(), clear));
-        let plaque_text = painter.layout_job(label_job("Formiga Battle", 22.0, ink::COVER));
-        let plaque = Rect::from_center_size(
-            pos2(sky.center().x, sky.top() + sky.height() * 0.16),
-            plaque_text.size() + vec2(u * 24.0, u * 14.0),
-        );
-        chrome::card(
-            &painter,
-            plaque,
-            u,
-            Color32::from_rgb(0x5b, 0x3a, 0x27),
-            Color32::from_rgb(0x2f, 0x1c, 0x12),
-        );
-        // Saddle stitches round the plaque, as round the notebook's cover.
-        let stitched = plaque.shrink(u * 3.0);
-        let mut x = stitched.left() + u;
-        while x + u * 3.0 < stitched.right() {
-            for y in [stitched.top(), stitched.bottom() - u] {
-                painter.rect_filled(
-                    Rect::from_min_size(pos2(x, y), vec2(u * 3.0, u)),
-                    0.0,
-                    Color32::from_rgb(0xcd, 0xb1, 0x7a),
-                );
-            }
-            x += u * 6.0;
-        }
-        painter.galley(
-            plaque.center() - plaque_text.size() / 2.0,
-            plaque_text,
-            ink::COVER,
-        );
+    }
+
+    /// The station's ruled right page: where the companions are, and once the train has stopped,
+    /// the two places they can be off to and the Handler's own pages.
+    pub(super) fn station_right(&mut self, ui: &mut egui::Ui, u: f32, now: f32) {
+        let Some(station) = &self.station else {
+            return;
+        };
         let leaving = station.leaving();
         let stopped = station.stopped(now);
-        let line = if leaving {
+        let since = station.stopped_at();
+        let observation = if leaving {
             "Off they go…"
         } else if stopped {
             "All aboard! Where are they off to?"
         } else {
-            "Your companions are coming in on the train. Click to hurry it along."
+            "Your companions are coming in on the train. Click the picture to hurry it along."
         };
-        let words = painter.layout_job(label_job(line, chrome::LABEL + 1.0, ink::FOREST));
-        let words_at = pos2(
-            sky.center().x - words.size().x / 2.0,
-            plaque.bottom() + u * 8.0,
-        );
-        let backing = Rect::from_min_size(words_at, words.size()).expand2(vec2(u * 5.0, u * 3.0));
-        chrome::card(
-            &painter,
-            backing,
-            u,
-            ink::CARD,
-            ink::LINE.gamma_multiply(0.55),
-        );
-        painter.galley(words_at, words, ink::FOREST);
+        chrome::page_heading(ui, "Formiga Battle · the station", GROUNDS, observation);
+        ui.add_space(u * 8.0);
+        let width = ui.available_width();
+        let h = 96.0;
         let mut chosen = None;
-        if stopped && !leaving {
-            let gap = u * 18.0;
-            let w = ((full.width() - gap * 3.0) / 2.0).min(340.0);
-            let h = 112.0_f32.min((clear - backing.bottom()) * 0.7).max(72.0);
-            let middle = pos2(
-                sky.center().x,
-                backing.bottom() + (clear - backing.bottom()) * 0.45,
-            );
-            let snap = |p: egui::Pos2| pos2((p.x / u).round() * u, (p.y / u).round() * u);
-            let world = Rect::from_min_size(
-                snap(pos2(middle.x - gap / 2.0 - w, middle.y - h / 2.0)),
-                vec2(w, h),
-            );
-            let home = Rect::from_min_size(
-                snap(pos2(middle.x + gap / 2.0, middle.y - h / 2.0)),
-                vec2(w, h),
-            );
-            // The choices drop in one after the other as the train comes to a stop.
-            let since = station.stopped_at();
-            let world = crate::feel::dropping(ui, since, 0, u, |ui| {
-                chrome::destination(
-                    ui,
-                    world,
-                    Id::new("out-in-the-world"),
-                    "Out in the World",
-                    "Online",
-                    u,
-                )
-                .on_hover_text("Play a friend: open a room and give them its code, or join theirs.")
-                .clicked()
-            });
-            let home = crate::feel::dropping(ui, since, 1, u, |ui| {
-                chrome::destination(
-                    ui,
-                    home,
-                    Id::new("close-to-home"),
-                    "Close to Home",
-                    "Offline",
-                    u,
-                )
-                .on_hover_text(
-                    "Play the visiting team on this computer. Wins fill each place's cup.",
-                )
-                .clicked()
-            });
-            if world {
-                chosen = Some(Outing::World);
-            } else if home {
-                chosen = Some(Outing::Home);
-            }
-            // The Handler's own pages, small beneath them.
-            let words = "History & settings";
-            let galley = painter.layout_job(label_job(words, chrome::LABEL, ink::PAGE));
-            let size = galley.size() + vec2(u * 10.0, u * 7.0);
-            let below = Rect::from_center_size(
-                snap(pos2(middle.x, middle.y + h / 2.0 + u * 10.0 + size.y / 2.0)),
-                size,
-            );
-            let notes = crate::feel::dropping(ui, since, 2, u, |ui| {
-                ui.scope_builder(egui::UiBuilder::new().max_rect(below), |ui| {
-                    chrome::button(ui, words, Kind::Plain, false, true, Some(below.width()), u)
-                        .on_hover_text("Matches played, cups, and how Battle looks and sounds")
+        let mut notes = false;
+        let ready = stopped && !leaving;
+        for (i, (outing, title, small, hint)) in [
+            (
+                Outing::World,
+                "Out in the World",
+                "Online",
+                "Play a friend: open a room and give them its code, or join theirs.",
+            ),
+            (
+                Outing::Home,
+                "Close to Home",
+                "Offline",
+                "Play the visiting team on this computer. Wins fill each place's cup.",
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let (rect, _) = ui.allocate_exact_size(vec2(width, h), Sense::hover());
+            if ready {
+                let picked = crate::feel::dropping(ui, since, i, u, |ui| {
+                    chrome::destination(ui, rect, Id::new(("destination", i)), title, small, u)
+                        .on_hover_text(hint)
                         .clicked()
-                })
-                .inner
-            });
-            if notes {
-                self.open_journal(self.outing, Step::History);
-                return;
+                });
+                if picked {
+                    chosen = Some(outing);
+                }
             }
+            ui.add_space(u * 6.0);
         }
-        // Who Battle is open for, on a ticket by the line.
-        let ticket =
-            painter.layout_no_wrap(self.host.describe(), FontId::proportional(11.5), ink::PAGE);
-        let ticket_rect = Rect::from_min_size(
-            full.max - ticket.size() - vec2(u * 14.0, u * 10.0),
-            ticket.size() + vec2(u * 8.0, u * 4.0),
-        );
-        chrome::card(
-            &painter,
-            ticket_rect,
-            u,
-            ink::CARD,
-            ink::LINE.gamma_multiply(0.55),
-        );
-        painter.galley(ticket_rect.min + vec2(u * 4.0, u * 2.0), ticket, ink::PAGE);
-
-        let station = self.station.as_mut().expect("the halt");
-        // What is heard of the train since the last frame.
-        let last = ctx
-            .data(|d| d.get_temp::<f32>(Id::new("station-heard")))
-            .unwrap_or(now);
-        for heard in station.heard(last, now) {
-            crate::feel::emit(
-                &ctx,
-                match heard {
-                    Heard::Whistle => Feedback::TrainIn,
-                    Heard::Brakes => Feedback::TrainStops,
-                    Heard::Away => Feedback::TrainOut,
-                },
-            );
+        if ready {
+            crate::feel::dropping(ui, since, 2, u, |ui| {
+                ui.add_space(u * 2.0);
+                dashed_rule(ui, u);
+                ui.add_space(u * 4.0);
+                notes = chrome::button(
+                    ui,
+                    "History & settings",
+                    Kind::Plain,
+                    false,
+                    true,
+                    Some(width),
+                    u,
+                )
+                .on_hover_text("Matches played, cups, and how Battle looks and sounds")
+                .clicked();
+            });
         }
-        ctx.data_mut(|d| d.insert_temp(Id::new("station-heard"), now));
-        if let Some(outing) = chosen {
+        if notes {
+            self.open_journal(self.outing, Step::History);
+        } else if let Some(outing) = chosen {
             self.outing = outing;
-            station.set_off(now);
-        }
-        if station.seen_off(now) {
-            let outing = self.outing;
-            self.open_journal(outing, Step::Where);
+            if let Some(station) = &mut self.station {
+                station.set_off(now);
+            }
         }
     }
 

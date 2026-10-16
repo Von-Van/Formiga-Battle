@@ -709,11 +709,7 @@ impl BattleApp {
         self.pokes.retain(|(_, at)| now - at < 0.6);
         let full = ui.max_rect();
         if self.stage == Stage::Station {
-            egui::CentralPanel::default()
-                .frame(egui::Frame::NONE)
-                .show(ui, |ui| self.station_page(ui, full, now));
-            self.take_snap(&ctx);
-            return;
+            self.station_tick(&ctx, now);
         }
         let layout = self.layout(&ctx, full);
         egui::CentralPanel::default()
@@ -739,7 +735,16 @@ impl BattleApp {
                             self.journal_right(ui, &ctx, u);
                         });
                     }
-                    Stage::Station => {}
+                    Stage::Station => {
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(left), |ui| {
+                            ui.multiply_opacity(fade);
+                            self.station_left(ui, &ctx, u, now);
+                        });
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                            ui.multiply_opacity(fade);
+                            self.station_right(ui, u, now);
+                        });
+                    }
                     Stage::Playing => {
                         self.board_view(ui, &ctx, layout.left.shrink(u * 4.0), now, u);
                         self.board_page(ui, layout.left, now, u);
@@ -888,6 +893,14 @@ impl BattleApp {
         );
         if self.stage == Stage::Journal {
             self.journal_strip(ui, area, u, now);
+            return;
+        }
+        if self.stage == Stage::Station {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.label(label_job("The Battle Grounds", chrome::LABEL, ink::COVER));
+                });
+            });
             return;
         }
         let paused = self.paused;
@@ -1118,7 +1131,13 @@ impl BattleApp {
             ),
         );
         let line = match self.stage {
-            Stage::Station => String::new(),
+            Stage::Station => match &self.station {
+                Some(s) if s.leaving() => "Off they go…".to_owned(),
+                Some(s) if s.stopped(now) => {
+                    "Choose where they are off to, or look back over your history.".to_owned()
+                }
+                _ => "Click the picture, or press Space, to hurry the train in.".to_owned(),
+            },
             Stage::Journal => self.journal_hint(),
             Stage::Playing if self.table.finished(now) => {
                 "The match is over. Play again from the notes page.".to_owned()
