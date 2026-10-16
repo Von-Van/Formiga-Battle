@@ -6,17 +6,13 @@ use common::*;
 use formiga_battle_core::*;
 
 fn tap(x: i8, y: i8) -> Order {
-    Order::Contest {
-        target: Target::Lever {
-            at: Tile::new(x, y),
-        },
-    }
+    interact(x, y)
 }
 
-fn use_on(x: i8, y: i8) -> Order {
-    Order::Use {
-        at: Tile::new(x, y),
-    }
+/// Holding where it stands, as a creature told to USE ITEM does in these tests.
+fn here(m: &Match, slot: Slot) -> Order {
+    let t = m.fighter(slot).at;
+    hold(t.x, t.y)
 }
 
 fn carry(m: &mut Match, slot: Slot, item: Item) {
@@ -70,7 +66,10 @@ fn a_leaf_umbrella_keeps_the_sprinkler_off() {
     // it is used, in the first.
     m.board.event_at = Some(4 * 3 + 2);
     m.board.event_tiles = m.arena.scenery_tiles(&[]);
-    let report = m.resolve_orders(orders(&[(L0, hold(3, 3)), (L1, use_on(3, 3))]));
+    let report = m.resolve_orders_using(
+        orders(&[(L0, hold(3, 3)), (L1, here(&m, L1))]),
+        using(Side::Left, &[(1, (3, 3))]),
+    );
     assert!(
         kinds(&report)
             .iter()
@@ -110,6 +109,34 @@ fn turning_a_tap_brings_the_sprinkler_a_tick_later_and_then_the_tap_rests() {
 }
 
 #[test]
+fn a_tap_reached_after_the_sprinkler_came_by_itself_rests_for_the_rest_of_that_turn() {
+    // L0 waits two steps from the left tap until the sprinkler comes by itself, at turn 4's
+    // second tick, and only then goes for the tap. L1 and R0 each hold an arm of the yard.
+    let placed = [(L0, (1, 3)), (L1, (3, 3)), (R0, (5, 3))];
+    let mut m = board_on(Arena::backyard(), &placed);
+    let waiting = orders(&[(L0, hold(1, 3)), (L1, hold(3, 3)), (R0, hold(5, 3))]);
+    for _ in 0..3 {
+        m.resolve_orders(waiting);
+    }
+    assert_eq!(m.board.event_at, Some(4 * 3 + 2));
+    let report = m.resolve_orders(orders(&[
+        (L0, tap(1, 6)),
+        (L1, hold(3, 3)),
+        (R0, hold(5, 3)),
+    ]));
+    let landings = kinds(&report)
+        .iter()
+        .filter(|k| matches!(k, EventKind::SceneryLanded { .. }))
+        .count();
+    assert_eq!(landings, 1, "the sprinkler comes once in a turn");
+    assert!(
+        !kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::SwitchTurned { .. }))
+    );
+}
+
+#[test]
 fn holding_beside_a_tap_shoos_off_whoever_turns_it() {
     let mut m = board_on(Arena::backyard(), &[(L0, (1, 5)), (R0, (2, 6))]);
     let report = m.resolve_orders(orders(&[(L0, tap(1, 6)), (R0, hold(2, 6))]));
@@ -145,7 +172,7 @@ fn found_things_glint_a_turn_ahead_then_turn_up_on_both_spots_of_a_mirrored_pair
 }
 
 #[test]
-fn stepping_onto_something_picks_it_up_and_being_caught_on_the_move_drops_it() {
+fn stepping_onto_something_picks_it_up_and_being_pressed_loses_it() {
     // The only quickest way from (1, 2) to (3, 2) is over (2, 2).
     let mut m = board(&[(L0, (1, 2)), (R0, (6, 4))]);
     m.board.ground.push((Tile::new(2, 2), Item::Twig));
@@ -161,10 +188,29 @@ fn stepping_onto_something_picks_it_up_and_being_caught_on_the_move_drops_it() {
     assert_eq!(m.fighter(L0).carrying, Some(Item::Twig));
     assert!(m.board.ground.is_empty());
 
-    // Caught before it can step, it lets go where it stands.
+    // Pressed before it can step, it loses it to the presser.
     let mut m = board(&[(L0, (1, 2)), (R0, (1, 3))]);
     carry(&mut m, L0, Item::Puff);
-    let report = m.resolve_orders(orders(&[(L0, walk(5, 2)), (R0, contest(L0))]));
+    let report = m.resolve_orders(orders(&[(L0, walk(5, 2)), (R0, press(L0))]));
+    assert!(kinds(&report).iter().any(|k| matches!(
+        k,
+        EventKind::Stole {
+            by: R0,
+            from: L0,
+            item: Item::Puff,
+        }
+    )));
+    assert_eq!(m.fighter(L0).carrying, None);
+    assert_eq!(m.fighter(R0).carrying, Some(Item::Puff));
+
+    // Knocked off its feet by a flank, it lets go where it ends up.
+    let mut m = board(&[(L0, (1, 2)), (R0, (0, 2)), (R1, (2, 2))]);
+    carry(&mut m, L0, Item::Puff);
+    let report = m.resolve_orders(orders(&[
+        (L0, hold(1, 2)),
+        (R0, press(L0)),
+        (R1, press(L0)),
+    ]));
     assert!(kinds(&report).iter().any(|k| matches!(
         k,
         EventKind::Dropped {
@@ -173,8 +219,6 @@ fn stepping_onto_something_picks_it_up_and_being_caught_on_the_move_drops_it() {
             at: Some(_)
         }
     )));
-    assert_eq!(m.fighter(L0).carrying, None);
-    assert_eq!(m.board.ground, vec![(Tile::new(1, 2), Item::Puff)]);
 }
 
 #[test]
@@ -182,11 +226,10 @@ fn a_puff_bowls_over_whoever_stands_across_its_way_but_not_two_holders_side_by_s
     // L0 blows rightwards at (3, 2): the tiles (3, 1), (3, 2) and (3, 3) are blown on to x = 4.
     let mut m = board(&[(L0, (1, 2)), (R0, (3, 2)), (R1, (3, 3))]);
     carry(&mut m, L0, Item::Puff);
-    let report = m.resolve_orders(orders(&[
-        (L0, use_on(3, 2)),
-        (R0, walk(3, 2)),
-        (R1, walk(3, 3)),
-    ]));
+    let report = m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, walk(3, 2)), (R1, walk(3, 3))]),
+        using(Side::Left, &[(0, (3, 2))]),
+    );
     let blown = report
         .events
         .iter()
@@ -202,11 +245,10 @@ fn a_puff_bowls_over_whoever_stands_across_its_way_but_not_two_holders_side_by_s
 
     let mut m = board(&[(L0, (1, 2)), (R0, (3, 2)), (R1, (3, 3))]);
     carry(&mut m, L0, Item::Puff);
-    let report = m.resolve_orders(orders(&[
-        (L0, use_on(3, 2)),
-        (R0, hold(3, 2)),
-        (R1, hold(3, 3)),
-    ]));
+    let report = m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, hold(3, 2)), (R1, hold(3, 3))]),
+        using(Side::Left, &[(0, (3, 2))]),
+    );
     assert!(kinds(&report).iter().any(
         |k| matches!(k, EventKind::Puffed { blown, braced, .. } if blown.is_empty() && braced.len() == 2)
     ));
@@ -218,7 +260,10 @@ fn a_puff_catches_a_leaf_umbrella_like_a_sail() {
     let mut m = board(&[(L0, (1, 2)), (R0, (3, 2))]);
     carry(&mut m, L0, Item::Puff);
     m.board.fighters[1][0].shelter_until = 100;
-    m.resolve_orders(orders(&[(L0, use_on(3, 2)), (R0, walk(3, 2))]));
+    m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, walk(3, 2))]),
+        using(Side::Left, &[(0, (3, 2))]),
+    );
     assert_eq!(at(&m, R0), (5, 2));
 }
 
@@ -226,7 +271,10 @@ fn a_puff_catches_a_leaf_umbrella_like_a_sail() {
 fn a_twig_blocks_its_tile_for_two_turns_and_keeps_an_open_gate_from_closing() {
     let mut m = board(&[(L0, (1, 2)), (R0, (6, 4))]);
     carry(&mut m, L0, Item::Twig);
-    m.resolve_orders(orders(&[(L0, use_on(3, 2)), (R0, hold(6, 4))]));
+    m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, hold(6, 4))]),
+        using(Side::Left, &[(0, (3, 2))]),
+    );
     assert!(!m.walkable(Tile::new(3, 2)));
     m.resolve_orders(orders(&[(L0, hold(1, 2)), (R0, hold(6, 4))]));
     m.resolve_orders(orders(&[(L0, hold(1, 2)), (R0, hold(6, 4))]));
@@ -253,10 +301,10 @@ fn a_twig_blocks_its_tile_for_two_turns_and_keeps_an_open_gate_from_closing() {
 }
 
 #[test]
-fn a_contest_bounces_off_a_leaf_umbrella_and_hurts_nobody() {
+fn a_press_bounces_off_a_leaf_umbrella_and_hurts_nobody() {
     let mut m = board(&[(L0, (1, 2)), (R0, (2, 2))]);
     m.board.fighters[0][0].shelter_until = 100;
-    let report = m.resolve_orders(orders(&[(L0, walk(1, 4)), (R0, contest(L0))]));
+    let report = m.resolve_orders(orders(&[(L0, walk(1, 4)), (R0, press(L0))]));
     assert!(
         kinds(&report)
             .iter()
@@ -387,7 +435,10 @@ fn a_twig_thrown_in_the_millpond_floats_as_a_raft_anyone_can_stand_on() {
     );
     carry(&mut m, L0, Item::Twig);
     assert!(!m.walkable(Tile::new(2, 1)));
-    let report = m.resolve_orders(orders(&[(L0, use_on(2, 1)), (R0, hold(8, 5))]));
+    let report = m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, hold(8, 5))]),
+        using(Side::Left, &[(0, (2, 1))]),
+    );
     assert!(
         kinds(&report)
             .iter()
@@ -420,15 +471,14 @@ fn shaking_a_tree_bonks_whoever_stands_round_it_and_drops_a_twig_beside_it() {
 }
 
 #[test]
-fn a_pebble_bell_spoils_a_contest_not_yet_settled_nearby() {
+fn a_pebble_bell_spoils_a_press_not_yet_settled_nearby() {
     // R0 needs two steps to reach L1; the bell rings before it gets there.
     let mut m = board(&[(L0, (3, 3)), (L1, (2, 2)), (R0, (5, 2))]);
     carry(&mut m, L0, Item::Bell);
-    let report = m.resolve_orders(orders(&[
-        (L0, use_on(3, 3)),
-        (L1, hold(2, 2)),
-        (R0, contest(L1)),
-    ]));
+    let report = m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (L1, hold(2, 2)), (R0, press(L1))]),
+        using(Side::Left, &[(0, (3, 3))]),
+    );
     assert!(
         kinds(&report)
             .iter()
@@ -437,7 +487,7 @@ fn a_pebble_bell_spoils_a_contest_not_yet_settled_nearby() {
     assert!(
         !kinds(&report)
             .iter()
-            .any(|k| matches!(k, EventKind::Countered { .. }))
+            .any(|k| matches!(k, EventKind::Repelled { .. }))
     );
     assert_eq!(composure(&m, R0), 3);
 }
@@ -446,7 +496,10 @@ fn a_pebble_bell_spoils_a_contest_not_yet_settled_nearby() {
 fn a_pebble_bell_rung_beside_a_tap_sets_the_sprinkler_off() {
     let mut m = board_on(Arena::backyard(), &[(L0, (1, 5)), (R0, (8, 1))]);
     carry(&mut m, L0, Item::Bell);
-    let report = m.resolve_orders(orders(&[(L0, use_on(1, 5)), (R0, hold(8, 1))]));
+    let report = m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, hold(8, 1))]),
+        using(Side::Left, &[(0, (1, 5))]),
+    );
     assert!(
         kinds(&report)
             .iter()
@@ -471,7 +524,10 @@ fn honey_stops_whoever_steps_in_and_whoever_is_pushed_onto_it() {
     carry(&mut m, L0, Item::Puff);
     m.board.fighters[1][0].shelter_until = 100;
     m.board.honey.push((Tile::new(4, 2), 100));
-    m.resolve_orders(orders(&[(L0, use_on(3, 2)), (R0, hold(3, 2))]));
+    m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, hold(3, 2))]),
+        using(Side::Left, &[(0, (3, 2))]),
+    );
     assert_eq!(at(&m, R0), (4, 2));
 }
 
@@ -479,7 +535,10 @@ fn honey_stops_whoever_steps_in_and_whoever_is_pushed_onto_it() {
 fn a_springy_seed_hops_over_a_creature_but_never_over_a_wall() {
     let mut m = board(&[(L0, (1, 2)), (R0, (2, 2))]);
     carry(&mut m, L0, Item::Seed);
-    m.resolve_orders(orders(&[(L0, use_on(3, 2)), (R0, hold(2, 2))]));
+    m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, hold(2, 2))]),
+        using(Side::Left, &[(0, (3, 2))]),
+    );
     assert_eq!(at(&m, L0), (3, 2));
 
     let walled = Arena::parse(
@@ -488,7 +547,10 @@ fn a_springy_seed_hops_over_a_creature_but_never_over_a_wall() {
     .unwrap();
     let mut m = board_on(walled, &[(L0, (1, 2)), (R0, (6, 4))]);
     carry(&mut m, L0, Item::Seed);
-    let report = m.resolve_orders(orders(&[(L0, use_on(3, 2)), (R0, hold(6, 4))]));
+    let report = m.resolve_orders_using(
+        orders(&[(L0, here(&m, L0)), (R0, hold(6, 4))]),
+        using(Side::Left, &[(0, (3, 2))]),
+    );
     assert!(kinds(&report).iter().any(|k| matches!(
         k,
         EventKind::ItemFizzled {

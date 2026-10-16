@@ -57,8 +57,8 @@ fn someone_knocked_off_balance_in_the_zone_no_longer_pauses_it() {
     );
     let report = m.resolve_orders(orders(&[
         (L0, hold(4, 3)),
-        (L1, contest(R0)),
-        (L2, contest(R0)),
+        (L1, press(R0)),
+        (L2, press(R0)),
         (R0, hold(5, 3)),
     ]));
     assert!(
@@ -86,12 +86,7 @@ fn a_pulled_lever_swings_the_gate_the_tick_after_and_everyone_saw_it_coming() {
     let mut m = board_on(arena, &[(L0, (3, 6)), (R0, (8, 1))]);
     assert!(!m.walkable(gate));
     let report = m.resolve_orders(orders(&[
-        (
-            L0,
-            Order::Contest {
-                target: Target::Lever { at: lever },
-            },
-        ),
+        (L0, Order::Interact { at: lever }),
         (R0, hold(8, 1)),
     ]));
     let pulled = report
@@ -116,12 +111,7 @@ fn a_pulled_lever_swings_the_gate_the_tick_after_and_everyone_saw_it_coming() {
     assert!(m.walkable(gate));
     // It rests for a whole turn after.
     let report = m.resolve_orders(orders(&[
-        (
-            L0,
-            Order::Contest {
-                target: Target::Lever { at: lever },
-            },
-        ),
+        (L0, Order::Interact { at: lever }),
         (R0, hold(8, 1)),
     ]));
     assert!(
@@ -137,12 +127,7 @@ fn someone_holding_beside_the_lever_turns_a_pull_away() {
     let lever = arena.levers[0];
     let mut m = board_on(arena, &[(L0, (3, 6)), (R0, (5, 6))]);
     let report = m.resolve_orders(orders(&[
-        (
-            L0,
-            Order::Contest {
-                target: Target::Lever { at: lever },
-            },
-        ),
+        (L0, Order::Interact { at: lever }),
         (R0, hold(5, 6)),
     ]));
     assert_eq!(composure(&m, L0), 2);
@@ -162,12 +147,7 @@ fn a_gate_cannot_close_on_someone_standing_in_it() {
     let mut m = board_on(arena, &[(L0, (3, 6)), (R0, (gate.x, gate.y))]);
     m.board.gates_open = vec![true];
     let report = m.resolve_orders(orders(&[
-        (
-            L0,
-            Order::Contest {
-                target: Target::Lever { at: lever },
-            },
-        ),
+        (L0, Order::Interact { at: lever }),
         (R0, hold(gate.x, gate.y)),
     ]));
     assert!(
@@ -200,8 +180,23 @@ fn missing_orders_are_filled_for_both_teams_by_the_same_fallback() {
     let mirror = |t: Tile| Tile::new(m.arena.width as i8 - 1 - t.x, t.y);
     for i in 0..TEAM_SIZE {
         match (report.orders[0][i], report.orders[1][i]) {
-            (Some(Order::Hold { at: left }), Some(Order::Hold { at: right })) => {
-                assert_eq!(mirror(left), right)
+            (
+                Some(Order::Hold {
+                    at: left,
+                    facing: a,
+                }),
+                Some(Order::Hold {
+                    at: right,
+                    facing: b,
+                }),
+            ) => {
+                assert_eq!(mirror(left), right);
+                let flip = |f: Facing| match f {
+                    Facing::East => Facing::West,
+                    Facing::West => Facing::East,
+                    f => f,
+                };
+                assert_eq!(flip(a), b, "and to face mirrored ways");
             }
             other => panic!("expected two holds, got {other:?}"),
         }
@@ -209,7 +204,7 @@ fn missing_orders_are_filled_for_both_teams_by_the_same_fallback() {
 }
 
 #[test]
-fn the_fallback_holds_in_the_zone_and_a_bold_creature_contests_a_neighbour() {
+fn the_fallback_holds_in_the_zone_and_a_bold_creature_presses_a_neighbour() {
     let mut bold = plain(1);
     bold.nature.boldness = 1000;
     let mut cautious = plain(2);
@@ -230,9 +225,10 @@ fn the_fallback_holds_in_the_zone_and_a_bold_creature_contests_a_neighbour() {
             (R1, (2, 6)),
         ],
     );
-    assert_eq!(ai::fallback(&m, L2), hold(4, 3));
-    assert_eq!(ai::fallback(&m, L0), contest(R0));
-    assert_eq!(ai::fallback(&m, L1), hold(1, 6));
+    // Each holds facing the nearest of the other team.
+    assert_eq!(ai::fallback(&m, L2), facing(4, 3, Facing::North));
+    assert_eq!(ai::fallback(&m, L0), press(R0));
+    assert_eq!(ai::fallback(&m, L1), facing(1, 6, Facing::East));
 }
 
 /// The left creature walks from one side of the field to the other past a holder whose reach
@@ -343,7 +339,7 @@ fn a_wary_creature_sent_to_hold_goes_straight_to_its_post() {
 }
 
 #[test]
-fn a_wary_creature_sent_to_contest_goes_without_hanging_back() {
+fn a_wary_creature_sent_to_press_goes_without_hanging_back() {
     let teams = [
         vec![wary(), plain(2), plain(3)],
         vec![plain(4), plain(5), plain(6)],
@@ -352,14 +348,14 @@ fn a_wary_creature_sent_to_contest_goes_without_hanging_back() {
     // Kept to the plain way, as the others are: a creature this wary would otherwise keep to
     // the walls on its way.
     m.ruleset.detour_budget = 0;
-    let report = m.resolve_orders(orders(&[(L0, contest(R0)), (R0, walk(3, 2))]));
+    let report = m.resolve_orders(orders(&[(L0, press(R0)), (R0, walk(3, 2))]));
     assert!(
         !report
             .events
             .iter()
             .any(|e| matches!(e.kind, EventKind::HungBack { .. }))
     );
-    assert_eq!(composure(&m, R0), 2);
+    assert!(m.fighter(R0).interrupted);
 }
 
 #[test]

@@ -117,6 +117,17 @@ pub struct Summary {
     pub flanks: u32,
     /// Flanks after which the flanking team's beacon went up before the turn was out.
     pub flanks_that_paid: u32,
+    /// Holds broken by a TRICK from the side or behind, and TRICKs read from the front.
+    pub tricks: u32,
+    pub tricks_read: u32,
+    /// Presses that pushed someone not holding, of them those that caught a trickster, and
+    /// things taken by them.
+    pub presses: u32,
+    pub tricksters_caught: u32,
+    pub steals: u32,
+    /// Two presses that met, and presses turned away head on by a holder facing them.
+    pub collisions: u32,
+    pub head_on: u32,
     /// Each creature counts its team's result.
     pub by_kind: BTreeMap<String, Record>,
     /// By trio of kinds, sorted, so the same three in any order are one trio.
@@ -184,6 +195,15 @@ pub fn run(
                             summary.flanks += 1;
                             flanked.push(by[0].side);
                         }
+                        EventKind::Tricked { .. } => summary.tricks += 1,
+                        EventKind::TrickRead { .. } => summary.tricks_read += 1,
+                        EventKind::Pressed { tricking, .. } => {
+                            summary.presses += 1;
+                            summary.tricksters_caught += u32::from(*tricking);
+                        }
+                        EventKind::Stole { .. } => summary.steals += 1,
+                        EventKind::Collided { .. } => summary.collisions += 1,
+                        EventKind::Repelled { faced, .. } => summary.head_on += faced.len() as u32,
                         EventKind::CaptureProgress { side, progress: p } => {
                             progress[side.index()] = *p;
                             let before = flanked.len();

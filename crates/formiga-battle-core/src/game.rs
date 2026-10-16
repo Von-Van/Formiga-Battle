@@ -3,7 +3,7 @@
 //! Both teams' plans are locked together and each team shares its own out among its creatures
 //! (`muster`), then the turn plays out in a few ticks. Every tick
 //! works from one shared picture of the board: everyone decides their step from where everyone
-//! stood, every step happens at once, and then every contest is settled from where everyone
+//! stood, every step happens at once, and then every press, trick and interaction is settled from where everyone
 //! ended up. Nobody moves first.
 //!
 //! A tick, in order:
@@ -12,15 +12,16 @@
 //!    tick lands: things found on the board turn up, items used last tick take effect, the map
 //!    event comes (`scenery`). Anyone whose job has just come to nothing thinks again, once a
 //!    turn, from its team's plan (`muster`).
-//! 2. Contests already next to their target are settled, all from the same picture (see
-//!    `engage`), so someone walking away from a contester next to it is caught before it steps.
+//!    On the first tick, every USE ITEM given for the turn is used, before anything else settles.
+//! 2. PRESSes, TRICKs and INTERACTs already next to what they are aimed at are settled (see
+//!    `engage`), so someone walking away from a presser next to it is caught before it steps.
 //! 3. Each creature still carrying out its order picks one step (`interpret`).
 //! 4. The steps happen together. Two wanting one tile: a fair draw lets one in. Two wanting to
 //!    swap, or a step into a tile whose creature did not leave: they stay where they were. Nobody
 //!    is hurt by a bump. Anyone with empty paws who stepped onto something lying there picks it
 //!    up.
 //! 5. Anyone who has reached the tile it was told to hold starts holding.
-//! 6. Contests that have just come into reach are settled the same way. Composure is lost as each
+//! 6. Those that have just come into reach are settled the same way. Composure is lost as each
 //!    is settled, at most `Ruleset::damage_cap` from one creature in a tick; anyone at zero is
 //!    knocked out.
 //! 7. The beacon counts: a team holding in the zone with nobody from the other team in it gains a
@@ -33,7 +34,7 @@ use crate::event::{Event, EventKind, Fill, Outcome, Victory};
 use crate::grid::Tile;
 use crate::items::Item;
 use crate::muster::Task;
-use crate::order::{Order, Orders, Side, Slot, Target, TeamPlan};
+use crate::order::{Facing, Order, Orders, Quarter, Side, Slot, TeamPlan};
 use crate::profile::{Behavior, Profile};
 use crate::rng::{self, Purpose};
 use crate::ruleset::{CaptureRule, RULES_VERSION, Ruleset};
@@ -53,9 +54,10 @@ pub struct Fighter {
     pub order: Option<Order>,
     /// Standing on the tile it was told to hold, holding it.
     pub holding: bool,
-    /// Its contest has been settled this turn, whatever came of it.
+    /// Its PRESS, TRICK or INTERACT has been settled this turn, whatever came of it.
     pub spent: bool,
-    /// A contest stopped it; it stays where it is for the rest of the turn.
+    /// Pressed, flanked, tricked or otherwise knocked off balance: it stays where it is for the
+    /// rest of the turn and does not count in the zone.
     pub interrupted: bool,
     /// It reached the tile it was told to move to.
     pub arrived: bool,
@@ -72,9 +74,23 @@ pub struct Fighter {
     /// bump each other for ever.
     #[serde(default)]
     pub bumped: bool,
-    /// Its contest this turn was turned away by a holder.
+    /// Its PRESS this turn was turned away by a holder.
     #[serde(default)]
     pub turned_away: bool,
+    /// The way it faces while it holds: set when it starts holding, and fixed for the turn.
+    pub facing: Facing,
+    /// The tile it was told to USE ITEM on this turn, until it does, at the start of the first
+    /// tick.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub using: Option<Tile>,
+    /// It does nothing more this tick, neither stepping nor settling anything: it is using what
+    /// it carried, or has just hopped.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pause: bool,
+    /// A TRICK broke its hold: it stands where it is and holds nothing more this turn, but it
+    /// is still on its feet, and still counts in the zone.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub broken: bool,
     /// What it picked up, if anything. One thing at a time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carrying: Option<Item>,
@@ -103,7 +119,7 @@ fn is_false(b: &bool) -> bool {
 }
 
 impl Fighter {
-    fn new(at: Tile, composure: u8) -> Self {
+    fn new(at: Tile, composure: u8, facing: Facing) -> Self {
         Self {
             at,
             composure,
@@ -118,6 +134,10 @@ impl Fighter {
             hung_back: false,
             bumped: false,
             turned_away: false,
+            facing,
+            using: None,
+            pause: false,
+            broken: false,
             carrying: None,
             shelter_until: 0,
             task: None,
@@ -137,10 +157,12 @@ impl Fighter {
             || self.interrupted
             || self.stuck
             || self.bumped
+            || self.pause
+            || self.broken
             || self.order.is_none()
             || match self.order {
                 Some(Order::Move { .. }) => self.arrived,
-                Some(Order::Contest { .. } | Order::Use { .. }) => self.spent,
+                Some(o) if o.settles() => self.spent,
                 _ => false,
             }
     }
@@ -258,8 +280,10 @@ impl Match {
             left.clone().map(|p| p.behavior()),
             right.clone().map(|p| p.behavior()),
         ];
-        let fighters =
-            [0, 1].map(|side| arena.starts[side].map(|tile| Fighter::new(tile, ruleset.composure)));
+        let fighters = Side::BOTH.map(|side| {
+            arena.starts[side.index()]
+                .map(|tile| Fighter::new(tile, ruleset.composure, Facing::across(side)))
+        });
         let board = Board {
             turn: 0,
             fighters,
@@ -409,26 +433,35 @@ impl Match {
         };
         match *order {
             Order::Move { to } => ground(to),
-            Order::Hold { at } => ground(at),
-            Order::Contest {
-                target: Target::Creature { slot: target },
-            } => {
+            Order::Hold { at, .. } => ground(at),
+            Order::Press { target } | Order::Trick { target } => {
                 target.side != slot.side
                     && (target.index as usize) < TEAM_SIZE
                     && self.standing(target)
             }
-            Order::Contest {
-                target: Target::Lever { at },
-            } => self.arena.levers.contains(&at) || self.arena.switches.contains(&at),
-            Order::Use { at } => {
-                self.arena.contains(at)
-                    && match self.fighter(slot).carrying {
-                        Some(Item::Twig) => ground(at) || self.floats(at),
-                        Some(_) => true,
-                        None => false,
-                    }
+            Order::Interact { at } => {
+                self.arena.levers.contains(&at) || self.arena.switches.contains(&at)
             }
         }
+    }
+
+    /// Whether this creature can USE ITEM on `at` this turn: it carries something, and `at` is
+    /// within the item's reach of where it stands now.
+    pub fn can_use(&self, slot: Slot, at: Tile) -> bool {
+        let ground = |tile: Tile| {
+            matches!(self.arena.terrain(tile), Terrain::Open | Terrain::Gate)
+                && self.arena.contains(tile)
+        };
+        let f = self.fighter(slot);
+        !f.out
+            && self.arena.contains(at)
+            && match f.carrying {
+                Some(item) if f.at.distance(at) <= item.reach() => match item {
+                    Item::Twig => ground(at) || self.floats(at),
+                    _ => true,
+                },
+                _ => false,
+            }
     }
 
     /// Locks both teams' plans, has each team share its own out among its creatures, fills any
@@ -442,6 +475,16 @@ impl Match {
     /// out are filled by the fallback.
     pub fn resolve_orders(&mut self, submitted: [Orders; 2]) -> TurnReport {
         self.resolve([Vec::new(), Vec::new()], Some(submitted))
+    }
+
+    /// The same, with each team's USE ITEMs taken from `plans`; anything else in them is
+    /// ignored.
+    pub fn resolve_orders_using(
+        &mut self,
+        submitted: [Orders; 2],
+        plans: [TeamPlan; 2],
+    ) -> TurnReport {
+        self.resolve(plans, Some(submitted))
     }
 
     fn resolve(&mut self, plans: [TeamPlan; 2], given: Option<[Orders; 2]>) -> TurnReport {
@@ -459,14 +502,22 @@ impl Match {
         // Both teams share out their plans from the board as it stood when the timer ran out.
         let mut submitted: [Orders; 2] = given.unwrap_or([[None; TEAM_SIZE]; 2]);
         let mut tasks: [[Option<Task>; TEAM_SIZE]; 2] = [[None; TEAM_SIZE]; 2];
-        if given.is_none() {
-            for side in Side::BOTH {
-                let (orders, assigned, said) =
-                    crate::muster::muster(self, side, &plans[side.index()], turn);
+        let mut uses: [[Option<Tile>; TEAM_SIZE]; 2] = [[None; TEAM_SIZE]; 2];
+        for side in Side::BOTH {
+            let plan = &plans[side.index()];
+            if given.is_none() {
+                let (orders, assigned, said) = crate::muster::muster(self, side, plan, turn);
                 submitted[side.index()] = orders;
                 tasks[side.index()] = assigned;
                 events.extend(said);
             }
+            let (using, dropped) = crate::muster::uses(self, side, plan);
+            uses[side.index()] = using;
+            events.extend(dropped.into_iter().map(|index| Event {
+                turn,
+                tick: 0,
+                kind: EventKind::OrderDropped { side, index },
+            }));
         }
         self.plans = plans.clone();
         // Every fallback order is chosen from the board as it stood when the timer ran out.
@@ -499,9 +550,13 @@ impl Match {
         for slot in Slot::all() {
             let order = orders[slot.side.index()][slot.index as usize];
             let task = tasks[slot.side.index()][slot.index as usize];
+            let using = uses[slot.side.index()][slot.index as usize];
             let f = self.fighter_mut(slot);
             f.order = order;
             f.task = task;
+            f.using = using;
+            f.pause = false;
+            f.broken = false;
             f.rethought = false;
             f.spent = false;
             f.interrupted = false;
@@ -512,7 +567,10 @@ impl Match {
             f.hung_back = false;
             f.turned_away = false;
             f.stuck = false;
-            f.holding = matches!(order, Some(Order::Hold { at }) if at == f.at) && !f.out;
+            f.holding = !f.out && order.and_then(|o| o.hold_at()) == Some(f.at);
+            if let (true, Some(Order::Hold { facing, .. })) = (f.holding, order) {
+                f.facing = facing;
+            }
             if f.holding {
                 let at = f.at;
                 events.push(Event {
@@ -556,6 +614,9 @@ impl Match {
 
     fn tick(&mut self, turn: u8, tick: u8, events: &mut Vec<Event>) {
         let now = self.clock(turn, tick);
+        for slot in Slot::all() {
+            self.fighter_mut(slot).pause = false;
+        }
         let mut push = |kind| events.push(Event { turn, tick, kind });
 
         // 1. A telegraphed swing.
@@ -583,7 +644,12 @@ impl Match {
         self.land(turn, tick, now, events);
         self.rethink(turn, tick, events);
 
-        // 2. Contests already in reach catch their target before anyone steps.
+        // On the first tick, every USE ITEM: the user stands still for it.
+        if tick == 1 {
+            self.use_items(turn, tick, now, events);
+        }
+
+        // 2. Presses, tricks and interactions already in reach settle before anyone steps.
         let mut lost = [[0u8; TEAM_SIZE]; 2];
         self.settle(turn, tick, now, &mut lost, events);
         let mut push = |kind| events.push(Event { turn, tick, kind });
@@ -696,11 +762,13 @@ impl Match {
                 Some(Order::Move { to }) if f.at == to && !f.arrived => {
                     self.fighter_mut(slot).arrived = true;
                 }
-                Some(Order::Hold { at }) if !f.holding && !f.interrupted => {
+                Some(Order::Hold { at, facing }) if !f.holding && !f.interrupted && !f.broken => {
                     // Someone already standing on the tile: hold beside it instead.
                     let short = f.at.touches(at) && self.occupant(at).is_some_and(|o| o != slot);
                     if f.at == at || short {
-                        self.fighter_mut(slot).holding = true;
+                        let f = self.fighter_mut(slot);
+                        f.holding = true;
+                        f.facing = facing;
                         push(EventKind::Holding { slot, at: f.at });
                     }
                 }
@@ -708,7 +776,7 @@ impl Match {
             }
         }
 
-        // 6. Contests that have just come into reach.
+        // 6. Presses, tricks and interactions that have just come into reach.
         self.settle(turn, tick, now, &mut lost, events);
         // A hold in the zone broken by a flank this tick is a breakthrough for the flankers.
         let mut broke: [Option<Slot>; 2] = [None, None];
@@ -799,7 +867,7 @@ impl Match {
         }
     }
 
-    /// Settles the contests in reach and takes the composure they cost, never more than
+    /// Settles the presses, tricks and interactions in reach and takes the composure they cost, never more than
     /// `Ruleset::damage_cap` from one creature in one tick. Anyone at zero is knocked out.
     fn settle(
         &mut self,
@@ -844,18 +912,124 @@ impl Match {
         }
     }
 
-    /// Settles every contest that has reached its target, all from the same picture of the
-    /// board.
+    /// Every USE ITEM given for the turn, at the start of its first tick: each is used from where
+    /// its user stands, which takes its whole tick: no step, no press, trick or interaction. One that has nothing in its paws any
+    /// more, or whose tile is out of reach, comes to nothing.
+    fn use_items(&mut self, turn: u8, tick: u8, now: u16, events: &mut Vec<Event>) {
+        for slot in self.standing_slots().collect::<Vec<_>>() {
+            let Some(at) = self.fighter_mut(slot).using.take() else {
+                continue;
+            };
+            self.fighter_mut(slot).pause = true;
+            if self.can_use(slot, at) {
+                self.use_item(slot, at, turn, tick, now, events);
+            } else if let Some(item) = self.fighter(slot).carrying {
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::ItemFizzled { slot, item, at },
+                });
+            }
+        }
+    }
+
+    /// Where a creature at `there` is pushed by `by`: one tile straight on from one of them,
+    /// onto free open ground, out of the zone if any of those ways leads out of it; ties go to
+    /// the upper tile, then the one nearer its own side of the board. `None` if every way is
+    /// blocked.
+    fn pushed_from(&self, target: Slot, there: Tile, by: &[Slot]) -> Option<Tile> {
+        by.iter()
+            .filter_map(|c| {
+                let from = self.fighter(*c).at;
+                let away = Tile::new(2 * there.x - from.x, 2 * there.y - from.y);
+                (self.arena.contains(away) && self.walkable(away) && self.occupant(away).is_none())
+                    .then_some(away)
+            })
+            .min_by_key(|w| {
+                (
+                    self.arena.in_zone(*w),
+                    w.y,
+                    self.arena.across(target.side, *w),
+                )
+            })
+    }
+
+    /// Caught by a PRESS: pushed one tile on and stopped for the turn, its paws emptied into the
+    /// first of `by` with room for what it carried (or onto the ground if none has).
+    fn caught(
+        &mut self,
+        target: Slot,
+        by: Vec<Slot>,
+        tricking: bool,
+        turn: u8,
+        tick: u8,
+        events: &mut Vec<Event>,
+    ) {
+        let there = self.fighter(target).at;
+        let pushed_to = self.pushed_from(target, there, &by);
+        let f = self.fighter_mut(target);
+        f.interrupted = true;
+        f.holding = false;
+        if let Some(to) = pushed_to {
+            f.at = to;
+        }
+        let item = f.carrying;
+        let thief = by
+            .iter()
+            .copied()
+            .find(|c| self.standing(*c) && self.fighter(*c).carrying.is_none());
+        events.push(Event {
+            turn,
+            tick,
+            kind: EventKind::Pressed {
+                target,
+                by,
+                pushed_to,
+                tricking,
+            },
+        });
+        match (item, thief) {
+            (Some(item), Some(thief)) => {
+                self.fighter_mut(target).carrying = None;
+                self.fighter_mut(thief).carrying = Some(item);
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::Stole {
+                        by: thief,
+                        from: target,
+                        item,
+                    },
+                });
+            }
+            (Some(_), None) => self.drop_carried(target, turn, tick, events),
+            _ => {}
+        }
+        if pushed_to.is_some() {
+            self.stick(target, turn, tick, events);
+        }
+    }
+
+    /// Settles every PRESS, TRICK and INTERACT that has reached what it is aimed at, presses
+    /// first, all from the same picture of the board.
     ///
-    /// | Target | What happens |
+    /// | Pressed | What happens |
     /// |---|---|
-    /// | Not holding (moving, arrived, done) | Interrupted: it stops for the turn and loses one composure for each contester |
-    /// | Holding | Countered: it and each holder of its team beside it, corner to corner, that a contester has reached costs one contester one composure |
-    /// | Holding, contested from two or more sides by more than its holders | Flanked: the hold breaks, it loses one composure and is pushed off its tile, or knocked off balance where it stands |
-    /// | Busy with its own contest this tick | A scuffle: nobody is hurt |
+    /// | Pressing too (on its way or settling) | A collision: each loses one composure and both stop for the turn |
+    /// | Holding | Repelled: it and each holder of its team beside it, corner to corner, that a presser has reached turns it away; one facing a presser costs it one composure |
+    /// | Holding, pressed from two or more sides by more than its holders | Flanked: the hold breaks, it loses one composure and is pushed off its tile, or knocked off balance where it stands |
+    /// | Anyone else | Pushed one tile on (off balance where it stands if blocked), stopped for the turn, and robbed of what it carries |
     ///
-    /// A creature contests once a turn. On the way to a target three or more tiles off, an
-    /// opportunist may take a contest against someone not holding who walks into reach instead.
+    /// | Tricked | What happens |
+    /// |---|---|
+    /// | Holding, from the side or behind | The hold breaks for the turn: it loses one composure and stands where it is, still on its feet |
+    /// | Holding, from the front, or from in front of a holder of its team | Read: nothing happens |
+    /// | Pressing | The trickster is caught: pushed, stopped and robbed by the one it tried to trick |
+    /// | Anyone else | Nothing yet: the trickster waits beside it for its chance |
+    ///
+    /// Each settles once a turn. On the way to a target three or more tiles off, an opportunist
+    /// may press someone not holding who walks into reach instead. A creature pressed this tick
+    /// gets neither its TRICK nor its INTERACT.
     fn engage(
         &mut self,
         turn: u8,
@@ -864,28 +1038,32 @@ impl Match {
         damage: &mut [[u8; TEAM_SIZE]; 2],
         events: &mut Vec<Event>,
     ) {
-        let mut push = |kind| events.push(Event { turn, tick, kind });
-        let mut contests: Vec<(Slot, Slot)> = Vec::new();
-        let mut pulls: Vec<(Slot, Tile)> = Vec::new();
-        let mut turns: Vec<(Slot, Tile)> = Vec::new();
-        let mut uses: Vec<(Slot, Tile)> = Vec::new();
+        let mut presses: Vec<(Slot, Slot)> = Vec::new();
+        let mut tricks: Vec<(Slot, Slot)> = Vec::new();
+        let mut works: Vec<(Slot, Tile)> = Vec::new();
         let mut knocked: Vec<Slot> = Vec::new();
+        // Pressing, on its way or settling now: a press that meets one collides.
+        let pressing: BTreeSet<Slot> = self
+            .standing_slots()
+            .filter(|s| {
+                let f = self.fighter(*s);
+                matches!(f.order, Some(Order::Press { .. })) && !f.spent && !f.interrupted
+            })
+            .collect();
         for c in self.standing_slots().collect::<Vec<_>>() {
             let f = self.fighter(c).clone();
-            if f.spent || f.interrupted {
+            if f.spent || f.interrupted || f.pause {
                 continue;
             }
             match f.order {
-                Some(Order::Contest {
-                    target: Target::Creature { slot: t },
-                }) => {
+                Some(Order::Press { target: t }) => {
                     if !self.standing(t) {
                         self.fighter_mut(c).spent = true;
                         continue;
                     }
                     let there = self.fighter(t).at;
                     if f.at.touches(there) {
-                        contests.push((c, t));
+                        presses.push((c, t));
                     } else if f.at.distance(there) >= 3 {
                         let opportunism = self.behavior(c).opportunism;
                         let nearby: Vec<Slot> = self
@@ -905,47 +1083,42 @@ impl Match {
                                 opportunism as u32,
                             )
                         {
-                            push(EventKind::TookOpportunity {
-                                slot: c,
-                                meant: t,
-                                took,
+                            events.push(Event {
+                                turn,
+                                tick,
+                                kind: EventKind::TookOpportunity {
+                                    slot: c,
+                                    meant: t,
+                                    took,
+                                },
                             });
-                            contests.push((c, took));
+                            presses.push((c, took));
                         }
                     }
                 }
-                Some(Order::Contest {
-                    target: Target::Lever { at },
-                }) if f.at.touches(at) => {
-                    if self.arena.switches.contains(&at) {
-                        turns.push((c, at));
-                    } else {
-                        pulls.push((c, at));
+                Some(Order::Trick { target: t }) => {
+                    if !self.standing(t) {
+                        self.fighter_mut(c).spent = true;
+                        continue;
+                    }
+                    if f.at.touches(self.fighter(t).at) {
+                        tricks.push((c, t));
                     }
                 }
-                Some(Order::Use { at }) => match f.carrying {
-                    Some(item) if f.at.distance(at) <= item.reach() => uses.push((c, at)),
-                    Some(_) => {}
-                    // Let go of on the way: there is nothing left to use.
-                    None => self.fighter_mut(c).spent = true,
-                },
+                Some(Order::Interact { at }) if f.at.touches(at) => works.push((c, at)),
                 _ => {}
             }
         }
-        let engaging: BTreeSet<Slot> = contests
-            .iter()
-            .map(|(c, _)| *c)
-            .chain(pulls.iter().map(|(c, _)| *c))
-            .chain(turns.iter().map(|(c, _)| *c))
-            .chain(uses.iter().map(|(c, _)| *c))
-            .collect();
-        let mut targets: Vec<Slot> = contests.iter().map(|(_, t)| *t).collect();
+
+        // Presses.
+        let mut targets: Vec<Slot> = presses.iter().map(|(_, t)| *t).collect();
         targets.sort();
         targets.dedup();
         let mut countered: BTreeSet<Slot> = BTreeSet::new();
+        let mut collided: BTreeSet<(Slot, Slot)> = BTreeSet::new();
         for t in targets {
             let there = self.fighter(t).at;
-            let mut cs: Vec<Slot> = contests
+            let mut cs: Vec<Slot> = presses
                 .iter()
                 .filter(|(_, target)| *target == t)
                 .map(|(c, _)| *c)
@@ -959,21 +1132,28 @@ impl Match {
             for c in &cs {
                 self.fighter_mut(*c).spent = true;
             }
-            if engaging.contains(&t) {
-                for c in cs {
-                    let mutual = contests.contains(&(t, c));
-                    // A mutual scuffle is told once.
-                    if !mutual || c < t {
-                        push(EventKind::Scuffle {
-                            contester: c,
-                            target: t,
-                            mutual,
-                        });
-                    }
+            if pressing.contains(&t) {
+                // Press against press: each loses one, and both stop. Two pressing each other
+                // collide once.
+                cs.retain(|c| !collided.contains(&(t, *c)));
+                if cs.is_empty() {
+                    continue;
                 }
+                damage[t.side.index()][t.index as usize] += 1;
+                self.fighter_mut(t).interrupted = true;
+                for c in &cs {
+                    collided.insert((*c, t));
+                    damage[c.side.index()][c.index as usize] += 1;
+                    self.fighter_mut(*c).interrupted = true;
+                }
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::Collided { target: t, by: cs },
+                });
             } else if self.fighter(t).holding {
-                // The one contested, and holders of its team beside it, corner to corner, that a
-                // contester has come within reach of: side by side, two holders share the two
+                // The one pressed, and holders of its team beside it, corner to corner, that a
+                // presser has come within reach of: side by side, two holders share the two
                 // tiles they both touch.
                 let holders: Vec<Slot> = self
                     .team(t.side)
@@ -986,23 +1166,11 @@ impl Match {
                     })
                     .collect();
                 if cs.len() >= 2 && cs.len() > holders.len() {
-                    // Flanked: contested from more sides than it has holders to turn them away,
+                    // Flanked: pressed from more sides than it has holders to turn them away,
                     // the hold breaks. It loses one composure, however many came at it, and is
-                    // pushed off its tile away from a contester, out of the zone if it can be,
-                    // or knocked off balance where it stands if every way out is blocked.
-                    let pushed_to = cs
-                        .iter()
-                        .filter_map(|c| {
-                            let from = self.fighter(*c).at;
-                            let away = Tile::new(2 * there.x - from.x, 2 * there.y - from.y);
-                            (self.arena.contains(away)
-                                && self.walkable(away)
-                                && self.occupant(away).is_none())
-                            .then_some(away)
-                        })
-                        .min_by_key(|w| {
-                            (self.arena.in_zone(*w), w.y, self.arena.across(t.side, *w))
-                        });
+                    // pushed off its tile away from a presser, out of the zone if it can be, or
+                    // knocked off balance where it stands if every way out is blocked.
+                    let pushed_to = self.pushed_from(t, there, &cs);
                     damage[t.side.index()][t.index as usize] += 1;
                     let f = self.fighter_mut(t);
                     f.holding = false;
@@ -1012,118 +1180,194 @@ impl Match {
                     }
                     knocked.push(t);
                     // The flank takes the ground: flankers standing in the zone start holding
-                    // where they stand.
+                    // where they stand, facing where the holder stood.
                     let taking: Vec<(Slot, Tile)> = cs
                         .iter()
                         .map(|c| (*c, self.fighter(*c).at))
                         .filter(|(_, at)| self.arena.in_zone(*at))
                         .collect();
-                    push(EventKind::Flanked {
-                        target: t,
-                        by: cs,
-                        from: there,
-                        pushed_to,
+                    events.push(Event {
+                        turn,
+                        tick,
+                        kind: EventKind::Flanked {
+                            target: t,
+                            by: cs,
+                            from: there,
+                            pushed_to,
+                        },
                     });
                     for (c, at) in taking {
-                        self.fighter_mut(c).holding = true;
-                        push(EventKind::Holding { slot: c, at });
+                        let f = self.fighter_mut(c);
+                        f.holding = true;
+                        f.facing = Facing::toward(at, there).unwrap_or(f.facing);
+                        events.push(Event {
+                            turn,
+                            tick,
+                            kind: EventKind::Holding { slot: c, at },
+                        });
                     }
                 } else {
+                    // Repelled. A holder facing a presser costs it one composure, at most once a
+                    // tick, spread so no presser takes a second before every other has taken one.
                     let mut hits = vec![0u8; cs.len()];
+                    let mut faced = Vec::new();
                     for h in &holders {
-                        let reach = self.fighter(*h).at;
+                        let ahead = self.fighter(*h).facing.ahead(self.fighter(*h).at);
                         if let Some(i) = (0..cs.len())
-                            .filter(|i| self.fighter(cs[*i]).at.touches(reach))
+                            .filter(|i| self.fighter(cs[*i]).at == ahead)
                             .min_by_key(|i| hits[*i])
                         {
                             hits[i] += 1;
                             damage[cs[i].side.index()][cs[i].index as usize] += 1;
                             countered.insert(*h);
+                            faced.push(cs[i]);
                         }
                     }
                     for c in &cs {
                         self.fighter_mut(*c).turned_away = true;
                     }
-                    push(EventKind::Countered {
-                        target: t,
-                        holders,
-                        contesters: cs,
+                    events.push(Event {
+                        turn,
+                        tick,
+                        kind: EventKind::Repelled {
+                            target: t,
+                            holders,
+                            pressers: cs,
+                            faced,
+                        },
                     });
                 }
             } else if self.fighter(t).sheltered(now) {
-                // Under a leaf umbrella, a contest bounces off: nobody is hurt.
-                push(EventKind::Sheltered { target: t, by: cs });
-            } else {
-                damage[t.side.index()][t.index as usize] += cs.len() as u8;
-                self.fighter_mut(t).interrupted = true;
-                knocked.push(t);
-                push(EventKind::Interrupted { target: t, by: cs });
-            }
-        }
-        pulls.sort();
-        for (c, lever) in pulls {
-            self.fighter_mut(c).spent = true;
-            let defenders: Vec<Slot> = self
-                .team(c.side.other())
-                .filter(|h| self.fighter(*h).holding && self.fighter(*h).at.touches(lever))
-                .collect();
-            if !defenders.is_empty() {
-                self.fighter_mut(c).turned_away = true;
-                damage[c.side.index()][c.index as usize] += defenders.len() as u8;
-                push(EventKind::LeverDefended {
-                    slot: c,
-                    lever,
-                    holders: defenders,
-                });
-            } else if !self.lever_ready() {
-                push(EventKind::LeverResting { slot: c, lever });
-            } else {
-                let at = now + u16::from(self.arena.lever.swing_ticks);
-                self.board.swing_at = Some(at);
-                let per = u16::from(self.ruleset.ticks_per_turn);
-                // The clock counts turn 1's first tick as `per + 1`.
-                let (swings_turn, swings_tick) =
-                    (((at - 1) / per) as u8, ((at - 1) % per + 1) as u8);
-                push(EventKind::LeverPulled {
-                    slot: c,
-                    lever,
-                    swings_turn,
-                    swings_tick,
-                });
-            }
-        }
-        turns.sort();
-        for (c, switch) in turns {
-            self.fighter_mut(c).spent = true;
-            let defenders: Vec<Slot> = self
-                .team(c.side.other())
-                .filter(|h| self.fighter(*h).holding && self.fighter(*h).at.touches(switch))
-                .collect();
-            if !defenders.is_empty() {
-                self.fighter_mut(c).turned_away = true;
-                damage[c.side.index()][c.index as usize] += defenders.len() as u8;
+                // Under a leaf umbrella, a press bounces off: nobody is hurt.
                 events.push(Event {
                     turn,
                     tick,
-                    kind: EventKind::SwitchDefended {
+                    kind: EventKind::Sheltered { target: t, by: cs },
+                });
+            } else {
+                let tricking = matches!(self.fighter(t).order, Some(Order::Trick { .. }));
+                self.caught(t, cs, tricking, turn, tick, events);
+            }
+        }
+
+        // Tricks, from where everyone stands now.
+        tricks.sort();
+        let mut landed: Vec<(Slot, Vec<Slot>)> = Vec::new();
+        for (c, t) in tricks {
+            if self.fighter(c).interrupted || self.fighter(c).spent || !self.standing(c) {
+                continue;
+            }
+            let target = self.fighter(t).clone();
+            if target.holding {
+                self.fighter_mut(c).spent = true;
+                // Seen from the front, by the holder or by a holder of its team beside it.
+                let from = self.fighter(c).at;
+                let seen = (Quarter::of(target.at, target.facing, from) == Some(Quarter::Front))
+                    .then_some(t)
+                    .or_else(|| crate::muster::faced_by(self, t.side, from));
+                match seen {
+                    None => match landed.iter_mut().find(|(x, _)| *x == t) {
+                        Some((_, by)) => by.push(c),
+                        None => landed.push((t, vec![c])),
+                    },
+                    Some(reader) => events.push(Event {
+                        turn,
+                        tick,
+                        kind: EventKind::TrickRead {
+                            target: reader,
+                            by: c,
+                        },
+                    }),
+                }
+            } else if pressing.contains(&t) && !target.interrupted {
+                // Tricking one that is pressing: it is read and caught by it.
+                self.fighter_mut(c).spent = true;
+                self.caught(c, vec![t], true, turn, tick, events);
+            }
+        }
+        for (t, by) in landed {
+            if !self.fighter(t).holding {
+                continue;
+            }
+            let from = self.fighter(t).at;
+            damage[t.side.index()][t.index as usize] += 1;
+            let f = self.fighter_mut(t);
+            f.holding = false;
+            f.broken = true;
+            events.push(Event {
+                turn,
+                tick,
+                kind: EventKind::Tricked {
+                    target: t,
+                    by,
+                    from,
+                },
+            });
+        }
+
+        // Levers and switches, unless whoever was working one was pressed first.
+        works.sort();
+        for (c, at) in works {
+            if self.fighter(c).interrupted || !self.standing(c) {
+                continue;
+            }
+            self.fighter_mut(c).spent = true;
+            let defenders: Vec<Slot> = self
+                .team(c.side.other())
+                .filter(|h| self.fighter(*h).holding && self.fighter(*h).at.touches(at))
+                .collect();
+            let switch = self.arena.switches.contains(&at);
+            if !defenders.is_empty() {
+                self.fighter_mut(c).turned_away = true;
+                damage[c.side.index()][c.index as usize] += defenders.len() as u8;
+                let kind = if switch {
+                    EventKind::SwitchDefended {
                         slot: c,
-                        switch,
+                        switch: at,
                         holders: defenders,
+                    }
+                } else {
+                    EventKind::LeverDefended {
+                        slot: c,
+                        lever: at,
+                        holders: defenders,
+                    }
+                };
+                events.push(Event { turn, tick, kind });
+            } else if switch {
+                if self.switch_ready() {
+                    self.set_off(c, at, turn, tick, now, events);
+                } else {
+                    events.push(Event {
+                        turn,
+                        tick,
+                        kind: EventKind::SwitchResting {
+                            slot: c,
+                            switch: at,
+                        },
+                    });
+                }
+            } else if !self.lever_ready() {
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::LeverResting { slot: c, lever: at },
+                });
+            } else {
+                let swing = now + u16::from(self.arena.lever.swing_ticks);
+                self.board.swing_at = Some(swing);
+                let (swings_turn, swings_tick) = self.when(swing);
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::LeverPulled {
+                        slot: c,
+                        lever: at,
+                        swings_turn,
+                        swings_tick,
                     },
                 });
-            } else if !self.switch_ready() {
-                events.push(Event {
-                    turn,
-                    tick,
-                    kind: EventKind::SwitchResting { slot: c, switch },
-                });
-            } else {
-                self.set_off(c, switch, turn, tick, now, events);
             }
-        }
-        uses.sort();
-        for (c, at) in uses {
-            self.use_item(c, at, turn, tick, now, events);
         }
         for slot in knocked {
             self.drop_carried(slot, turn, tick, events);

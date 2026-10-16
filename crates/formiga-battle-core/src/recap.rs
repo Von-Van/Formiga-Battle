@@ -5,7 +5,7 @@ use crate::event::{Event, EventKind, Fill, Reason, Victory};
 use crate::game::Match;
 use crate::grid::Tile;
 use crate::muster::{Because, Role, Task, Why};
-use crate::order::{Directive, Order, Side, Slot, Target};
+use crate::order::{Directive, Order, Side, Slot};
 use std::collections::BTreeSet;
 
 pub fn team_name(side: Side) -> &'static str {
@@ -28,17 +28,13 @@ fn list(m: &Match, slots: &[Slot]) -> String {
 pub fn describe(m: &Match, order: &Order) -> String {
     match order {
         Order::Move { to } => format!("MOVE to {to}"),
-        Order::Hold { at } => format!("HOLD at {at}"),
-        Order::Contest {
-            target: Target::Creature { slot },
-        } => format!("CONTEST {}", m.profile(*slot).name),
-        Order::Contest {
-            target: Target::Lever { at },
-        } if m.arena.switches.contains(at) => "CONTEST the tap".to_owned(),
-        Order::Contest {
-            target: Target::Lever { .. },
-        } => "CONTEST the lever".to_owned(),
-        Order::Use { at } => format!("USE what it carries at {at}"),
+        Order::Hold { at, facing } => format!("HOLD at {at} facing {}", facing.name()),
+        Order::Press { target } => format!("PRESS {}", m.profile(*target).name),
+        Order::Trick { target } => format!("TRICK {}", m.profile(*target).name),
+        Order::Interact { at } if m.arena.switches.contains(at) => {
+            format!("INTERACT with {}", words(m).switch)
+        }
+        Order::Interact { .. } => "INTERACT with the lever".to_owned(),
     }
 }
 
@@ -51,8 +47,14 @@ pub fn describe_directive(m: &Match, d: &Directive) -> String {
             .join(", ")
     };
     match d {
-        Directive::Take { squares: ts } => format!("TAKE {}", squares(ts)),
-        Directive::Defend { squares: ts } => format!("DEFEND {}", squares(ts)),
+        Directive::Press { squares: ts } => format!("PRESS {}", squares(ts)),
+        Directive::Hold {
+            squares: ts,
+            facing,
+        } => {
+            format!("HOLD {} facing {}", squares(ts), facing.name())
+        }
+        Directive::Trick { squares: ts } => format!("TRICK {}", squares(ts)),
         Directive::Interact { at } if m.arena.switches.contains(at) => {
             format!("INTERACT with {}", words(m).switch)
         }
@@ -60,17 +62,14 @@ pub fn describe_directive(m: &Match, d: &Directive) -> String {
             "INTERACT with the lever".to_owned()
         }
         Directive::Interact { at } => format!("INTERACT at {at}"),
+        Directive::UseItem { at, .. } => format!("USE ITEM at {at}"),
     }
 }
 
 /// A creature's job, as something to do: "hold (4, 3)", "flank Pip", "fetch the twig".
 pub fn job(m: &Match, slot: Slot, task: &Task, order: &Order) -> String {
-    let target = match order {
-        Order::Contest {
-            target: Target::Creature { slot },
-        } => Some(m.profile(*slot).name.clone()),
-        _ => None,
-    };
+    let _ = slot;
+    let target = order.target().map(|t| m.profile(t).name.clone());
     let thing = |at| {
         m.board
             .ground
@@ -84,14 +83,12 @@ pub fn job(m: &Match, slot: Slot, task: &Task, order: &Order) -> String {
     match task.role {
         Role::Claim => format!("hold {at}"),
         Role::Oust => match target {
-            Some(t)
-                if m.occupant(at)
-                    .is_some_and(|o| m.fighter(o).carrying.is_some()) =>
-            {
-                format!("go after what {t} carries")
-            }
-            Some(t) => format!("move {t} off {at}"),
+            Some(t) => format!("push {t} off {at}"),
             None => format!("clear {at}"),
+        },
+        Role::Trick => match target.or_else(|| m.occupant(at).map(|o| m.profile(o).name.clone())) {
+            Some(t) => format!("trick {t}"),
+            None => format!("trick whoever holds {at}"),
         },
         Role::Flank => match target.or_else(|| m.occupant(at).map(|o| m.profile(o).name.clone())) {
             Some(t) => format!("flank {t}"),
@@ -113,10 +110,6 @@ pub fn job(m: &Match, slot: Slot, task: &Task, order: &Order) -> String {
         Role::Pull => "pull the lever".to_owned(),
         Role::Wait if tap => format!("wait by {}", words(m).switch),
         Role::Wait => "wait by the lever".to_owned(),
-        Role::Use => match m.fighter(slot).carrying {
-            Some(item) => format!("use its {}", item.name()),
-            None => "use what it carried".to_owned(),
-        },
         Role::Spare => "do as it saw fit".to_owned(),
     }
 }
@@ -294,7 +287,9 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                         Reason::FollowedUpToCover => {
                             format!("With a moment to spare, {n} tucked itself out of reach.")
                         }
-                        Reason::SteppedBack => format!("{n} hopped back after the contest."),
+                        Reason::SteppedBack => {
+                            format!("{n} hopped back after its press was turned away.")
+                        }
                         Reason::HungBack => {
                             format!("{n} hung back rather than walk in among the other team.")
                         }
@@ -313,27 +308,64 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                     name(slot)
                 )
             }),
-            EventKind::Interrupted { target, by } => Some(format!(
-                "{} caught {} on the move.",
+            EventKind::Pressed {
+                target,
+                by,
+                pushed_to,
+                tricking,
+            } => Some(match (tricking, pushed_to) {
+                (true, Some(_)) => format!(
+                    "{} saw through {}'s trick and pushed it back.",
+                    list(m, by),
+                    name(target)
+                ),
+                (true, None) => format!(
+                    "{} saw through {}'s trick; with nowhere to go, it lost its footing.",
+                    list(m, by),
+                    name(target)
+                ),
+                (false, Some(_)) => format!(
+                    "{} pressed {} on the move and pushed it back.",
+                    list(m, by),
+                    name(target)
+                ),
+                (false, None) => format!(
+                    "{} pressed {}; with nowhere to go, it lost its footing.",
+                    list(m, by),
+                    name(target)
+                ),
+            }),
+            EventKind::Stole { by, from, item } => Some(format!(
+                "{} snatched {}'s {}.",
+                name(by),
+                name(from),
+                item.name()
+            )),
+            EventKind::Collided { target, by } => Some(format!(
+                "{} and {} pressed into each other: both lost composure and stopped.",
                 list(m, by),
                 name(target)
             )),
-            EventKind::Countered {
+            EventKind::Repelled {
                 target,
                 holders,
-                contesters,
-            } => Some(if holders.len() > 1 {
-                format!(
-                    "{} held firm side by side and turned {} away.",
-                    list(m, holders),
-                    list(m, contesters)
-                )
-            } else {
-                format!(
-                    "{} held firm and turned {} away.",
-                    name(target),
-                    list(m, contesters)
-                )
+                pressers,
+                faced,
+            } => Some({
+                let who = if holders.len() > 1 {
+                    format!("{} held firm side by side", list(m, holders))
+                } else {
+                    format!("{} held firm", name(target))
+                };
+                if faced.is_empty() {
+                    format!("{who} and turned {} away.", list(m, pressers))
+                } else {
+                    format!(
+                        "{who} and turned {} away; {} came at it head on and lost composure.",
+                        list(m, pressers),
+                        list(m, faced)
+                    )
+                }
             }),
             EventKind::Flanked {
                 target,
@@ -342,25 +374,28 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                 ..
             } => Some(match pushed_to {
                 Some(_) => format!(
-                    "{} came at {} from two sides and pushed it off its spot.",
+                    "{} pressed {} from two sides and pushed it off its spot.",
                     list(m, by),
                     name(target)
                 ),
                 None => format!(
-                    "{} came at {} from two sides; boxed in, it lost its footing.",
+                    "{} pressed {} from two sides; boxed in, it lost its footing.",
                     list(m, by),
                     name(target)
                 ),
             }),
-            EventKind::Scuffle {
-                contester, target, ..
-            } => Some(format!(
-                "{} and {} got tangled up in a scuffle; nobody minded.",
-                name(contester),
+            EventKind::Tricked { target, by, .. } => Some(format!(
+                "{} slipped round {} where it wasn't looking and broke its hold; it lost composure.",
+                list(m, by),
+                name(target)
+            )),
+            EventKind::TrickRead { target, by } => Some(format!(
+                "{} tried to trick {} from the front; it saw it coming and held.",
+                name(by),
                 name(target)
             )),
             EventKind::TookOpportunity { slot, meant, took } => Some(format!(
-                "{} spotted {} wandering past and went for them instead of {}.",
+                "{} spotted {} wandering past and pressed them instead of {}.",
                 name(slot),
                 name(took),
                 name(meant)
@@ -506,7 +541,7 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                 Some(format!("{} is under a leaf umbrella.", list(m, slots)))
             }
             EventKind::Sheltered { target, by } => Some(format!(
-                "{} bounced off {}'s leaf umbrella.",
+                "{} pressed, and bounced off {}'s leaf umbrella.",
                 list(m, by),
                 name(target)
             )),
@@ -648,11 +683,34 @@ pub fn orders_told(m: &Match, side: Side, events: &[Event]) -> Vec<String> {
     let names = |slots: &[Slot]| list(m, slots);
     // Orders naming the same squares (or the same thing) are told once, under all their
     // numbers: naming a square again only made it more pressing.
-    let about = |d: &Directive| match d {
-        Directive::Take { squares } | Directive::Defend { squares } => squares.clone(),
-        Directive::Interact { at } => vec![*at],
-    };
-    plan.iter()
+    let about = |d: &Directive| (d.verb() == "TRICK", d.squares().to_vec());
+    let tactical: Vec<Directive> = plan.iter().filter(|d| d.tactical()).cloned().collect();
+    let plan = &tactical;
+    let bonus = record.submitted[side.index()]
+        .iter()
+        .filter_map(|d| match d {
+            Directive::UseItem { by, .. } => Some(Slot::new(side, *by)),
+            _ => None,
+        })
+        .map(|slot| {
+            let n = &m.profile(slot).name;
+            let came = events.iter().find_map(|e| match &e.kind {
+                EventKind::ItemUsed { slot: s, item, .. } if *s == slot => {
+                    Some(format!("used the {}", item.name()))
+                }
+                EventKind::ItemFizzled { slot: s, item, .. } if *s == slot => {
+                    Some(format!("the {} came to nothing", item.name()))
+                }
+                _ => None,
+            });
+            format!(
+                "Bonus. USE ITEM, {n}: {}.",
+                came.unwrap_or_else(|| "nothing was left to use".to_owned())
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut told: Vec<String> = plan
+        .iter()
         .enumerate()
         .filter(|(i, d)| !plan[..*i].iter().any(|e| about(e) == about(d)))
         .map(|(_, d)| {
@@ -677,8 +735,12 @@ pub fn orders_told(m: &Match, side: Side, events: &[Event]) -> Vec<String> {
                 }
             }
             let said = match d {
-                Directive::Take { squares } => format!("TAKE {}", place(m, squares)),
-                Directive::Defend { squares } => format!("DEFEND {}", place(m, squares)),
+                Directive::Press { squares } => format!("PRESS {}", place(m, squares)),
+                Directive::Hold { squares, facing } => {
+                    format!("HOLD {} facing {}", place(m, squares), facing.name())
+                }
+                Directive::Trick { squares } => format!("TRICK {}", place(m, squares)),
+                Directive::UseItem { .. } => "USE ITEM".to_owned(),
                 Directive::Interact { at } => {
                     let found = events.iter().find_map(|e| match &e.kind {
                         EventKind::PickedUp { item, at: t, .. } if t == at => Some(*item),
@@ -723,19 +785,38 @@ pub fn orders_told(m: &Match, side: Side, events: &[Event]) -> Vec<String> {
                             format!("flanked {}", m.profile(*target).name)
                         });
                     }
-                    EventKind::Countered {
+                    EventKind::Repelled {
                         holders,
-                        contesters,
+                        pressers,
+                        faced,
                         ..
-                    } if contesters.iter().any(ours) => {
-                        came.push(format!("turned away by {}", names(holders)));
+                    } if pressers.iter().any(ours) => {
+                        came.push(if faced.iter().any(ours) {
+                            format!("turned away head on by {}", names(holders))
+                        } else {
+                            format!("turned away by {}", names(holders))
+                        });
                     }
-                    EventKind::Interrupted { target, by } if ours(target) => {
-                        came.push(format!("{} was caught on the way", m.profile(*target).name));
-                        let _ = by;
+                    EventKind::Pressed { target, .. } if ours(target) => {
+                        came.push(format!(
+                            "{} was pressed on the way",
+                            m.profile(*target).name
+                        ));
                     }
-                    EventKind::Interrupted { target, by } if by.iter().any(ours) => {
-                        came.push(format!("caught {}", m.profile(*target).name));
+                    EventKind::Pressed { target, by, .. } if by.iter().any(ours) => {
+                        came.push(format!("pushed {} back", m.profile(*target).name));
+                    }
+                    EventKind::Stole { by, item, .. } if ours(by) => {
+                        came.push(format!("took the {}", item.name()));
+                    }
+                    EventKind::Collided { target, by } if ours(target) || by.iter().any(ours) => {
+                        came.push("ran into a press of theirs".to_owned());
+                    }
+                    EventKind::Tricked { target, by, .. } if by.iter().any(ours) => {
+                        came.push(format!("tricked {}", m.profile(*target).name));
+                    }
+                    EventKind::TrickRead { target, by } if ours(by) => {
+                        came.push(format!("{} saw it coming", m.profile(*target).name));
                     }
                     EventKind::LeverPulled { slot, .. } | EventKind::SwitchTurned { slot, .. }
                         if ours(slot) =>
@@ -768,7 +849,7 @@ pub fn orders_told(m: &Match, side: Side, events: &[Event]) -> Vec<String> {
             if flanking && !came.iter().any(|c| c.starts_with("flanked")) {
                 came.push("getting into place to flank".to_owned());
             }
-            if let Directive::Take { squares } | Directive::Defend { squares } = d {
+            if let Directive::Press { squares } | Directive::Hold { squares, .. } = d {
                 let held = squares
                     .iter()
                     .filter(|t| {
@@ -794,5 +875,7 @@ pub fn orders_told(m: &Match, side: Side, events: &[Event]) -> Vec<String> {
             }
             line
         })
-        .collect()
+        .collect();
+    told.extend(bonus);
+    told
 }

@@ -70,9 +70,11 @@ The site keeps the released builds in its own repository, in `lib/battle-builds.
 ["<digest>", …]}`), changed by a pull request when a Battle release's digests are known; the
 reference takes them through `Relay::knowing`.
 
-`orders` is the team's plan: up to three orders as Battle writes them (each a TAKE or DEFEND of
-at most five squares, or an INTERACT), an empty list for none. The relay refuses a longer plan as
-`malformed` and otherwise stores it as given. Before protocol 3 (rules version 7) it was three
+`orders` is the team's plan: up to three orders as Battle writes them (each a PRESS, HOLD or TRICK
+of at most five squares, or an INTERACT), and besides them up to one USE ITEM (`"order":
+"use_item"`) for each of the three creatures, an empty list for none. A USE ITEM never counts
+toward the three. The relay refuses a bigger plan as `malformed` and otherwise stores it as given.
+Before rules version 9 the three orders were TAKE, DEFEND and INTERACT, with no USE ITEM. Before protocol 3 (rules version 7) it was three
 entries, one per creature, each `null` or an order.
 
 `hash` is 16 lowercase hex digits. 64-bit numbers (`seed`, `hash`) always travel as 16 hex

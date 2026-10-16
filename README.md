@@ -2,8 +2,9 @@
 
 A separate desktop app for Formiga Desktop's companions: isometric, simultaneous-order 3v3
 tactics, against the AI or a friend in a private room. You are the Handler: each turn you give
-your team up to three orders (TAKE some squares, DEFEND some squares, INTERACT with something),
-both teams' plans lock together, and the turn plays out at once. The Formigas share the plan out
+your team up to three orders (PRESS some squares, HOLD some squares facing one way, TRICK
+whoever holds some squares, INTERACT with something), and USE ITEM for anyone carrying something
+besides, both teams' plans lock together, and the turn plays out at once. The Formigas share the plan out
 among themselves, and who takes which job, and how each carries it out, comes from who it is in
 Desktop, never from stats, so knowing your Formigas is the skill and rerolling them for a better
 trio is not.
@@ -76,9 +77,10 @@ train pulls in with your companions aboard on its left page, and on its right yo
 choose Out in the World (a friend, online) or Close to Home (the visitors, offline). The notebook
 then turns to where to play, who goes and, for a friend, the room.
 
-In a match: give the team up to three orders a turn, each a Take, Defend or Interact (or T, D,
-I) put on a square of the board; Enter locks in, Escape puts an order back, and L opens the whole
-match turn by turn.
+In a match: give the team up to three orders a turn, each a Press, Hold, Trick or Interact (or P,
+H, T, I) put on a square of the board, and a Use Item (U) for anyone carrying something besides;
+R or the mouse wheel turns the way a Hold faces. Enter locks in, Escape puts an order back, and L
+opens the whole match turn by turn.
 
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
 window (`--turns`, `--into`, `--scale`); `--snap <png> --review station|where|who|friend|orders|playing --at <s>`

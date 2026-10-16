@@ -3,12 +3,12 @@
 //! The rules hand back where everyone ended up and what happened on the way; this works out what
 //! the board looks like at any moment in between, so the window can animate it and a review
 //! picture can stop at any point. Each tick is shown in three beats, the same order the rules
-//! settle it in: contests already in reach, then everyone's steps together, then whatever those
-//! steps brought into reach, the beacon and the end.
+//! settle it in: presses and tricks already in reach, then everyone's steps together, then
+//! whatever those steps brought into reach, the beacon and the end.
 
 use crate::look::Pose;
 use formiga_battle_core::game::Board;
-use formiga_battle_core::{Event, EventKind, Item, Side, Slot, TEAM_SIZE, Tile};
+use formiga_battle_core::{Event, EventKind, Facing, Item, Order, Side, Slot, TEAM_SIZE, Tile};
 
 /// How long one tick takes to show, in seconds.
 pub const TICK_SECS: f32 = 0.9;
@@ -27,6 +27,8 @@ pub struct Figure {
     pub at: (f32, f32),
     pub tile: Tile,
     pub facing_right: bool,
+    /// The way it faces while it holds, fixed from when it starts holding to the end of the turn.
+    pub facing: Facing,
     pub pose: Pose,
     /// Seconds into its pose, for its animation.
     pub posed_for: f32,
@@ -48,12 +50,24 @@ pub struct Figure {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Burst {
-    /// A contest landing on someone not holding.
+    /// A PRESS landing on someone not holding, with nowhere to push it: knocked off balance where
+    /// it stands.
     Hit,
-    /// A contest turned away by someone holding.
+    /// A PRESS pushing someone not holding one tile on, toward `to`: dust kicked up where it was.
+    Shove { to: Tile },
+    /// A PRESS turned away by someone holding.
     Shield,
-    /// Two busy with contests of their own.
-    Scuffle,
+    /// A holder at `from` facing a presser head on, which costs the presser composure: a jab out
+    /// of the holder's front into it.
+    Counter { from: Tile },
+    /// Two PRESSes meeting, the other at `partner`: a bonk between them.
+    Collide { partner: Tile },
+    /// A TRICK coming round from `from` to the side or back of a hold, and breaking it.
+    Sneak { from: Tile },
+    /// A trick seen coming: an alert over whoever saw through it.
+    Read,
+    /// What a pressed creature carried, snatched and flying across to the presser at `to`.
+    Snatch { to: Tile, item: Item },
     /// Two wanting the same tile.
     Bump,
     /// A cartoon knockout.
@@ -121,6 +135,31 @@ pub struct Frame {
 
 /// How long effects stay on the board.
 const EFFECT_SECS: f32 = 0.7;
+/// How long something snatched takes to fly across to its new carrier.
+pub const SNATCH_SECS: f32 = 0.45;
+
+/// The way a HOLD faces, if the order is one.
+fn hold_facing(order: &Order) -> Option<Facing> {
+    match order {
+        Order::Hold { facing, .. } => Some(*facing),
+        _ => None,
+    }
+}
+
+/// Whether a creature facing this way is drawn looking right across the screen: east and north
+/// are to the right, as the board is drawn.
+fn looks_right(facing: Facing) -> bool {
+    matches!(facing, Facing::East | Facing::North)
+}
+
+/// A slide one tile on, quickly, from `from` to `to`, `age` seconds in.
+fn slid(f: &mut Figure, from: Tile, to: Tile, age: f32) {
+    let share = (age / 0.35).clamp(0.0, 1.0);
+    let (fx, fy) = (f32::from(from.x) + 0.5, f32::from(from.y) + 0.5);
+    let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
+    f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
+    f.tile = to;
+}
 
 impl Frame {
     /// The board as it stands, with nothing happening.
@@ -132,6 +171,7 @@ impl Frame {
                     at: (f32::from(f.at.x) + 0.5, f32::from(f.at.y) + 0.5),
                     tile: f.at,
                     facing_right: facing[s][i],
+                    facing: f.facing,
                     pose: if f.holding { Pose::Hold } else { Pose::Idle },
                     posed_for: 0.0,
                     composure: f.composure,
@@ -184,6 +224,8 @@ impl Frame {
 /// One turn, ready to be shown.
 pub struct Playback {
     start: Frame,
+    /// Each creature's order as the turn began, for which way a holder faces.
+    orders: [[Option<Order>; TEAM_SIZE]; 2],
     /// The arena's gates, in its own order.
     gates: Vec<Tile>,
     /// Each event and when it happens, in seconds from the start.
@@ -201,12 +243,28 @@ impl Playback {
         ticks: u8,
     ) -> Self {
         let mut start = Frame::still(before, facing);
-        // Whoever holds where it stands holds from the moment orders lock.
+        let mut orders = [[None; TEAM_SIZE]; 2];
+        // Whoever holds where it stands holds from the moment orders lock, facing the way its
+        // HOLD says.
         for event in events.iter().filter(|e| e.tick == 0) {
-            if let EventKind::Holding { slot, .. } = event.kind {
-                let f = start.figure_mut(slot);
-                f.holding = true;
-                f.pose = Pose::Hold;
+            match &event.kind {
+                EventKind::Assigned { slot, order, .. }
+                | EventKind::OrderFilled { slot, order, .. } => {
+                    orders[slot.side.index()][slot.index as usize] = Some(*order);
+                }
+                EventKind::Holding { slot, .. } => {
+                    let held = orders[slot.side.index()][slot.index as usize]
+                        .as_ref()
+                        .and_then(hold_facing);
+                    let f = start.figure_mut(*slot);
+                    f.holding = true;
+                    f.pose = Pose::Hold;
+                    if let Some(facing) = held {
+                        f.facing = facing;
+                        f.facing_right = looks_right(facing);
+                    }
+                }
+                _ => {}
             }
         }
         let played = events
@@ -248,6 +306,7 @@ impl Playback {
         });
         Self {
             start,
+            orders,
             gates: gates.to_vec(),
             timed,
             ticks: played,
@@ -268,6 +327,10 @@ impl Playback {
     /// The board `t` seconds into the turn.
     pub fn at(&self, t: f32) -> Frame {
         let mut frame = self.start.clone();
+        let mut orders = self.orders;
+        // Flankers in the yard who take the ground, and the tile they face: where the holder they
+        // broke stood.
+        let mut took: Vec<(Slot, Tile)> = Vec::new();
         let mut since: [[f32; TEAM_SIZE]; 2] = [[0.0; TEAM_SIZE]; 2];
         let step_secs = (STEPS_TO - STEPS_FROM) * TICK_SECS;
         let set_pose =
@@ -326,22 +389,57 @@ impl Playback {
                         set_pose(&mut frame, &mut since, *slot, Pose::Worry, *when);
                     }
                 }
-                EventKind::Holding { slot, .. } => {
-                    frame.figure_mut(*slot).holding = true;
+                EventKind::Holding { slot, at } => {
+                    let facing = match took.iter().find(|(s, _)| s == slot) {
+                        Some((_, there)) => Facing::toward(*at, *there),
+                        None => orders[slot.side.index()][slot.index as usize]
+                            .as_ref()
+                            .and_then(hold_facing),
+                    };
+                    let f = frame.figure_mut(*slot);
+                    f.holding = true;
+                    if let Some(facing) = facing {
+                        f.facing = facing;
+                        f.facing_right = looks_right(facing);
+                    }
                     set_pose(&mut frame, &mut since, *slot, Pose::Hold, *when);
                 }
-                EventKind::Interrupted { target, by } => {
-                    let tile = frame.figure(*target).tile;
-                    effect(&mut frame, Burst::Hit, tile);
-                    frame.figure_mut(*target).off_balance = true;
+                EventKind::Assigned { slot, order, .. }
+                | EventKind::OrderFilled { slot, order, .. }
+                | EventKind::Rethought { slot, order, .. } => {
+                    orders[slot.side.index()][slot.index as usize] = Some(*order);
+                }
+                EventKind::Pressed {
+                    target,
+                    by,
+                    pushed_to,
+                    tricking,
+                } => {
                     let short = age < 0.6;
-                    set_pose(
-                        &mut frame,
-                        &mut since,
-                        *target,
-                        if short { Pose::Gasp } else { Pose::Idle },
-                        *when,
-                    );
+                    let from = frame.figure(*target).tile;
+                    match pushed_to {
+                        // Shoved one tile on, quickly, dust kicked up where it stood.
+                        Some(to) => effect(&mut frame, Burst::Shove { to: *to }, from),
+                        // Nowhere to go: knocked off balance where it stands.
+                        None => effect(&mut frame, Burst::Hit, from),
+                    }
+                    // Caught in the middle of a TRICK: whoever pressed it saw it coming.
+                    if *tricking && let Some(first) = by.first() {
+                        let tile = frame.figure(*first).tile;
+                        effect(&mut frame, Burst::Read, tile);
+                    }
+                    let f = frame.figure_mut(*target);
+                    f.holding = false;
+                    f.off_balance = true;
+                    if let Some(to) = pushed_to {
+                        slid(f, from, *to, age);
+                    }
+                    let pose = match (short, pushed_to) {
+                        (true, Some(_)) => Pose::Wobble,
+                        (true, None) => Pose::Gasp,
+                        (false, _) => Pose::Idle,
+                    };
+                    set_pose(&mut frame, &mut since, *target, pose, *when);
                     for c in by {
                         let back = if frame.figure(*c).holding {
                             Pose::Hold
@@ -357,11 +455,45 @@ impl Playback {
                         );
                     }
                 }
-                EventKind::Countered {
+                EventKind::Stole { by, from, item } => {
+                    // It leaves the one pressed at once and flies across; the presser has it
+                    // once it lands.
+                    let (a, b) = (frame.figure(*from).tile, frame.figure(*by).tile);
+                    frame.figure_mut(*from).carrying = None;
+                    if age < SNATCH_SECS {
+                        frame.effects.push(Effect {
+                            burst: Burst::Snatch { to: b, item: *item },
+                            tile: a,
+                            age,
+                        });
+                    } else {
+                        frame.figure_mut(*by).carrying = Some(*item);
+                    }
+                }
+                EventKind::Collided { target, by } => {
+                    // Press met press: both stop where they are, off balance for the turn.
+                    let short = age < 0.6;
+                    let tile = frame.figure(*target).tile;
+                    if let Some(first) = by.first() {
+                        let partner = frame.figure(*first).tile;
+                        effect(&mut frame, Burst::Collide { partner }, tile);
+                    }
+                    for c in by.iter().chain(std::iter::once(target)) {
+                        frame.figure_mut(*c).off_balance = true;
+                        set_pose(
+                            &mut frame,
+                            &mut since,
+                            *c,
+                            if short { Pose::Gasp } else { Pose::Idle },
+                            *when,
+                        );
+                    }
+                }
+                EventKind::Repelled {
                     target,
                     holders,
-                    contesters,
-                    ..
+                    pressers,
+                    faced,
                 } => {
                     let tile = frame.figure(*target).tile;
                     effect(&mut frame, Burst::Shield, tile);
@@ -370,16 +502,25 @@ impl Playback {
                         let (from, partner) = (frame.figure(first).tile, frame.figure(second).tile);
                         effect(&mut frame, Burst::Braced { partner }, from);
                     }
+                    // A presser in front of a holder facing it: a jab out of the holder's front.
+                    for p in faced {
+                        let at = frame.figure(*p).tile;
+                        let from = holders
+                            .iter()
+                            .map(|h| frame.figure(*h))
+                            .find(|h| h.facing.ahead(h.tile) == at)
+                            .map_or(tile, |h| h.tile);
+                        effect(&mut frame, Burst::Counter { from }, at);
+                    }
                     let short = age < 0.6;
                     set_pose(&mut frame, &mut since, *target, Pose::Hold, *when);
-                    for c in contesters {
-                        set_pose(
-                            &mut frame,
-                            &mut since,
-                            *c,
-                            if short { Pose::Reach } else { Pose::Idle },
-                            *when,
-                        );
+                    for c in pressers {
+                        let pose = match (short, faced.contains(c)) {
+                            (true, true) => Pose::Gasp,
+                            (true, false) => Pose::Reach,
+                            (false, _) => Pose::Idle,
+                        };
+                        set_pose(&mut frame, &mut since, *c, pose, *when);
                     }
                 }
                 EventKind::Flanked {
@@ -392,16 +533,13 @@ impl Playback {
                     // Its hold breaks: the shield flies apart where it stood, and it is off
                     // balance for the rest of the turn.
                     effect(&mut frame, Burst::Broken, *from);
+                    took.extend(by.iter().map(|c| (*c, *from)));
                     let f = frame.figure_mut(*target);
                     f.holding = false;
                     f.off_balance = true;
                     if let Some(to) = pushed_to {
                         // Shoved one tile, quickly.
-                        let share = (age / 0.35).clamp(0.0, 1.0);
-                        let (fx, fy) = (f32::from(from.x) + 0.5, f32::from(from.y) + 0.5);
-                        let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
-                        f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
-                        f.tile = *to;
+                        slid(f, *from, *to, age);
                     }
                     set_pose(
                         &mut frame,
@@ -420,14 +558,43 @@ impl Playback {
                         );
                     }
                 }
-                EventKind::Scuffle {
-                    contester, target, ..
-                } => {
-                    let tile = frame.figure(*target).tile;
-                    effect(&mut frame, Burst::Scuffle, tile);
-                    if age < 0.6 {
-                        set_pose(&mut frame, &mut since, *contester, Pose::Worry, *when);
+                EventKind::Tricked { target, by, from } => {
+                    // Round its side or back: its hold breaks where it stands. It stays on its
+                    // feet, and in the yard, but holds nothing more this turn: its ring and front
+                    // go, and it looks round, caught out.
+                    let short = age < 0.6;
+                    effect(&mut frame, Burst::Broken, *from);
+                    if let Some(first) = by.first() {
+                        let came = frame.figure(*first).tile;
+                        effect(&mut frame, Burst::Sneak { from: came }, *from);
                     }
+                    frame.figure_mut(*target).holding = false;
+                    set_pose(
+                        &mut frame,
+                        &mut since,
+                        *target,
+                        if short { Pose::Worry } else { Pose::Idle },
+                        *when,
+                    );
+                    for c in by {
+                        set_pose(
+                            &mut frame,
+                            &mut since,
+                            *c,
+                            if short { Pose::Reach } else { Pose::Idle },
+                            *when,
+                        );
+                    }
+                }
+                EventKind::TrickRead { target, by } => {
+                    // Tried from the front of a holder (the one aimed at, or one beside it): it
+                    // saw it coming and keeps holding.
+                    let tile = frame.figure(*target).tile;
+                    effect(&mut frame, Burst::Read, tile);
+                    if age < 0.6 {
+                        set_pose(&mut frame, &mut since, *by, Pose::Worry, *when);
+                    }
+                    set_pose(&mut frame, &mut since, *target, Pose::Hold, *when);
                 }
                 EventKind::LeverPulled { slot, lever, .. } => {
                     frame.swing_pending = true;
@@ -449,7 +616,7 @@ impl Playback {
                         frame.gates_open[i] = *open;
                     }
                 }
-                EventKind::GateJammed { gate, .. } => {
+                EventKind::GateJammed { gate, .. } | EventKind::GateWedged { gate } => {
                     frame.swing_pending = false;
                     effect(&mut frame, Burst::Bump, *gate);
                 }
@@ -603,15 +770,11 @@ impl Playback {
                     let tile = frame.figure(*target).tile;
                     effect(&mut frame, Burst::Shield, tile);
                 }
-                EventKind::OrderFilled { .. }
-                | EventKind::Assigned { .. }
-                | EventKind::Rethought { .. }
-                | EventKind::OrderDropped { .. }
+                EventKind::OrderDropped { .. }
                 | EventKind::TookOpportunity { .. }
                 | EventKind::LeverResting { .. }
                 | EventKind::SwitchDefended { .. }
                 | EventKind::SwitchResting { .. }
-                | EventKind::GateWedged { .. }
                 | EventKind::ItemFizzled { .. } => {}
             }
         }
@@ -753,6 +916,18 @@ mod tests {
     }
 
     #[test]
+    fn a_gate_wedged_by_a_twig_is_no_longer_waiting_to_swing() {
+        let (mut before, _, m) = turn();
+        before.swing_at = Some(4);
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let gate = m.arena.gates[0];
+        let events = vec![at(1, EventKind::GateWedged { gate })];
+        let playback = Playback::new(&before, &m.arena.gates, &facing, &events, 3);
+        assert!(playback.at(0.0).swing_pending);
+        assert!(!playback.at(playback.duration()).swing_pending);
+    }
+
+    #[test]
     fn halfway_through_a_step_a_creature_is_between_its_tiles() {
         let (before, report, m) = turn();
         let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
@@ -779,5 +954,214 @@ mod tests {
         };
         assert!(along(from.x, to.x, f.at.0) && along(from.y, to.y, f.at.1));
         assert_eq!(f.pose, Pose::Walk);
+    }
+
+    /// When the first event of this kind is shown, in seconds from the start.
+    fn when(playback: &Playback, kind: fn(&EventKind) -> bool) -> f32 {
+        playback
+            .timed
+            .iter()
+            .find(|(_, e)| kind(&e.kind))
+            .map(|(when, _)| *when)
+            .expect("the event is shown")
+    }
+
+    fn hold(slot: Slot, at: Tile, facing: Facing) -> EventKind {
+        EventKind::Assigned {
+            slot,
+            task: formiga_battle_core::Task {
+                directive: Some(0),
+                role: formiga_battle_core::Role::Claim,
+                at,
+            },
+            order: Order::Hold { at, facing },
+            why: formiga_battle_core::Why::Nearest,
+        }
+    }
+
+    #[test]
+    fn a_holder_faces_the_way_its_hold_says_and_a_flanker_faces_where_it_broke_one() {
+        let (before, _, m) = turn();
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let (a, b) = (Slot::new(Side::Left, 0), Slot::new(Side::Left, 1));
+        let (at_a, at_b) = (before.fighters[0][0].at, before.fighters[0][1].at);
+        let them = Slot::new(Side::Right, 0);
+        let there = before.fighters[1][0].at;
+        let events = vec![
+            at(0, hold(a, at_a, Facing::South)),
+            at(0, EventKind::Holding { slot: a, at: at_a }),
+            at(0, hold(b, at_b, Facing::North)),
+            at(1, EventKind::Holding { slot: b, at: at_b }),
+            at(
+                2,
+                EventKind::Flanked {
+                    target: them,
+                    by: vec![a, b],
+                    from: there,
+                    pushed_to: None,
+                },
+            ),
+            at(2, EventKind::Holding { slot: a, at: at_a }),
+        ];
+        let playback = Playback::new(&before, &m.arena.gates, &facing, &events, 3);
+        let start = playback.at(0.1);
+        assert_eq!(start.figure(a).facing, Facing::South);
+        assert!(
+            !start.figure(a).facing_right,
+            "south is down and to the left"
+        );
+        let end = playback.at(playback.duration());
+        assert_eq!(end.figure(b).facing, Facing::North);
+        assert!(end.figure(b).facing_right);
+        assert_eq!(
+            Some(end.figure(a).facing),
+            Facing::toward(at_a, there),
+            "taking the ground, it faces where the holder stood"
+        );
+    }
+
+    #[test]
+    fn a_press_pushes_its_target_on_and_snatches_what_it_carries() {
+        let (mut before, _, m) = turn();
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let (by, target) = (Slot::new(Side::Left, 0), Slot::new(Side::Right, 0));
+        before.fighters[1][0].carrying = Some(Item::Twig);
+        let from = before.fighters[1][0].at;
+        let to = Tile::new(from.x + 1, from.y);
+        let events = vec![
+            at(
+                1,
+                EventKind::Pressed {
+                    target,
+                    by: vec![by],
+                    pushed_to: Some(to),
+                    tricking: false,
+                },
+            ),
+            at(
+                1,
+                EventKind::Stole {
+                    by,
+                    from: target,
+                    item: Item::Twig,
+                },
+            ),
+        ];
+        let playback = Playback::new(&before, &m.arena.gates, &facing, &events, 3);
+        let pressed = when(&playback, |k| matches!(k, EventKind::Pressed { .. }));
+        let pushing = playback.at(pressed + 0.1);
+        assert!(
+            pushing
+                .effects
+                .iter()
+                .any(|e| e.burst == Burst::Shove { to } && e.tile == from)
+        );
+        assert!(pushing.figure(target).off_balance);
+        let stole = when(&playback, |k| matches!(k, EventKind::Stole { .. }));
+        let flying = playback.at(stole + SNATCH_SECS / 2.0);
+        assert_eq!(flying.figure(target).carrying, None);
+        assert_eq!(flying.figure(by).carrying, None, "still in the air");
+        assert!(flying.effects.iter().any(|e| matches!(
+            e.burst,
+            Burst::Snatch {
+                item: Item::Twig,
+                ..
+            }
+        )));
+        let end = playback.at(playback.duration());
+        assert_eq!(end.figure(target).tile, to);
+        assert_eq!(
+            end.figure(target).at,
+            (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5)
+        );
+        assert_eq!(end.figure(by).carrying, Some(Item::Twig));
+    }
+
+    #[test]
+    fn a_hold_facing_a_presser_jabs_it_and_one_from_the_side_breaks_to_a_trick() {
+        let (mut before, _, m) = turn();
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let holder = Slot::new(Side::Right, 0);
+        let (presser, trickster) = (Slot::new(Side::Left, 0), Slot::new(Side::Left, 1));
+        let there = before.fighters[1][0].at;
+        let ahead = Facing::West.ahead(there);
+        before.fighters[0][0].at = ahead;
+        before.fighters[0][1].at = Facing::North.ahead(there);
+        let events = vec![
+            at(0, hold(holder, there, Facing::West)),
+            at(
+                0,
+                EventKind::Holding {
+                    slot: holder,
+                    at: there,
+                },
+            ),
+            at(
+                1,
+                EventKind::Repelled {
+                    target: holder,
+                    holders: vec![holder],
+                    pressers: vec![presser],
+                    faced: vec![presser],
+                },
+            ),
+            at(
+                2,
+                EventKind::Tricked {
+                    target: holder,
+                    by: vec![trickster],
+                    from: there,
+                },
+            ),
+        ];
+        let playback = Playback::new(&before, &m.arena.gates, &facing, &events, 3);
+        let repelled = when(&playback, |k| matches!(k, EventKind::Repelled { .. }));
+        let jab = playback.at(repelled + 0.1);
+        assert!(
+            jab.effects
+                .iter()
+                .any(|e| e.burst == Burst::Counter { from: there } && e.tile == ahead)
+        );
+        assert!(jab.figure(holder).holding);
+        let tricked = when(&playback, |k| matches!(k, EventKind::Tricked { .. }));
+        let broken = playback.at(tricked + 0.1);
+        assert!(
+            broken
+                .effects
+                .iter()
+                .any(|e| matches!(e.burst, Burst::Sneak { .. }))
+        );
+        let end = playback.at(playback.duration());
+        assert!(!end.figure(holder).holding);
+        assert!(
+            !end.figure(holder).off_balance,
+            "tricked, it is still on its feet"
+        );
+        assert_eq!(end.figure(holder).tile, there, "a trick moves nobody");
+    }
+
+    #[test]
+    fn two_presses_meeting_both_stop_off_balance() {
+        let (before, _, m) = turn();
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let (a, b) = (Slot::new(Side::Left, 0), Slot::new(Side::Right, 0));
+        let events = vec![at(
+            1,
+            EventKind::Collided {
+                target: b,
+                by: vec![a],
+            },
+        )];
+        let playback = Playback::new(&before, &m.arena.gates, &facing, &events, 3);
+        let met = when(&playback, |k| matches!(k, EventKind::Collided { .. }));
+        assert!(
+            playback
+                .at(met + 0.1)
+                .effects
+                .iter()
+                .any(|e| matches!(e.burst, Burst::Collide { .. }))
+        );
+        let end = playback.at(playback.duration());
+        assert!(end.figure(a).off_balance && end.figure(b).off_balance);
     }
 }

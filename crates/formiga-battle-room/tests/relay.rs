@@ -311,13 +311,21 @@ fn a_turn_locks_when_both_are_in_and_neither_sees_the_other_s_orders_before() {
 fn a_plan_bigger_than_any_battle_sends_is_refused() {
     let mut relay = Relay::with_entropy(Limits::default(), counting());
     let (code, host, _) = room(&mut relay);
-    let take = Directive::Take {
+    let take = Directive::Press {
         squares: vec![Tile::new(4, 3)],
     };
-    let wide = Directive::Take {
+    let wide = Directive::Press {
         squares: (0..9).map(|x| Tile::new(x, 0)).collect(),
     };
-    for orders in [vec![take.clone(); 4], vec![wide]] {
+    let use_item = |by| Directive::UseItem {
+        by,
+        at: Tile::new(4, 3),
+    };
+    for orders in [
+        vec![take.clone(); 4],
+        vec![wide],
+        vec![use_item(0); TEAM_SIZE + 1],
+    ] {
         assert_eq!(
             refusal(relay.handle(
                 Request::Orders {
@@ -331,6 +339,32 @@ fn a_plan_bigger_than_any_battle_sends_is_refused() {
             Refusal::Malformed
         );
     }
+}
+
+#[test]
+fn three_orders_and_a_use_item_for_each_creature_are_a_plan_battle_sends() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let (code, host, _) = room(&mut relay);
+    let mut orders: TeamPlan = vec![
+        Directive::Hold {
+            squares: vec![Tile::new(4, 3)],
+            facing: formiga_battle_core::Facing::West,
+        };
+        3
+    ];
+    orders.extend((0..TEAM_SIZE as u8).map(|by| Directive::UseItem {
+        by,
+        at: Tile::new(4, 3),
+    }));
+    viewed(relay.handle(
+        Request::Orders {
+            code,
+            seat: host,
+            turn: 1,
+            orders,
+        },
+        100,
+    ));
 }
 
 #[test]

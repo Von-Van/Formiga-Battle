@@ -102,9 +102,7 @@ impl BattleApp {
 
     /// The pennant a trio flies: its own, or the Handler's.
     pub(super) fn trio_style(&self, trio: &Trio) -> Style {
-        trio.pennant
-            .as_ref()
-            .map_or_else(|| self.handler_style(), Style::of)
+        identity::trio_style(self.handler_style(), trio)
     }
 
     /// The Handler card as it stands, with the drafts of its name and club.
@@ -167,7 +165,9 @@ impl BattleApp {
                             ink::LINE.gamma_multiply(0.5)
                         },
                     );
-                    changed |= field.lost_focus();
+                    // Kept as it is typed, so closing Battle with the field still in hand
+                    // loses nothing.
+                    changed |= field.changed();
                 }
             });
         });

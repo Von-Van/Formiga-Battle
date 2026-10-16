@@ -1,5 +1,5 @@
-//! Formiga Battle's rules: an arena, three universal orders, and a turn that resolves both teams'
-//! orders at once, the same way on every machine.
+//! Formiga Battle's rules: an arena, three universal orders that go round in a circle, and a turn
+//! that resolves both teams' orders at once, the same way on every machine.
 //!
 //! Nothing here draws, waits on a clock or touches a network. Given the same arena, ruleset,
 //! seed, rosters and orders, a match comes out the same, byte for byte, which is what lets a
@@ -7,10 +7,11 @@
 //! match replay exactly.
 //!
 //! - [`arena`]: the board, authored as data.
-//! - [`order`]: a team's plan (TAKE, DEFEND and INTERACT), and what each creature does about it:
-//!   MOVE, HOLD and CONTEST, and USE for whoever carries something.
+//! - [`order`]: a team's plan (PRESS, HOLD, TRICK and INTERACT, and USE ITEM for whoever carries
+//!   something), and what each creature does about it: MOVE, HOLD, PRESS, TRICK and INTERACT.
 //! - [`muster`]: how a team shares out its plan, and thinks again when the board changes.
 //! - [`items`]: found things, and what each does.
+//! - [`lesson`]: Field Lessons, short situations that teach how a match works.
 //! - [`scenery`]: the map event, and found things turning up, being carried and used.
 //! - [`game`]: a match and how a turn resolves, tick by tick.
 //! - [`profile`]: who a creature is, read from Desktop's own record.
@@ -29,6 +30,7 @@ pub mod game;
 pub mod grid;
 pub mod interpret;
 pub mod items;
+pub mod lesson;
 pub mod muster;
 pub mod notebook;
 pub mod order;
@@ -47,7 +49,7 @@ pub use game::{Match, TurnReport};
 pub use grid::Tile;
 pub use items::Item;
 pub use muster::{Because, Role, Task, Why};
-pub use order::{Directive, Order, Orders, PLAN_SIZE, Side, Slot, Target, TeamPlan};
+pub use order::{Directive, Facing, Order, Orders, PLAN_SIZE, Quarter, Side, Slot, TeamPlan};
 pub use profile::{Behavior, Bond, Leanings, Nature, Profile, Strength};
 pub use replay::MatchRecord;
 pub use ruleset::{CaptureRule, RULES_VERSION, Ruleset};

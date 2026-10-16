@@ -15,7 +15,7 @@
 use crate::event::Reason;
 use crate::game::Match;
 use crate::grid::Tile;
-use crate::order::{Order, Slot, Target};
+use crate::order::{Order, Slot};
 use crate::rng::{self, Purpose};
 
 /// How hard a creature's leanings pull on the way it walks, against arriving on time, in percent
@@ -47,8 +47,8 @@ pub const WARY: i16 = 150;
 
 /// Whether a wary creature, sent to walk or hold, would rather not take this step: it would put
 /// it within reach of more of the other team than it is now. It waits one tick, once a turn, and
-/// then goes on: a Handler who knows it can plan for the tick it loses. Told to contest, it goes
-/// anyway: that is what it was sent for.
+/// then goes on: a Handler who knows it can plan for the tick it loses. Told to press or trick, it
+/// goes anyway: that is what it was sent for.
 fn hangs_back(m: &Match, slot: Slot, to: Tile) -> bool {
     let f = m.fighter(slot);
     if m.behavior(slot).caution < WARY
@@ -68,9 +68,17 @@ fn hangs_back(m: &Match, slot: Slot, to: Tile) -> bool {
 /// The step a creature means to take this tick, if any. A plan to its own tile is hanging back.
 pub fn plan_step(m: &Match, slot: Slot, now: u16) -> Option<Plan> {
     let f = m.fighter(slot);
-    if f.out || f.interrupted || f.holding || f.stuck {
+    if f.out || f.interrupted || f.holding || f.stuck || f.pause || f.broken {
         return None;
     }
+    let beside = |there: Tile| -> Vec<Tile> {
+        there
+            .steps()
+            .into_iter()
+            .filter(|t| m.walkable(*t))
+            .collect()
+    };
+    let mut avoid = None;
     let goals: Vec<Tile> = match f.order? {
         Order::Move { to } => {
             if f.arrived || f.at == to {
@@ -78,41 +86,44 @@ pub fn plan_step(m: &Match, slot: Slot, now: u16) -> Option<Plan> {
             }
             vec![to]
         }
-        Order::Hold { at } => vec![at],
-        Order::Use { at } => {
-            let item = f.carrying?;
-            if f.spent || f.at.distance(at) <= item.reach() {
-                return None;
-            }
-            m.arena
-                .tiles()
-                .filter(|t| t.distance(at) <= item.reach() && m.walkable(*t))
-                .collect()
-        }
-        Order::Contest { target } => {
+        Order::Hold { at, .. } => vec![at],
+        Order::Press { target } => {
             if f.spent {
                 return step_back(m, slot);
             }
-            let there = match target {
-                Target::Creature { slot: t } => {
-                    if !m.standing(t) {
-                        return None;
-                    }
-                    m.fighter(t).at
-                }
-                Target::Lever { at } => at,
-            };
+            if !m.standing(target) {
+                return None;
+            }
+            let there = m.fighter(target).at;
             if f.at.touches(there) {
                 return None;
             }
-            there
-                .steps()
+            beside(there)
+        }
+        Order::Trick { target } => {
+            if f.spent || !m.standing(target) {
+                return None;
+            }
+            let there = m.fighter(target).at;
+            // Round to the side or the back of one holding, never across its front.
+            let front = crate::muster::facing_of(m, target).map(|facing| facing.ahead(there));
+            if f.at.touches(there) && Some(f.at) != front {
+                return None;
+            }
+            avoid = front;
+            beside(there)
                 .into_iter()
-                .filter(|t| m.walkable(*t))
+                .filter(|t| Some(*t) != front)
                 .collect()
         }
+        Order::Interact { at } => {
+            if f.spent || f.at.touches(at) {
+                return None;
+            }
+            beside(at)
+        }
     };
-    let plan = route(m, slot, &goals, now)?;
+    let plan = route(m, slot, &goals, now, avoid)?;
     if hangs_back(m, slot, plan.to) {
         return Some(Plan {
             to: m.fighter(slot).at,
@@ -127,6 +138,17 @@ pub fn plan_step(m: &Match, slot: Slot, now: u16) -> Option<Plan> {
 /// Steps from every tile to the nearest goal, walking only where the ground allows and, if
 /// `around` is set, round anyone standing still.
 pub fn distances(m: &Match, me: Slot, goals: &[Tile], around: bool) -> Vec<Option<u8>> {
+    distances_avoiding(m, me, goals, around, None)
+}
+
+/// The same, never through `avoid`.
+fn distances_avoiding(
+    m: &Match,
+    me: Slot,
+    goals: &[Tile],
+    around: bool,
+    avoid: Option<Tile>,
+) -> Vec<Option<u8>> {
     let w = m.arena.width as usize;
     let index = |t: Tile| t.y as usize * w + t.x as usize;
     let mut dist = vec![None; w * m.arena.height as usize];
@@ -137,10 +159,12 @@ pub fn distances(m: &Match, me: Slot, goals: &[Tile], around: bool) -> Vec<Optio
             queue.push_back(*goal);
         }
     }
+    let start = m.fighter(me).at;
     let blocked = |t: Tile| {
-        around
-            && m.occupant(t)
-                .is_some_and(|o| o != me && m.fighter(o).stationary())
+        (Some(t) == avoid && t != start)
+            || around
+                && m.occupant(t)
+                    .is_some_and(|o| o != me && m.fighter(o).stationary())
     };
     while let Some(tile) = queue.pop_front() {
         let d = dist[index(tile)].expect("queued tiles have a distance");
@@ -354,21 +378,16 @@ fn explain(chosen: &Weighed, plain: &Weighed) -> Reason {
 /// at most its detour budget, and weighs each whole way: what every tile on it is like, less
 /// `TIME_COST` for each step it would get there later than the quickest way. Then it takes the
 /// first step of the best, and looks again next tick, from wherever everyone has got to.
-fn route(m: &Match, slot: Slot, goals: &[Tile], now: u16) -> Option<Plan> {
+fn route(m: &Match, slot: Slot, goals: &[Tile], now: u16, avoid: Option<Tile>) -> Option<Plan> {
     let f = m.fighter(slot);
-    let mut dist = distances(m, slot, goals, true);
+    let mut dist = distances_avoiding(m, slot, goals, true, avoid);
     let w = m.arena.width as usize;
     let index = |t: Tile| t.y as usize * w + t.x as usize;
     if dist[index(f.at)].is_none() {
-        dist = distances(m, slot, goals, false);
+        dist = distances_avoiding(m, slot, goals, false, avoid);
     }
     let here = dist[index(f.at)]?;
-    let chasing = match f.order {
-        Some(Order::Contest {
-            target: Target::Creature { slot: t },
-        }) => Some(t),
-        _ => None,
-    };
+    let chasing = f.order.and_then(|o| o.target());
     let passing_zone = !goals.iter().any(|g| m.arena.in_zone(*g));
     let per = u16::from(m.ruleset.ticks_per_turn);
     let tick = now.saturating_sub(u16::from(m.board.turn) * per);
@@ -380,6 +399,7 @@ fn route(m: &Match, slot: Slot, goals: &[Tile], now: u16) -> Option<Plan> {
         chasing,
         passing_zone,
         here,
+        avoid,
     };
     let mut ways: Vec<Way> = Vec::new();
     look.extend(
@@ -462,6 +482,7 @@ struct Look<'a> {
     chasing: Option<Slot>,
     passing_zone: bool,
     here: u8,
+    avoid: Option<Tile>,
 }
 
 impl Look<'_> {
@@ -494,7 +515,11 @@ impl Look<'_> {
             return;
         }
         for next in last.steps() {
-            if !self.m.arena.contains(next) || !self.m.walkable(next) || path.contains(&next) {
+            if !self.m.arena.contains(next)
+                || !self.m.walkable(next)
+                || path.contains(&next)
+                || Some(next) == self.avoid
+            {
                 continue;
             }
             // Nobody walks through someone standing still; anyone walking may have moved on.
@@ -562,8 +587,8 @@ fn follow_up(m: &Match, slot: Slot) -> Option<Plan> {
     })
 }
 
-/// Turned away by a holder, a creature that steps back takes one step out of reach, if there is
-/// one. After a contest that landed it stays where it is.
+/// Its PRESS turned away by a holder, a creature that steps back takes one step out of reach, if
+/// there is one. After a press that landed it stays where it is.
 fn step_back(m: &Match, slot: Slot) -> Option<Plan> {
     let f = m.fighter(slot);
     if f.followed_up || !f.turned_away || !m.behavior(slot).steps_back {

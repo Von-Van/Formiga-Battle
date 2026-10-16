@@ -18,9 +18,9 @@
 //! | `Z` | Open ground inside the capture zone, where the beacon counts |
 //! | `G` | A gate: closed at the start, walkable only while open |
 //! | `g` | A gate that starts open |
-//! | `L` | A lever: nobody stands on it; a CONTEST from next door swings every gate |
+//! | `L` | A lever: nobody stands on it; an INTERACT from next door swings every gate |
 //! | `1`, `2` | Where the left and right teams start, in reading order; open ground |
-//! | `S` | A switch (a garden tap): nobody stands on it; a CONTEST from next door sets off the map event early |
+//! | `S` | A switch (a garden tap): nobody stands on it; an INTERACT from next door sets off the map event early |
 //! | `*` | An item spot: open ground where found things turn up, always one of a mirrored pair |
 //!
 //! An arena may have one map event, set by `event:` and the settings after it: what it is called,

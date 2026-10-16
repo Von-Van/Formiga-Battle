@@ -162,6 +162,18 @@ pub fn first_pennant() -> Pennant {
     Style::default().pennant()
 }
 
+/// The pennant a trio flies: the Handler's, in the trio's own colour if it has one. Only the
+/// colour is the trio's, so it follows the Handler's cut, symbol and trim when they change.
+pub fn trio_style(handler: Style, trio: &Trio) -> Style {
+    match &trio.pennant {
+        Some(own) => Style {
+            field: Style::of(own).field,
+            ..handler
+        },
+        None => handler,
+    }
+}
+
 /// The Handler card as it stands, or one made from the name signed on the Friend page, flying the
 /// first pennant. `None` until there is a name.
 pub fn card_with_name(record: &BattleRecord, name: &str) -> Option<HandlerCard> {
@@ -436,6 +448,34 @@ mod tests {
         assert!(card.holds());
         assert_ne!(card.id, named("x", &[1, 2, 3]).unwrap().id);
         assert!(named("\u{200b}", &[1, 2, 3]).is_none());
+    }
+
+    #[test]
+    fn a_trio_of_its_own_colour_keeps_the_handlers_pennant_as_it_changes() {
+        let mut trio = sample::record().trios[0].clone();
+        let handler = Style {
+            shape: 1,
+            field: 0,
+            symbol: 4,
+            trim: 2,
+        };
+        trio.pennant = None;
+        assert_eq!(trio_style(handler, &trio), handler);
+        // Given its own colour under an older pennant, it takes only the colour from it.
+        trio.pennant = Some(
+            Style {
+                field: 3,
+                ..Style::default()
+            }
+            .pennant(),
+        );
+        assert_eq!(
+            trio_style(handler, &trio),
+            Style {
+                field: 3,
+                ..handler
+            }
+        );
     }
 
     #[test]

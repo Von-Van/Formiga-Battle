@@ -54,13 +54,14 @@ WINDOW:
                              aboard), where (choosing a place), picking or who (the team
                              choice), friend (a friend's room about to be opened), history,
                              settings, orders (a
-                             turn's orders half given, three turns in, TAKE chosen), playing (the AI giving
+                             turn's orders half given, three turns in, PRESS chosen), playing (the AI giving
                              your orders too,
                              every turn locked at once; the default) or notebook (the sample
                              colony's notebook, as Desktop would send it, open) or room (a room
                              opened on the relay, its code showing; FORMIGA_BATTLE_RELAY points
                              at a local one from `formiga-battle relay`) or account (as
-                             playing, with the whole match open)
+                             playing, with the whole match open) or lessons (choosing a Field
+                             Lesson) or lesson (the lesson on flanks, orders not yet given)
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
                              (default 0), at --scale (default 3), --into seconds into the
                              turn after (default: still)
@@ -159,6 +160,8 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "notebook" => app::Review::Notebook,
                     "room" => app::Review::Room,
                     "account" => app::Review::Account,
+                    "lessons" => app::Review::Lessons,
+                    "lesson" => app::Review::Lesson,
                     other => bail!("unknown stage {other:?}"),
                 }
             }
