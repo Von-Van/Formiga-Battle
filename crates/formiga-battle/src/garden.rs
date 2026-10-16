@@ -444,6 +444,23 @@ impl Garden {
         }
     }
 
+    /// The place with nobody in it: the ground and everything standing on the board, back to
+    /// front, gates shut. For pictures of an arena before a match.
+    pub fn picture(&self) -> Canvas {
+        let mut canvas = self.ground.clone();
+        let mut standing: Vec<(Tile, &Sprite)> = self
+            .pieces
+            .iter()
+            .map(|(t, s)| (*t, s))
+            .chain(self.gates.iter().map(|(t, s)| (*t, &s[0])))
+            .collect();
+        standing.sort_by_key(|(t, _)| (i32::from(t.x) + i32::from(t.y), t.y));
+        for (_, sprite) in standing {
+            paint::blit(&mut canvas, &sprite.pic, sprite.x, sprite.y);
+        }
+        canvas
+    }
+
     /// The lever, as this place has it: on a brick plinth in the garden, a winch post by the pond.
     pub fn lever(
         &self,

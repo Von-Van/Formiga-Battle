@@ -112,6 +112,10 @@ pub struct BattleApp {
     finished_at: Option<f32>,
     /// Whether the beacon is held by both at this moment of the turn shown.
     paused: bool,
+    /// The picking page shows how to play a friend, not just the button for it.
+    friend_open: bool,
+    /// The chosen arena, pictured under the companions while choosing.
+    preview: Option<(String, egui::TextureHandle)>,
     /// The board's marks, painted for the key on its page.
     keys: Vec<egui::TextureHandle>,
     /// How large a board pixel is drawn, in points, this frame.
@@ -146,6 +150,8 @@ impl BattleApp {
             pokes: Vec::new(),
             finished_at: None,
             paused: false,
+            friend_open: false,
+            preview: None,
             keys: Vec::new(),
             board_scale: 2.0,
             arenas: formiga_battle_core::Arena::built_in()
@@ -170,6 +176,7 @@ impl BattleApp {
                 app.notebook_open = true;
             }
             Some(Review::Room) => {
+                app.friend_open = true;
                 app.handler = "Jake".to_owned();
                 app.understood = true;
                 app.table.open_room("Jake", None);
@@ -569,6 +576,8 @@ impl BattleApp {
             Stage::Picking => match self.table.picked.len() {
                 3 => "Your three are ready: play the visitors, or open a room for a friend."
                     .to_owned(),
+                0 => "You are their Handler: choose three, then give each one order a turn."
+                    .to_owned(),
                 n => format!("Choose {} more of your companions to play.", TEAM_SIZE - n),
             },
             Stage::Playing if self.table.finished(now) => {
@@ -610,16 +619,9 @@ impl BattleApp {
     /// The left page while choosing: every companion, on a card.
     fn picking(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         chrome::kicker(ui, "Choose three to play");
-        ui.label(
-            RichText::new(
-                "You are their Handler: each turn you give each of them one order, and they carry it out their own way.",
-            )
-            .size(13.0)
-            .color(ink::MUTED),
-        );
-        ui.add_space(u * 6.0);
+        ui.add_space(u * 4.0);
         let count = self.table.home.len();
-        let card_w = 250.0;
+        let card_w = 220.0;
         let gap = u * 6.0;
         let per_row = ((ui.available_width() + gap) / (card_w + gap))
             .floor()
@@ -659,6 +661,41 @@ impl BattleApp {
                 if let Some(error) = &self.error {
                     ui.colored_label(ink::STAMP, error);
                 }
+                // Where they will play, pictured below them.
+                let garden = self
+                    .garden
+                    .get_or_insert_with(|| Garden::new(&self.table.arena, &self.view));
+                let key = format!("preview-{}", self.table.arena.id);
+                let fresh = !matches!(&self.preview, Some((k, _)) if *k == key);
+                let picture = if fresh { Some(garden.picture()) } else { None };
+                let size_px = (garden.ground.width() as f32, garden.ground.height() as f32);
+                let area = ui.available_rect_before_wrap();
+                let ppp = ctx.pixels_per_point();
+                let (w, h) = size_px;
+                let pixels = ((area.width() * ppp) / w)
+                    .min((area.height() * ppp) / h)
+                    .floor()
+                    .min(3.0);
+                if pixels >= 1.0 {
+                    let texture = match (picture, &self.preview) {
+                        (Some(picture), _) => {
+                            let t = texture(ctx, &key, &picture);
+                            self.preview = Some((key, t.clone()));
+                            t
+                        }
+                        (None, Some((_, t))) => t.clone(),
+                        (None, None) => return,
+                    };
+                    let size = vec2(w, h) * pixels / ppp;
+                    let min = pos2(area.center().x - size.x / 2.0, area.max.y - size.y);
+                    let min = pos2((min.x * ppp).round() / ppp, (min.y * ppp).round() / ppp);
+                    ui.painter().image(
+                        texture.id(),
+                        Rect::from_min_size(min, size),
+                        Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                        Color32::WHITE,
+                    );
+                }
             });
     }
 
@@ -667,36 +704,6 @@ impl BattleApp {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                chrome::kicker(ui, "The Championship Circuit");
-                let record = &self.table.record;
-                // Every cup, each on its own arena, with a rosette for each win toward it.
-                for cup in &crate::rewards::CUPS {
-                    let open = crate::rewards::is_open(cup, record);
-                    let wins = record.cup_wins(cup.id).min(crate::rewards::CUP_WINS);
-                    ui.horizontal(|ui| {
-                        let colour = if open { ink::PAGE } else { ink::MUTED };
-                        ui.label(RichText::new(cup.name).size(13.0).color(colour));
-                        for k in 0..crate::rewards::CUP_WINS {
-                            rosette(ui, k < wins, u);
-                        }
-                        if !open {
-                            ui.label(label_job("Locked", 9.0, ink::MUTED));
-                        }
-                    });
-                }
-                ui.label(
-                    RichText::new(format!("Open Circuit points: {}", record.circuit_points))
-                        .size(13.0),
-                );
-                ui.label(
-                    RichText::new(
-                        "Matches against the visitors earn cup progress, journal entries and keepsakes. Friend matches earn Open Circuit points, match history and notebook entries.",
-                    )
-                    .size(12.0)
-                    .italics()
-                    .color(ink::MUTED),
-                );
-                ui.add_space(u * 6.0);
                 self.arena_choice(ui, u);
                 ui.add_space(u * 6.0);
                 let open = crate::rewards::open_to_play(&self.table.record)
@@ -705,12 +712,15 @@ impl BattleApp {
                 let label = if !open {
                     format!("Win the {} first", locked_behind(&self.table.arena.id))
                 } else if ready {
-                    format!("Play the visitors in the {}", self.table.arena.name)
+                    "Play the visitors".to_owned()
                 } else {
                     format!("Choose {} more", TEAM_SIZE - self.table.picked.len())
                 };
                 let width = ui.available_width();
                 if chrome::button(ui, &label, Kind::Primary, false, ready, Some(width), u)
+                    .on_hover_text(
+                        "Wins against the visitors fill the arena's cup, and earn journal entries and keepsakes.",
+                    )
                     .clicked()
                 {
                     self.begin();
@@ -718,7 +728,15 @@ impl BattleApp {
                 ui.add_space(u * 8.0);
                 dashed_rule(ui, u);
                 ui.add_space(u * 4.0);
-                self.lobby(ui, u);
+                // Playing a friend waits behind one button, until it is wanted.
+                if self.friend_open || self.table.friend.is_some() {
+                    self.lobby(ui, u);
+                } else if chrome::button(ui, "Play a friend", Kind::Plain, false, true, Some(width), u)
+                    .on_hover_text("Open a room for a friend, or join theirs with its code")
+                    .clicked()
+                {
+                    self.friend_open = true;
+                }
             });
     }
 
@@ -739,7 +757,7 @@ impl BattleApp {
                     texture(
                         &ctx,
                         &format!("arena-{}", arena.id),
-                        &shrunk(&garden.ground, 3),
+                        &shrunk(&garden.picture(), 3),
                     )
                 })
                 .clone();
@@ -755,6 +773,13 @@ impl BattleApp {
                     locked_behind(&arena.id)
                 )
             };
+            let cup = crate::rewards::cup_for(&arena.id);
+            let wins = cup.map_or(0, |c| {
+                self.table
+                    .record
+                    .cup_wins(c.id)
+                    .min(crate::rewards::CUP_WINS)
+            });
             let (response, _) = card(
                 ui,
                 Id::new(("arena", i)),
@@ -765,7 +790,7 @@ impl BattleApp {
                 |ui| {
                     ui.horizontal(|ui| {
                         let size = picture.size_vec2();
-                        let w = 92.0;
+                        let w = 64.0;
                         let (rect, _) =
                             ui.allocate_exact_size(vec2(w, w * size.y / size.x), Sense::hover());
                         ui.painter().image(
@@ -780,11 +805,26 @@ impl BattleApp {
                                 chrome::LABEL,
                                 if here { ink::FOREST } else { ink::PAGE },
                             ));
-                            ui.label(RichText::new(blurb).size(11.5).color(ink::MUTED));
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = u;
+                                if unlocked {
+                                    for k in 0..crate::rewards::CUP_WINS {
+                                        rosette(ui, k < wins, u);
+                                    }
+                                } else {
+                                    ui.label(label_job("Locked", 9.0, ink::MUTED));
+                                }
+                            });
                         });
                     });
                 },
             );
+            let response = response.on_hover_ui(|ui| {
+                if let Some(cup) = cup {
+                    ui.label(label_job(cup.name, 9.0, ink::FOREST));
+                }
+                ui.label(RichText::new(&blurb).size(12.0));
+            });
             if response.hovered() && !open_room {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             }
@@ -1363,7 +1403,24 @@ impl BattleApp {
     /// Playing a friend: open a room and pass on its code, or join one with the code a friend
     /// gave. What is shared is said here, every time, before anything is sent.
     fn lobby(&mut self, ui: &mut egui::Ui, u: f32) {
-        chrome::kicker(ui, "Play a friend");
+        ui.horizontal(|ui| {
+            chrome::kicker(ui, "Play a friend");
+            if self.table.friend.is_none() {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if chrome::button(ui, "hide", Kind::Quiet, false, true, None, u).clicked() {
+                        self.friend_open = false;
+                    }
+                });
+            }
+        });
+        ui.label(
+            RichText::new(format!(
+                "Open Circuit points: {}. Friend matches earn points, match history and notebook entries.",
+                self.table.record.circuit_points
+            ))
+            .size(11.5)
+            .color(ink::MUTED),
+        );
         if let Some(friend) = &self.table.friend {
             match &friend.code {
                 Some(code) => {
@@ -1723,9 +1780,8 @@ impl Companion<'_> {
         let (response, _) = ui
             .allocate_ui(vec2(width, 0.0), |ui| {
                 card(ui, id, self.chosen.is_some(), true, true, u, |ui| {
-                    ui.set_min_height(92.0);
-                    ui.horizontal_top(|ui| {
-                        portrait_mat(ui, self.texture, 76.0, u, true);
+                    ui.horizontal(|ui| {
+                        portrait_mat(ui, self.texture, 60.0, u, true);
                         ui.vertical(|ui| {
                             ui.label(
                                 RichText::new(&self.contender.traveler.name)
@@ -1734,24 +1790,29 @@ impl Companion<'_> {
                                     .color(ink::PAGE),
                             );
                             ui.label(
-                                RichText::new(&self.contender.traveler.character.phrase).size(12.5),
-                            );
-                            ui.label(label_job(
-                                &self.contender.traveler.character.traits.join(" · "),
-                                9.0,
-                                ink::MUTED,
-                            ));
-                            ui.label(
-                                RichText::new(self.note)
-                                    .size(11.5)
-                                    .italics()
-                                    .color(ink::FOREST),
+                                RichText::new(&self.contender.traveler.character.phrase)
+                                    .size(12.5)
+                                    .color(ink::MUTED),
                             );
                         });
                     });
                 })
             })
             .inner;
+        // The rest, for whoever wants it: temperament in a word or three, and the notebook.
+        let response = response.on_hover_ui(|ui| {
+            ui.label(label_job(
+                &self.contender.traveler.character.traits.join(" · "),
+                9.0,
+                ink::MUTED,
+            ));
+            ui.label(
+                RichText::new(self.note)
+                    .size(12.0)
+                    .italics()
+                    .color(ink::FOREST),
+            );
+        });
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
