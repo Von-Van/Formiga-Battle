@@ -32,6 +32,8 @@ protocol 3 is unchanged: a friend match needs both Handlers on Battle 0.67.11 an
   turns to do it in; the timer waits, and a lesson earns and keeps nothing. Your own three play
   them, doing exactly as told until the last lesson, where they are themselves. A colony that has
   never played is pointed to them. `--review lessons` and `--review lesson` picture them.
+- A match against the visitors played from Formiga Desktop 0.67.8 leaves its notebook entries out
+  of the result, which that Desktop would otherwise turn away whole.
 - A gate a twig keeps from closing no longer goes on looking as if it is about to swing for the
   rest of the turn.
 - A trio given a colour of its own flies the Handler's pennant as it is now in that colour, on the
