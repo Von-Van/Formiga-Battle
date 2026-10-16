@@ -4,6 +4,7 @@
 mod app;
 mod chrome;
 mod cli;
+mod feel;
 mod friend;
 mod garden;
 mod host;
@@ -42,7 +43,8 @@ WINDOW:
     --at <SECONDS>           With --snap
     --review <STAGE>         With --snap: station (the train in at the halt, everyone hopping
                              aboard), where (choosing a place), picking or who (the team
-                             choice), friend (a friend's room about to be opened), orders (a
+                             choice), friend (a friend's room about to be opened), history,
+                             settings, orders (a
                              turn's orders half given, MOVE chosen), playing (the AI giving
                              your orders too,
                              every turn locked at once; the default) or notebook (the sample
@@ -134,6 +136,8 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "where" => app::Review::Where,
                     "picking" | "who" => app::Review::Picking,
                     "friend" => app::Review::Friend,
+                    "history" => app::Review::History,
+                    "settings" => app::Review::Settings,
                     "orders" => app::Review::Orders,
                     "playing" => app::Review::Playing,
                     "notebook" => app::Review::Notebook,

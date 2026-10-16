@@ -83,6 +83,24 @@ pub enum Going {
     Standing,
 }
 
+/// When the whistle goes as the train comes into hearing, and how long before it stops it lets
+/// off steam: Hill's.
+const WHISTLE_IN: f32 = 0.15;
+const BRAKES_BEFORE_STOP: f32 = 0.9;
+
+/// Something heard at the halt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Heard {
+    /// The whistle, as the train comes in.
+    Whistle,
+    /// Steam let off as it stops.
+    Brakes,
+    /// A companion hopping aboard.
+    Hop,
+    /// The whistle again, as it pulls away.
+    Away,
+}
+
 /// Where one companion is at a moment of the pickup.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Place {
@@ -240,6 +258,46 @@ impl Station {
     pub fn wait_at_platform(&mut self, now: f32) {
         self.leaving = None;
         self.began = now - self.aboard_after();
+    }
+
+    /// Brings the train in again for everyone, waiting on the platform as they were the first
+    /// time: back from a match. Under reduced motion it is simply in.
+    pub fn come_in(&mut self, now: f32) {
+        self.leaving = None;
+        if !self.reduce_motion {
+            self.began = now;
+        }
+    }
+
+    /// When the train came to a stop at the platform, or will.
+    pub fn stopped_at(&self) -> f32 {
+        self.began + self.stops()
+    }
+
+    /// What is heard of the train and its passengers after `from` and up to `to`: its whistle
+    /// as it comes, steam as it stops, each hop aboard, and its whistle as it goes.
+    pub fn heard(&self, from: f32, to: f32) -> Vec<Heard> {
+        if self.reduce_motion || to <= from {
+            return Vec::new();
+        }
+        let mut sounds = vec![
+            (self.began + WHISTLE_IN, Heard::Whistle),
+            (self.began + PULL_IN - BRAKES_BEFORE_STOP, Heard::Brakes),
+        ];
+        for i in 0..self.riders.len() {
+            sounds.push((
+                self.began + PULL_IN + SETTLE + i as f32 * HOP_GAP,
+                Heard::Hop,
+            ));
+        }
+        if let Some(at) = self.leaving {
+            sounds.push((at, Heard::Away));
+        }
+        sounds
+            .into_iter()
+            .filter(|(at, _)| *at > from && *at <= to)
+            .map(|(_, h)| h)
+            .collect()
     }
 
     /// Where each companion stands on the platform, across the scene.
@@ -803,6 +861,18 @@ mod tests {
         station.set_off(2.0);
         assert!(!station.seen_off(2.5));
         assert!(station.seen_off(2.0 + SEEN_OFF + 0.01));
+    }
+
+    #[test]
+    fn the_train_is_heard_coming_stopping_and_each_hop_aboard() {
+        let mut station = Station::new(looks(3, false), (384, 216), 0.0, false);
+        let all = station.heard(-1.0, 30.0);
+        assert_eq!(all.first(), Some(&Heard::Whistle));
+        assert_eq!(all.iter().filter(|h| **h == Heard::Hop).count(), 3);
+        assert!(all.contains(&Heard::Brakes));
+        station.set_off(30.0);
+        assert_eq!(station.heard(29.5, 30.5), vec![Heard::Away]);
+        assert!(station.heard(31.0, 32.0).is_empty());
     }
 
     #[test]

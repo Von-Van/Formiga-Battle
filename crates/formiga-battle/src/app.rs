@@ -6,6 +6,7 @@
 //! one; the turn, the beacon and the timer on the leather along the top, and what to do next
 //! along the foot. Everything it shows comes from the `Table`.
 
+mod handler;
 mod menus;
 
 use crate::chrome::{self, Kind, ink, label_job};
@@ -53,6 +54,27 @@ pub enum Stage {
     Playing,
 }
 
+/// How loud Battle is, for this sitting: Battle keeps no files, so each sitting starts as these
+/// are set by default.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SoundSettings {
+    /// 0 to 1.
+    pub music: f32,
+    /// 0 to 1.
+    pub effects: f32,
+    pub muted: bool,
+}
+
+impl Default for SoundSettings {
+    fn default() -> Self {
+        Self {
+            music: 0.6,
+            effects: 0.8,
+            muted: false,
+        }
+    }
+}
+
 /// Where the companions are off to, chosen at the station.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outing {
@@ -85,6 +107,9 @@ pub enum Step {
     Where,
     Who,
     Room,
+    /// The Handler's own pages, opened from the station rather than on the way anywhere.
+    History,
+    Settings,
 }
 
 impl Step {
@@ -93,6 +118,8 @@ impl Step {
             Self::Where => "Where",
             Self::Who => "Who",
             Self::Room => "Friend",
+            Self::History => "History",
+            Self::Settings => "Settings",
         }
     }
 }
@@ -107,6 +134,9 @@ pub enum Review {
     Picking,
     /// A friend's room about to be opened: three chosen, a name signed.
     Friend,
+    /// The sample colony's history, and its settings.
+    History,
+    Settings,
     Orders,
     Playing,
     /// A few matches played out of sight first, then the notebook open beside the board.
@@ -183,6 +213,11 @@ pub struct BattleApp {
     station_picture: Option<(i64, egui::TextureHandle)>,
     /// The friend's room was asked for by its code, not opened.
     joining: bool,
+    /// What was felt away from the window's context, told with the rest at the next frame.
+    felt: Vec<crate::feel::Feedback>,
+    /// Sound, for this sitting: how loud the music and the effects are, and whether all of it
+    /// is off.
+    pub(crate) sound: SoundSettings,
     /// The chosen arena, pictured under the companions while choosing.
     preview: Option<(String, egui::TextureHandle)>,
     /// The board's marks, painted for the key on its page.
@@ -225,6 +260,8 @@ impl BattleApp {
             station: None,
             station_picture: None,
             joining: false,
+            felt: Vec::new(),
+            sound: SoundSettings::default(),
             preview: None,
             keys: Vec::new(),
             board_scale: 2.0,
@@ -250,6 +287,11 @@ impl BattleApp {
                 app.notebook_open = true;
             }
             Some(Review::Where) => app.open_journal(Outing::Home, Step::Where),
+            Some(Review::History) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.open_journal(Outing::Home, Step::History);
+            }
+            Some(Review::Settings) => app.open_journal(Outing::Home, Step::Settings),
             Some(Review::Picking) => app.open_journal(Outing::Home, Step::Who),
             Some(Review::Friend) => {
                 app.open_journal(Outing::World, Step::Room);
@@ -349,7 +391,6 @@ impl BattleApp {
         let open_tab = match self.stage {
             Stage::Playing => usize::from(self.notebook_open),
             _ => self
-                .outing
                 .steps()
                 .iter()
                 .position(|s| *s == self.step)
@@ -373,7 +414,6 @@ impl BattleApp {
         match self.stage {
             Stage::Playing => TABS.iter().map(|w| (*w).to_owned()).collect(),
             Stage::Journal => self
-                .outing
                 .steps()
                 .iter()
                 .enumerate()
@@ -459,6 +499,11 @@ impl BattleApp {
             self.styled = true;
         }
         self.clock = ctx.input(|input| input.time) as f32;
+        crate::feel::set_still(&ctx, self.table.reduce_motion);
+        // Until Battle has sounds to play, whatever is felt goes unheard.
+        let mut heard = std::mem::take(&mut self.felt);
+        heard.extend(crate::feel::take(&ctx));
+        drop(heard);
         let now = self.clock;
         if self.turned < 0.0 {
             self.turned = now;
@@ -588,7 +633,7 @@ impl BattleApp {
         for (i, rect) in layout.tabs.iter().enumerate() {
             let open = i == layout.open_tab;
             let reachable = match self.stage {
-                Stage::Journal => self.reachable(self.outing.steps()[i]).is_ok(),
+                Stage::Journal => self.reachable(self.steps()[i]).is_ok(),
                 _ => true,
             };
             let mut response = ui.interact(
@@ -617,13 +662,13 @@ impl BattleApp {
             ui.painter()
                 .galley(rect.center() - galley.size() / 2.0, galley, colour);
             if self.stage == Stage::Journal
-                && let Err(why) = self.reachable(self.outing.steps()[i])
+                && let Err(why) = self.reachable(self.steps()[i])
             {
                 response = response.on_hover_text(why);
             }
             if response.clicked() && !open {
                 match self.stage {
-                    Stage::Journal => self.turn_to(self.outing.steps()[i], now),
+                    Stage::Journal => self.turn_to(self.steps()[i], now),
                     _ => {
                         self.notebook_open = i == 1;
                         self.turned = now;
@@ -1305,8 +1350,10 @@ impl BattleApp {
             self.notebook_open = false;
             let outing = self.outing;
             self.open_journal(outing, Step::Who);
+            // Back through the notebook to choosing who goes.
+            self.leaf(false);
         }
-        if chrome::button(ui, "Back to the station", Kind::Quiet, false, true, None, u)
+        if chrome::button(ui, "Back to the station", Kind::Back, false, true, None, u)
             .on_hover_text("Choose again where your companions are off to")
             .clicked()
         {
@@ -1536,6 +1583,7 @@ fn card<R>(
     u: f32,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (egui::Response, R) {
+    let mark = crate::feel::mark(ui);
     let under = ui.painter().add(egui::Shape::Noop);
     let inner = egui::Frame::new()
         .inner_margin(egui::Margin::same((u * 5.0).round() as i8))
@@ -1554,9 +1602,12 @@ fn card<R>(
     };
     let response = ui.interact(rect, id, sense);
     let pointed = lively && up && response.hovered();
-    let lift = ui
-        .ctx()
-        .animate_bool_with_time(id.with("lift"), pointed, 0.12);
+    let press = if lively && up {
+        crate::feel::press(ui.ctx(), id, &response, crate::feel::Feel::Select)
+    } else {
+        crate::feel::Press::REST
+    };
+    let lift = press.hover;
     let fill = if chosen {
         ink::MINT
     } else if pointed {
@@ -1583,6 +1634,7 @@ fn card<R>(
         shapes.push(egui::Shape::rect_filled(strip, 0.0, edge));
     }
     ui.painter().set(under, egui::Shape::Vec(shapes));
+    crate::feel::transform_since(ui, mark, press.transform(rect, u));
     (response, inner.inner)
 }
 

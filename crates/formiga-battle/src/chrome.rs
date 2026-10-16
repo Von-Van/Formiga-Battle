@@ -397,6 +397,9 @@ pub enum Kind {
     Primary,
     /// A word on the page to click, with no card round it.
     Quiet,
+    /// The way back, or something undone: a card-coloured button that shakes rather than
+    /// sparkles when pressed.
+    Back,
 }
 
 /// A button in the notebook's way, after Hill's: printed capitals on a slip of card with a
@@ -437,79 +440,224 @@ pub fn button(
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     let pressed = enabled && response.is_pointer_button_down_on();
-    let painter = ui.painter();
-    let lip = if pressed || selected { 0.0 } else { unit };
-    let face = egui::Rect::from_min_max(
-        rect.min + egui::vec2(0.0, unit - lip),
-        rect.max - egui::vec2(0.0, lip),
-    );
-    match kind {
-        Kind::Quiet => {
-            if response.hovered() && enabled {
+    let feel = match kind {
+        Kind::Primary => crate::feel::Feel::Confirm,
+        Kind::Back => crate::feel::Feel::Cancel,
+        _ => crate::feel::Feel::Select,
+    };
+    let press = crate::feel::press(ui.ctx(), response.id, &response, feel);
+    ui.with_visual_transform(press.transform(rect, unit), |ui| {
+        let painter = ui.painter();
+        let lip = if pressed || selected { 0.0 } else { unit };
+        let face = egui::Rect::from_min_max(
+            rect.min + egui::vec2(0.0, unit - lip),
+            rect.max - egui::vec2(0.0, lip),
+        );
+        match kind {
+            Kind::Quiet => {
+                if response.hovered() && enabled {
+                    painter.hline(
+                        rect.x_range(),
+                        rect.bottom() - unit,
+                        egui::Stroke::new(unit, ink::FOREST),
+                    );
+                }
+            }
+            Kind::Plain | Kind::Back => {
+                let fill = if !enabled {
+                    ink::CARD.gamma_multiply(0.85)
+                } else if selected {
+                    ink::MINT
+                } else if response.hovered() {
+                    Color32::from_rgb(214, 238, 218)
+                } else {
+                    ink::CARD
+                };
+                if lip > 0.0 {
+                    let foot = egui::Rect::from_min_max(
+                        egui::pos2(rect.left(), rect.bottom() - unit * 2.0),
+                        rect.max,
+                    );
+                    painter.rect_filled(
+                        foot.shrink2(egui::vec2(unit, 0.0)),
+                        0.0,
+                        ink::LINE.gamma_multiply(0.35),
+                    );
+                }
+                painter.rect_filled(face.shrink(unit), 0.0, fill);
+                let edge = if selected {
+                    ink::FOREST
+                } else {
+                    ink::LINE.gamma_multiply(if enabled { 0.7 } else { 0.35 })
+                };
+                stepped(painter, face, unit, edge);
+            }
+            Kind::Primary => {
+                let (fill, rim) = if !enabled {
+                    (ink::MUTED, ink::LINE.gamma_multiply(0.4))
+                } else if response.hovered() {
+                    (Color32::from_rgb(40, 90, 75), ink::BRASS_LIGHT)
+                } else {
+                    (ink::FOREST, ink::BRASS)
+                };
+                if lip > 0.0 {
+                    let foot = egui::Rect::from_min_max(
+                        egui::pos2(rect.left(), rect.bottom() - unit * 2.0),
+                        rect.max,
+                    );
+                    painter.rect_filled(foot.shrink2(egui::vec2(unit, 0.0)), 0.0, ink::BRASS_EDGE);
+                }
+                painter.rect_filled(face.shrink(unit), 0.0, rim);
+                painter.rect_filled(face.shrink(unit * 2.0), 0.0, fill);
+                stepped(painter, face, unit, ink::BRASS_EDGE);
+                // A line of light along its top, as the brass catches it.
                 painter.hline(
-                    rect.x_range(),
-                    rect.bottom() - unit,
-                    egui::Stroke::new(unit, ink::FOREST),
+                    (face.left() + unit * 2.0)..=(face.right() - unit * 2.0),
+                    face.top() + unit * 2.5,
+                    egui::Stroke::new(unit, Color32::from_rgba_unmultiplied(255, 255, 255, 30)),
                 );
             }
         }
-        Kind::Plain => {
-            let fill = if !enabled {
-                ink::CARD.gamma_multiply(0.85)
-            } else if selected {
-                ink::MINT
-            } else if response.hovered() {
-                Color32::from_rgb(214, 238, 218)
-            } else {
-                ink::CARD
-            };
-            if lip > 0.0 {
-                let foot = egui::Rect::from_min_max(
-                    egui::pos2(rect.left(), rect.bottom() - unit * 2.0),
-                    rect.max,
-                );
-                painter.rect_filled(
-                    foot.shrink2(egui::vec2(unit, 0.0)),
-                    0.0,
-                    ink::LINE.gamma_multiply(0.35),
-                );
-            }
-            painter.rect_filled(face.shrink(unit), 0.0, fill);
-            let edge = if selected {
-                ink::FOREST
-            } else {
-                ink::LINE.gamma_multiply(if enabled { 0.7 } else { 0.35 })
-            };
-            stepped(painter, face, unit, edge);
+        let at = face.center() - galley.size() / 2.0;
+        painter.galley(at, galley, colour);
+        if let Some(through) = press.sparkle {
+            crate::feel::sparkle(painter, face, through, unit);
         }
-        Kind::Primary => {
-            let (fill, rim) = if !enabled {
-                (ink::MUTED, ink::LINE.gamma_multiply(0.4))
-            } else if response.hovered() {
-                (Color32::from_rgb(40, 90, 75), ink::BRASS_LIGHT)
-            } else {
-                (ink::FOREST, ink::BRASS)
-            };
-            if lip > 0.0 {
-                let foot = egui::Rect::from_min_max(
-                    egui::pos2(rect.left(), rect.bottom() - unit * 2.0),
-                    rect.max,
-                );
-                painter.rect_filled(foot.shrink2(egui::vec2(unit, 0.0)), 0.0, ink::BRASS_EDGE);
-            }
-            painter.rect_filled(face.shrink(unit), 0.0, rim);
-            painter.rect_filled(face.shrink(unit * 2.0), 0.0, fill);
-            stepped(painter, face, unit, ink::BRASS_EDGE);
-            // A line of light along its top, as the brass catches it.
-            painter.hline(
-                (face.left() + unit * 2.0)..=(face.right() - unit * 2.0),
-                face.top() + unit * 2.5,
-                egui::Stroke::new(unit, Color32::from_rgba_unmultiplied(255, 255, 255, 30)),
-            );
+    });
+    response
+}
+
+/// A brass switch on a slip of card, for a setting that is on or off: forest green behind the
+/// knob when on, the knob sliding across as it changes. Flips `on` when clicked.
+pub fn switch(ui: &mut egui::Ui, on: &mut bool, unit: f32) -> egui::Response {
+    let size = egui::vec2(unit * 22.0, unit * 12.0);
+    let (rect, mut response) = ui.allocate_exact_size(size, egui::Sense::click());
+    if response.clicked() {
+        *on = !*on;
+        response.mark_changed();
+    }
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    let press = crate::feel::press(ui.ctx(), response.id, &response, crate::feel::Feel::Select);
+    let across = if crate::feel::still(ui.ctx()) {
+        f32::from(u8::from(*on))
+    } else {
+        ui.ctx()
+            .animate_bool_with_time(response.id.with("knob"), *on, 0.12)
+    };
+    let mark = crate::feel::mark(ui);
+    let painter = ui.painter();
+    let track = rect.shrink2(egui::vec2(0.0, unit * 2.0));
+    let fill = if *on {
+        ink::FOREST
+    } else if press.hover > 0.5 {
+        Color32::from_rgb(214, 238, 218)
+    } else {
+        ink::CARD
+    };
+    painter.rect_filled(
+        track.translate(egui::vec2(unit, unit)).shrink(unit),
+        0.0,
+        ink::SHADOW,
+    );
+    painter.rect_filled(track.shrink(unit), 0.0, fill);
+    stepped(painter, track, unit, ink::LINE.gamma_multiply(0.7));
+    let knob_w = unit * 10.0;
+    let x = rect.left() + (rect.width() - knob_w) * across;
+    let knob =
+        egui::Rect::from_min_size(egui::pos2(x, rect.top()), egui::vec2(knob_w, rect.height()));
+    painter.rect_filled(knob.shrink(unit), 0.0, ink::BRASS);
+    painter.rect_filled(
+        egui::Rect::from_min_size(
+            knob.min + egui::vec2(unit * 2.0, unit * 2.0),
+            egui::vec2(knob_w - unit * 4.0, unit),
+        ),
+        0.0,
+        ink::BRASS_LIGHT,
+    );
+    stepped(painter, knob, unit, ink::BRASS_EDGE);
+    crate::feel::transform_since(ui, mark, press.transform(rect, unit));
+    response
+}
+
+/// A dial along a ruled track, for a setting from nothing to all of it: the track filled in green
+/// up to a brass slider, marked every tenth. Drag or click along it to set `value`, 0 to 1.
+pub fn dial(
+    ui: &mut egui::Ui,
+    value: &mut f32,
+    width: f32,
+    enabled: bool,
+    unit: f32,
+) -> egui::Response {
+    let size = egui::vec2(width, unit * 12.0);
+    let sense = if enabled {
+        egui::Sense::click_and_drag()
+    } else {
+        egui::Sense::hover()
+    };
+    let (rect, mut response) = ui.allocate_exact_size(size, sense);
+    let inner = rect.shrink2(egui::vec2(unit * 4.0, 0.0));
+    if enabled
+        && (response.dragged() || response.clicked())
+        && let Some(p) = response.interact_pointer_pos()
+    {
+        let v = ((p.x - inner.left()) / inner.width()).clamp(0.0, 1.0);
+        // Settles on the tenths, so it is easy to set it where it was.
+        let v = (v * 20.0).round() / 20.0;
+        if (v - *value).abs() > f32::EPSILON {
+            *value = v;
+            response.mark_changed();
         }
     }
-    let at = face.center() - galley.size() / 2.0;
-    painter.galley(at, galley, colour);
+    if enabled && response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    if response.drag_stopped() {
+        crate::feel::emit(ui.ctx(), crate::feel::Feedback::Select);
+    }
+    let painter = ui.painter();
+    let y = rect.center().y;
+    let faint = if enabled { 1.0 } else { 0.4 };
+    let track = egui::Rect::from_min_max(
+        egui::pos2(inner.left(), y - unit * 1.5),
+        egui::pos2(inner.right(), y + unit * 1.5),
+    );
+    painter.rect_filled(track.translate(egui::vec2(unit, unit)), 0.0, ink::SHADOW);
+    painter.rect_filled(track, 0.0, ink::CARD.gamma_multiply(faint));
+    let filled = egui::Rect::from_min_max(
+        track.min,
+        egui::pos2(inner.left() + inner.width() * *value, track.max.y),
+    );
+    painter.rect_filled(filled, 0.0, ink::FOREST.gamma_multiply(faint));
+    stepped(
+        painter,
+        track.expand(unit),
+        unit,
+        ink::LINE.gamma_multiply(0.6 * faint),
+    );
+    for k in 0..=10 {
+        let x = inner.left() + inner.width() * k as f32 / 10.0;
+        let tall = if k % 5 == 0 { unit * 3.0 } else { unit * 1.5 };
+        painter.rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(x - unit / 2.0, track.max.y + unit * 1.5),
+                egui::vec2(unit, tall),
+            ),
+            0.0,
+            ink::LINE.gamma_multiply(0.35 * faint),
+        );
+    }
+    let knob = egui::Rect::from_center_size(
+        egui::pos2(inner.left() + inner.width() * *value, y),
+        egui::vec2(unit * 5.0, unit * 10.0),
+    );
+    painter.rect_filled(
+        knob.shrink(unit),
+        0.0,
+        if enabled { ink::BRASS } else { ink::MUTED },
+    );
+    stepped(painter, knob, unit, ink::BRASS_EDGE.gamma_multiply(faint));
     response
 }
 
@@ -663,55 +811,61 @@ pub fn destination(
     if response.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
-    let lift = ui
-        .ctx()
-        .animate_bool_with_time(id.with("lift"), response.hovered(), 0.12);
+    let press = crate::feel::press(ui.ctx(), id, &response, crate::feel::Feel::Confirm);
+    let lift = press.hover;
     let pressed = response.is_pointer_button_down_on();
-    let painter = ui.painter();
-    let face = rect.translate(egui::vec2(
-        0.0,
-        if pressed {
-            unit
+    let mut painted = None;
+    ui.with_visual_transform(press.transform(rect, unit), |ui| {
+        let painter = ui.painter();
+        let face = rect.translate(egui::vec2(
+            0.0,
+            if pressed {
+                unit
+            } else {
+                -(lift * unit * 2.0).round()
+            },
+        ));
+        let shadow = rect.translate(egui::vec2(unit * 2.0, unit * 2.0));
+        painter.rect_filled(shadow.shrink(unit), 0.0, ink::SHADOW);
+        let (fill, rim) = if response.hovered() {
+            (Color32::from_rgb(40, 90, 75), ink::BRASS_LIGHT)
         } else {
-            -(lift * unit * 2.0).round()
-        },
-    ));
-    let shadow = rect.translate(egui::vec2(unit * 2.0, unit * 2.0));
-    painter.rect_filled(shadow.shrink(unit), 0.0, ink::SHADOW);
-    let (fill, rim) = if response.hovered() {
-        (Color32::from_rgb(40, 90, 75), ink::BRASS_LIGHT)
-    } else {
-        (ink::FOREST, ink::BRASS)
-    };
-    let lip = egui::Rect::from_min_max(
-        egui::pos2(face.left(), face.bottom() - unit * 2.0),
-        egui::pos2(face.right(), face.bottom() + unit),
-    );
-    painter.rect_filled(lip.shrink2(egui::vec2(unit, 0.0)), 0.0, ink::BRASS_EDGE);
-    painter.rect_filled(face.shrink(unit), 0.0, rim);
-    painter.rect_filled(face.shrink(unit * 3.0), 0.0, fill);
-    stepped(painter, face, unit, ink::BRASS_EDGE);
-    painter.hline(
-        (face.left() + unit * 3.0)..=(face.right() - unit * 3.0),
-        face.top() + unit * 3.5,
-        egui::Stroke::new(unit, Color32::from_rgba_unmultiplied(255, 255, 255, 30)),
-    );
-    let big = painter.layout_job(label_job(title, 19.0, ink::COVER));
-    let little = painter.layout_job(label_job(small, LABEL, ink::DEBOSS));
-    let gap = unit * 3.0;
-    let total = big.size().y + gap + little.size().y;
-    let top = face.center().y - total / 2.0;
-    painter.galley(
-        egui::pos2(face.center().x - big.size().x / 2.0, top),
-        big,
-        ink::COVER,
-    );
-    let below = top + total - little.size().y;
-    painter.galley(
-        egui::pos2(face.center().x - little.size().x / 2.0, below),
-        little,
-        ink::DEBOSS,
-    );
+            (ink::FOREST, ink::BRASS)
+        };
+        let lip = egui::Rect::from_min_max(
+            egui::pos2(face.left(), face.bottom() - unit * 2.0),
+            egui::pos2(face.right(), face.bottom() + unit),
+        );
+        painter.rect_filled(lip.shrink2(egui::vec2(unit, 0.0)), 0.0, ink::BRASS_EDGE);
+        painter.rect_filled(face.shrink(unit), 0.0, rim);
+        painter.rect_filled(face.shrink(unit * 3.0), 0.0, fill);
+        stepped(painter, face, unit, ink::BRASS_EDGE);
+        painter.hline(
+            (face.left() + unit * 3.0)..=(face.right() - unit * 3.0),
+            face.top() + unit * 3.5,
+            egui::Stroke::new(unit, Color32::from_rgba_unmultiplied(255, 255, 255, 30)),
+        );
+        let big = painter.layout_job(label_job(title, 19.0, ink::COVER));
+        let little = painter.layout_job(label_job(small, LABEL, ink::DEBOSS));
+        let gap = unit * 3.0;
+        let total = big.size().y + gap + little.size().y;
+        let top = face.center().y - total / 2.0;
+        painter.galley(
+            egui::pos2(face.center().x - big.size().x / 2.0, top),
+            big,
+            ink::COVER,
+        );
+        let below = top + total - little.size().y;
+        painter.galley(
+            egui::pos2(face.center().x - little.size().x / 2.0, below),
+            little,
+            ink::DEBOSS,
+        );
+        painted = Some(face);
+    });
+    if let (Some(through), Some(face)) = (press.sparkle, painted) {
+        crate::feel::sparkle(ui.painter(), face, through, unit);
+    }
     response
 }
 

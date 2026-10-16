@@ -9,10 +9,11 @@ use super::{
     rosette, shrunk, sticky, texture,
 };
 use crate::chrome::{self, ink, label_job};
+use crate::feel::Feedback;
 use crate::garden::Garden;
 use crate::iso::View;
 use crate::look::Look;
-use crate::station::Station;
+use crate::station::{Heard, Station};
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
 use formiga_battle_contract::Contender;
 use formiga_battle_core::TEAM_SIZE;
@@ -25,23 +26,64 @@ const STATION_FRAMES_PER_SECOND: f32 = 30.0;
 /// The halt's name, lettered on its board.
 const HALT: &str = "Battle Halt";
 
+/// How long after a page starts turning its cards start dropping onto it: once the leaf is
+/// mostly over.
+const TURN_DROP_DELAY: f32 = 0.16;
+
 impl BattleApp {
-    /// Opens the notebook at a page of getting ready for an outing.
+    /// The pages the notebook is turning through: an outing's, or the Handler's own.
+    pub(super) fn steps(&self) -> &'static [Step] {
+        if self.own_pages() {
+            &[Step::History, Step::Settings]
+        } else {
+            self.outing.steps()
+        }
+    }
+
+    /// The notebook is open at the Handler's own pages, not on the way anywhere.
+    pub(super) fn own_pages(&self) -> bool {
+        matches!(self.step, Step::History | Step::Settings)
+    }
+
+    /// Opens the notebook at a page of getting ready for an outing, or at the Handler's own
+    /// pages; a page turns as it opens, unless motion is reduced.
     pub(super) fn open_journal(&mut self, outing: Outing, step: Step) {
         self.outing = outing;
         self.step = step;
         self.stage = Stage::Journal;
-        self.turn = None;
-        self.turned = self.clock;
         self.notebook_open = false;
         self.keep_arena_open();
+        self.leaf(true);
     }
 
-    /// Back to the halt, where the train waits with everyone aboard.
+    /// A leaf of the notebook turning over now, forward or back, and the page under it dropping
+    /// its cards in once it has mostly gone by.
+    pub(super) fn leaf(&mut self, forward: bool) {
+        let now = self.clock;
+        if self.table.reduce_motion {
+            self.turn = None;
+            self.turned = now;
+        } else {
+            self.turn = Some(chrome::PageTurn {
+                started: now,
+                forward,
+            });
+            self.turned = now + TURN_DROP_DELAY;
+            self.felt.push(crate::feel::Feedback::PageTurn);
+        }
+    }
+
+    /// Back to the halt. From the notebook, the train is waiting with everyone aboard; after a
+    /// match, it comes in again for them, as it did the first time.
     pub(super) fn back_to_station(&mut self) {
         let now = self.clock;
+        let after_match = self.stage == Stage::Playing;
         if let Some(station) = &mut self.station {
-            station.wait_at_platform(now);
+            if after_match {
+                station.come_in(now);
+            } else {
+                station.wait_at_platform(now);
+            }
         }
         self.stage = Stage::Station;
         self.turn = None;
@@ -73,7 +115,7 @@ impl BattleApp {
 
     /// Whether a page can be turned to now, and if not, why.
     pub(super) fn reachable(&self, step: Step) -> Result<(), String> {
-        if self.room_waiting() && step != Step::Room {
+        if self.room_waiting() && step != Step::Room && !self.own_pages() {
             return Err("Close the room first".to_owned());
         }
         if step == Step::Room && self.table.picked.len() < TEAM_SIZE {
@@ -88,21 +130,17 @@ impl BattleApp {
         if step == self.step || self.reachable(step).is_err() {
             return;
         }
-        if self.table.reduce_motion {
-            self.turned = now;
-        } else {
-            self.turn = Some(chrome::PageTurn {
-                started: now,
-                forward: step > self.step,
-            });
-        }
+        let forward = step > self.step;
         self.step = step;
+        self.clock = now;
+        self.leaf(forward);
     }
 
     /// The leather along the top while getting ready: the way back to the station, and where the
     /// companions are off to.
     pub(super) fn journal_strip(&mut self, ui: &mut egui::Ui, area: Rect, u: f32, _now: f32) {
-        let waiting = self.room_waiting();
+        let waiting = self.room_waiting() && !self.own_pages();
+        let own = self.own_pages();
         let mut back = false;
         ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
             ui.horizontal_centered(|ui| {
@@ -138,15 +176,23 @@ impl BattleApp {
                 };
                 back = response.clicked() && !waiting;
                 ui.add_space(u * 6.0);
-                ui.label(label_job(self.outing.name(), chrome::LABEL, ink::COVER));
-                ui.label(label_job(
-                    match self.outing {
-                        Outing::World => "· online",
-                        Outing::Home => "· offline",
-                    },
-                    chrome::LABEL,
-                    ink::DEBOSS,
-                ));
+                if own {
+                    ui.label(label_job(
+                        "The Handler's notebook",
+                        chrome::LABEL,
+                        ink::COVER,
+                    ));
+                } else {
+                    ui.label(label_job(self.outing.name(), chrome::LABEL, ink::COVER));
+                    ui.label(label_job(
+                        match self.outing {
+                            Outing::World => "· online",
+                            Outing::Home => "· offline",
+                        },
+                        chrome::LABEL,
+                        ink::DEBOSS,
+                    ));
+                }
             });
         });
         if back {
@@ -181,6 +227,8 @@ impl BattleApp {
                     "Sign your name, read what is shared, then open a room or join one.".to_owned()
                 }
             },
+            Step::History => "Every match your colony has played, newest first.".to_owned(),
+            Step::Settings => "Settings last for this sitting.".to_owned(),
         }
     }
 
@@ -340,31 +388,58 @@ impl BattleApp {
                 snap(pos2(middle.x + gap / 2.0, middle.y - h / 2.0)),
                 vec2(w, h),
             );
-            if chrome::destination(
-                ui,
-                world,
-                Id::new("out-in-the-world"),
-                "Out in the World",
-                "Online",
-                u,
-            )
-            .on_hover_text("Play a friend: open a room and give them its code, or join theirs.")
-            .clicked()
-            {
+            // The choices drop in one after the other as the train comes to a stop.
+            let since = station.stopped_at();
+            let world = crate::feel::dropping(ui, since, 0, u, |ui| {
+                chrome::destination(
+                    ui,
+                    world,
+                    Id::new("out-in-the-world"),
+                    "Out in the World",
+                    "Online",
+                    u,
+                )
+                .on_hover_text("Play a friend: open a room and give them its code, or join theirs.")
+                .clicked()
+            });
+            let home = crate::feel::dropping(ui, since, 1, u, |ui| {
+                chrome::destination(
+                    ui,
+                    home,
+                    Id::new("close-to-home"),
+                    "Close to Home",
+                    "Offline",
+                    u,
+                )
+                .on_hover_text(
+                    "Play the visiting team on this computer. Wins fill each place's cup.",
+                )
+                .clicked()
+            });
+            if world {
                 chosen = Some(Outing::World);
-            }
-            if chrome::destination(
-                ui,
-                home,
-                Id::new("close-to-home"),
-                "Close to Home",
-                "Offline",
-                u,
-            )
-            .on_hover_text("Play the visiting team on this computer. Wins fill each place's cup.")
-            .clicked()
-            {
+            } else if home {
                 chosen = Some(Outing::Home);
+            }
+            // The Handler's own pages, small beneath them.
+            let words = "History & settings";
+            let galley = painter.layout_job(label_job(words, chrome::LABEL, ink::PAGE));
+            let size = galley.size() + vec2(u * 10.0, u * 7.0);
+            let below = Rect::from_center_size(
+                snap(pos2(middle.x, middle.y + h / 2.0 + u * 10.0 + size.y / 2.0)),
+                size,
+            );
+            let notes = crate::feel::dropping(ui, since, 2, u, |ui| {
+                ui.scope_builder(egui::UiBuilder::new().max_rect(below), |ui| {
+                    chrome::button(ui, words, Kind::Plain, false, true, Some(below.width()), u)
+                        .on_hover_text("Matches played, cups, and how Battle looks and sounds")
+                        .clicked()
+                })
+                .inner
+            });
+            if notes {
+                self.open_journal(self.outing, Step::History);
+                return;
             }
         }
         // Who Battle is open for, on a ticket by the line.
@@ -384,6 +459,22 @@ impl BattleApp {
         painter.galley(ticket_rect.min + vec2(u * 4.0, u * 2.0), ticket, ink::PAGE);
 
         let station = self.station.as_mut().expect("the halt");
+        // What is heard of the train since the last frame.
+        let last = ctx
+            .data(|d| d.get_temp::<f32>(Id::new("station-heard")))
+            .unwrap_or(now);
+        for heard in station.heard(last, now) {
+            crate::feel::emit(
+                &ctx,
+                match heard {
+                    Heard::Whistle => Feedback::TrainIn,
+                    Heard::Brakes => Feedback::TrainStops,
+                    Heard::Hop => Feedback::Hop,
+                    Heard::Away => Feedback::TrainOut,
+                },
+            );
+        }
+        ctx.data_mut(|d| d.insert_temp(Id::new("station-heard"), now));
         if let Some(outing) = chosen {
             self.outing = outing;
             station.set_off(now);
@@ -396,11 +487,15 @@ impl BattleApp {
 
     /// The left page of getting ready.
     pub(super) fn journal_left(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
-        let steps = self.outing.steps();
+        let steps = self.steps();
         let number = steps.iter().position(|s| *s == self.step).unwrap_or(0) + 1;
         let line = format!(
             "{} · page {} of {}",
-            self.outing.name(),
+            if self.own_pages() {
+                "The Handler's notebook"
+            } else {
+                self.outing.name()
+            },
             number,
             steps.len()
         );
@@ -438,6 +533,26 @@ impl BattleApp {
                 ui.add_space(u * 6.0);
                 self.room(ui, u);
             }
+            Step::History => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "History",
+                    "Every match your colony has played, newest first, and who went.",
+                );
+                ui.add_space(u * 6.0);
+                self.history(ui, ctx, u);
+            }
+            Step::Settings => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "Settings",
+                    "How Battle looks and sounds. Battle keeps no files, so these last for this sitting.",
+                );
+                ui.add_space(u * 6.0);
+                self.settings(ui, u);
+            }
         }
     }
 
@@ -449,6 +564,8 @@ impl BattleApp {
                 Step::Where => self.places(ui, u),
                 Step::Who => self.lineup(ui, ctx, u),
                 Step::Room => self.shared(ui, ctx, u),
+                Step::History => self.totals(ui, u),
+                Step::Settings => self.keys_and_about(ui, u),
             });
     }
 
@@ -562,6 +679,7 @@ impl BattleApp {
         let ctx = ui.ctx().clone();
         let waiting = self.room_waiting();
         let home = self.outing == Outing::Home;
+        let since = self.turned;
         let mut chosen = None;
         for i in 0..self.arenas.len() {
             let (arena, thumb) = &mut self.arenas[i];
@@ -587,47 +705,49 @@ impl BattleApp {
                     .cup_wins(c.id)
                     .min(crate::rewards::CUP_WINS)
             });
-            let (response, _) = card(
-                ui,
-                Id::new(("arena", i)),
-                here,
-                choosable || here,
-                choosable,
-                u,
-                |ui| {
-                    ui.horizontal(|ui| {
-                        let size = picture.size_vec2();
-                        let w = 72.0;
-                        let (rect, _) =
-                            ui.allocate_exact_size(vec2(w, w * size.y / size.x), Sense::hover());
-                        ui.painter().image(
-                            picture.id(),
-                            rect,
-                            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-                            Color32::WHITE,
-                        );
-                        ui.vertical(|ui| {
-                            ui.label(label_job(
-                                &arena.name,
-                                chrome::LABEL,
-                                if here { ink::FOREST } else { ink::PAGE },
-                            ));
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = u;
-                                if unlocked {
-                                    for k in 0..crate::rewards::CUP_WINS {
-                                        rosette(ui, k < wins, u);
+            let (response, _) = crate::feel::dropping(ui, since, i, u, |ui| {
+                card(
+                    ui,
+                    Id::new(("arena", i)),
+                    here,
+                    choosable || here,
+                    choosable,
+                    u,
+                    |ui| {
+                        ui.horizontal(|ui| {
+                            let size = picture.size_vec2();
+                            let w = 72.0;
+                            let (rect, _) = ui
+                                .allocate_exact_size(vec2(w, w * size.y / size.x), Sense::hover());
+                            ui.painter().image(
+                                picture.id(),
+                                rect,
+                                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                                Color32::WHITE,
+                            );
+                            ui.vertical(|ui| {
+                                ui.label(label_job(
+                                    &arena.name,
+                                    chrome::LABEL,
+                                    if here { ink::FOREST } else { ink::PAGE },
+                                ));
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = u;
+                                    if unlocked {
+                                        for k in 0..crate::rewards::CUP_WINS {
+                                            rosette(ui, k < wins, u);
+                                        }
+                                    } else if home {
+                                        ui.label(label_job("Locked", 9.0, ink::MUTED));
+                                    } else {
+                                        ui.label(label_job("Open for friends", 9.0, ink::MUTED));
                                     }
-                                } else if home {
-                                    ui.label(label_job("Locked", 9.0, ink::MUTED));
-                                } else {
-                                    ui.label(label_job("Open for friends", 9.0, ink::MUTED));
-                                }
+                                });
                             });
                         });
-                    });
-                },
-            );
+                    },
+                )
+            });
             let response = if !unlocked && home {
                 response.on_hover_text(format!("Win the {} to play here", locked_behind(&arena.id)))
             } else {
@@ -679,6 +799,7 @@ impl BattleApp {
         let card_w = ((width - gap * (per_row as f32 - 1.0)) / per_row as f32).floor();
         let full = self.table.picked.len() >= TEAM_SIZE;
         let waiting = self.room_waiting();
+        let since = self.turned;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -708,9 +829,16 @@ impl BattleApp {
                                 note: &note,
                                 spare: (full || waiting) && chosen.is_none(),
                             };
-                            let response = card.show(ui, card_w, u);
+                            let response =
+                                crate::feel::dropping(ui, since, place.min(9), u, |ui| {
+                                    card.show(ui, card_w, u)
+                                });
                             if response.clicked() && !waiting {
+                                let was = self.table.picked.contains(&place);
                                 self.table.toggle_pick(place);
+                                if !was && self.table.picked.contains(&place) {
+                                    crate::feel::start_hop(ui.ctx(), hop_id(place));
+                                }
                             }
                         }
                     });
@@ -757,7 +885,7 @@ impl BattleApp {
                                         if chrome::button(
                                             ui,
                                             "take out",
-                                            Kind::Quiet,
+                                            Kind::Back,
                                             false,
                                             true,
                                             None,
@@ -773,7 +901,15 @@ impl BattleApp {
                         });
                     });
                 }
-                None => empty_slot(ui, slot, u),
+                None => {
+                    let first = slot == self.table.picked.len();
+                    let breath = if first {
+                        crate::feel::breathe(ui.ctx(), 2.4)
+                    } else {
+                        0.0
+                    };
+                    empty_slot(ui, slot, breath, u)
+                }
             }
             ui.add_space(u * 3.0);
         }
@@ -905,7 +1041,7 @@ impl BattleApp {
                 }
             }
             ui.add_space(u * 4.0);
-            if chrome::button(ui, "Close the room", Kind::Plain, false, true, None, u).clicked() {
+            if chrome::button(ui, "Close the room", Kind::Back, false, true, None, u).clicked() {
                 self.table.leave_room();
                 self.joining = false;
             }
@@ -1076,6 +1212,11 @@ impl BattleApp {
     }
 }
 
+/// What a companion's hop as it is chosen goes by.
+fn hop_id(place: usize) -> Id {
+    Id::new(("companion-hop", place))
+}
+
 /// "once", "twice", or "n times".
 fn times(n: u32) -> String {
     match n {
@@ -1086,10 +1227,13 @@ fn times(n: u32) -> String {
 }
 
 /// A place in the team still to fill: a dashed outline, numbered.
-fn empty_slot(ui: &mut egui::Ui, slot: usize, u: f32) {
+fn empty_slot(ui: &mut egui::Ui, slot: usize, breath: f32, u: f32) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 60.0), Sense::hover());
     let painter = ui.painter();
-    let colour = ink::LINE.gamma_multiply(0.35);
+    // The next place to fill breathes, from the page's plum towards the notebook's green.
+    let colour = ink::LINE
+        .gamma_multiply(0.35)
+        .lerp_to_gamma(ink::FOREST, breath * 0.7);
     let dash = |a: egui::Pos2, b: egui::Pos2| {
         let along = b - a;
         let length = along.length();
@@ -1164,12 +1308,22 @@ struct Companion<'a> {
 impl Companion<'_> {
     fn show(&self, ui: &mut egui::Ui, width: f32, u: f32) -> egui::Response {
         let id = Id::new(("companion", self.place));
+        let hop = crate::feel::hop(ui.ctx(), hop_id(self.place));
         let (response, _) = ui
             .allocate_ui(vec2(width, 0.0), |ui| {
                 card(ui, id, self.chosen.is_some(), !self.spare, true, u, |ui| {
                     ui.set_min_height(96.0);
                     ui.horizontal_top(|ui| {
+                        let mark = crate::feel::mark(ui);
                         portrait_mat(ui, self.texture, 64.0, u, true);
+                        crate::feel::transform_since(
+                            ui,
+                            mark,
+                            egui::emath::TSTransform::from_translation(vec2(
+                                0.0,
+                                -(hop * u).round(),
+                            )),
+                        );
                         ui.vertical(|ui| {
                             ui.label(
                                 RichText::new(&self.contender.traveler.name)
@@ -1211,8 +1365,10 @@ impl Companion<'_> {
             let rect = response.rect;
             let centre = pos2(rect.max.x - u * 9.0, rect.min.y + u * 9.0);
             let painter = ui.painter();
-            painter.circle_filled(centre, u * 6.5, ink::STAMP);
-            painter.circle_stroke(centre, u * 5.0, Stroke::new(u * 0.7, ink::CARD));
+            // Stamped down as it is chosen: a touch large, then pressed flat.
+            let pop = 1.0 + hop / 12.0;
+            painter.circle_filled(centre, u * 6.5 * pop, ink::STAMP);
+            painter.circle_stroke(centre, u * 5.0 * pop, Stroke::new(u * 0.7, ink::CARD));
             painter.text(
                 centre,
                 Align2::CENTER_CENTER,
