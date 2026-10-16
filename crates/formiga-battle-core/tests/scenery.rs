@@ -400,14 +400,23 @@ fn a_twig_thrown_in_the_millpond_floats_as_a_raft_anyone_can_stand_on() {
 fn shaking_a_tree_bonks_whoever_stands_round_it_and_drops_a_twig_beside_it() {
     let mut m = board_on(
         Arena::by_id("woodland").unwrap(),
-        &[(L0, (2, 2)), (R0, (0, 1))],
+        &[(L0, (2, 2)), (R0, (1, 1))],
     );
-    let report = m.resolve_turn(orders(&[(L0, tap(1, 2)), (R0, hold(0, 1))]));
+    let report = m.resolve_turn(orders(&[(L0, tap(1, 2)), (R0, walk(1, 1))]));
     let (hit, _) = landed(&report).expect("the acorns fall");
     assert_eq!(hit, vec![L0, R0]);
-    assert!(m.board.ground.contains(&(Tile::new(1, 1), Item::Twig)));
+    // The first free tile beside it, from the far side: under R0, who picks it straight up.
+    assert_eq!(m.fighter(R0).carrying, Some(Item::Twig));
     let mirrored = m.arena.scenery_tiles(&[Tile::new(7, 2)]);
-    assert!(mirrored.contains(&Tile::new(8, 1)) && mirrored.contains(&Tile::new(6, 2)));
+    assert_eq!(
+        mirrored,
+        vec![
+            Tile::new(7, 1),
+            Tile::new(6, 2),
+            Tile::new(8, 2),
+            Tile::new(7, 3)
+        ]
+    );
 }
 
 #[test]

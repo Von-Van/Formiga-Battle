@@ -162,7 +162,7 @@ composure.
 | Backyard | The sprinkler | Soak | The whole yard | Turns 4, 8 and 12 | A garden tap on each side of the near edge |
 | Sandy Cove | A wave | Wash | The sandbar's two ends and the sand either side of them | Turns 3, 6, 9 and 12 | A big shell on each side of the near edge |
 | Millpond | The pond rising | Close | The jetty's two sides, leaving the yard a line | Turns 5 and 10 | A sluice on each bank |
-| Woodland Glade | A tree shaken | Soak, and a twig falls beside the tree | The open ground round the tree, corner to corner | Turns 4, 8 and 12, on a pair of trees across from each other drawn at random | Each of the four old trees by the lanes (`event_tiles: around`) |
+| Woodland Glade | A tree shaken | Soak, and a twig falls beside the tree | The open ground touching the tree | Turns 4, 8 and 12, on a pair of trees across from each other drawn at random | Each of the four old trees by the lanes (`event_tiles: around`) |
 
 Backyard's is a sprinkler that soaks the whole yard on turns 4, 8 and 12, with a tap on each side
 of the near edge. It clears the yard for both teams alike: what it rewards is having someone
