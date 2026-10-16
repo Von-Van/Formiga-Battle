@@ -3,7 +3,7 @@
 //! named as a trio there, or take a place in a trio that has the other two. Everything here is
 //! kept by Desktop with the colony's Battle record, and none of it changes how a match is played.
 
-use super::{BattleApp, Kind, card, dashed_rule, sticky, texture};
+use super::{BattleApp, Kind, dashed_rule, sticky, texture};
 use crate::chrome::{self, ink, label_job};
 use crate::heraldry::{self, Part};
 use crate::identity::{self, FIELDS, SHAPES, SYMBOLS, Standing, Style, TRIMS};
@@ -53,19 +53,6 @@ impl BattleApp {
         t
     }
 
-    /// The Handler's pennant on its cane, stirring unless motion is reduced.
-    fn standard(&mut self, ctx: &egui::Context, style: Style, now: f32) -> egui::TextureHandle {
-        let k = if self.table.reduce_motion {
-            None
-        } else {
-            ctx.request_repaint_after(std::time::Duration::from_millis(110));
-            Some((now * 9.0) as usize % heraldry::STIR_FRAMES)
-        };
-        self.painted(ctx, format!("standard-{style:?}-{k:?}"), |_| {
-            heraldry::standard(style, k.map_or(0.0, heraldry::stir_at))
-        })
-    }
-
     /// The looks of a trio's three, where the colony still has them.
     fn looks_of(&self, members: &[u64]) -> Vec<Option<Look>> {
         let reduce = self.table.reduce_motion;
@@ -101,7 +88,7 @@ impl BattleApp {
             rect.min + vec2(rx as f32, ry as f32) * u,
             vec2(rw as f32, rh as f32) * u,
         );
-        letter(ui.painter(), ribbon, &trio.name, ON_RIBBON);
+        letter(ui.painter(), ribbon, &trio.name, ON_RIBBON, 0.55);
     }
 
     /// The pennant the Handler flies: their card's, or the one being chosen before they sign.
@@ -135,27 +122,28 @@ impl BattleApp {
         }
     }
 
-    /// The left page of the registry: the Handler's name and club, and their pennant.
+    /// The left page of the registry: the Handler's card as it stands, painted, and under it
+    /// what it is made of: their name and club, and the samples their pennant is chosen from.
     pub(super) fn handler_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         let since = self.turned;
+        let style = self.handler_style();
+        crate::feel::dropping(ui, since, 0, u, |ui| self.handler_card(ui, ctx, style, u));
+        ui.add_space(u * 8.0);
         let mut changed = false;
-        crate::feel::dropping(ui, since, 0, u, |ui| {
-            card(ui, Id::new("handler-card"), false, true, false, u, |ui| {
-                for (label, hint, limit, club) in [
+        crate::feel::dropping(ui, since, 1, u, |ui| {
+            chrome::kicker(ui, "Your name and club");
+            ui.add_space(u * 2.0);
+            let half = ((ui.available_width() - u * 8.0) / 2.0).min(300.0);
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = u * 8.0;
+                for (hint, limit, club) in [
                     (
-                        "Your name",
                         "The name your friends know you by",
                         identity::NAME_CHARS,
                         false,
                     ),
-                    (
-                        "Your club",
-                        "A club or team name, if you like",
-                        identity::CLUB_CHARS,
-                        true,
-                    ),
+                    ("A club or team, if you like", identity::CLUB_CHARS, true),
                 ] {
-                    ui.label(label_job(label, chrome::LABEL, ink::FOREST));
                     let text = if club {
                         &mut self.club
                     } else {
@@ -163,11 +151,11 @@ impl BattleApp {
                     };
                     let field = ui.add(
                         egui::TextEdit::singleline(text)
-                            .font(FontId::proportional(18.0))
+                            .font(FontId::proportional(17.0))
                             .char_limit(limit)
                             .frame(egui::Frame::NONE)
                             .hint_text(hint)
-                            .desired_width(ui.available_width().min(360.0)),
+                            .desired_width(half),
                     );
                     let r = field.rect;
                     ui.painter().rect_filled(
@@ -180,16 +168,13 @@ impl BattleApp {
                         },
                     );
                     changed |= field.lost_focus();
-                    ui.add_space(u * 4.0);
                 }
             });
         });
         if changed {
             self.keep_card();
         }
-        ui.add_space(u * 4.0);
-        let style = self.handler_style();
-        let flag = self.standard(ctx, style, self.clock);
+        ui.add_space(u * 10.0);
         let mut tiles: Vec<(Part, usize, egui::TextureHandle, egui::TextureHandle, &str)> =
             Vec::new();
         for (part, names) in [
@@ -219,58 +204,53 @@ impl BattleApp {
             }
         }
         let mut chosen = style;
-        crate::feel::dropping(ui, since, 1, u, |ui| {
-            card(
-                ui,
-                Id::new("handler-pennant"),
-                false,
-                true,
-                false,
-                u,
-                |ui| {
-                    ui.label(label_job("Your pennant", chrome::LABEL, ink::FOREST));
-                    ui.add_space(u * 2.0);
-                    ui.horizontal_top(|ui| {
-                        place(ui, &flag, 3.0, u);
-                        ui.add_space(u * 8.0);
-                        ui.vertical(|ui| {
-                            for (part, label) in [
-                                (Part::Shape, "Cut"),
-                                (Part::Field, "Cloth"),
-                                (Part::Symbol, "Symbol"),
-                                (Part::Trim, "Edge"),
-                            ] {
-                                ui.label(RichText::new(label).size(11.5).color(ink::MUTED));
-                                ui.horizontal_wrapped(|ui| {
-                                    ui.spacing_mut().item_spacing = vec2(u, u);
-                                    for (p, i, plain, lit, name) in &tiles {
-                                        if *p != part {
-                                            continue;
-                                        }
-                                        if pick_tile(ui, plain, lit, name, u) {
-                                            match part {
-                                                Part::Shape => chosen.shape = *i,
-                                                Part::Field => chosen.field = *i,
-                                                Part::Symbol => chosen.symbol = *i,
-                                                Part::Trim => chosen.trim = *i,
-                                            }
-                                        }
-                                    }
-                                });
-                                ui.add_space(u * 2.0);
+        crate::feel::dropping(ui, since, 2, u, |ui| {
+            chrome::kicker(ui, "Your pennant");
+            ui.add_space(u * 3.0);
+            for (part, label) in [
+                (Part::Shape, "Cut"),
+                (Part::Field, "Cloth"),
+                (Part::Symbol, "Symbol"),
+                (Part::Trim, "Edge"),
+            ] {
+                ui.horizontal_top(|ui| {
+                    let (slot, _) =
+                        ui.allocate_exact_size(vec2(u * 34.0, TILE_ROW * u), Sense::hover());
+                    let galley =
+                        ui.painter()
+                            .layout_job(label_job(label, chrome::LABEL - 0.5, ink::MUTED));
+                    ui.painter().galley(
+                        pos2(slot.min.x, slot.center().y - galley.size().y / 2.0 - u),
+                        galley,
+                        ink::MUTED,
+                    );
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
+                        for (p, i, plain, lit, name) in &tiles {
+                            if *p != part {
+                                continue;
                             }
-                        });
+                            if pick_tile(ui, plain, lit, name, u) {
+                                match part {
+                                    Part::Shape => chosen.shape = *i,
+                                    Part::Field => chosen.field = *i,
+                                    Part::Symbol => chosen.symbol = *i,
+                                    Part::Trim => chosen.trim = *i,
+                                }
+                            }
+                        }
                     });
-                    ui.add_space(u * 2.0);
-                    ui.label(
-                    RichText::new(format!(
-                        "It flies beside your team in every match, and your friends see it. {}.",
-                        capitalised(&style.words())
-                    ))
-                    .size(12.0)
-                    .color(ink::MUTED),
-                );
-                },
+                });
+                ui.add_space(u * 3.0);
+            }
+            ui.label(
+                RichText::new(format!(
+                    "{}. It flies beside your team in every match, and your friends see it.",
+                    capitalised(&style.words())
+                ))
+                .size(12.0)
+                .italics()
+                .color(ink::MUTED),
             );
         });
         if chosen != style || changed {
@@ -280,6 +260,7 @@ impl BattleApp {
         }
         if chosen != style {
             self.draft_style = chosen;
+            self.felt.push(crate::feel::Feedback::Select);
             match self.table.record.handler.clone() {
                 Some(card) => self.table.set_handler(HandlerCard {
                     pennant: chosen.pennant(),
@@ -288,61 +269,92 @@ impl BattleApp {
                 None => self.keep_card(),
             }
         }
-        if self.table.record.handler.is_none() {
-            ui.add_space(u * 3.0);
-            ui.label(
-                RichText::new(
-                    "Sign your name and your notebook keeps all of this with your colony.",
-                )
-                .size(12.5)
-                .italics()
-                .color(ink::MUTED),
-            );
-        }
         if let Some(notice) = self.table.notice.clone() {
             ui.add_space(u * 3.0);
             sticky(ui, &notice, u);
         }
     }
 
+    /// The Handler's card, painted, with their name, club and title lettered on it.
+    fn handler_card(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, style: Style, u: f32) {
+        let standing = Standing::of(&self.table.record);
+        let won: [bool; 4] = std::array::from_fn(|i| {
+            standing
+                .cups
+                .iter()
+                .any(|c| c.id == crate::rewards::CUPS[i].id)
+        });
+        let w = ((ui.available_width() / u).floor() as i32).clamp(220, 380);
+        let k = if self.table.reduce_motion {
+            None
+        } else {
+            ctx.request_repaint_after(std::time::Duration::from_millis(110));
+            Some((self.clock * 9.0) as usize % heraldry::STIR_FRAMES)
+        };
+        let picture = self.painted(ctx, format!("card-{w}-{style:?}-{k:?}-{won:?}"), |_| {
+            heraldry::handler_card(w, style, k.map_or(0.0, heraldry::stir_at), won)
+        });
+        let rect = place(ui, &picture, 1.0, u).0;
+        let at = |(x, y, w, h): heraldry::Area| {
+            Rect::from_min_size(
+                rect.min + vec2(x as f32, y as f32) * u,
+                vec2(w as f32, h as f32) * u,
+            )
+        };
+        let places = heraldry::card_places(w);
+        let painter = ui.painter();
+        let card = self.table.record.handler.clone();
+        match &card {
+            Some(card) => {
+                letter_left(painter, at(places.name), &card.name, 22.0, ink::PAGE, false);
+                if let Some(club) = &card.club {
+                    letter_left(painter, at(places.club), club, 13.0, ink::MUTED, true);
+                }
+            }
+            None => letter_left(
+                painter,
+                at(places.name),
+                "Sign your name below",
+                17.0,
+                ink::MUTED,
+                true,
+            ),
+        }
+        letter(painter, at(places.title), standing.title, ON_BRASS, 0.9);
+        for (i, cup) in crate::rewards::CUPS.iter().enumerate() {
+            let hint = if won[i] {
+                format!("{}: won", cup.name)
+            } else {
+                format!(
+                    "{}: win it with three wins against the visitors there",
+                    cup.name
+                )
+            };
+            ui.interact(
+                at(places.rosettes[i]),
+                Id::new(("rosette", i)),
+                Sense::hover(),
+            )
+            .on_hover_text(hint);
+        }
+    }
+
     /// The right page of the registry: how the Handler stands, and their trios.
     pub(super) fn standing_and_trios(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         let standing = Standing::of(&self.table.record);
+        let _ = ctx;
         chrome::kicker(ui, "Standing");
-        ui.add_space(u * 2.0);
-        let w = ((ui.available_width() / u / 2.0).floor() as i32).clamp(60, 120);
-        let plate = self.painted(ctx, format!("plate-{w}"), |_| heraldry::plate(w));
-        let rect = place(ui, &plate, 2.0, u).0;
-        let panel = Rect::from_min_size(
-            rect.min + vec2(7.0, 3.0) * u * 2.0,
-            vec2((w - 15) as f32, (heraldry::PLATE_H - 7) as f32) * u * 2.0,
-        );
-        letter(ui.painter(), panel, standing.title, ON_BRASS);
-        ui.add_space(u * 2.0);
+        ui.add_space(u);
         ui.label(
             RichText::new(format!(
-                "{} Open Circuit points · {}",
+                "{} · {} Open Circuit points · {}",
+                standing.title,
                 standing.points,
                 standing.circuit()
             ))
             .size(12.5)
             .color(ink::PAGE),
         );
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = u * 3.0;
-            for (i, cup) in crate::rewards::CUPS.iter().enumerate() {
-                let won = standing.cups.iter().any(|c| c.id == cup.id);
-                let picture = self.painted(ctx, format!("rosette-{i}-{won}"), |_| {
-                    heraldry::rosette(i, won)
-                });
-                let hint = if won {
-                    format!("{}: won", cup.name)
-                } else {
-                    format!("{}: three wins against the visitors in its place", cup.name)
-                };
-                place(ui, &picture, 2.0, u).1.on_hover_text(hint);
-            }
-        });
         ui.label(RichText::new(standing.how()).size(11.5).color(ink::MUTED));
         ui.add_space(u * 4.0);
         dashed_rule(ui, u);
@@ -390,131 +402,143 @@ impl BattleApp {
         let mut rename_to: Option<Option<Renaming>> = None;
         self.team_picture(ui, trio, 72, u);
         ui.add_space(u * 2.0);
-        ui.indent(Id::new(("trio-notes", &trio.id)), |ui| {
-            if let Some(name) = &mut draft {
-                ui.horizontal(|ui| {
-                    let edit = ui.add(
-                        egui::TextEdit::singleline(name)
-                            .font(FontId::proportional(15.0))
-                            .char_limit(identity::TRIO_CHARS)
-                            .desired_width(170.0),
-                    );
-                    let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                    if chrome::button(ui, "keep", Kind::Quiet, false, true, None, u).clicked()
-                        || enter
-                    {
-                        if let Some(name) = identity::trio_name(name) {
-                            update = Some(TrioCard {
-                                name,
-                                ..trio.card()
-                            });
+        ui.horizontal(|ui| {
+            ui.add_space(u * 6.0);
+            ui.vertical(|ui| {
+                if let Some(name) = &mut draft {
+                    ui.horizontal(|ui| {
+                        let edit = ui.add(
+                            egui::TextEdit::singleline(name)
+                                .font(FontId::proportional(15.0))
+                                .char_limit(identity::TRIO_CHARS)
+                                .desired_width(170.0),
+                        );
+                        let enter =
+                            edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                        if chrome::button(ui, "keep", Kind::Quiet, false, true, None, u).clicked()
+                            || enter
+                        {
+                            if let Some(name) = identity::trio_name(name) {
+                                update = Some(TrioCard {
+                                    name,
+                                    ..trio.card()
+                                });
+                            }
+                            rename_to = Some(None);
                         }
-                        rename_to = Some(None);
+                    });
+                }
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(identity::record_words(trio))
+                            .size(12.5)
+                            .color(ink::PAGE),
+                    );
+                    if trio.retired {
+                        ui.label(label_job("Retired", 9.0, ink::MUTED));
                     }
                 });
-            }
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(identity::record_words(trio))
-                        .size(12.5)
-                        .color(ink::PAGE),
-                );
-                if trio.retired {
-                    ui.label(label_job("Retired", 9.0, ink::MUTED));
-                }
-            });
-            let split = format!(
-                "Friends {} · Visitors {}",
-                identity::tally_words(trio.friends.played, trio.friends.won, trio.friends.drawn)
-                    .to_lowercase(),
-                identity::tally_words(trio.visitors.played, trio.visitors.won, trio.visitors.drawn)
-                    .to_lowercase(),
-            );
-            ui.label(RichText::new(split).size(11.0).color(ink::MUTED));
-            if missing {
-                ui.label(
-                    RichText::new(
-                        "Someone in this trio is no longer in your colony. Its record stays.",
+                let split = format!(
+                    "Friends {} · Visitors {}",
+                    identity::tally_words(
+                        trio.friends.played,
+                        trio.friends.won,
+                        trio.friends.drawn
                     )
-                    .size(11.0)
-                    .italics()
-                    .color(ink::MUTED),
+                    .to_lowercase(),
+                    identity::tally_words(
+                        trio.visitors.played,
+                        trio.visitors.won,
+                        trio.visitors.drawn
+                    )
+                    .to_lowercase(),
                 );
-            }
-            for line in &earlier {
-                ui.label(RichText::new(line).size(11.0).color(ink::MUTED));
-            }
-            let cups: Vec<String> = trio
-                .cups
-                .iter()
-                .filter_map(|c| {
-                    crate::rewards::CUPS
-                        .iter()
-                        .find(|cup| cup.id == c.cup)
-                        .map(|cup| format!("{} {}", c.wins, cup.name))
-                })
-                .collect();
-            if !cups.is_empty() {
-                ui.label(
-                    RichText::new(format!("Cup wins together: {}", cups.join(", ")))
+                ui.label(RichText::new(split).size(11.0).color(ink::MUTED));
+                if missing {
+                    ui.label(
+                        RichText::new(
+                            "Someone in this trio is no longer in your colony. Its record stays.",
+                        )
                         .size(11.0)
-                        .color(ink::FOREST),
-                );
-            }
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = u * 3.0;
-                if !renaming
-                    && chrome::button(ui, "rename", Kind::Quiet, false, true, None, u).clicked()
-                {
-                    rename_to = Some(Some(Renaming {
-                        id: trio.id.clone(),
-                        name: trio.name.clone(),
-                    }));
+                        .italics()
+                        .color(ink::MUTED),
+                    );
                 }
-                // Its own colours, or the Handler's: a step through the cloths.
-                let own = trio.pennant.as_ref().map(|p| Style::of(p).field);
-                let word = match own {
-                    Some(f) => format!("colours: {}", FIELDS[f].1.to_lowercase()),
-                    None => "colours: yours".to_owned(),
-                };
-                if chrome::button(ui, &word, Kind::Quiet, false, true, None, u)
-                    .on_hover_text("Fly your pennant in a colour of the trio's own")
-                    .clicked()
-                {
-                    let next = match own {
-                        None => Some(0),
-                        Some(f) if f + 1 < FIELDS.len() => Some(f + 1),
-                        Some(_) => None,
+                for line in &earlier {
+                    ui.label(RichText::new(line).size(11.0).color(ink::MUTED));
+                }
+                let cups: Vec<String> = trio
+                    .cups
+                    .iter()
+                    .filter_map(|c| {
+                        crate::rewards::CUPS
+                            .iter()
+                            .find(|cup| cup.id == c.cup)
+                            .map(|cup| format!("{} {}", c.wins, cup.name))
+                    })
+                    .collect();
+                if !cups.is_empty() {
+                    ui.label(
+                        RichText::new(format!("Cup wins together: {}", cups.join(", ")))
+                            .size(11.0)
+                            .color(ink::FOREST),
+                    );
+                }
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = u * 3.0;
+                    if !renaming
+                        && chrome::button(ui, "rename", Kind::Quiet, false, true, None, u).clicked()
+                    {
+                        rename_to = Some(Some(Renaming {
+                            id: trio.id.clone(),
+                            name: trio.name.clone(),
+                        }));
+                    }
+                    // Its own colours, or the Handler's: a step through the cloths.
+                    let own = trio.pennant.as_ref().map(|p| Style::of(p).field);
+                    let word = match own {
+                        Some(f) => format!("colours: {}", FIELDS[f].1.to_lowercase()),
+                        None => "colours: yours".to_owned(),
                     };
-                    update = Some(TrioCard {
-                        pennant: next.map(|field| {
-                            Style {
-                                field,
-                                ..handler_style
-                            }
-                            .pennant()
-                        }),
-                        ..trio.card()
-                    });
-                }
-                let (word, hint) = if trio.retired {
-                    (
-                        "bring back",
-                        "Recognise this trio again when its three are picked",
-                    )
-                } else {
-                    ("retire", "Keep its record, but stop recognising it")
-                };
-                let may = !trio.retired || may_return;
-                if chrome::button(ui, word, Kind::Quiet, false, may, None, u)
-                    .on_hover_text(hint)
-                    .clicked()
-                {
-                    update = Some(TrioCard {
-                        retired: !trio.retired,
-                        ..trio.card()
-                    });
-                }
+                    if chrome::button(ui, &word, Kind::Quiet, false, true, None, u)
+                        .on_hover_text("Fly your pennant in a colour of the trio's own")
+                        .clicked()
+                    {
+                        let next = match own {
+                            None => Some(0),
+                            Some(f) if f + 1 < FIELDS.len() => Some(f + 1),
+                            Some(_) => None,
+                        };
+                        update = Some(TrioCard {
+                            pennant: next.map(|field| {
+                                Style {
+                                    field,
+                                    ..handler_style
+                                }
+                                .pennant()
+                            }),
+                            ..trio.card()
+                        });
+                    }
+                    let (word, hint) = if trio.retired {
+                        (
+                            "bring back",
+                            "Recognise this trio again when its three are picked",
+                        )
+                    } else {
+                        ("retire", "Keep its record, but stop recognising it")
+                    };
+                    let may = !trio.retired || may_return;
+                    if chrome::button(ui, word, Kind::Quiet, false, may, None, u)
+                        .on_hover_text(hint)
+                        .clicked()
+                    {
+                        update = Some(TrioCard {
+                            retired: !trio.retired,
+                            ..trio.card()
+                        });
+                    }
+                });
             });
         });
         match (rename_to, draft) {
@@ -747,13 +771,14 @@ impl BattleApp {
             Rect::from_min_max(pos2(ribbon.center().x + gap, ribbon.min.y), ribbon.max),
         ];
         for (i, half) in halves.iter().enumerate() {
-            letter(&painter, *half, &names[i], ON_RIBBON);
+            letter(&painter, *half, &names[i], ON_RIBBON, 0.55);
         }
         letter(
             &painter,
             Rect::from_center_size(ribbon.center(), vec2(gap * 2.0, ribbon.height())),
             "vs",
             Color32::from_rgb(0xf5, 0xc5, 0x42),
+            0.55,
         );
         // A paper tag hung under each cane.
         for (i, tag) in tags.iter().enumerate() {
@@ -851,9 +876,47 @@ fn pick_tile(
     response.on_hover_text(name).clicked()
 }
 
+/// How tall a row of sample tiles is, in notebook pixels.
+const TILE_ROW: f32 = heraldry::TILE as f32;
+
+/// Words written at the left of `area`, centred on it top to bottom, as large as `size` while
+/// they fit: in the page's own hand, or its italic.
+fn letter_left(
+    painter: &egui::Painter,
+    area: Rect,
+    text: &str,
+    size: f32,
+    colour: Color32,
+    italic: bool,
+) {
+    let mut size = size;
+    let layout = |size: f32| {
+        let mut rich = RichText::new(text).size(size).color(colour);
+        if italic {
+            rich = rich.italics();
+        }
+        let job = egui::WidgetText::from(rich).into_layout_job(
+            &egui::Style::default(),
+            egui::FontSelection::Default,
+            egui::Align::Min,
+        );
+        painter.layout_job((*job).clone())
+    };
+    let mut galley = layout(size);
+    while galley.size().x > area.width() && size > 9.0 {
+        size -= 0.5;
+        galley = layout(size);
+    }
+    painter.galley(
+        pos2(area.min.x, area.center().y - galley.size().y / 2.0),
+        galley,
+        colour,
+    );
+}
+
 /// Words lettered in the notebook's printed capitals, as large as `area` holds, centred on it.
-fn letter(painter: &egui::Painter, area: Rect, text: &str, colour: Color32) {
-    let mut size = (area.height() * 0.5).clamp(8.0, 16.0);
+fn letter(painter: &egui::Painter, area: Rect, text: &str, colour: Color32, fill: f32) {
+    let mut size = (area.height() * fill).clamp(8.0, 16.0);
     let mut galley = painter.layout_job(label_job(text, size, colour));
     while galley.size().x > area.width() * 0.92 && size > 7.0 {
         size -= 0.5;

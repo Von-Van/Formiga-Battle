@@ -260,20 +260,25 @@ pub fn rosette(cup: usize, won: bool) -> Canvas {
     let (cx, cy) = (7, 7);
     let ramp = FIELDS[CUP_RIBBONS[cup % CUP_RIBBONS.len()]].2;
     if !won {
-        let pencil = rgba(0x6e5a44, 170);
-        for k in 0..20 {
-            let a = k as f32 / 20.0 * std::f32::consts::TAU;
-            if k % 2 == 0 {
-                paint::put(
-                    &mut canvas,
-                    cx + (a.cos() * 6.0).round() as i32,
-                    cy + (a.sin() * 6.0).round() as i32,
-                    pencil,
-                );
+        // Where it will go: a pencilled ring on the page, a little smudged, and an empty pin.
+        let pencil = rgba(0x6e5a44, 120);
+        let smudge = rgba(0x6e5a44, 28);
+        for py in cy - 7..=cy + 7 {
+            for px in cx - 7..=cx + 7 {
+                let (dx, dy) = ((px - cx) as f32, (py - cy) as f32);
+                let r = (dx * dx + dy * dy).sqrt();
+                if (5.6..=6.6).contains(&r) {
+                    paint::put(&mut canvas, px, py, pencil);
+                } else if r < 5.6 {
+                    paint::put(&mut canvas, px, py, smudge);
+                }
             }
         }
-        paint::line(&mut canvas, (cx - 2, cy + 7), (cx - 4, cy + 13), pencil);
-        paint::line(&mut canvas, (cx + 2, cy + 7), (cx + 4, cy + 13), pencil);
+        for (x0, x1) in [(cx - 2, cx - 3), (cx + 2, cx + 3)] {
+            paint::line(&mut canvas, (x0, cy + 7), (x1, cy + 12), smudge);
+        }
+        paint::put(&mut canvas, cx, cy, BRASS.shadow);
+        paint::put(&mut canvas, cx - 1, cy - 1, BRASS.light);
         return canvas;
     }
     // The tails first, behind, each cut in a V at its foot.
@@ -317,6 +322,132 @@ pub fn rosette(cup: usize, won: bool) -> Canvas {
     paint::ellipse(&mut canvas, cx, cy, 2, 2, BRASS.base);
     paint::put(&mut canvas, cx - 1, cy - 1, BRASS.shine);
     paint::put(&mut canvas, cx, cy - 1, BRASS.light);
+    canvas
+}
+
+/// Where the words and pictures go on a Handler's card, for the window to letter on.
+pub struct CardPlaces {
+    pub name: Area,
+    pub club: Area,
+    /// The sunk panel of the title's brass plate.
+    pub title: Area,
+    /// The four rosettes, in the order the cups open.
+    pub rosettes: [Area; 4],
+}
+
+/// How tall a Handler's card is.
+pub const CARD_H: i32 = 100;
+
+/// Where everything is on a Handler's card `width` pixels wide.
+pub fn card_places(width: i32) -> CardPlaces {
+    let x = 74;
+    let text_w = (width - x - 12).max(40);
+    let plate_w = text_w.min(150);
+    CardPlaces {
+        name: (x, 11, text_w, 18),
+        club: (x, 29, text_w, 11),
+        title: (x + 7, 45, plate_w - 15, PLATE_H - 7),
+        rosettes: [0, 1, 2, 3].map(|i| (x + i * 19, 62, ROSETTE_W as i32, ROSETTE_H as i32)),
+    }
+}
+
+/// A Handler's card, `width` pixels wide, as a club would issue one: a stiff card taped into the
+/// notebook with a stitched border, a little window of sky and grass where their pennant stirs
+/// on its cane, a brass plate for their title and a rosette for each cup (`won`, in the order the
+/// cups open). The window letters their name and club on it.
+pub fn handler_card(width: i32, style: Style, t: f32, won: [bool; 4]) -> Canvas {
+    let (w, h) = (width.max(200), CARD_H);
+    let mut canvas = Canvas::new(w as u32, h as u32);
+    let (cx, cy, cw, ch) = (2, 3, w - 6, h - 9);
+    paint::rect(&mut canvas, cx + 3, cy + 3, cw, ch, SHADOW);
+    paint::rect(&mut canvas, cx, cy, cw, ch, CARD.edge);
+    for y in cy + 1..cy + ch - 1 {
+        for x in cx + 1..cx + cw - 1 {
+            let fibre = paint::noise(x, y, 977) % 100;
+            canvas.set(x, y, if fibre < 5 { CARD.light } else { CARD.base });
+        }
+    }
+    paint::hline(&mut canvas, cx + 1, cy + 1, cw - 2, CARD.shine);
+    paint::vline(&mut canvas, cx + 1, cy + 1, ch - 2, CARD.light);
+    // A stitched border just inside its edge.
+    let (bx, by, bw, bh) = (cx + 3, cy + 3, cw - 6, ch - 6);
+    for k in 0..bw {
+        if k % 4 < 2 {
+            paint::put(&mut canvas, bx + k, by, THREAD_DARK);
+            paint::put(&mut canvas, bx + k, by + bh - 1, THREAD_DARK);
+        }
+    }
+    for k in 0..bh {
+        if k % 4 < 2 {
+            paint::put(&mut canvas, bx, by + k, THREAD_DARK);
+            paint::put(&mut canvas, bx + bw - 1, by + k, THREAD_DARK);
+        }
+    }
+    // The window the pennant flies in: sky over a mound of grass, framed in the card's shade.
+    let (sx, sy, sw, sh) = (cx + 8, cy + 8, 56, ch - 16);
+    let ground = sy + sh - 12;
+    for y in sy..sy + sh {
+        for x in sx..sx + sw {
+            let tone = if y < ground {
+                let k = (y - sy) as f32 / (ground - sy).max(1) as f32;
+                let jitter = (paint::noise(x, y, 941) % 100) as f32 / 100.0 - 0.5;
+                paint::mix(
+                    SKY_HIGH,
+                    SKY_LOW,
+                    ((k * 5.0 + jitter * 0.7).floor() / 5.0).clamp(0.0, 1.0),
+                )
+            } else {
+                match paint::noise(x, y, 947) % 100 {
+                    0..=11 => GRASS.shadow,
+                    12..=19 => GRASS.shine,
+                    _ => GRASS.light,
+                }
+            };
+            canvas.set(x, y, tone);
+        }
+    }
+    for x in sx..sx + sw {
+        let u = (x - sx) as f32 / sw as f32 - 0.5;
+        let rise = ((1.0 - 4.0 * u * u).max(0.0) * 3.0) as i32;
+        for y in ground - rise..ground {
+            canvas.set(x, y, GRASS.light);
+        }
+        canvas.set(x, ground - rise, GRASS.edge);
+        canvas.set(x, ground - rise + 1, GRASS.shine);
+    }
+    let flag = standard(style, t);
+    let fx = sx + sw / 2 - 8;
+    let fy = ground + 2 - flag.height() as i32;
+    for y in 0..flag.height() as i32 {
+        for x in 0..flag.width() as i32 {
+            let c = flag.get(x, y);
+            let (px, py) = (fx + x, fy + y);
+            if c.a > 0 && (sx..sx + sw).contains(&px) && (sy..sy + sh).contains(&py) {
+                canvas.set(px, py, paint::over(c, canvas.get(px, py)));
+            }
+        }
+    }
+    paint::hline(&mut canvas, sx - 1, sy - 1, sw + 2, CARD.shadow);
+    paint::vline(&mut canvas, sx - 1, sy - 1, sh + 2, CARD.shadow);
+    paint::hline(&mut canvas, sx - 1, sy + sh, sw + 2, CARD.shine);
+    paint::vline(&mut canvas, sx + sw, sy - 1, sh + 2, CARD.shine);
+    // A ruled line under the name, as a card has for signing.
+    let places = card_places(w);
+    let (nx, ny, nw, nh) = places.name;
+    paint::hline(&mut canvas, nx, ny + nh, nw, CARD.shadow);
+    // The title's plate, and the rosettes.
+    let (tx, ty, tw, _) = places.title;
+    paint::blit(&mut canvas, &plate(tw + 15), tx - 7, ty - 3);
+    for (i, (rx, ry, _, _)) in places.rosettes.iter().enumerate() {
+        paint::blit(&mut canvas, &rosette(i, won[i]), *rx, *ry);
+    }
+    // Tape at its two top corners.
+    for (tx, lean) in [(cx - 3, 1), (cx + cw - 13, -1)] {
+        for i in 0..16 {
+            let y0 = cy - 2 + if lean > 0 { i / 4 } else { 3 - i / 4 };
+            paint::vline(&mut canvas, tx + i, y0, 5, TAPE);
+        }
+    }
     canvas
 }
 
@@ -569,6 +700,21 @@ mod tests {
             assert_ne!(won, rosette(cup, false));
         }
         assert_ne!(rosette(0, true), rosette(1, true));
+    }
+
+    #[test]
+    fn a_handlers_card_shows_its_rosettes_and_its_pennant_stirs() {
+        let style = Style::default();
+        let none = handler_card(260, style, 0.0, [false; 4]);
+        let all = handler_card(260, style, 0.0, [true; 4]);
+        assert_ne!(none, all);
+        assert_ne!(handler_card(260, style, stir_at(2), [false; 4]), none);
+        let (x, y, w, h) = card_places(260).title;
+        assert_eq!(
+            all.get(x + w / 2, y + h / 2).a,
+            255,
+            "the plate is under the title"
+        );
     }
 
     #[test]
