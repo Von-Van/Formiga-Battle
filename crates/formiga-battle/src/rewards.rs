@@ -184,6 +184,7 @@ pub fn page_for_showing(page: &NotebookPage, teammates: &[(u64, String)]) -> Pag
 }
 
 /// What a finished match earned, for the Handler's side.
+#[derive(Clone)]
 pub struct Earned {
     pub result: MatchResult,
     /// The same, in words, for the window to show.
@@ -277,6 +278,29 @@ fn notebook_additions(m: &Match, you: Side, events: &[Event], won: bool) -> Vec<
         .collect()
 }
 
+/// How the result card begins a line about a new notebook moment.
+const NOTEBOOK_LINE: &str = "In the notebook, ";
+
+/// The first version of Battle's contract whose Desktop keeps what a match against the visitors
+/// showed in the notebook. An older Desktop (0.67.8) refuses a session's whole result if one of
+/// its matches against the visitors carries any.
+pub const VISITORS_NOTEBOOK_READER: u32 = 3;
+
+/// What a match earned, as the Desktop that opened the session can keep it, given the newest
+/// version of Battle's contract it reads: for a Desktop older than [`VISITORS_NOTEBOOK_READER`],
+/// a match against the visitors earns no notebook entries, and the card does not say it did, so
+/// the session's other rewards still reach the colony.
+pub fn for_reader(mut earned: Earned, reads: u32) -> Earned {
+    if earned.result.mode == Mode::Ai
+        && reads < VISITORS_NOTEBOOK_READER
+        && !earned.result.rewards.notebook.is_empty()
+    {
+        earned.result.rewards.notebook.clear();
+        earned.lines.retain(|line| !line.starts_with(NOTEBOOK_LINE));
+    }
+    earned
+}
+
 /// The notebook's new moments, as the result card lists them.
 fn notebook_lines(m: &Match, you: Side, additions: &[NotebookAddition]) -> Vec<String> {
     let mut lines = Vec::new();
@@ -286,7 +310,7 @@ fn notebook_lines(m: &Match, you: Side, additions: &[NotebookAddition]) -> Vec<S
             .find(|p| p.creature_id == a.creature_id)
             .map_or("", |p| p.name.as_str());
         for moment in &a.moments {
-            lines.push(format!("In the notebook, {name}: {moment}"));
+            lines.push(format!("{NOTEBOOK_LINE}{name}: {moment}"));
         }
     }
     lines
@@ -477,6 +501,43 @@ mod tests {
         assert!(record.unlocked.iter().any(|u| u == WOODLAND_CUP));
         assert_eq!(record.circuit_points, 0, "the AI never gives points");
         assert!(!record.notebook.is_empty(), "but the notebook fills in");
+    }
+
+    #[test]
+    fn a_desktop_that_reads_version_2_gets_visitors_matches_without_notebook_entries() {
+        // Desktop 0.67.8 reads version 2, which refuses a whole result if a match against the
+        // visitors carries notebook entries; every other reward of the session must still reach
+        // it, so those entries are left out for it and for it alone.
+        let (m, events) = played(3);
+        let earned = ai_match(&m, Side::Left, &events, &BattleRecord::default());
+        assert_eq!(earned.result.rewards.notebook.len(), 3);
+        let current = for_reader(earned.clone(), VISITORS_NOTEBOOK_READER);
+        assert_eq!(
+            current.result, earned.result,
+            "a version 3 Desktop keeps them"
+        );
+        let older = for_reader(earned.clone(), 2);
+        let r = &older.result.rewards;
+        assert!(r.notebook.is_empty());
+        assert_eq!(r.journal, earned.result.rewards.journal);
+        assert_eq!(r.cup_win, earned.result.rewards.cup_win);
+        assert_eq!(r.keepsakes, earned.result.rewards.keepsakes);
+        assert!(!older.lines.iter().any(|l| l.starts_with(NOTEBOOK_LINE)));
+        assert!(older.lines.iter().all(|l| earned.lines.contains(l)));
+        let friend = friend_match(
+            &m,
+            Side::Left,
+            &events,
+            &BattleRecord::default(),
+            "Sam",
+            None,
+            OffsetDateTime::UNIX_EPOCH,
+        );
+        assert_eq!(
+            for_reader(friend.clone(), 2).result,
+            friend.result,
+            "a version 2 Desktop has always kept a friend match's notebook entries"
+        );
     }
 
     /// A record in which the left team of `m` is a trio, named before it played.
