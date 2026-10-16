@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Rules version 6: Backyard has a sprinkler. It sweeps the whole yard on turns 4, 8 and 12, its
+  tiles washed blue and ringed with droplets the turn before, and a garden tap on each side of the
+  near edge sets it off a tick early. Whoever it soaks is off balance for the rest of the turn and
+  lets go of what it carries; nobody loses composure. A quarter of matches are now won at the
+  beacon. Recorded matches from earlier builds no longer replay.
+- Found things: a dandelion puff, a twig or a leaf umbrella glints on two mirrored spots and turns
+  up the turn after. Whoever steps onto one picks it up and can USE it once: a puff bowls over
+  whoever stands across its way, a twig blocks a tile for two turns (and keeps an open gate from
+  closing), and a leaf umbrella keeps a teammate dry and bounces contests off. Cautious companions
+  keep off ground about to be soaked; curious, playful ones go out of their way for what lies in
+  the grass.
 - Battle opens at the Battleground, the first spread of the Handler's notebook. On its left page
   the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
   it, a face at each window, and a coach more for every three past six. On its right, two railway

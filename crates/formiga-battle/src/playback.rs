@@ -8,7 +8,7 @@
 
 use crate::look::Pose;
 use formiga_battle_core::game::Board;
-use formiga_battle_core::{Event, EventKind, Side, Slot, TEAM_SIZE, Tile};
+use formiga_battle_core::{Event, EventKind, Item, Side, Slot, TEAM_SIZE, Tile};
 
 /// How long one tick takes to show, in seconds.
 pub const TICK_SECS: f32 = 0.9;
@@ -38,6 +38,12 @@ pub struct Figure {
     /// Knocked off balance this turn: it holds nothing and counts for nothing in the yard until
     /// the turn is over.
     pub off_balance: bool,
+    /// What it carries, if anything.
+    pub carrying: Option<Item>,
+    /// A leaf umbrella is open over it.
+    pub sheltered: bool,
+    /// The sprinkler soaked it this turn.
+    pub soaked: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,6 +66,12 @@ pub enum Burst {
     Broken,
     /// A wary creature waiting a tick rather than walk in among the other team.
     Hesitate,
+    /// The sprinkler's spray landing on a tile.
+    Splash,
+    /// A dandelion puff's gust landing on a tile.
+    Gust,
+    /// Something found turning up, or picked up.
+    Twinkle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -83,6 +95,18 @@ pub struct Frame {
     pub tick: u8,
     /// Both teams have someone steady in the yard, so neither gains on the beacon.
     pub paused: bool,
+    /// Things lying on the ground.
+    pub ground: Vec<(Tile, Item)>,
+    /// Spots glinting with something about to turn up.
+    pub glint: Vec<Tile>,
+    /// Twigs wedged upright.
+    pub twigs: Vec<Tile>,
+    /// The map event is warned and has not landed yet.
+    pub sprinkler_coming: bool,
+    /// A tap can be turned.
+    pub tap_ready: bool,
+    /// Tiles a puff is about to blow across.
+    pub gusty: Vec<Tile>,
 }
 
 /// How long effects stay on the board.
@@ -105,6 +129,9 @@ impl Frame {
                     opacity: if f.out { 0.0 } else { 1.0 },
                     holding: f.holding,
                     off_balance: false,
+                    carrying: f.carrying,
+                    sheltered: f.shelter_until > 0,
+                    soaked: false,
                 }
             })
         });
@@ -116,6 +143,18 @@ impl Frame {
             effects: Vec::new(),
             tick: 0,
             paused: false,
+            ground: board.ground.clone(),
+            glint: board.glint.iter().map(|(t, _)| *t).collect(),
+            twigs: board.twigs.iter().map(|(t, _)| *t).collect(),
+            sprinkler_coming: board.event_at.is_some(),
+            tap_ready: board.event_at.is_none()
+                && board.turn.saturating_add(1) >= board.switch_ready_turn,
+            gusty: board
+                .pending
+                .iter()
+                .filter(|p| p.item == Item::Puff)
+                .flat_map(|p| formiga_battle_core::items::puff_tiles(p.from, p.target))
+                .collect(),
         }
     }
 
@@ -429,16 +468,24 @@ impl Playback {
                 }
                 // Where the map event and found things move or topple anyone; how they look and
                 // sound is the match screen's to draw.
-                EventKind::SceneryLanded { hit, .. } => {
+                EventKind::SceneryLanded { hit, tiles, .. } => {
+                    frame.sprinkler_coming = false;
+                    for tile in tiles {
+                        effect(&mut frame, Burst::Splash, *tile);
+                    }
                     for slot in hit {
                         let f = frame.figure_mut(*slot);
                         f.holding = false;
                         f.off_balance = true;
+                        f.soaked = true;
                         set_pose(&mut frame, &mut since, *slot, Pose::Wobble, *when);
                     }
                 }
-                EventKind::Puffed { blown, .. } => {
+                EventKind::Puffed { blown, twigs, .. } => {
+                    frame.gusty.clear();
+                    frame.twigs.retain(|t| !twigs.contains(t));
                     for b in blown {
+                        effect(&mut frame, Burst::Gust, b.from);
                         let f = frame.figure_mut(b.slot);
                         f.holding = false;
                         f.off_balance = true;
@@ -452,24 +499,55 @@ impl Playback {
                         set_pose(&mut frame, &mut since, b.slot, Pose::Wobble, *when);
                     }
                 }
+                EventKind::SceneryWarned { .. } => frame.sprinkler_coming = true,
+                EventKind::SwitchTurned { .. } => {
+                    frame.tap_ready = false;
+                    frame.sprinkler_coming = true;
+                }
+                EventKind::ItemsGlint { spots, .. } => frame.glint = spots.clone(),
+                EventKind::ItemAppeared { at, item } => {
+                    frame.glint.retain(|t| t != at);
+                    frame.ground.push((*at, *item));
+                    effect(&mut frame, Burst::Twinkle, *at);
+                }
+                EventKind::PickedUp { slot, item, at } => {
+                    frame.ground.retain(|(t, _)| t != at);
+                    frame.figure_mut(*slot).carrying = Some(*item);
+                    effect(&mut frame, Burst::Twinkle, *at);
+                }
+                EventKind::Dropped { slot, item, at } => {
+                    frame.figure_mut(*slot).carrying = None;
+                    if let Some(at) = at {
+                        frame.ground.push((*at, *item));
+                    }
+                }
+                EventKind::ItemUsed {
+                    slot, item, tiles, ..
+                } => {
+                    frame.figure_mut(*slot).carrying = None;
+                    set_pose(&mut frame, &mut since, *slot, Pose::Reach, *when);
+                    if *item == Item::Puff {
+                        frame.gusty = tiles.clone();
+                    }
+                }
+                EventKind::TwigWedged { at, .. } => frame.twigs.push(*at),
+                EventKind::TwigFell { at } => frame.twigs.retain(|t| t != at),
+                EventKind::Sheltering { slots, .. } => {
+                    for slot in slots {
+                        frame.figure_mut(*slot).sheltered = true;
+                    }
+                }
+                EventKind::ShelterFolded { slot } => frame.figure_mut(*slot).sheltered = false,
+                EventKind::Sheltered { target, .. } => {
+                    let tile = frame.figure(*target).tile;
+                    effect(&mut frame, Burst::Shield, tile);
+                }
                 EventKind::OrderFilled { .. }
                 | EventKind::TookOpportunity { .. }
                 | EventKind::LeverResting { .. }
-                | EventKind::SceneryWarned { .. }
-                | EventKind::SwitchTurned { .. }
                 | EventKind::SwitchDefended { .. }
                 | EventKind::SwitchResting { .. }
-                | EventKind::ItemsGlint { .. }
-                | EventKind::ItemAppeared { .. }
-                | EventKind::PickedUp { .. }
-                | EventKind::Dropped { .. }
-                | EventKind::ItemUsed { .. }
-                | EventKind::TwigWedged { .. }
-                | EventKind::TwigFell { .. }
                 | EventKind::GateWedged { .. }
-                | EventKind::Sheltering { .. }
-                | EventKind::Sheltered { .. }
-                | EventKind::ShelterFolded { .. }
                 | EventKind::ItemFizzled { .. } => {}
             }
         }

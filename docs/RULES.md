@@ -268,14 +268,20 @@ Over 10,000 Exhibition-coached matches with the default rules (`--pairings 5000 
 
 | | |
 |---|---|
-| Left side | 0.496 |
-| Kinds, highest to lowest | Grump 0.538, Guardian 0.538, Lazybones 0.528, Troublemaker 0.523, Sweetheart 0.497, Explorer 0.490, Wallflower 0.480, Scholar 0.478, Oddball 0.464, Showoff 0.440 |
-| Spread between kinds | 0.098, each kind over 3,600 to 7,000 matches |
-| Won by capture, knockout, at the cap, drawn | 13%, 0%, 70%, 17%, in 11.3 turns |
+| Left side | 0.497 |
+| Kinds, highest to lowest | Guardian 0.545, Lazybones 0.542, Grump 0.537, Troublemaker 0.523, Sweetheart 0.518, Explorer 0.481, Showoff 0.474, Oddball 0.461, Wallflower 0.448, Scholar 0.443 |
+| Spread between kinds | 0.102, each kind over 3,600 to 7,000 matches |
+| Won by capture, knockout, at the cap, drawn | 25%, 0%, 63%, 12%, in 10.8 turns |
 
-With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500`, seeds 7 and
-8), kinds score within 0.105 and 0.075 of each other, Showoffs lowest on both; 24% of those
-matches are won by capture and 1% by knockout, in about 10 turns.
+With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500 --seed 7`),
+kinds score within 0.078 of each other, Wallflowers lowest; 52% of those matches are won by
+capture and 1% by knockout, in about 9.5 turns.
+
+Rules version 6 added Backyard's sprinkler and found things. Before it, under version 5, 13% of
+Exhibition matches were won at the beacon and the kinds were 0.098 apart; with familiar coaching,
+24% were won at the beacon. Most of the change is the sprinkler: with found things alone, 21% of
+1,000 pairings were won at the beacon, the kinds 0.096 apart. A sprinkler that clears the yard is
+a moment a team can plan for, and coaches that think a turn ahead plan for it best.
 
 Rules version 5 made the pull four times as strong, and the spread grew with it (0.036 under
 version 4, when Wallflowers scored 0.480, 21% of matches were won by capture and familiar
@@ -301,9 +307,9 @@ of the zone and holds it for the rest of the match. Over 2,000 matches each (`--
 
 | Against turtle | Score | How |
 |---|---|---|
-| exhibition | 0.660 | 72% won or lost at the cap, 22% drawn |
-| familiar | 0.829 | 83% at the cap, 11% drawn |
-| generic | 0.638 | 80% at the cap, 10% drawn |
+| exhibition | 0.608 | 67% won or lost at the cap, 22% drawn |
+| familiar | 0.800 | 50% at the cap, 48% by capture |
+| generic | 0.662 | 48% at the cap, 51% by capture |
 
 Three holders in a five-tile cross keep it contested for as long as they stand, so they are
 almost never beaten by capture; they are beaten on the cap, because a team that only holds never
@@ -320,9 +326,9 @@ creatures as they are; the generic one imagines every creature as one that leans
 
 | Coaches | Familiar's score |
 |---|---|
-| familiar against generic, 6,000 matches | 0.616 |
-| familiar against Exhibition, 2,000 matches | 0.890 |
-| generic against Exhibition, 2,000 matches | 0.654 |
+| familiar against generic, 6,000 matches | 0.621 |
+| familiar against Exhibition, 2,000 matches | 0.966 |
+| generic against Exhibition, 2,000 matches | 0.857 |
 
 Knowing your creatures is worth more under rules version 5 than it was: the coach who knows them
 wins 61.6% against one who plans as well without knowing them (59.0% under version 4, 52.4%
