@@ -88,8 +88,9 @@ cargo test --workspace
   `crates/formiga-battle-core/src/arena.rs`, a branch of `Dressing` in
   `crates/formiga-battle/src/garden.rs` to dress it as a place, and a cup in `rewards::CUPS`.
 - **Anything visual.** Look at the pictures rather than trusting the numbers:
-  `--render-board <png>` draws the board with no window, and `--snap <png> --review
-  picking|orders|playing` pictures the window. Either takes `--arena`.
+  `--render-board <png>` draws the board with no window, and `--render-window <png> --review
+  picking|orders|playing` pictures the whole window without opening one (`--snap <png>` opens it
+  to take the same picture). Each takes `--arena`.
 - **Releases.** Battle's version follows Formiga Desktop's. `scripts/set-version.sh X.Y.Z vX.Y.Z`
   moves it and Desktop's tag everywhere they appear, and `scripts/set-version.sh --check` says
   whether they agree. Add what changed under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md).

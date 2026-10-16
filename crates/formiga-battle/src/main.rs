@@ -14,6 +14,7 @@ mod host;
 mod icon;
 mod identity;
 mod iso;
+mod keepsake;
 mod lettering;
 mod look;
 mod masthead;
@@ -23,6 +24,7 @@ mod rewards;
 mod scene;
 mod sound;
 mod station;
+mod still;
 mod table;
 mod ticket;
 
@@ -62,6 +64,8 @@ WINDOW:
                              at a local one from `formiga-battle relay`) or account (as
                              playing, with the whole match open) or lessons (choosing a Field
                              Lesson) or lesson (the lesson on flanks, orders not yet given)
+    --render-window <PNG>    A picture of the window as --snap takes it (at 2 pixels to the point),
+                             made without opening one: --review, --at and --window as for --snap
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
                              (default 0), at --scale (default 3), --into seconds into the
                              turn after (default: still)
@@ -109,6 +113,8 @@ struct Parsed {
     at: f32,
     review: app::Review,
     render: Option<PathBuf>,
+    /// A picture of the whole window, made without one.
+    still: Option<PathBuf>,
     arena: Option<String>,
     turns: u32,
     into: Option<f32>,
@@ -126,6 +132,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
         at: 6.0,
         review: app::Review::Playing,
         render: None,
+        still: None,
         arena: None,
         turns: 0,
         into: None,
@@ -166,6 +173,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                 }
             }
             "--render-board" => parsed.render = Some(value()?.into()),
+            "--render-window" => parsed.still = Some(value()?.into()),
             "--arena" => parsed.arena = Some(value()?),
             "--turns" => parsed.turns = value()?.parse().context("--turns takes a number")?,
             "--into" => parsed.into = Some(value()?.parse().context("--into takes seconds")?),
@@ -197,7 +205,7 @@ fn window(args: Vec<String>) -> Result<()> {
         table.arena = formiga_battle_core::Arena::by_id(id)
             .with_context(|| format!("there is no arena called {id:?}"))?;
         // A picture of an arena shows that arena, whichever cups the colony has won so far.
-        if args.render.is_some() || args.snap.is_some() {
+        if args.render.is_some() || args.snap.is_some() || args.still.is_some() {
             for cup in &rewards::CUPS {
                 if !table.record.unlocked.iter().any(|u| u == cup.id) {
                     table.record.unlocked.push(cup.id.to_owned());
@@ -221,6 +229,15 @@ fn window(args: Vec<String>) -> Result<()> {
                 env!("CARGO_PKG_VERSION"),
             ),
         });
+    }
+    if let Some(path) = &args.still {
+        let size = args.window.unwrap_or((1280.0, 780.0));
+        let mut app =
+            app::BattleApp::new(host, table, Some(args.review), None, sound::Sound::silent());
+        let canvas = still::picture(&mut app, size, args.at, 2.0);
+        write_png(path, &canvas, 1)?;
+        println!("Wrote {}", path.display());
+        return Ok(());
     }
     let snap = args.snap.map(|path| app::Snap {
         path,
