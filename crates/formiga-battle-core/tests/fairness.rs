@@ -61,11 +61,11 @@ fn every_creature_starts_with_the_same_composure_and_takes_one_step_a_tick_whoev
     for slot in Slot::all() {
         assert_eq!(m.fighter(slot).composure, Ruleset::default().composure);
     }
-    let orders = [
-        Coach::Exhibition.orders(&m, Side::Left),
-        Coach::Exhibition.orders(&m, Side::Right),
+    let plans = [
+        Coach::Exhibition.plan(&m, Side::Left),
+        Coach::Exhibition.plan(&m, Side::Right),
     ];
-    let report = m.resolve_turn(orders);
+    let report = m.resolve_turn(plans);
     for e in &report.events {
         if let EventKind::Stepped { from, to, .. } = e.kind {
             assert_eq!(from.distance(to), 1);

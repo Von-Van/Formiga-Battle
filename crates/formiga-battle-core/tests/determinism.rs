@@ -64,9 +64,9 @@ fn a_changed_order_is_found_as_a_desync_on_its_turn() {
     );
     let mut record = m.record();
     assert!(record.turns.len() >= 2);
-    record.turns[1].submitted[0][0] = Some(Order::Hold {
-        at: Tile::new(0, 0),
-    });
+    record.turns[1].submitted[0] = vec![Directive::Defend {
+        squares: vec![Tile::new(0, 0)],
+    }];
     match record.replay() {
         Err(replay::ReplayError::Desync { turn, .. }) => assert_eq!(turn, 2),
         other => panic!("expected a desync, got {other:?}"),

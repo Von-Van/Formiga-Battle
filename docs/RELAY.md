@@ -36,7 +36,7 @@ dashes ignored). A seat is 32 lowercase hex digits from a cryptographic random s
 An **Entrant** is `{"protocol": 2, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3], "arena": "backyard"}`.
 An entrant with any other numeric `protocol` is refused `version` before anything else about it is
 read, so an older Battle is told to update rather than that it was not understood. Otherwise the
-relay checks `protocol == 2`, three contenders and at most three bonds, and trims `handler` to
+relay checks `protocol == 3`, three contenders and at most three bonds, and trims `handler` to
 at most 24 printable characters ("A Handler" if empty). A joiner's `rules_version` must equal the
 opener's. It does not look inside the contenders. `arena` (`"backyard"` when missing) is the id of
 one of the arenas that come with Battle: 1 to 32 characters of lowercase letters, digits, `_` and
@@ -61,8 +61,12 @@ The site keeps the released builds in its own repository, in `lib/battle-builds.
 ["<digest>", …]}`), changed by a pull request when a Battle release's digests are known; the
 reference takes them through `Relay::knowing`.
 
-`orders` is three entries, each `null` or an order as Battle writes it; the relay stores them as
-given. `hash` is 16 lowercase hex digits. 64-bit numbers (`seed`, `hash`) always travel as 16 hex
+`orders` is the team's plan: up to three orders as Battle writes them (each a TAKE or DEFEND of
+at most five squares, or an INTERACT), an empty list for none. The relay refuses a longer plan as
+`malformed` and otherwise stores it as given. Before protocol 3 (rules version 7) it was three
+entries, one per creature, each `null` or an order.
+
+`hash` is 16 lowercase hex digits. 64-bit numbers (`seed`, `hash`) always travel as 16 hex
 digits, because JavaScript numbers lose anything past 53 bits.
 
 ## Refusals
@@ -72,7 +76,7 @@ digits, because JavaScript numbers lose anything past 53 bits.
 | 400 | `{"refused": "malformed"}` | The body is not the shape above, too large or nested too deep |
 | 415 | `{"refused": "malformed"}` | A `POST` whose body is not said to be JSON |
 | 404 | `{"refused": "no_such_room"}` | No room under that code, or a seat that is not one of its two (the same answer, so a seat cannot be guessed at) |
-| 409 | `{"refused": "version", "relay": 2, "rules_version": n}` | Another protocol, or a joiner playing by other rules than the opener (`n` is the opener's) |
+| 409 | `{"refused": "version", "relay": 3, "rules_version": n}` | Another protocol, or a joiner playing by other rules than the opener (`n` is the opener's) |
 | 409 | `{"refused": "mismatch", "battle": "…", "desktop": "…" or null}` | A joiner with another Battle or Desktop than the opener's (these are the opener's) |
 | 409 | `{"refused": "build"}` | A copy of Battle the relay does not admit, or not the opener's copy |
 | 409 | `{"refused": "room_full"}` | Joining a room that already has two |
@@ -86,8 +90,8 @@ A room is `waiting` until joined, then `playing`, then `over`. Joining picks the
 random bits) and sets turn 1's deadline to now + 44 seconds.
 
 Before answering any request about a room, the relay brings it up to now: while `playing` and
-the deadline has passed, it locks the turn with whatever orders each side has sent (`null` for a
-side that sent none), sets the next deadline 44 seconds after the one that passed, and repeats.
+the deadline has passed, it locks the turn with whatever plan each side has sent (an empty plan
+for a side that sent none), sets the next deadline 44 seconds after the one that passed, and repeats.
 A side with no orders in three locked turns running forfeits: the room is `over`, with
 `ending: {"forfeited": side, "reason": "<name> gave no orders for 3 turns in a row."}`. When
 12 turns are locked the room is `over` (`reason: "The match is over."`).

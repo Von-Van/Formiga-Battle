@@ -566,8 +566,25 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
                 c.headline = Some(format!("{}'s {} came to nothing.", name(slot), item.name()));
                 c.cue = Some(Cue::Fizzle);
             }
-            // Orders filled come before the first tick, and are told in the full account.
+            // Partway through, a creature whose job came to nothing takes another.
+            EventKind::Rethought {
+                slot, task, order, ..
+            } => {
+                c.place = Some(at(*slot));
+                c.about = Some(*slot);
+                c.word = Some("!");
+                c.headline = Some(format!(
+                    "{} changed plan: {}.",
+                    name(slot),
+                    formiga_battle_core::recap::job(m, *slot, task, order)
+                ));
+                c.cue = Some(Cue::Hmm);
+            }
+            // Orders filled and the plan shared out come before the first tick, and are told in
+            // the full account.
             EventKind::OrderFilled { .. }
+            | EventKind::Assigned { .. }
+            | EventKind::OrderDropped { .. }
             | EventKind::Holding { .. }
             | EventKind::Composure { .. }
             | EventKind::ShelterFolded { .. }
@@ -605,11 +622,11 @@ mod tests {
                 break;
             }
             let before = m.board.clone();
-            let orders = [
-                Coach::Exhibition.orders(&m, Side::Left),
-                Coach::Exhibition.orders(&m, Side::Right),
+            let plans = [
+                Coach::Exhibition.plan(&m, Side::Left),
+                Coach::Exhibition.plan(&m, Side::Right),
             ];
-            let report = m.resolve_turn(orders);
+            let report = m.resolve_turn(plans);
             let playback = Playback::new(
                 &before,
                 &m.arena.gates,

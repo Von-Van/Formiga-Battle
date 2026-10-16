@@ -26,9 +26,8 @@ use crate::table::{Aim, Table, Verb};
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
 use formiga_art::Canvas;
 use formiga_battle_contract::Contender;
-use formiga_battle_core::recap::describe;
-use formiga_battle_core::{Match, Order, Tile};
-use formiga_battle_core::{Side, Slot, TEAM_SIZE, Victory};
+use formiga_battle_core::{Match, Tile};
+use formiga_battle_core::{PLAN_SIZE, Side, Slot, TEAM_SIZE, Victory};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -356,7 +355,7 @@ impl BattleApp {
                 app.table.orders[1] = None;
                 app.table.orders[2] = None;
                 app.table.select(1);
-                app.table.choose_verb(Verb::Move);
+                app.table.choose_verb(Verb::Take);
             }
             Some(Review::Notebook) => {
                 // A colony that has played a little with friends, as Desktop would send it.
@@ -858,10 +857,9 @@ impl BattleApp {
             return;
         }
         for (key, verb) in [
-            (egui::Key::M, Verb::Move),
-            (egui::Key::H, Verb::Hold),
-            (egui::Key::C, Verb::Contest),
-            (egui::Key::U, Verb::Use),
+            (egui::Key::T, Verb::Take),
+            (egui::Key::D, Verb::Defend),
+            (egui::Key::I, Verb::Interact),
         ] {
             if pressed(key) && self.table.selected.is_some() {
                 self.table.choose_verb(verb);
@@ -1213,27 +1211,21 @@ impl BattleApp {
             }
             Stage::Playing if self.table.shown.is_some() => "The turn plays out…".to_owned(),
             Stage::Playing => match (self.table.selected, self.table.verb) {
-                (Some(_), Some(Verb::Move)) => {
-                    "Click a tile to walk to. Right-click or Escape cancels.".to_owned()
+                (Some(_), Some(Verb::Take)) => {
+                    "Click squares for the team to take. Right-click or Escape is done.".to_owned()
                 }
-                (Some(_), Some(Verb::Hold)) => {
-                    "Click a tile to hold. Right-click or Escape cancels.".to_owned()
-                }
-                (Some(_), Some(Verb::Contest)) => {
-                    "Click someone of theirs, or the lever. Right-click or Escape cancels."
+                (Some(_), Some(Verb::Defend)) => {
+                    "Click squares for the team to defend. Right-click or Escape is done."
                         .to_owned()
                 }
-                (Some(i), None) => format!(
-                    "{}: click the ground to MOVE, theirs or the lever to CONTEST; right-click to HOLD. Enter locks in.",
-                    self.table.m.as_ref().map_or(String::new(), |m| m
-                        .profile(Slot::new(self.table.you, i))
-                        .name
-                        .clone())
-                ),
-                (Some(_), Some(Verb::Use)) => {
-                    "Click where to use it. Right-click or Escape cancels.".to_owned()
+                (Some(_), Some(Verb::Interact)) => {
+                    "Click something to go and get: a found thing, the lever, a switch, or one carrying something.".to_owned()
                 }
-                (None, _) => "Click one of yours on the board to give it an order.".to_owned(),
+                (Some(i), None) => format!(
+                    "Order {}: click a square to TAKE it, something to INTERACT with it; right-click to DEFEND. Enter locks in.",
+                    i + 1
+                ),
+                (None, _) => "Choose one of your three orders.".to_owned(),
             },
         };
         let painter = ui.painter();
@@ -1328,7 +1320,10 @@ impl BattleApp {
             .hover
             .filter(|_| giving)
             .map(|tile| (self.table.aim(tile, false), self.table.aim(tile, true)));
-        if aims.is_some_and(|(plain, right)| plain != Aim::Nothing || right != Aim::Nothing) {
+        if aims
+            .as_ref()
+            .is_some_and(|(plain, right)| *plain != Aim::Nothing || *right != Aim::Nothing)
+        {
             ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
         }
         let pressed = if response.clicked() {
@@ -1348,7 +1343,6 @@ impl BattleApp {
                 self.sound.play(Cue::Cancel);
             } else {
                 match self.table.press(tile, hold) {
-                    Aim::Choose(_) => self.sound.play(Cue::Select),
                     Aim::Give(_) => {
                         self.pokes.push((tile, now));
                         self.sound.play(Cue::Order);
@@ -1754,21 +1748,17 @@ impl BattleApp {
         let Some(m) = &self.table.m else {
             return;
         };
-        let say = |aim: Aim| match aim {
-            Aim::Choose(i) => Some(format!(
-                "choose {}",
-                m.profile(Slot::new(self.table.you, i)).name
-            )),
-            Aim::Give(order) => Some(speak(m, &order, self.table.carrying())),
+        let say = |aim: &Aim| match aim {
+            Aim::Give(order) => Some(speak_order(m, self.table.you, order)),
             Aim::Nothing => None,
         };
         let mut lines = Vec::new();
-        if let Some(text) = say(plain) {
+        if let Some(text) = say(&plain) {
             lines.push((false, text));
         }
         if self.table.verb.is_some() {
-            lines.push((true, "cancel".to_owned()));
-        } else if let Some(text) = say(right).filter(|_| right != plain) {
+            lines.push((true, "done".to_owned()));
+        } else if let Some(text) = say(&right).filter(|_| right != plain) {
             lines.push((true, text));
         }
         if lines.is_empty() {
@@ -2187,110 +2177,82 @@ impl BattleApp {
         );
         ui.add_space(u * 2.0);
         let team = TEAM[you.index()];
-        for i in 0..TEAM_SIZE as u8 {
-            let contender = self.table.board_teams[you.index()][i as usize].clone();
-            let texture = self.portrait(ctx, &contender);
+        // Who is on the team, and how steady each is: the plan is the team's, not one creature's.
+        ui.horizontal_wrapped(|ui| {
+            for i in 0..TEAM_SIZE as u8 {
+                let contender = &self.table.board_teams[you.index()][i as usize];
+                let up = standing[i as usize];
+                ui.label(
+                    RichText::new(&contender.traveler.name)
+                        .size(13.0)
+                        .strong()
+                        .color(if up { ink::PAGE } else { ink::MUTED }),
+                );
+                pips(ui, composure[i as usize], team, u);
+                ui.add_space(u * 3.0);
+            }
+        });
+        ui.add_space(u * 2.0);
+        for i in 0..PLAN_SIZE as u8 {
             let chosen = giving && self.table.selected == Some(i);
-            let order = self.table.orders[i as usize];
-            let carried = self
-                .table
-                .m
-                .as_ref()
-                .and_then(|m| m.fighter(Slot::new(you, i)).carrying);
-            let order_text = match (standing[i as usize], order) {
-                (false, _) => "Sitting out, dizzy".to_owned(),
-                (true, Some(order)) => speak(self.table.m.as_ref().expect("on"), &order, carried),
-                (true, None) => match self.table.fallback(i) {
-                    Some(f) => format!(
-                        "No order: will {}",
-                        speak(self.table.m.as_ref().expect("on"), &f, carried)
-                    ),
-                    None => "No order".to_owned(),
-                },
+            let order = self.table.orders[i as usize].clone();
+            let order_text = match &order {
+                Some(order) => speak_order(self.table.m.as_ref().expect("on"), you, order),
+                None => "No order".to_owned(),
             };
             let has_order = order.is_some();
-            let up = standing[i as usize];
             let verb = self.table.verb;
-            let (response, (picked, cleared)) =
-                card(ui, Id::new(("order-card", i)), chosen, up, true, u, |ui| {
-                    ui.horizontal_top(|ui| {
-                        portrait_mat(ui, &texture, 52.0, u, up);
-                        ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(label_job(
-                                    &format!("{}", i + 1),
-                                    chrome::LABEL,
-                                    ink::MUTED,
-                                ));
-                                ui.label(
-                                    RichText::new(&contender.traveler.name)
-                                        .size(15.0)
-                                        .strong()
-                                        .color(ink::PAGE),
-                                );
-                                pips(ui, composure[i as usize], team, u);
-                            });
-                            let colour = if has_order { ink::PAGE } else { ink::MUTED };
-                            ui.label(RichText::new(&order_text).size(12.5).color(colour));
-                            if let Some(item) = carried {
-                                ui.label(
-                                    RichText::new(format!("Carrying the {}", item.name()))
-                                        .size(11.5)
-                                        .italics()
-                                        .color(ink::FOREST),
-                                );
-                            }
-                            let mut picked = None;
-                            let mut cleared = false;
-                            if giving && up {
-                                ui.add_space(u);
-                                let row = egui::Layout::left_to_right(egui::Align::TOP)
-                                    .with_main_wrap(true);
-                                ui.with_layout(row, |ui| {
-                                    ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
-                                    for v in Verb::ALL {
-                                        if v == Verb::Use && carried.is_none() {
-                                            continue;
-                                        }
-                                        let on = chosen && verb == Some(v);
-                                        if chrome::button(
-                                            ui,
-                                            v.word(),
-                                            Kind::Plain,
-                                            on,
-                                            true,
-                                            None,
-                                            u,
-                                        )
+            let (response, (picked, cleared)) = card(
+                ui,
+                Id::new(("order-card", i)),
+                chosen,
+                true,
+                true,
+                u,
+                |ui| {
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(label_job(&format!("{}", i + 1), chrome::LABEL, ink::MUTED));
+                            ui.label(
+                                RichText::new(format!("Order {}", i + 1))
+                                    .size(15.0)
+                                    .strong()
+                                    .color(ink::PAGE),
+                            );
+                        });
+                        let colour = if has_order { ink::PAGE } else { ink::MUTED };
+                        ui.label(RichText::new(&order_text).size(12.5).color(colour));
+                        let mut picked = None;
+                        let mut cleared = false;
+                        if giving {
+                            ui.add_space(u);
+                            let row =
+                                egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true);
+                            ui.with_layout(row, |ui| {
+                                ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
+                                for v in Verb::ALL {
+                                    let on = chosen && verb == Some(v);
+                                    if chrome::button(ui, v.word(), Kind::Plain, on, true, None, u)
                                         .on_hover_text(v.hint())
                                         .clicked()
-                                        {
-                                            picked = Some(v);
-                                        }
+                                    {
+                                        picked = Some(v);
                                     }
-                                    if has_order
-                                        && chrome::button(
-                                            ui,
-                                            "clear",
-                                            Kind::Back,
-                                            false,
-                                            true,
-                                            None,
-                                            u,
-                                        )
+                                }
+                                if has_order
+                                    && chrome::button(ui, "clear", Kind::Back, false, true, None, u)
                                         .on_hover_text("Clear this order")
                                         .clicked()
-                                    {
-                                        cleared = true;
-                                    }
-                                });
-                            }
-                            (picked, cleared)
-                        })
-                        .inner
+                                {
+                                    cleared = true;
+                                }
+                            });
+                        }
+                        (picked, cleared)
                     })
                     .inner
-                });
+                },
+            );
             // Heard through the interaction kit, as every button and card is.
             if let Some(v) = picked {
                 self.table.select(i);
@@ -2315,7 +2277,7 @@ impl BattleApp {
                 u,
             )
             .on_hover_text(
-                "Enter. Anyone without an order chooses for itself when the timer runs out.",
+                "Enter. With no orders at all, each of the team chooses for itself when the timer runs out.",
             )
             .clicked()
             {
@@ -2402,28 +2364,28 @@ impl BattleApp {
             ],
             Guide::Orders => vec![
                 (
-                    key(scene::Key::Move),
-                    "MOVE".to_owned(),
-                    "walk to a tile".to_owned(),
-                    Verb::Move.hint().to_owned(),
+                    key(scene::Key::Contest),
+                    "TAKE".to_owned(),
+                    "get squares and hold them".to_owned(),
+                    Verb::Take.hint().to_owned(),
                 ),
                 (
                     key(scene::Key::Holding),
-                    "HOLD".to_owned(),
-                    "stand firm, light the beacon".to_owned(),
-                    Verb::Hold.hint().to_owned(),
-                ),
-                (
-                    key(scene::Key::Contest),
-                    "CONTEST".to_owned(),
-                    "bump theirs, or pull the lever".to_owned(),
-                    Verb::Contest.hint().to_owned(),
+                    "DEFEND".to_owned(),
+                    "keep squares, keep theirs off".to_owned(),
+                    Verb::Defend.hint().to_owned(),
                 ),
                 (
                     Glyph::Stars,
-                    "USE".to_owned(),
-                    "what it found on the ground".to_owned(),
-                    Verb::Use.hint().to_owned(),
+                    "INTERACT".to_owned(),
+                    "found things, the lever, a switch".to_owned(),
+                    Verb::Interact.hint().to_owned(),
+                ),
+                (
+                    key(scene::Key::Move),
+                    "Up to three".to_owned(),
+                    "the team shares them out".to_owned(),
+                    "Name a square in two orders and more of the team goes to it. Who goes where is up to them: who is nearest, what each is already doing, and a little of who each one is.".to_owned(),
                 ),
             ],
             Guide::Marks => scene::Key::ALL
@@ -2772,34 +2734,48 @@ fn tally(m: &Match) -> Tally {
 /// An order in the Handler's words: where, by what is there, never by coordinates.
 /// An order in the Handler's words: where, by what is there, never by coordinates. `carrying`
 /// is what the one given it carries, for a USE.
-pub fn speak(m: &Match, order: &Order, carrying: Option<formiga_battle_core::Item>) -> String {
-    let place = |tile: Tile| -> (&'static str, &'static str) {
-        let arena = &m.arena;
-        if arena.in_zone(tile) {
-            ("into the yard", "in the yard")
-        } else if arena.levers.iter().any(|l| l.touches(tile)) {
-            ("to the lever", "by the lever")
-        } else if arena.gates.contains(&tile) {
-            ("to the gate", "in the gateway")
-        } else if tile.x <= 2 {
-            ("back to your side", "on your side")
-        } else if i16::from(tile.x) >= i16::from(arena.width) - 3 {
-            ("over to their side", "on their side")
-        } else {
-            crate::garden::Dressing::of(arena).ground()
+/// A team order in a few words, as the order cards and the pointer's card say it.
+pub fn speak_order(m: &Match, you: Side, order: &formiga_battle_core::Directive) -> String {
+    use formiga_battle_core::Directive;
+    let squares = |ts: &[Tile]| -> String {
+        let yard = ts.iter().filter(|t| m.arena.in_zone(**t)).count();
+        let ground = crate::garden::Dressing::of(&m.arena).ground().1;
+        match (ts.len(), yard) {
+            (1, 1) => "a square of the yard".to_owned(),
+            (1, _) => format!("a square {ground}"),
+            (n, y) if y == n => format!("{n} squares of the yard"),
+            (n, _) => format!("{n} squares"),
         }
     };
     match order {
-        Order::Move { to } => format!("MOVE {}", place(*to).0),
-        Order::Hold { at } => format!("HOLD {}", place(*at).1),
-        Order::Contest {
-            target: formiga_battle_core::Target::Lever { at },
-        } if m.arena.switches.contains(at) => "CONTEST: turn the tap".to_owned(),
-        Order::Contest { .. } => describe(m, order),
-        Order::Use { at } => match carrying {
-            Some(item) => format!("USE the {} {}", item.name(), place(*at).1),
-            None => format!("USE what it carries {}", place(*at).1),
+        Directive::Take { squares: ts } => match ts.as_slice() {
+            [t] => match m.occupant(*t).filter(|o| o.side != you) {
+                Some(o) => format!("TAKE {}'s square", m.profile(o).name),
+                None => format!("TAKE {}", squares(ts)),
+            },
+            _ => format!("TAKE {}", squares(ts)),
         },
+        Directive::Defend { squares: ts } => format!("DEFEND {}", squares(ts)),
+        Directive::Interact { at } => {
+            let thing = m
+                .board
+                .ground
+                .iter()
+                .chain(m.board.glint.iter())
+                .find(|(g, _)| g == at)
+                .map(|(_, i)| i.name());
+            match (thing, m.occupant(*at)) {
+                (Some(item), _) => format!("INTERACT: fetch the {item}"),
+                (None, Some(o)) if o.side == you => {
+                    format!("INTERACT: {} uses what it carries", m.profile(o).name)
+                }
+                (None, Some(o)) => format!("INTERACT: go after what {} carries", m.profile(o).name),
+                (None, None) if m.arena.levers.contains(at) => {
+                    "INTERACT: pull the lever".to_owned()
+                }
+                (None, None) => "INTERACT: set off the switch".to_owned(),
+            }
+        }
     }
 }
 

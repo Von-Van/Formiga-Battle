@@ -3,7 +3,8 @@
 
 use crate::event::{Event, EventKind, Fill, Reason, Victory};
 use crate::game::Match;
-use crate::order::{Order, Side, Slot, Target};
+use crate::muster::{Because, Role, Task, Why};
+use crate::order::{Directive, Order, Side, Slot, Target};
 use std::collections::BTreeSet;
 
 pub fn team_name(side: Side) -> &'static str {
@@ -37,6 +38,85 @@ pub fn describe(m: &Match, order: &Order) -> String {
             target: Target::Lever { .. },
         } => "CONTEST the lever".to_owned(),
         Order::Use { at } => format!("USE what it carries at {at}"),
+    }
+}
+
+/// A team order, in a few words.
+pub fn describe_directive(m: &Match, d: &Directive) -> String {
+    let squares = |ts: &[crate::grid::Tile]| {
+        ts.iter()
+            .map(|t| t.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    match d {
+        Directive::Take { squares: ts } => format!("TAKE {}", squares(ts)),
+        Directive::Defend { squares: ts } => format!("DEFEND {}", squares(ts)),
+        Directive::Interact { at } if m.arena.switches.contains(at) => {
+            format!("INTERACT with {}", words(m).switch)
+        }
+        Directive::Interact { at } if m.arena.levers.contains(at) => {
+            "INTERACT with the lever".to_owned()
+        }
+        Directive::Interact { at } => format!("INTERACT at {at}"),
+    }
+}
+
+/// A creature's job, as something to do: "hold (4, 3)", "flank Pip", "fetch the twig".
+pub fn job(m: &Match, slot: Slot, task: &Task, order: &Order) -> String {
+    let target = match order {
+        Order::Contest {
+            target: Target::Creature { slot },
+        } => Some(m.profile(*slot).name.clone()),
+        _ => None,
+    };
+    let thing = |at| {
+        m.board
+            .ground
+            .iter()
+            .chain(m.board.glint.iter())
+            .find(|(g, _)| *g == at)
+            .map(|(_, i)| i.name())
+    };
+    let tap = m.arena.switches.contains(&task.at);
+    let at = task.at;
+    match task.role {
+        Role::Claim => format!("hold {at}"),
+        Role::Oust => match target {
+            Some(t)
+                if m.occupant(at)
+                    .is_some_and(|o| m.fighter(o).carrying.is_some()) =>
+            {
+                format!("go after what {t} carries")
+            }
+            Some(t) => format!("move {t} off {at}"),
+            None => format!("clear {at}"),
+        },
+        Role::Flank => match target.or_else(|| m.occupant(at).map(|o| m.profile(o).name.clone())) {
+            Some(t) => format!("flank {t}"),
+            None => format!("flank whoever holds {at}"),
+        },
+        Role::Pin => format!("stand beside whoever holds {at}"),
+        Role::Guard if tap => format!("guard {}", words(m).switch),
+        Role::Guard if m.arena.levers.contains(&at) => "guard the lever".to_owned(),
+        Role::Guard => format!("guard {at}"),
+        Role::Intercept => match target {
+            Some(t) => format!("head off {t}"),
+            None => format!("head off whoever comes at {at}"),
+        },
+        Role::Fetch => match thing(at) {
+            Some(item) => format!("fetch the {item}"),
+            None => format!("fetch what lay at {at}"),
+        },
+        Role::Pull if tap => format!("set off {}", words(m).switch),
+        Role::Pull => "pull the lever".to_owned(),
+        Role::Wait if tap => format!("wait by {}", words(m).switch),
+        Role::Wait => "wait by the lever".to_owned(),
+        Role::Use => match m.fighter(slot).carrying {
+            Some(item) => format!("use its {}", item.name()),
+            None => "use what it carried".to_owned(),
+        },
+        Role::Spare => "do as it saw fit".to_owned(),
     }
 }
 
@@ -100,6 +180,78 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
     let mut progress_told: BTreeSet<Side> = BTreeSet::new();
     for event in events {
         let line = match &event.kind {
+            EventKind::Assigned {
+                slot,
+                task,
+                order,
+                why,
+            } => {
+                let n = name(slot);
+                let j = job(m, *slot, task, order);
+                let held = || {
+                    m.occupant(task.at)
+                        .map_or_else(|| "the holder".to_owned(), |o| name(&o))
+                };
+                match why {
+                    Why::Nearest | Why::KeptAtIt => None,
+                    Why::Bold => Some(format!("{n} went to {j}, keen to meet the other team.")),
+                    Why::Careful => Some(format!("{n} chose to {j}, happier standing its ground.")),
+                    Why::Friendly { ally } => {
+                        Some(format!("{n} chose to {j}, to be beside {}.", name(ally)))
+                    }
+                    Why::Avoiding { ally } => Some(format!(
+                        "{n} chose to {j}, to keep away from {}.",
+                        name(ally)
+                    )),
+                    Why::Curious => Some(format!("{n} couldn't resist: it went to {j}.")),
+                    Why::Whim => Some(format!("{n} took it into its head to {j}.")),
+                    Why::Alone if task.role == Role::Pin => Some(format!(
+                        "{n} was the only one free to flank {}, so it waited beside it for help.",
+                        held()
+                    )),
+                    Why::Alone => Some(format!(
+                        "{n} was the only one free to flank {} and went at it alone anyway.",
+                        held()
+                    )),
+                }
+            }
+            EventKind::Rethought {
+                slot,
+                task,
+                order,
+                because,
+            } => {
+                let n = name(slot);
+                let j = job(m, *slot, task, order);
+                Some(match because {
+                    Because::ItemGone => {
+                        format!("{n} found what it went for gone, so it went to {j} instead.")
+                    }
+                    Because::GotIt => format!("{n} got what it went for and went on to {j}."),
+                    Because::TargetDown => {
+                        format!("{n}'s target was out of it, so it went to {j} instead.")
+                    }
+                    Because::DugIn { target } => format!(
+                        "{} dug in before {n} got there, so {n} went to {j} instead.",
+                        name(target)
+                    ),
+                    Because::SquareCleared => format!("The square came free, so {n} went to {j}."),
+                    Because::SquareTaken { by } => {
+                        format!("{} got there first, so {n} went to {j} instead.", name(by))
+                    }
+                    Because::Warned => format!("{n} saw what was coming and went to {j} instead."),
+                    Because::AllyDown { ally } => {
+                        format!("With {} out, {n} stepped in to {j}.", name(ally))
+                    }
+                    Because::Spotted => {
+                        format!("{n} spotted something turning up and went to {j}.")
+                    }
+                })
+            }
+            EventKind::OrderDropped { side, .. } => Some(format!(
+                "One of {}'s orders couldn't be carried out and was left out.",
+                team_name(*side).to_lowercase()
+            )),
             EventKind::OrderFilled { slot, order, fill } => Some(format!(
                 "{} {}, so it chose for itself: {}.",
                 name(slot),

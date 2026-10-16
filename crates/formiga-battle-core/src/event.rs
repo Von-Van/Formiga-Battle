@@ -4,6 +4,7 @@
 use crate::arena::Effect;
 use crate::grid::Tile;
 use crate::items::Item;
+use crate::muster::{Because, Task, Why};
 use crate::order::{Order, Side, Slot};
 use serde::{Deserialize, Serialize};
 
@@ -81,6 +82,27 @@ pub struct Outcome {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum EventKind {
+    /// The job a creature took on when its team shared out the plan, the order it comes to, and
+    /// why it was this creature.
+    Assigned {
+        slot: Slot,
+        task: Task,
+        order: Order,
+        why: Why,
+    },
+    /// Partway through the turn its job came to nothing, and it took another from the plan.
+    Rethought {
+        slot: Slot,
+        task: Task,
+        order: Order,
+        because: Because,
+    },
+    /// One of a team's orders could not be carried out at all (no square on the board, nothing
+    /// there to interact with, or more than three orders), so it was left out.
+    OrderDropped {
+        side: Side,
+        index: u8,
+    },
     OrderFilled {
         slot: Slot,
         order: Order,
