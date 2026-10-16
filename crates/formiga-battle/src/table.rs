@@ -21,7 +21,7 @@ use formiga_battle_core::{
     Tile, TurnReport, order::MAX_SQUARES,
 };
 use formiga_battle_room::roster::{check_team, room_match};
-use formiga_battle_room::{Build, Entrant, View, relay_base};
+use formiga_battle_room::{Build, Card, Entrant, View, relay_base};
 use std::path::PathBuf;
 
 /// The session Desktop opened, and the answer being written into it.
@@ -53,6 +53,9 @@ pub struct Friend {
     pub seated: bool,
     /// Both Handlers' names, left then right.
     pub handlers: [String; 2],
+    /// What each Handler shows of themselves besides their name, left then right, cleaned again
+    /// on arrival.
+    pub cards: [Option<Card>; 2],
     /// The newest view of the room.
     pub view: Option<View>,
     /// The turn this Handler's orders have gone to the relay for.
@@ -277,6 +280,7 @@ impl Table {
                 &self.match_events,
                 &self.record,
                 &friend.handlers[self.you.other().index()],
+                friend.cards[self.you.other().index()].as_ref(),
                 now,
             ),
             None => rewards::ai_match(m, self.you, &self.record),
@@ -316,14 +320,84 @@ impl Table {
     fn keep(&mut self, earned: rewards::Earned) {
         self.record.apply(&earned.result);
         self.earned = earned.lines;
+        if let Some(trio) = earned
+            .result
+            .rewards
+            .trio
+            .as_ref()
+            .and_then(|played| self.record.trios.iter().find(|t| t.id == played.id))
+        {
+            self.earned.push(format!(
+                "{}: {}",
+                trio.name,
+                crate::identity::record_words(trio)
+            ));
+        }
         if let Some(session) = &mut self.session {
             session.result.matches.push(earned.result);
-            if let Err(error) = session.result.write(&session.directory) {
-                self.notice = Some(format!(
-                    "What this match earned could not be kept for Desktop: {error}"
-                ));
-            }
         }
+        self.write_session("What this match earned");
+    }
+
+    /// Writes the session's answer for Desktop again, whole, with the Handler card and trios as
+    /// they stand. A rehearsal keeps nothing.
+    fn write_session(&mut self, what: &str) {
+        let Some(session) = &mut self.session else {
+            return;
+        };
+        let registry = crate::identity::registry(&self.record);
+        session.result.registry = (!registry.is_empty()).then_some(registry);
+        if let Err(error) = session.result.write(&session.directory) {
+            self.notice = Some(format!("{what} could not be kept for Desktop: {error}"));
+        }
+    }
+
+    /// The Handler card is now this.
+    pub fn set_handler(&mut self, card: formiga_battle_contract::HandlerCard) {
+        self.register(formiga_battle_contract::Registry {
+            handler: Some(card),
+            trios: Vec::new(),
+        });
+    }
+
+    /// A trio named, renamed, given a pennant, retired or given new members: kept here at once,
+    /// and for Desktop when Battle closes.
+    pub fn set_trio(&mut self, card: formiga_battle_contract::TrioCard) {
+        self.register(formiga_battle_contract::Registry {
+            handler: None,
+            trios: vec![card],
+        });
+    }
+
+    fn register(&mut self, registry: formiga_battle_contract::Registry) {
+        if !registry.holds() {
+            self.notice = Some("That is not something your notebook can keep.".to_owned());
+            return;
+        }
+        self.record
+            .register(&registry, time::OffsetDateTime::now_utc());
+        self.write_session("Your Handler card and trios");
+    }
+
+    /// What a friend is shown of this Handler besides their name: their club, pennant and
+    /// standing, and the trio the three picked are, if they are one.
+    pub fn shared_card(&self) -> Option<Card> {
+        let ids: Vec<u64> = self
+            .picked
+            .iter()
+            .filter_map(|&i| self.home.get(i))
+            .map(|(c, _)| c.traveler.id.0)
+            .collect();
+        let trio = crate::identity::trio_of(&self.record, &ids);
+        let handler = self.record.handler.as_ref();
+        Card {
+            club: handler.and_then(|h| h.club.clone()),
+            pennant: handler.map(|h| h.pennant.clone()),
+            standing: Some(crate::identity::Standing::of(&self.record).line()),
+            trio: trio.map(|t| t.name.clone()),
+            trio_pennant: trio.and_then(|t| t.pennant.clone()),
+        }
+        .cleaned()
     }
 
     pub fn toggle_pick(&mut self, index: usize) {
@@ -436,6 +510,12 @@ impl Table {
             return;
         }
         let (team, bonds) = self.picked_team();
+        // The name signed here is the Handler's from now on.
+        if let Some(card) = crate::identity::card_with_name(&self.record, handler)
+            && self.record.handler.as_ref() != Some(&card)
+        {
+            self.set_handler(card);
+        }
         let entrant = Entrant {
             protocol: formiga_battle_room::RELAY_VERSION,
             rules_version: formiga_battle_core::RULES_VERSION,
@@ -444,12 +524,14 @@ impl Table {
             team,
             bonds,
             arena: self.arena.id.clone(),
+            card: self.shared_card(),
         };
         self.friend = Some(Friend {
             line: Line::start(self.relay.clone(), entrant, code.map(str::to_owned)),
             code: None,
             seated: false,
             handlers: [String::new(), String::new()],
+            cards: [None, None],
             view: None,
             sent_turn: None,
             opponent_ready: false,
@@ -590,6 +672,10 @@ impl Table {
                 Ok(m) => {
                     friend.seated = true;
                     friend.handlers = handlers.clone();
+                    friend.cards = [
+                        a.card.as_ref().and_then(Card::cleaned),
+                        b.card.as_ref().and_then(Card::cleaned),
+                    ];
                     let teams = [a.team.clone(), b.team.clone()];
                     let you = view.you;
                     friend.view = Some(view);
@@ -1326,6 +1412,72 @@ mod tests {
         .unwrap();
         assert_eq!(written.matches.len(), 1);
         assert_eq!(written.matches[0].mode, formiga_battle_contract::Mode::Ai);
+    }
+
+    #[test]
+    fn a_trio_named_before_a_match_plays_it_and_desktop_is_told_both() {
+        let dir = std::env::temp_dir().join(format!("formiga-battle-trio-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
+        t.session = Some(Session {
+            directory: dir.clone(),
+            result: BattleResult::new(
+                formiga_battle_contract::SessionId::parse("00000000000000000000000000000000")
+                    .unwrap(),
+                "0".repeat(64),
+                "0.1.0",
+            ),
+        });
+        // Signing a name for a friend makes it the Handler's.
+        assert!(t.record.handler.is_none());
+        let card = crate::identity::card_with_name(&t.record, "Jo").unwrap();
+        t.set_handler(card);
+        let ids: Vec<u64> = t
+            .picked
+            .iter()
+            .map(|&i| t.home[i].0.traveler.id.0)
+            .collect();
+        t.set_trio(crate::identity::named("The Thistle Three", &ids).unwrap());
+        let read = |dir: &std::path::Path| {
+            BattleResult::decode(
+                &std::fs::read(dir.join(formiga_battle_contract::RESULT_FILE)).unwrap(),
+            )
+            .unwrap()
+        };
+        let named = read(&dir);
+        assert!(
+            named.matches.is_empty(),
+            "nothing played yet, and still written"
+        );
+        let registry = named.registry.expect("the card and trio, for Desktop");
+        assert_eq!(registry.handler.unwrap().name, "Jo");
+        assert_eq!(registry.trios[0].name, "The Thistle Three");
+        let card = t.shared_card().expect("a card for a friend");
+        assert_eq!(card.trio.as_deref(), Some("The Thistle Three"));
+        assert_eq!(card.standing.as_deref(), Some("New Handler"));
+
+        t.start(0.0).unwrap();
+        let mut now = 0.0;
+        while !t.finished(now) {
+            t.coach_orders();
+            t.lock(now);
+            now += 20.0;
+            t.frame(now);
+        }
+        assert!(
+            t.earned
+                .iter()
+                .any(|l| l.starts_with("The Thistle Three: 1 played"))
+        );
+        assert_eq!(t.record.trios[0].visitors.played, 1);
+        let written = read(&dir);
+        assert_eq!(
+            written.matches[0].rewards.trio.as_ref().unwrap().id,
+            t.record.trios[0].id
+        );
+        assert!(written.registry.is_some());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

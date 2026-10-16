@@ -13,6 +13,7 @@
 
 mod handler;
 mod menus;
+mod registry;
 
 use crate::announce::{Callout, Style};
 use crate::chrome::{self, Kind, ink, label_job};
@@ -44,7 +45,7 @@ const TABS: [&str; 2] = ["Orders", "Notebook"];
 
 /// What a friend match sends, said in full before the first is opened.
 const SHARED: [&str; 5] = [
-    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here; for each of your three companions, its name, the number Formiga Desktop knows it by, when it was born, its parent's number if it is a little one, its look, size and what it wears, how it moves, its temperament, the habits it has picked up and the leanings it has learned, and how the three get on; your orders each turn; a check number for the board after each turn; and which versions of Battle and Formiga Desktop you have, with a fingerprint of your copy of Battle (the same for everyone with that copy), so only matching, unaltered copies play each other.",
+    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here, with your club, your pennant and your Handler standing; the name and pennant of your trio, if your three are one; for each of your three companions, its name, the number Formiga Desktop knows it by, when it was born, its parent's number if it is a little one, its look, size and what it wears, how it moves, its temperament, the habits it has picked up and the leanings it has learned, and how the three get on; your orders each turn; a check number for the board after each turn; and which versions of Battle and Formiga Desktop you have, with a fingerprint of your copy of Battle (the same for everyone with that copy), so only matching, unaltered copies play each other.",
     "Nothing else from your colony is sent. There is no account, no email, no device or computer ID.",
     "The relay keeps your room only while it is in use, and never keeps a copy. It deletes it two minutes after the match ends, fifteen minutes after it opens if your friend never joins, five minutes after neither Battle has checked in, and two hours after it opens in any case. Your seat's key is kept only in scrambled form.",
     "Like any website, formigaworld.com's host may keep its usual short-lived request logs (when a request came, and from what internet address). The relay itself logs nothing about your room.",
@@ -92,7 +93,9 @@ pub enum Step {
     Where,
     Who,
     Room,
-    /// The Handler's own pages, opened from the station rather than on the way anywhere.
+    /// The Handler's own pages, opened from the station rather than on the way anywhere: who
+    /// they are and their trios, the history, and the settings.
+    Handler,
     History,
     Settings,
 }
@@ -103,6 +106,7 @@ impl Step {
             Self::Where => "Where",
             Self::Who => "Who",
             Self::Room => "Friend",
+            Self::Handler => "Handler",
             Self::History => "History",
             Self::Settings => "Settings",
         }
@@ -119,6 +123,8 @@ pub enum Review {
     Picking,
     /// A friend's room about to be opened: three chosen, a name signed.
     Friend,
+    /// The Handler's registry: their card and pennant, standing and trios.
+    Handler,
     /// The sample colony's history, and its settings.
     History,
     Settings,
@@ -172,8 +178,18 @@ pub struct BattleApp {
     error: Option<String>,
     /// The side page shows the Handler's Notebook instead of the orders.
     notebook_open: bool,
-    /// What the Handler types to play a friend.
+    /// The Handler's name as typed, on the Friend page or their own.
     handler: String,
+    /// Their club as typed.
+    club: String,
+    /// The pennant being chosen before the Handler has signed a name to keep it under.
+    draft_style: crate::identity::Style,
+    /// Each pennant's picture, painted once.
+    flags: HashMap<crate::identity::Style, egui::TextureHandle>,
+    /// A name for the three picked, as typed.
+    trio_draft: String,
+    /// A trio being renamed.
+    renaming: Option<registry::Renaming>,
     join_code: String,
     /// The Handler has read what a friend match shares, this time.
     understood: bool,
@@ -292,6 +308,7 @@ impl BattleApp {
         sound: Sound,
     ) -> Self {
         let view = View::new(table.arena.width, table.arena.height);
+        let card = table.record.handler.clone();
         let mut app = Self {
             host,
             table,
@@ -304,7 +321,15 @@ impl BattleApp {
             hover: None,
             error: None,
             notebook_open: false,
-            handler: String::new(),
+            handler: card.as_ref().map(|c| c.name.clone()).unwrap_or_default(),
+            club: card
+                .as_ref()
+                .and_then(|c| c.club.clone())
+                .unwrap_or_default(),
+            draft_style: crate::identity::Style::default(),
+            flags: HashMap::new(),
+            trio_draft: String::new(),
+            renaming: None,
             join_code: String::new(),
             understood: false,
             autoplay: matches!(review, Some(Review::Playing | Review::Account)),
@@ -373,6 +398,12 @@ impl BattleApp {
                 app.open_journal(Outing::Home, Step::History);
             }
             Some(Review::Settings) => app.open_journal(Outing::Home, Step::Settings),
+            Some(Review::Handler) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.handler = "Jo".to_owned();
+                app.club = "Hedge End Club".to_owned();
+                app.open_journal(Outing::Home, Step::Handler);
+            }
             Some(Review::Picking) => app.open_journal(Outing::Home, Step::Who),
             Some(Review::Friend) => {
                 app.open_journal(Outing::World, Step::Room);
@@ -978,6 +1009,20 @@ impl BattleApp {
             return;
         }
         let paused = self.paused;
+        // Each side's pennant beside its name: the Handler's (or their trio's), and a friend's.
+        let ctx = ui.ctx().clone();
+        let mut flags: [Option<egui::TextureHandle>; 2] = [None, None];
+        let ours = self.our_team_words().0;
+        flags[self.table.you.index()] = Some(self.flag(&ctx, ours));
+        let theirs = self.table.friend.as_ref().and_then(|f| {
+            f.cards[self.table.you.other().index()]
+                .as_ref()
+                .and_then(|c| c.trio_pennant.as_ref().or(c.pennant.as_ref()))
+                .map(crate::identity::Style::of)
+        });
+        if let Some(style) = theirs {
+            flags[self.table.you.other().index()] = Some(self.flag(&ctx, style));
+        }
         ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = u * 4.0;
@@ -1006,6 +1051,11 @@ impl BattleApp {
                     } else {
                         self.table.other_short()
                     };
+                    if let Some(flag) = &flags[side.index()] {
+                        let h = (u * 9.0).round();
+                        let w = h * crate::pennant::WIDTH as f32 / crate::pennant::HEIGHT as f32;
+                        ui.add(egui::Image::new(flag).fit_to_exact_size(vec2(w, h)));
+                    }
                     ui.label(label_job(&name, chrome::LABEL, color(team.light)));
                     beacon_meter(
                         ui,
@@ -1409,6 +1459,7 @@ impl BattleApp {
         }
         self.confetti(&painter, rect, now, u);
         self.result_stamp(&painter, rect, now, u);
+        self.introduction(&painter, rect, now, u);
         if let (Some(pointer), Some((plain, right))) = (response.hover_pos(), aims) {
             self.cursor_hint(&painter, pointer, plain, right, u);
         }
