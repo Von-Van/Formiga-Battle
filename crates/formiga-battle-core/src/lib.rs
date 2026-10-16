@@ -7,7 +7,9 @@
 //! match replay exactly.
 //!
 //! - [`arena`]: the board, authored as data.
-//! - [`order`]: MOVE, HOLD and CONTEST.
+//! - [`order`]: MOVE, HOLD and CONTEST, and USE for whoever carries something.
+//! - [`items`]: found things, and what each does.
+//! - [`scenery`]: the map event, and found things turning up, being carried and used.
 //! - [`game`]: a match and how a turn resolves, tick by tick.
 //! - [`profile`]: who a creature is, read from Desktop's own record.
 //! - [`interpret`]: how a creature carries out its order, and why.
@@ -24,6 +26,7 @@ pub mod event;
 pub mod game;
 pub mod grid;
 pub mod interpret;
+pub mod items;
 pub mod notebook;
 pub mod order;
 pub mod plan;
@@ -32,12 +35,14 @@ pub mod recap;
 pub mod replay;
 pub mod rng;
 pub mod ruleset;
+pub mod scenery;
 pub mod tournament;
 
-pub use arena::{Arena, TEAM_SIZE};
-pub use event::{Event, EventKind, Outcome, Reason, Victory};
+pub use arena::{Arena, Effect, Scenery, TEAM_SIZE};
+pub use event::{Blown, Event, EventKind, Outcome, Reason, Victory};
 pub use game::{Match, TurnReport};
 pub use grid::Tile;
+pub use items::Item;
 pub use order::{Order, Orders, Side, Slot, Target};
 pub use profile::{Behavior, Bond, Leanings, Nature, Profile, Strength};
 pub use replay::MatchRecord;

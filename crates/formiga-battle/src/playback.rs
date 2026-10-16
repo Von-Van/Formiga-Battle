@@ -422,9 +422,50 @@ impl Playback {
                         }
                     }
                 }
+                // Where the map event and found things move or topple anyone; how they look and
+                // sound is the match screen's to draw.
+                EventKind::SceneryLanded { hit, .. } => {
+                    for slot in hit {
+                        let f = frame.figure_mut(*slot);
+                        f.holding = false;
+                        f.off_balance = true;
+                        set_pose(&mut frame, &mut since, *slot, Pose::Wobble, *when);
+                    }
+                }
+                EventKind::Puffed { blown, .. } => {
+                    for b in blown {
+                        let f = frame.figure_mut(b.slot);
+                        f.holding = false;
+                        f.off_balance = true;
+                        if let Some(to) = b.to {
+                            let share = (age / 0.35).clamp(0.0, 1.0);
+                            let (fx, fy) = (f32::from(b.from.x) + 0.5, f32::from(b.from.y) + 0.5);
+                            let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
+                            f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
+                            f.tile = to;
+                        }
+                        set_pose(&mut frame, &mut since, b.slot, Pose::Wobble, *when);
+                    }
+                }
                 EventKind::OrderFilled { .. }
                 | EventKind::TookOpportunity { .. }
-                | EventKind::LeverResting { .. } => {}
+                | EventKind::LeverResting { .. }
+                | EventKind::SceneryWarned { .. }
+                | EventKind::SwitchTurned { .. }
+                | EventKind::SwitchDefended { .. }
+                | EventKind::SwitchResting { .. }
+                | EventKind::ItemsGlint { .. }
+                | EventKind::ItemAppeared { .. }
+                | EventKind::PickedUp { .. }
+                | EventKind::Dropped { .. }
+                | EventKind::ItemUsed { .. }
+                | EventKind::TwigWedged { .. }
+                | EventKind::TwigFell { .. }
+                | EventKind::GateWedged { .. }
+                | EventKind::Sheltering { .. }
+                | EventKind::Sheltered { .. }
+                | EventKind::ShelterFolded { .. }
+                | EventKind::ItemFizzled { .. } => {}
             }
         }
         for (figures, began) in frame.figures.iter_mut().zip(since) {

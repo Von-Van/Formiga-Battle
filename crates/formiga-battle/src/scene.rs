@@ -354,7 +354,8 @@ fn order_marks(
                 }
                 pennant(canvas, b, team, now, still);
             }
-            Order::Hold { .. } => {}
+            // How a USE is marked is the match screen's to draw.
+            Order::Hold { .. } | Order::Use { .. } => {}
             Order::Contest { target } => {
                 let (at, lever) = match target {
                     Target::Creature { slot } => (frame.figure(*slot).tile, false),

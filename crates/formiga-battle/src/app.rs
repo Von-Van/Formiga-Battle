@@ -1698,7 +1698,7 @@ pub fn speak(m: &Match, order: &Order) -> String {
     match order {
         Order::Move { to } => format!("MOVE {}", place(*to).0),
         Order::Hold { at } => format!("HOLD {}", place(*at).1),
-        Order::Contest { .. } => describe(m, order),
+        Order::Contest { .. } | Order::Use { .. } => describe(m, order),
     }
 }
 

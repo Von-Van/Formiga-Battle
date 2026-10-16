@@ -417,7 +417,8 @@ fn replay(path: PathBuf) -> Result<()> {
 }
 
 /// The board as text: left team A B C, right team x y z, `#` obstacles, `=` a closed gate, `/`
-/// an open one, `L` the lever, `:` the zone.
+/// an open one, `L` the lever, `S` a tap, `:` the zone, `~` ground marked for something about to
+/// land, `*` something to pick up, `|` a twig.
 fn draw(m: &Match) -> String {
     let mut out = String::new();
     for y in 0..m.arena.height as i8 {
@@ -429,11 +430,15 @@ fn draw(m: &Match) -> String {
                     Side::Left => (b'A' + slot.index) as char,
                     Side::Right => (b'x' + slot.index) as char,
                 },
+                None if m.board.twigs.iter().any(|(t, _)| *t == tile) => '|',
+                None if m.board.ground.iter().any(|(t, _)| *t == tile) => '*',
                 None => match m.arena.terrain(tile) {
+                    arena::Terrain::Obstacle if m.arena.switches.contains(&tile) => 'S',
                     arena::Terrain::Obstacle => '#',
                     arena::Terrain::Lever => 'L',
                     arena::Terrain::Gate if m.walkable(tile) => '/',
                     arena::Terrain::Gate => '=',
+                    arena::Terrain::Open if formiga_battle_core::interpret::warned(m, tile) => '~',
                     arena::Terrain::Open if m.arena.in_zone(tile) => ':',
                     arena::Terrain::Open => '.',
                 },

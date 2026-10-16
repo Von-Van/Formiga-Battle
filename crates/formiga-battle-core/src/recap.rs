@@ -31,8 +31,19 @@ pub fn describe(m: &Match, order: &Order) -> String {
             target: Target::Creature { slot },
         } => format!("CONTEST {}", m.profile(*slot).name),
         Order::Contest {
+            target: Target::Lever { at },
+        } if m.arena.switches.contains(at) => "CONTEST the tap".to_owned(),
+        Order::Contest {
             target: Target::Lever { .. },
         } => "CONTEST the lever".to_owned(),
+        Order::Use { at } => format!("USE what it carries at {at}"),
+    }
+}
+
+/// What the arena's map event is called in the recap.
+fn scenery_name(m: &Match) -> &'static str {
+    match m.arena.scenery.as_ref().map(|s| s.effect) {
+        Some(crate::arena::Effect::Soak) | None => "sprinkler",
     }
 }
 
@@ -96,6 +107,12 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                         Reason::SteppedBack => format!("{n} hopped back after the contest."),
                         Reason::HungBack => {
                             format!("{n} hung back rather than walk in among the other team.")
+                        }
+                        Reason::SkirtedWarning => {
+                            format!("{n} kept clear of the ground about to get it.")
+                        }
+                        Reason::WentForItem => {
+                            format!("{n} couldn't resist something lying on the ground.")
                         }
                     })
                 }
@@ -183,6 +200,87 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                 "The gate couldn't close with {} standing in it.",
                 name(by)
             )),
+            EventKind::SceneryWarned { .. } if event.tick == m.ruleset.ticks_per_turn => {
+                Some(format!("The {} is about to come round.", scenery_name(m)))
+            }
+            EventKind::SwitchTurned { slot, .. } => Some(format!(
+                "{} turned the tap: the {} is coming.",
+                name(slot),
+                scenery_name(m)
+            )),
+            EventKind::SwitchDefended { slot, holders, .. } => Some(format!(
+                "{} guarded the tap and shooed {} off.",
+                list(m, holders),
+                name(slot)
+            )),
+            EventKind::SwitchResting { slot, .. } => Some(format!(
+                "{} turned the tap, but nothing more came of it just yet.",
+                name(slot)
+            )),
+            EventKind::SceneryLanded { hit, sheltered, .. } => Some({
+                let mut line = format!("The {} swept the yard", scenery_name(m));
+                if !hit.is_empty() {
+                    line.push_str(&format!(" and soaked {}", list(m, hit)));
+                }
+                if !sheltered.is_empty() {
+                    line.push_str(&format!("; {} stayed dry under a leaf", list(m, sheltered)));
+                }
+                line.push('.');
+                line
+            }),
+            EventKind::ItemsGlint { item, .. } => Some(format!(
+                "Something is glinting: a {} is about to turn up.",
+                item.name()
+            )),
+            EventKind::PickedUp { slot, item, .. } => {
+                Some(format!("{} picked up a {}.", name(slot), item.name()))
+            }
+            EventKind::Dropped { slot, item, .. } => {
+                Some(format!("{} dropped its {}.", name(slot), item.name()))
+            }
+            EventKind::ItemUsed { slot, item, .. } => Some(format!(
+                "{} {}.",
+                name(slot),
+                match item {
+                    crate::items::Item::Puff => "blew a dandelion puff",
+                    crate::items::Item::Twig => "threw a twig",
+                    crate::items::Item::Leaf => "opened a leaf umbrella",
+                }
+            )),
+            EventKind::Puffed { blown, braced, .. } => {
+                let moved: Vec<Slot> = blown.iter().map(|b| b.slot).collect();
+                match (moved.is_empty(), braced.is_empty()) {
+                    (true, true) => Some("The puff blew across empty ground.".to_owned()),
+                    (false, true) => Some(format!("The puff bowled {} over.", list(m, &moved))),
+                    (true, false) => Some(format!(
+                        "{} braced side by side and the puff blew past.",
+                        list(m, braced)
+                    )),
+                    (false, false) => Some(format!(
+                        "The puff bowled {} over; {} braced and stood firm.",
+                        list(m, &moved),
+                        list(m, braced)
+                    )),
+                }
+            }
+            EventKind::TwigWedged { by, .. } => {
+                Some(format!("{}'s twig stuck fast in the ground.", name(by)))
+            }
+            EventKind::TwigFell { .. } => Some("A twig toppled over.".to_owned()),
+            EventKind::GateWedged { .. } => {
+                Some("The gate couldn't close with a twig wedged in it.".to_owned())
+            }
+            EventKind::Sheltering { slots, .. } => {
+                Some(format!("{} is under a leaf umbrella.", list(m, slots)))
+            }
+            EventKind::Sheltered { target, by } => Some(format!(
+                "{} bounced off {}'s leaf umbrella.",
+                list(m, by),
+                name(target)
+            )),
+            EventKind::ItemFizzled { slot, item, .. } => {
+                Some(format!("{}'s {} came to nothing.", name(slot), item.name()))
+            }
             EventKind::KnockedOut { slot } => Some(format!(
                 "{} flopped over, dizzy, and sits out the rest of the match.",
                 name(slot)

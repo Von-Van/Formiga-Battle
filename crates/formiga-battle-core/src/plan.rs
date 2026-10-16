@@ -84,6 +84,55 @@ fn options(m: &Match, slot: Slot) -> Vec<Order> {
     for to in walks.into_iter().take(4) {
         options.push(Order::Move { to });
     }
+    // Something to pick up, near enough to reach this turn.
+    if f.carrying.is_none() {
+        for (t, _) in &m.board.ground {
+            if dist[t.y as usize * w + t.x as usize]
+                .is_some_and(|d| (1..=m.ruleset.ticks_per_turn).contains(&d))
+            {
+                options.push(Order::Move { to: *t });
+            }
+        }
+    }
+    // Something to use: a puff on one of theirs, a twig beside one of ours, a leaf over one of
+    // ours.
+    if let Some(item) = f.carrying {
+        let near = |t: crate::grid::Tile| f.at.distance(t) <= item.reach() + 1;
+        match item {
+            crate::items::Item::Puff => {
+                for e in m.team(slot.side.other()) {
+                    let t = m.fighter(e).at;
+                    if near(t) {
+                        options.push(Order::Use { at: t });
+                    }
+                }
+            }
+            crate::items::Item::Twig => {
+                for a in m.team(slot.side) {
+                    for t in m.fighter(a).at.steps() {
+                        if near(t) && m.walkable(t) && m.occupant(t).is_none() {
+                            options.push(Order::Use { at: t });
+                        }
+                    }
+                }
+            }
+            crate::items::Item::Leaf => {
+                for a in m.team(slot.side) {
+                    let t = m.fighter(a).at;
+                    if f.at.distance(t) <= item.reach() {
+                        options.push(Order::Use { at: t });
+                    }
+                }
+            }
+        }
+    }
+    if m.switch_ready() {
+        for switch in &m.arena.switches {
+            options.push(Order::Contest {
+                target: Target::Lever { at: *switch },
+            });
+        }
+    }
     if m.lever_ready() && m.board.gates_open.iter().any(|open| !open) {
         for lever in &m.arena.levers {
             options.push(Order::Contest {
@@ -96,7 +145,7 @@ fn options(m: &Match, slot: Slot) -> Vec<Order> {
 }
 
 /// How good the board is for `side`: the beacon most of all, then who is still standing and how
-/// steady they are, then holding in the zone.
+/// steady they are, then holding in the zone, then having something in hand.
 fn score(m: &Match, side: Side) -> i32 {
     if let Some(outcome) = m.outcome() {
         return match outcome.winner {
@@ -118,10 +167,16 @@ fn score(m: &Match, side: Side) -> i32 {
             .count() as i32
     };
     let capture = |sd: Side| i32::from(m.board.capture[sd.index()]);
+    let carrying = |sd: Side| {
+        m.team(sd)
+            .filter(|x| m.fighter(*x).carrying.is_some())
+            .count() as i32
+    };
     300 * (capture(s) - capture(o))
         + 80 * (composure(s) - composure(o))
         + 200 * (standing(s) - standing(o))
         + 40 * (holding(s) - holding(o))
+        + 25 * (carrying(s) - carrying(o))
 }
 
 /// One turn's orders for `side`, thought through on `model`.

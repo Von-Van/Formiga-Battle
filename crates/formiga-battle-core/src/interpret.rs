@@ -2,7 +2,8 @@
 //!
 //! Every tick a creature still on its way looks at the steps that bring it closer, and at a
 //! sideways step if it has detours left, and weighs them by what it is like: whether a step puts
-//! it within reach of the other team, beside a friend, along the outside, or against a wall. The
+//! it within reach of the other team, beside a friend, along the outside, against a wall, on a
+//! tile marked for something about to land, or onto something lying on the ground. The
 //! weights come from `Behavior`, pulled `PULL` as hard; the board decides which choices exist at
 //! all. Every step later than the quickest way is weighed against them, and a sideways step costs
 //! a tick, so a creature that goes round is later for it.
@@ -76,6 +77,16 @@ pub fn plan_step(m: &Match, slot: Slot, now: u16) -> Option<Plan> {
             vec![to]
         }
         Order::Hold { at } => vec![at],
+        Order::Use { at } => {
+            let item = f.carrying?;
+            if f.spent || f.at.distance(at) <= item.reach() {
+                return None;
+            }
+            m.arena
+                .tiles()
+                .filter(|t| t.distance(at) <= item.reach() && m.walkable(*t))
+                .collect()
+        }
         Order::Contest { target } => {
             if f.spent {
                 return step_back(m, slot);
@@ -154,6 +165,10 @@ struct Weighed {
     apart: i32,
     lane: i32,
     cover: i32,
+    /// Marked for something about to land on it.
+    warned: i32,
+    /// Something lies there to pick up.
+    find: i32,
     /// The teammate it would be beside that it likes best, and the one it likes least.
     friend: Option<Slot>,
     shunned: Option<Slot>,
@@ -168,6 +183,8 @@ impl Weighed {
         self.apart += other.apart;
         self.lane += other.lane;
         self.cover += other.cover;
+        self.warned += other.warned;
+        self.find += other.find;
         self.friend = self.friend.or(other.friend);
         self.shunned = self.shunned.or(other.shunned);
     }
@@ -177,7 +194,12 @@ impl Weighed {
     /// for being long.
     fn along(&self, steps: usize) -> i32 {
         let steps = steps.max(1) as i32;
-        self.exposure + self.centre + self.cover + (self.together + self.apart + self.lane) / steps
+        self.exposure
+            + self.centre
+            + self.cover
+            + self.warned
+            + self.find
+            + (self.together + self.apart + self.lane) / steps
     }
 
     /// The same tile, its every part pulling `percent` as hard.
@@ -189,6 +211,8 @@ impl Weighed {
             &mut self.apart,
             &mut self.lane,
             &mut self.cover,
+            &mut self.warned,
+            &mut self.find,
         ] {
             *part = *part * percent / 100;
         }
@@ -196,7 +220,14 @@ impl Weighed {
     }
 
     fn total(&self) -> i32 {
-        self.exposure + self.centre + self.together + self.apart + self.lane + self.cover
+        self.exposure
+            + self.centre
+            + self.together
+            + self.apart
+            + self.lane
+            + self.cover
+            + self.warned
+            + self.find
     }
 }
 
@@ -254,7 +285,27 @@ fn weigh(m: &Match, slot: Slot, tile: Tile, chasing: Option<Slot>, passing_zone:
     w.lane = (i32::from(tile.y) - middle).abs() * i32::from(b.wanderlust) / reach;
     let walls = tile.steps().iter().filter(|t| !m.walkable(**t)).count() as i32;
     w.cover = walls * caution.max(0) / 4;
+    // A cautious creature keeps off a tile marked for something about to land; a bold one walks
+    // straight on and takes its chances.
+    if warned(m, tile) {
+        w.warned = -caution.max(0);
+    }
+    // Something lying there, and paws to carry it: a curious or playful creature is drawn to it,
+    // one that keeps to its way is not.
+    if m.fighter(slot).carrying.is_none() && m.board.ground.iter().any(|(g, _)| *g == tile) {
+        w.find = (i32::from(b.wanderlust).max(0) + i32::from(b.opportunism).max(0)) / 2;
+    }
     w
+}
+
+/// Whether something is marked to land on this tile: the map event once it is warned, or an item
+/// used and about to take effect.
+pub fn warned(m: &Match, tile: Tile) -> bool {
+    (m.board.event_at.is_some() && m.arena.in_scenery(tile))
+        || m.board.pending.iter().any(|p| match p.item {
+            crate::items::Item::Puff => crate::items::puff_tiles(p.from, p.target).contains(&tile),
+            _ => false,
+        })
 }
 
 /// Which part of a choice made the difference, as a reason the recap can say.
@@ -266,6 +317,8 @@ fn explain(chosen: &Weighed, plain: &Weighed) -> Reason {
         (chosen.apart - plain.apart, 3),
         (chosen.lane - plain.lane, 4),
         (chosen.cover - plain.cover, 5),
+        (chosen.warned - plain.warned, 6),
+        (chosen.find - plain.find, 7),
     ];
     let (gain, part) = parts
         .into_iter()
@@ -286,7 +339,9 @@ fn explain(chosen: &Weighed, plain: &Weighed) -> Reason {
             .shunned
             .map_or(Reason::Direct, |ally| Reason::KeptApartFrom { ally }),
         4 => Reason::SideRoute,
-        _ => Reason::TookCover,
+        5 => Reason::TookCover,
+        6 => Reason::SkirtedWarning,
+        _ => Reason::WentForItem,
     }
 }
 
