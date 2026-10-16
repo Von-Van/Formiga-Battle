@@ -1467,11 +1467,24 @@ impl BattleApp {
             } else {
                 None
             };
+            // While orders are given, the first thing the notebook has noted of one of the
+            // Handler's own, to plan round.
+            let note = (slot.side == self.table.you && !likely.is_empty())
+                .then(|| {
+                    let id = self.table.board_teams[slot.side.index()]
+                        .get(slot.index as usize)?
+                        .traveler
+                        .id
+                        .0;
+                    self.table.page(id)?.notes().into_iter().next()
+                })
+                .flatten();
             name_tag(
                 &painter,
                 at,
                 &look.name,
                 state.as_deref(),
+                note.as_deref(),
                 TEAM[slot.side.index()],
                 u,
             );
@@ -3344,17 +3357,31 @@ fn name_tag(
     at: egui::Pos2,
     name: &str,
     state: Option<&str>,
+    note: Option<&str>,
     team: formiga_art::paint::Ramp,
     u: f32,
 ) {
     let galley = painter.layout_no_wrap(name.to_owned(), FontId::proportional(13.0), ink::PAGE);
     let state = state.map(|s| painter.layout_job(label_job(s, 9.0, ink::MUTED)));
+    // A note from the notebook, in the notebook's own hand, wrapped narrow.
+    let note = note.map(|n| {
+        painter.layout(
+            format!("\u{201c}{n}\u{201d}"),
+            FontId::proportional(11.0),
+            ink::FOREST,
+            u * 70.0,
+        )
+    });
     let w = galley
         .size()
         .x
         .max(state.as_ref().map_or(0.0, |s| s.size().x))
+        .max(note.as_ref().map_or(0.0, |n| n.size().x))
         + u * 11.0;
-    let h = galley.size().y + state.as_ref().map_or(0.0, |s| s.size().y) + u * 4.0;
+    let h = galley.size().y
+        + state.as_ref().map_or(0.0, |s| s.size().y)
+        + note.as_ref().map_or(0.0, |n| n.size().y + u)
+        + u * 4.0;
     let rect = Rect::from_min_size(
         pos2(
             ((at.x - w / 2.0) / u).round() * u,
@@ -3386,8 +3413,14 @@ fn name_tag(
     let top = rect.min + vec2(u * 6.0, u * 2.0);
     let line = galley.size().y;
     painter.galley(top, galley, ink::PAGE);
+    let mut y = line;
     if let Some(state) = state {
-        painter.galley(top + vec2(0.0, line), state, ink::MUTED);
+        let h = state.size().y;
+        painter.galley(top + vec2(0.0, y), state, ink::MUTED);
+        y += h;
+    }
+    if let Some(note) = note {
+        painter.galley(top + vec2(0.0, y + u), note, ink::FOREST);
     }
 }
 
