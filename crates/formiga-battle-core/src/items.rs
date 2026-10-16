@@ -7,7 +7,10 @@
 //! |---|---|---|
 //! | Dandelion puff | Everyone on the tile and the two either side of it, across the way it is blown, is pushed one tile on and knocked off balance. Two holders side by side brace each other and are not moved. Twigs there blow over | Lands and is gone |
 //! | Twig | Wedged into an empty tile: nobody can stand there, and a gate cannot close on it | Two turns |
-//! | Leaf umbrella | Opened over a teammate, or itself: the sprinkler cannot soak it and a contest cannot catch it on the move. A puff carries it two tiles instead of one | The rest of this turn and the next |
+//! | Leaf umbrella | Opened over a teammate, or itself: the map event cannot soak or wash it and a contest cannot catch it on the move. A puff carries it two tiles instead of one | The rest of this turn and the next |
+//! | Pebble bell | Rung: everyone of the other team within two tiles who has not yet settled a contest this turn loses it. Rung beside a switch, it sets the map event off | Lands and is gone |
+//! | Honey drop | The tile and the four round it go sticky: whoever steps in stops there for the turn, and can still hold. A pushed creature sticks on the first honey it is pushed onto, and a twig will not stand in it | Two turns |
+//! | Springy seed | Its user hops onto the tile, up to two away, over anyone or a twig in between, never over a wall or water | Lands and is gone |
 //!
 //! Every effect is marked on its tiles the tick it is used and lands the tick after, and none
 //! costs composure.
@@ -24,15 +27,28 @@ pub enum Item {
     Twig,
     /// Shield: keeps a teammate dry and on its feet.
     Leaf,
+    /// Interrupt: rung, it spoils the other team's contests nearby.
+    Bell,
+    /// Terrain: sticky ground that stops whoever steps in.
+    Honey,
+    /// Mobility, and rare: a hop of two tiles.
+    Seed,
 }
 
 impl Item {
-    pub const ALL: [Self; 3] = [Self::Puff, Self::Twig, Self::Leaf];
+    pub const ALL: [Self; 6] = [
+        Self::Puff,
+        Self::Twig,
+        Self::Leaf,
+        Self::Bell,
+        Self::Honey,
+        Self::Seed,
+    ];
 
     /// How far from the tile it is used on its user may stand, in steps.
     pub const fn reach(self) -> u8 {
         match self {
-            Self::Puff | Self::Twig => 2,
+            Self::Puff | Self::Twig | Self::Bell | Self::Honey | Self::Seed => 2,
             Self::Leaf => 1,
         }
     }
@@ -40,9 +56,12 @@ impl Item {
     /// How likely it is to be the one that turns up, against the others.
     pub const fn weight(self) -> u64 {
         match self {
-            Self::Puff => 40,
-            Self::Twig => 35,
-            Self::Leaf => 25,
+            Self::Puff => 26,
+            Self::Twig => 22,
+            Self::Leaf => 18,
+            Self::Bell => 16,
+            Self::Honey => 12,
+            Self::Seed => 6,
         }
     }
 
@@ -52,6 +71,9 @@ impl Item {
             Self::Puff => "dandelion puff",
             Self::Twig => "twig",
             Self::Leaf => "leaf umbrella",
+            Self::Bell => "pebble bell",
+            Self::Honey => "honey drop",
+            Self::Seed => "springy seed",
         }
     }
 }
@@ -61,8 +83,19 @@ impl Item {
 pub const FIRST_TURN: u8 = 2;
 pub const EVERY: u8 = 3;
 
-/// Whole turns a twig stays wedged.
+/// Whole turns a twig stays wedged, or honey sticky.
 pub const TWIG_TURNS: u8 = 2;
+pub const HONEY_TURNS: u8 = 2;
+
+/// How far a pebble bell is heard.
+pub const BELL_REACH: u8 = 2;
+
+/// The tiles a honey drop lands on: the tile and the four round it.
+pub fn honey_tiles(at: Tile) -> Vec<Tile> {
+    let mut tiles = vec![at];
+    tiles.extend(at.steps());
+    tiles
+}
 
 /// The way a puff blows, from where its user stands toward the tile it is used on: along
 /// whichever of the two directions is further, across the board when they are level.

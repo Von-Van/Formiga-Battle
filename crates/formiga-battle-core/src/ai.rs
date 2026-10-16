@@ -396,7 +396,9 @@ fn exhibition(m: &Match, side: Side) -> Orders {
 
     // Whoever carries something uses it, when there is a plain use for it, unless it is about to
     // flank: a puff on one of theirs in the zone, a twig on a side of a holder of ours that they
-    // could come at it from, a leaf over one of ours the sprinkler is about to sweep.
+    // could come at it from, a leaf over one of ours the map event is about to catch, a bell when
+    // one of theirs not holding is beside one of ours, honey on one of theirs walking in, a hop
+    // into the yard.
     for s in m.team(side) {
         let Some(item) = m.fighter(s).carrying else {
             continue;
@@ -416,7 +418,7 @@ fn exhibition(m: &Match, side: Side) -> Orders {
                 .team(side.other())
                 .map(|e| m.fighter(e).at)
                 .filter(|t| m.arena.in_zone(*t) && near(*t) && *t != at)
-                .min_by_key(|t| (at.distance(*t), *t)),
+                .min_by_key(|t| (at.distance(*t), t.y, m.arena.across(side, *t))),
             Item::Twig => m
                 .team(side)
                 .filter(|h| {
@@ -430,14 +432,44 @@ fn exhibition(m: &Match, side: Side) -> Orders {
                         && !m.arena.in_zone(*t)
                         && m.team(side.other()).any(|e| m.fighter(e).at.distance(*t) <= 3)
                 })
-                .min_by_key(|t| (at.distance(*t), *t)),
+                .min_by_key(|t| (at.distance(*t), t.y, m.arena.across(side, *t))),
             Item::Leaf => m
                 .team(side)
                 .map(|x| m.fighter(x).at)
                 .filter(|t| {
-                    m.board.event_at.is_some() && m.arena.in_scenery(*t) && at.distance(*t) <= 1
+                    m.board.event_at.is_some()
+                        && m.board.event_tiles.contains(t)
+                        && at.distance(*t) <= 1
                 })
-                .min_by_key(|t| (at.distance(*t), *t)),
+                .min_by_key(|t| (at.distance(*t), t.y, m.arena.across(side, *t))),
+            Item::Bell => m
+                .team(side.other())
+                .any(|e| {
+                    let there = m.fighter(e).at;
+                    !m.fighter(e).holding
+                        && there.distance(at) <= crate::items::BELL_REACH
+                        && m.team(side).any(|x| m.fighter(x).at.touches(there))
+                })
+                .then_some(at),
+            Item::Honey => m
+                .team(side.other())
+                .filter(|e| !m.fighter(*e).holding)
+                .map(|e| m.fighter(e).at)
+                .filter(|t| near(*t) && m.arena.zone.iter().any(|z| z.distance(*t) <= 2))
+                .min_by_key(|t| (at.distance(*t), t.y, m.arena.across(side, *t))),
+            Item::Seed => m
+                .arena
+                .zone
+                .iter()
+                .copied()
+                .filter(|t| {
+                    at.distance(*t) == 2
+                        && !m.arena.in_zone(at)
+                        && m.walkable(*t)
+                        && m.occupant(*t).is_none()
+                        && !crate::interpret::warned(m, *t)
+                })
+                .min_by_key(|t| (t.y, m.arena.across(side, *t))),
         };
         if let Some(target) = target
             && roll(30 + u64::from(s.index)) < 75

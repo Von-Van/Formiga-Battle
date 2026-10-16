@@ -40,10 +40,47 @@ pub fn describe(m: &Match, order: &Order) -> String {
     }
 }
 
-/// What the arena's map event is called in the recap.
-fn scenery_name(m: &Match) -> &'static str {
-    match m.arena.scenery.as_ref().map(|s| s.effect) {
-        Some(crate::arena::Effect::Soak) | None => "sprinkler",
+/// How the recap tells an arena's map event: what its switch is, what setting it off is, what the
+/// event does when it lands and what it does to whoever it catches.
+struct Words {
+    name: &'static str,
+    switch: &'static str,
+    turned: &'static str,
+    lands: &'static str,
+    hits: &'static str,
+}
+
+fn words(m: &Match) -> Words {
+    let name = m.arena.scenery.as_ref().map_or("", |s| s.name.as_str());
+    match name {
+        "wave" => Words {
+            name: "wave",
+            switch: "the shell",
+            turned: "blew",
+            lands: "rolled over the ends of the sandbar",
+            hits: "washed",
+        },
+        "pond" => Words {
+            name: "pond",
+            switch: "the sluice",
+            turned: "opened",
+            lands: "rose over the jetty's sides",
+            hits: "washed off",
+        },
+        "tree" => Words {
+            name: "tree",
+            switch: "a tree",
+            turned: "shook",
+            lands: "shed its acorns",
+            hits: "bonked",
+        },
+        _ => Words {
+            name: "sprinkler",
+            switch: "the tap",
+            turned: "turned",
+            lands: "swept the yard",
+            hits: "soaked",
+        },
     }
 }
 
@@ -201,26 +238,38 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                 name(by)
             )),
             EventKind::SceneryWarned { .. } if event.tick == m.ruleset.ticks_per_turn => {
-                Some(format!("The {} is about to come round.", scenery_name(m)))
+                Some(format!("The {} is about to come round.", words(m).name))
             }
-            EventKind::SwitchTurned { slot, .. } => Some(format!(
-                "{} turned the tap: the {} is coming.",
-                name(slot),
-                scenery_name(m)
-            )),
+            EventKind::SwitchTurned { slot, .. } => {
+                let w = words(m);
+                Some(format!(
+                    "{} {} {}: the {} is coming.",
+                    name(slot),
+                    w.turned,
+                    w.switch,
+                    w.name
+                ))
+            }
             EventKind::SwitchDefended { slot, holders, .. } => Some(format!(
-                "{} guarded the tap and shooed {} off.",
+                "{} guarded {} and shooed {} off.",
                 list(m, holders),
+                words(m).switch,
                 name(slot)
             )),
-            EventKind::SwitchResting { slot, .. } => Some(format!(
-                "{} turned the tap, but nothing more came of it just yet.",
-                name(slot)
-            )),
+            EventKind::SwitchResting { slot, .. } => {
+                let w = words(m);
+                Some(format!(
+                    "{} {} {}, but nothing more came of it just yet.",
+                    name(slot),
+                    w.turned,
+                    w.switch
+                ))
+            }
             EventKind::SceneryLanded { hit, sheltered, .. } => Some({
-                let mut line = format!("The {} swept the yard", scenery_name(m));
+                let w = words(m);
+                let mut line = format!("The {} {}", w.name, w.lands);
                 if !hit.is_empty() {
-                    line.push_str(&format!(" and soaked {}", list(m, hit)));
+                    line.push_str(&format!(" and {} {}", w.hits, list(m, hit)));
                 }
                 if !sheltered.is_empty() {
                     line.push_str(&format!("; {} stayed dry under a leaf", list(m, sheltered)));
@@ -245,6 +294,9 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                     crate::items::Item::Puff => "blew a dandelion puff",
                     crate::items::Item::Twig => "threw a twig",
                     crate::items::Item::Leaf => "opened a leaf umbrella",
+                    crate::items::Item::Bell => "rang a pebble bell",
+                    crate::items::Item::Honey => "dropped some honey",
+                    crate::items::Item::Seed => "bit into a springy seed",
                 }
             )),
             EventKind::Puffed { blown, braced, .. } => {
@@ -267,6 +319,33 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                 Some(format!("{}'s twig stuck fast in the ground.", name(by)))
             }
             EventKind::TwigFell { .. } => Some("A twig toppled over.".to_owned()),
+            EventKind::RaftFloated { by, .. } => Some(format!(
+                "{}'s twig floated on the water as a raft.",
+                name(by)
+            )),
+            EventKind::RaftSank { .. } => Some("A twig raft drifted off.".to_owned()),
+            EventKind::Rung { by, hushed, .. } => Some(if hushed.is_empty() {
+                format!("{}'s bell rang out.", name(by))
+            } else {
+                format!(
+                    "{}'s bell rang out, and {} forgot what they were doing.",
+                    name(by),
+                    list(m, hushed)
+                )
+            }),
+            EventKind::HoneySpilled { by, .. } => {
+                Some(format!("{}'s honey spread over the ground.", name(by)))
+            }
+            EventKind::HoneyDried { .. } => Some("The honey dried up.".to_owned()),
+            EventKind::Stuck { slot, .. } => {
+                Some(format!("{} got stuck in the honey.", name(slot)))
+            }
+            EventKind::Hopped { slot, .. } => {
+                Some(format!("{} sprang two tiles in one go.", name(slot)))
+            }
+            EventKind::GroundReopened { .. } => {
+                Some(format!("The {} went down again.", words(m).name))
+            }
             EventKind::GateWedged { .. } => {
                 Some("The gate couldn't close with a twig wedged in it.".to_owned())
             }

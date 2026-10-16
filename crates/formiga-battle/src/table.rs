@@ -85,7 +85,7 @@ impl Verb {
             Self::Hold => "Defend a tile. Turns a contest away; holds the beacon.",
             Self::Contest => "Disrupt someone not holding, or pull the lever or turn the tap.",
             Self::Use => {
-                "Use what it carries: a puff blows them along, a twig blocks a tile, a leaf keeps a friend dry."
+                "Use what it found: a puff blows them along, a twig blocks a tile, a leaf keeps a friend dry, a bell spoils their contests, honey stops them, a seed hops two tiles."
             }
         }
     }
