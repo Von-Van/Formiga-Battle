@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.67.10] - 2026-10-16
+
+A patch to 0.67.9, built on Formiga Desktop 0.67.10, which takes the colony to Battle by train as
+for a trip to Formiga Hill. Rules version 8 and relay protocol 3 are unchanged. A friend match
+needs both Handlers on Battle 0.67.10 and Formiga Desktop 0.67.10.
+
+- Battle no longer freezes after a turn with Interact orders, when two lines over the board came at
+  the same moment.
+- Going back to the station from the Handler's page, from any notebook's first page, or after a
+  match no longer crashes Battle.
+
 ## [0.67.9] - 2026-10-16
 
 Released with Formiga Desktop 0.67.9 and built on its shared crates, with Battle contract version 3,

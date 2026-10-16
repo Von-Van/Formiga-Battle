@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.67.9"
+version = "0.67.10"
 edition = "2024"
 rust-version = "1.97"
 authors = ["Formiga contributors"]
@@ -17,11 +17,11 @@ publish = false
 [workspace.dependencies]
 # Formiga Desktop's shared crates, all from the same Desktop release so their types agree.
 # Move them to a new release's tag together.
-formiga-art = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
-formiga-battle-contract = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
-formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
-formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
-formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
+formiga-art = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.10" }
+formiga-battle-contract = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.10" }
+formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.10" }
+formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.10" }
+formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.10" }
 
 formiga-battle-core = { path = "crates/formiga-battle-core" }
 formiga-battle-room = { path = "crates/formiga-battle-room" }

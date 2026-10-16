@@ -141,7 +141,7 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
-by one release tag (`v0.67.9`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
+by one release tag (`v0.67.10`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
 authoritative for the colony; Battle never writes a colony file.
 
 ## License
