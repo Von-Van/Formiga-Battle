@@ -1,8 +1,8 @@
 //! The line to the relay during a match with a friend, on a thread of its own so the window never
-//! waits on the network. The window asks it to send orders or a board; it answers with every
+//! waits on the network. The window asks it to send its plan or a board; it answers with every
 //! view of the room it gets, and asks the relay for one about once a second.
 
-use formiga_battle_core::Orders;
+use formiga_battle_core::TeamPlan;
 use formiga_battle_room::{AskError, Entrant, RelayClient, View};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 const POLL: Duration = Duration::from_millis(900);
 
 pub enum Ask {
-    Orders { turn: u8, orders: Orders },
+    Orders { turn: u8, orders: TeamPlan },
     Board { turn: u8, hash: u64, finished: bool },
     Leave,
 }

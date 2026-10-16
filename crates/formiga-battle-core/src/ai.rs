@@ -346,7 +346,9 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         });
     let chase = m
         .team(side.other())
-        .filter(|e| !m.fighter(*e).holding && !in_zone.contains(e) && nearest(m.fighter(*e).at) <= 4)
+        .filter(|e| {
+            !m.fighter(*e).holding && !in_zone.contains(e) && nearest(m.fighter(*e).at) <= 4
+        })
         .min_by_key(|e| (nearest(m.fighter(*e).at), *e));
     let lever = m
         .arena

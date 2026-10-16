@@ -603,6 +603,9 @@ impl Playback {
                     effect(&mut frame, Burst::Shield, tile);
                 }
                 EventKind::OrderFilled { .. }
+                | EventKind::Assigned { .. }
+                | EventKind::Rethought { .. }
+                | EventKind::OrderDropped { .. }
                 | EventKind::TookOpportunity { .. }
                 | EventKind::LeverResting { .. }
                 | EventKind::SwitchDefended { .. }
@@ -634,11 +637,11 @@ mod tests {
         ];
         let mut m = Match::new(Arena::backyard(), Ruleset::default(), 2, rosters).unwrap();
         let before = m.board.clone();
-        let orders = [
-            Coach::Exhibition.orders(&m, Side::Left),
-            Coach::Exhibition.orders(&m, Side::Right),
+        let plans = [
+            Coach::Exhibition.plan(&m, Side::Left),
+            Coach::Exhibition.plan(&m, Side::Right),
         ];
-        let report = m.resolve_turn(orders);
+        let report = m.resolve_turn(plans);
         (before, report, m)
     }
 

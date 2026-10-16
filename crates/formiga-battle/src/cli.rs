@@ -338,16 +338,37 @@ fn play_match(mut args: Args) -> Result<()> {
         }
     }
     while m.outcome().is_none() {
-        let orders = [
-            coaches[0].orders(&m, Side::Left),
-            coaches[1].orders(&m, Side::Right),
+        let plans = [
+            coaches[0].plan(&m, Side::Left),
+            coaches[1].plan(&m, Side::Right),
         ];
-        let report = m.resolve_turn(orders);
+        let told: Vec<String> = Side::BOTH
+            .iter()
+            .map(|side| {
+                let orders: Vec<String> = plans[side.index()]
+                    .iter()
+                    .map(|d| formiga_battle_core::recap::describe_directive(&m, d))
+                    .collect();
+                format!(
+                    "  {} plan: {}",
+                    formiga_battle_core::recap::team_name(*side),
+                    if orders.is_empty() {
+                        "none".to_owned()
+                    } else {
+                        orders.join("; ")
+                    }
+                )
+            })
+            .collect();
+        let report = m.resolve_turn(plans);
         if json {
             println!("{}", serde_json::to_string(&report)?);
             continue;
         }
         println!("Turn {}", report.turn);
+        for line in told {
+            println!("{line}");
+        }
         for slot in Slot::all() {
             if let Some(order) = report.orders[slot.side.index()][slot.index as usize] {
                 println!("  {:<10} {}", m.profile(slot).name, describe(&m, &order));

@@ -83,7 +83,10 @@ pub fn job(m: &Match, slot: Slot, task: &Task, order: &Order) -> String {
     match task.role {
         Role::Claim => format!("hold {at}"),
         Role::Oust => match target {
-            Some(t) if m.occupant(at).is_some_and(|o| m.fighter(o).carrying.is_some()) => {
+            Some(t)
+                if m.occupant(at)
+                    .is_some_and(|o| m.fighter(o).carrying.is_some()) =>
+            {
                 format!("go after what {t} carries")
             }
             Some(t) => format!("move {t} off {at}"),
@@ -196,9 +199,10 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                     Why::Friendly { ally } => {
                         Some(format!("{n} chose to {j}, to be beside {}.", name(ally)))
                     }
-                    Why::Avoiding { ally } => {
-                        Some(format!("{n} chose to {j}, to keep away from {}.", name(ally)))
-                    }
+                    Why::Avoiding { ally } => Some(format!(
+                        "{n} chose to {j}, to keep away from {}.",
+                        name(ally)
+                    )),
                     Why::Curious => Some(format!("{n} couldn't resist: it went to {j}.")),
                     Why::Whim => Some(format!("{n} took it into its head to {j}.")),
                     Why::Alone if task.role == Role::Pin => Some(format!(

@@ -56,7 +56,13 @@ fn options(m: &Match, side: Side) -> Vec<Directive> {
         .chain(m.board.glint.iter())
         .map(|(t, _)| *t)
         .chain(m.arena.levers.iter().copied().filter(|_| m.lever_ready()))
-        .chain(m.arena.switches.iter().copied().filter(|_| m.switch_ready()))
+        .chain(
+            m.arena
+                .switches
+                .iter()
+                .copied()
+                .filter(|_| m.switch_ready()),
+        )
         .chain(
             m.team(side)
                 .filter(|s| m.fighter(*s).carrying.is_some())

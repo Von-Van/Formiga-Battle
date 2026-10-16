@@ -31,7 +31,9 @@ use crate::event::{Event, EventKind};
 use crate::game::Match;
 use crate::grid::Tile;
 use crate::items::{self, Item};
-use crate::order::{Directive, MAX_SQUARES, Order, Orders, PLAN_SIZE, Side, Slot, Target, TeamPlan};
+use crate::order::{
+    Directive, MAX_SQUARES, Order, Orders, PLAN_SIZE, Side, Slot, Target, TeamPlan,
+};
 use crate::rng::{self, Purpose};
 use serde::{Deserialize, Serialize};
 
@@ -181,7 +183,10 @@ enum Goal {
     /// Go at a holder of theirs that cannot be flanked: alone, a contest is turned away.
     Press(Slot),
     /// A flank's side `at`, against the holder `of`.
-    Flank { at: Tile, of: Slot },
+    Flank {
+        at: Tile,
+        of: Slot,
+    },
     Pull(Tile),
     Fetch(Tile),
     Use(Tile),
@@ -256,8 +261,7 @@ pub fn checked(m: &Match, side: Side, plan: &TeamPlan) -> (Vec<(u8, Directive)>,
 /// tap), each once, no more than `MAX_SQUARES`; or `None` if nothing is left.
 fn tidy(m: &Match, side: Side, d: &Directive) -> Option<Directive> {
     let fits = |t: &Tile| {
-        m.arena.contains(*t)
-            && matches!(m.arena.terrain(*t), Terrain::Open | Terrain::Gate)
+        m.arena.contains(*t) && matches!(m.arena.terrain(*t), Terrain::Open | Terrain::Gate)
             || m.arena.levers.contains(t)
             || m.arena.switches.contains(t)
     };
@@ -350,11 +354,21 @@ pub fn muster(
                 let seat = &seats[i];
                 let alone = seat.pair.is_some_and(|p| !chosen.contains(&Some(p)))
                     || matches!(seat.goal, Goal::Press(_));
-                let (role, order) = order_for(m, *slot, seat, &chosen, &team, &seats, &walks[k], &mut taken, alone);
+                let (role, order) = order_for(
+                    m, *slot, seat, &chosen, &team, &seats, &walks[k], &mut taken, alone,
+                );
                 let why = if alone {
                     Why::Alone
                 } else {
-                    explain(m, *slot, seat, plain[k].map(|p| &seats[p]), plain[k] == chosen[k], &walks[k], turn)
+                    explain(
+                        m,
+                        *slot,
+                        seat,
+                        plain[k].map(|p| &seats[p]),
+                        plain[k] == chosen[k],
+                        &walks[k],
+                        turn,
+                    )
                 };
                 (
                     Task {
@@ -508,7 +522,11 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
                             seats.push(Seat {
                                 task: task(Role::Flank),
                                 goal: Goal::Flank { at: place, of: e },
-                                value: if k == 0 { NEED * weight } else { SECOND * weight },
+                                value: if k == 0 {
+                                    NEED * weight
+                                } else {
+                                    SECOND * weight
+                                },
                                 only: None,
                                 pair: Some(if k == 0 { first + 1 } else { first }),
                                 lean: Lean::Meet,
@@ -585,7 +603,10 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
         .iter()
         .map(|(t, _)| *t)
         .filter(|t| !named_tiles.contains(t))
-        .filter(|t| m.team(side).any(|s| m.fighter(s).at.distance(*t) <= FIND_REACH))
+        .filter(|t| {
+            m.team(side)
+                .any(|s| m.fighter(s).at.distance(*t) <= FIND_REACH)
+        })
         .collect();
     finds.sort_by_key(|t| (t.y, m.arena.across(side, *t)));
     for t in finds {
@@ -704,7 +725,8 @@ fn use_for(m: &Match, slot: Slot, squares: &[Tile], asked: bool) -> Option<Tile>
                     && m.occupant(*t).is_none()
                     && !squares.contains(t)
                     && !m.board.ground.iter().any(|(g, _)| g == t)
-                    && m.team(side.other()).any(|e| m.fighter(e).at.distance(*t) <= 3)
+                    && m.team(side.other())
+                        .any(|e| m.fighter(e).at.distance(*t) <= 3)
             })
             .min_by_key(by),
         Item::Leaf => {
@@ -787,9 +809,7 @@ fn reach(m: &Match, slot: Slot, seat: &Seat, walk: &[Option<u8>]) -> Option<(u8,
             .min_by_key(|(d, t)| (*d, m.arena.across(side, *t), t.y))
     };
     match &seat.goal {
-        Goal::HoldAt(t) | Goal::Fetch(t) | Goal::Flank { at: t, .. } => {
-            steps(*t).map(|d| (d, *t))
-        }
+        Goal::HoldAt(t) | Goal::Fetch(t) | Goal::Flank { at: t, .. } => steps(*t).map(|d| (d, *t)),
         Goal::HoldNear(tiles) => nearest(tiles.clone()),
         Goal::Contest(e) | Goal::Press(e) => {
             let there = m.fighter(*e).at;
@@ -905,7 +925,15 @@ fn leaning(m: &Match, slot: Slot, seat: &Seat, from: Tile, turn: u8) -> Leaning 
 
 /// What a job is worth to the team in this creature's paws, from `from`, `steps` away. With
 /// `leanings` off, what it is worth from a creature that leans no way at all.
-fn worth(m: &Match, slot: Slot, seat: &Seat, steps: u8, from: Tile, leanings: bool, turn: u8) -> i32 {
+fn worth(
+    m: &Match,
+    slot: Slot,
+    seat: &Seat,
+    steps: u8,
+    from: Tile,
+    leanings: bool,
+    turn: u8,
+) -> i32 {
     let f = m.fighter(slot);
     let b = m.behavior(slot);
     let mut v = seat.value - STEP * i32::from(steps).min(MAX_STEPS);
@@ -913,7 +941,10 @@ fn worth(m: &Match, slot: Slot, seat: &Seat, steps: u8, from: Tile, leanings: bo
     if steps <= m.ruleset.ticks_per_turn {
         v += ON_TIME;
     }
-    if f.task.is_some_and(|t| t.role == seat.task.role && t.at == seat.task.at) || steps == 0 {
+    if f.task
+        .is_some_and(|t| t.role == seat.task.role && t.at == seat.task.at)
+        || steps == 0
+    {
         v += STICK;
         if leanings {
             v += i32::from(b.patience).max(0) / 5;
@@ -944,8 +975,9 @@ fn can_take(m: &Match, slot: Slot, seat: &Seat, midturn: bool) -> bool {
     }
     if seat.only.is_none()
         && let Goal::HoldAt(t) = seat.goal
-        && m.occupant(t)
-            .is_some_and(|o| o != slot && (o.side != slot.side || (midturn && m.fighter(o).holding)))
+        && m.occupant(t).is_some_and(|o| {
+            o != slot && (o.side != slot.side || (midturn && m.fighter(o).holding))
+        })
     {
         return false;
     }
@@ -978,8 +1010,9 @@ fn solve(
                 .enumerate()
                 .filter(|(_, seat)| can_take(m, *slot, seat, false))
                 .filter_map(|(i, seat)| {
-                    reach(m, *slot, seat, &walks[k])
-                        .map(|(steps, from)| (i, worth(m, *slot, seat, steps, from, leanings, turn)))
+                    reach(m, *slot, seat, &walks[k]).map(|(steps, from)| {
+                        (i, worth(m, *slot, seat, steps, from, leanings, turn))
+                    })
                 })
                 .filter(|(_, v)| *v > 0)
                 .collect();
@@ -1074,7 +1107,12 @@ fn order_for(
             },
         ),
         Goal::Press(e) => press(m, slot, *e, walk, taken),
-        Goal::Pull(t) => (role, Order::Contest { target: Target::Lever { at: *t } }),
+        Goal::Pull(t) => (
+            role,
+            Order::Contest {
+                target: Target::Lever { at: *t },
+            },
+        ),
         Goal::Fetch(t) => (role, Order::Move { to: *t }),
         Goal::Use(t) => (role, Order::Use { at: *t }),
         Goal::Flank { at, of } => {
@@ -1174,8 +1212,7 @@ fn explain(
     let (steps, from) = reach(m, slot, seat, walk).unwrap_or((0, m.fighter(slot).at));
     if same {
         let kept = steps == 0
-            || m
-                .fighter(slot)
+            || m.fighter(slot)
                 .task
                 .is_some_and(|t| t.role == seat.task.role && t.at == seat.task.at);
         return if kept { Why::KeptAtIt } else { Why::Nearest };
@@ -1214,7 +1251,6 @@ impl Match {
     /// nothing thinks again, once a turn, from its team's plan. It keeps to jobs nobody else of
     /// its team is on, and a contest it has already spent this turn is not taken again.
     pub(crate) fn rethink(&mut self, turn: u8, tick: u8, events: &mut Vec<Event>) {
-
         let news: Vec<EventKind> = events
             .iter()
             .filter(|e| e.turn == turn && (e.tick == tick || e.tick + 1 == tick))
@@ -1263,9 +1299,11 @@ impl Match {
                 .enumerate()
                 .filter(|(_, seat)| can_take(self, slot, seat, true))
                 .filter(|(_, seat)| {
-                    !others
-                        .iter()
-                        .any(|t| t.role == seat.task.role && t.at == seat.task.at && seat.task.role != Role::Guard)
+                    !others.iter().any(|t| {
+                        t.role == seat.task.role
+                            && t.at == seat.task.at
+                            && seat.task.role != Role::Guard
+                    })
                 })
                 .filter_map(|(i, seat)| {
                     reach(self, slot, seat, &walk)
@@ -1289,7 +1327,9 @@ impl Match {
                         // Partway through a turn there is no flanking together: it walks into
                         // place and holds there.
                         Goal::Flank { at, .. } => (Role::Flank, Order::Hold { at: *at }),
-                        _ => order_for(self, slot, seat, &[], &[], &seats, &walk, &mut taken, false),
+                        _ => {
+                            order_for(self, slot, seat, &[], &[], &seats, &walk, &mut taken, false)
+                        }
                     };
                     (
                         Task {
@@ -1366,7 +1406,10 @@ impl Match {
         }
         match task.role {
             Role::Fetch => {
-                if news.iter().any(|k| matches!(k, EventKind::PickedUp { slot: s, .. } if *s == slot)) {
+                if news
+                    .iter()
+                    .any(|k| matches!(k, EventKind::PickedUp { slot: s, .. } if *s == slot))
+                {
                     return Some(Because::GotIt);
                 }
                 let there = self.board.ground.iter().any(|(g, _)| *g == task.at)
@@ -1411,8 +1454,7 @@ impl Match {
             if !f.holding
                 && let Some(by) = self.occupant(at).filter(|o| *o != slot)
                 && (self.fighter(by).holding
-                    || (by.side != slot.side
-                        && self.fighter(by).order == Some(Order::Hold { at })))
+                    || (by.side != slot.side && self.fighter(by).order == Some(Order::Hold { at })))
             {
                 return Some(Because::SquareTaken { by });
             }
