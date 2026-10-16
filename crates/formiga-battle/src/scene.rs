@@ -14,7 +14,7 @@ use crate::look::{Look, Pose};
 use crate::playback::{Burst, Figure, Frame};
 use formiga_art::paint::{self, Ramp, rgb, rgba};
 use formiga_art::{Canvas, FRAME_SIZE, Rgba};
-use formiga_battle_core::arena::Terrain;
+use formiga_battle_core::arena::{Effect, Terrain};
 use formiga_battle_core::{Arena, Order, Side, Slot, TEAM_SIZE, Target, Tile};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
@@ -77,8 +77,17 @@ pub fn paint(
     beacon(&mut canvas, arena, frame, capture_ticks, now, still, view);
     garden.behind(&mut canvas, view, now, still);
     floor_marks(&mut canvas, frame, marks, view, now, still);
+    for tile in &frame.closed {
+        found::under(&mut canvas, view, *tile, now, still);
+    }
+    for tile in &frame.rafts {
+        found::raft(&mut canvas, view, *tile, now, still);
+    }
+    for tile in &frame.honey {
+        found::honey(&mut canvas, view, *tile, now, still);
+    }
     if frame.sprinkler_coming {
-        for tile in arena.scenery.iter().flat_map(|s| s.tiles.iter()) {
+        for tile in &frame.event_tiles {
             found::warned(&mut canvas, view, *tile, now, still);
         }
     }
@@ -86,12 +95,16 @@ pub fn paint(
         found::gusty(&mut canvas, view, *tile, now, still);
     }
 
+    let dressing = garden::Dressing::of(arena);
     // Everyone and everything standing, back to front by how far down the board it is.
     let mut standing: Vec<(i32, i32, Item)> = Vec::new();
     for tile in arena.tiles() {
         let depth = i32::from(tile.x) + i32::from(tile.y);
         match arena.terrain(tile) {
-            Terrain::Obstacle if arena.switches.contains(&tile) => {
+            // In the glade a switch is one of the trees, drawn with the rest.
+            Terrain::Obstacle
+                if arena.switches.contains(&tile) && dressing != garden::Dressing::Woodland =>
+            {
                 standing.push((depth, 0, Item::Tap(tile)))
             }
             Terrain::Obstacle => standing.push((depth, 0, Item::Piece(tile))),
@@ -183,9 +196,15 @@ pub fn paint(
                     }
                 }
             }
-            Item::Tap(tile) => {
-                found::tap(&mut canvas, view, tile, frame.tap_ready, now, still);
-            }
+            Item::Tap(tile) => match dressing {
+                garden::Dressing::Cove => {
+                    found::shell(&mut canvas, view, tile, frame.tap_ready, now, still);
+                }
+                garden::Dressing::Millpond => {
+                    found::sluice(&mut canvas, view, tile, frame.tap_ready, now, still);
+                }
+                _ => found::tap(&mut canvas, view, tile, frame.tap_ready, now, still),
+            },
             Item::Found(tile, thing) => {
                 found::on_ground(&mut canvas, view, tile, thing, now, still);
             }
@@ -209,7 +228,7 @@ pub fn paint(
     }
     order_marks(&mut canvas, frame, marks, view, now, still);
     for effect in &frame.effects {
-        burst(&mut canvas, view, effect, now);
+        burst(&mut canvas, arena, view, effect, now);
     }
     for &(tile, age) in &marks.pokes {
         poke(&mut canvas, view, tile, age, still);
@@ -758,12 +777,24 @@ fn poke(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, still: bool) {
     }
 }
 
-fn burst(canvas: &mut Canvas, view: &View, effect: &crate::playback::Effect, now: f32) {
+fn burst(
+    canvas: &mut Canvas,
+    arena: &Arena,
+    view: &View,
+    effect: &crate::playback::Effect,
+    now: f32,
+) {
     let (cx, cy) = view.centre(effect.tile);
     let age = effect.age;
     let fade = ((1.0 - age / 0.7).clamp(0.0, 1.0) * 255.0) as u8;
     match effect.burst {
-        Burst::Splash => found::splash(canvas, view, effect.tile, age, fade),
+        Burst::Splash => match arena.scenery.as_ref().map(|s| (s.effect, s.around)) {
+            Some((Effect::Wash, _)) => found::wave(canvas, view, effect.tile, age, fade),
+            Some((Effect::Close, _)) => found::rising(canvas, view, effect.tile, age, fade),
+            Some((Effect::Soak, true)) => found::acorns(canvas, view, effect.tile, age, fade),
+            _ => found::splash(canvas, view, effect.tile, age, fade),
+        },
+        Burst::Ring => found::ring(canvas, view, effect.tile, age, fade),
         Burst::Gust => found::gust(canvas, view, effect.tile, age, fade),
         Burst::Twinkle => {
             let lift = (age * 14.0) as i32;

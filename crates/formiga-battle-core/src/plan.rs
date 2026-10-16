@@ -116,6 +116,26 @@ fn options(m: &Match, slot: Slot) -> Vec<Order> {
                     }
                 }
             }
+            crate::items::Item::Bell => options.push(Order::Use { at: f.at }),
+            crate::items::Item::Honey => {
+                for e in m.team(slot.side.other()) {
+                    let t = m.fighter(e).at;
+                    if near(t) {
+                        options.push(Order::Use { at: t });
+                    }
+                }
+            }
+            crate::items::Item::Seed => {
+                for t in m.arena.tiles() {
+                    if f.at.distance(t) == 2
+                        && m.walkable(t)
+                        && m.occupant(t).is_none()
+                        && m.arena.zone.iter().any(|z| z.distance(t) <= 1)
+                    {
+                        options.push(Order::Use { at: t });
+                    }
+                }
+            }
             crate::items::Item::Leaf => {
                 for a in m.team(slot.side) {
                     let t = m.fighter(a).at;
