@@ -105,7 +105,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
             }
             EventKind::HungBack { at: tile, .. } => {
                 c.place = Some(centre(*tile));
-                c.word = Some("hmm…");
+                c.word = Some("HMM?");
                 c.cue = Some(Cue::Hmm);
             }
             EventKind::Interrupted { target, by } => {

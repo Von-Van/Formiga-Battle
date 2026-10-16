@@ -11,6 +11,7 @@ mod garden;
 mod host;
 mod icon;
 mod iso;
+mod lettering;
 mod look;
 mod playback;
 mod rewards;

@@ -47,6 +47,9 @@ pub struct Marks {
     pub orders: Vec<(Slot, Order)>,
     /// Tiles just given an order, and how many seconds ago.
     pub pokes: Vec<(Tile, f32)>,
+    /// Cartoon words (`lettering`), over everything: each picture, where its top-left corner
+    /// goes, and how much of it shows, out of 255.
+    pub lettering: Vec<(Canvas, i32, i32, u8)>,
 }
 
 /// The board at one moment, as a picture of `view.size`. `still` holds the garden's own motion
@@ -148,6 +151,9 @@ pub fn paint(
         poke(&mut canvas, view, tile, age, still);
     }
     garden.over(&mut canvas, view, now, still);
+    for (word, x, y, opacity) in &marks.lettering {
+        paint::blit_faded(&mut canvas, word, *x, *y, *opacity);
+    }
     canvas
 }
 

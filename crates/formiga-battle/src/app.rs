@@ -1210,6 +1210,7 @@ impl BattleApp {
         };
         self.paused = frame.paused;
         let mut marks = self.table.marks(self.hover, now);
+        marks.lettering = self.lettering(now);
         marks.pokes = self.pokes.iter().map(|(t, at)| (*t, now - at)).collect();
         let m = self.table.m.as_ref().expect("a match is on");
         let garden = self
@@ -1335,42 +1336,88 @@ impl BattleApp {
                 rect.min + vec2(hx as f32, hy as f32 - 7.0) * scale - vec2(0.0, u * 22.0 + bob * u);
             pointer_arrow(&painter, tip, color(TEAM[slot.side.index()].light), u);
         }
-        self.words(&painter, rect, scale, now, u);
         self.confetti(&painter, rect, now, u);
         self.result_stamp(&painter, rect, now, u);
-        self.ready_words(&painter, rect, now, u);
         if let (Some(pointer), Some((plain, right))) = (response.hover_pos(), aims) {
             self.cursor_hint(&painter, pointer, plain, right, u);
         }
     }
 
-    /// "Ready?" and then "Go!", big over the middle of the board, as a match begins.
-    fn ready_words(&self, painter: &egui::Painter, board: Rect, now: f32, u: f32) {
-        let Some((at, _)) = self.ready else {
-            return;
+    /// The cartoon words to paint into the board this frame, in Formiga's pixel art: each moment's
+    /// word over whoever it happened to, rising a little and fading; composure lost as a number;
+    /// and "READY?" then "GO!" as a match begins. Each pops in a size larger for a moment, by
+    /// whole board pixels, so it stays crisp. No more than three words at once.
+    fn lettering(&self, now: f32) -> Vec<(Canvas, i32, i32, u8)> {
+        let reduce = self.table.reduce_motion;
+        let (w, h) = (self.view.size.0 as f32, self.view.size.1 as f32);
+        let mut out = Vec::new();
+        let mut place = |word: Canvas, cx: f32, cy: f32, alpha: f32| {
+            let x = (cx - word.width() as f32 / 2.0).round() as i32;
+            let y = (cy - word.height() as f32 / 2.0).round() as i32;
+            out.push((word, x, y, (alpha.clamp(0.0, 1.0) * 255.0) as u8));
         };
-        let age = now - at;
-        if age > READY_SECS {
-            return;
+        let mut words = 0;
+        for (k, (c, born)) in self.live.iter().enumerate().rev() {
+            let (Some(text), Some((x, y))) = (c.word, c.place) else {
+                continue;
+            };
+            let age = now - born;
+            let life = match c.style {
+                Style::Big => 1.5,
+                Style::Word => 1.0,
+                Style::Damage => 1.1,
+            };
+            if age > life {
+                continue;
+            }
+            if c.style != Style::Damage {
+                words += 1;
+                if words > 3 {
+                    continue;
+                }
+            }
+            let alpha = 1.0 - ((age - life * 0.65) / (life * 0.35)).clamp(0.0, 1.0);
+            let popping = !reduce && age < 0.1;
+            let (sx, sy) = self.view.screen(x, y);
+            if c.style == Style::Damage {
+                // Beside whoever lost it, floating up.
+                let rise = if reduce { 0.0 } else { age * 18.0 };
+                let word = crate::lettering::word(text, 1, crate::lettering::Paint::HURT);
+                place(word, sx + 14.0, sy - 22.0 - rise, alpha);
+                continue;
+            }
+            let big = c.style == Style::Big;
+            let colours = match c.good_for {
+                _ if big => crate::lettering::Paint::GOLD,
+                Some(side) => crate::lettering::Paint::team(TEAM[side.index()]),
+                None => crate::lettering::Paint::CREAM,
+            };
+            let scale = if big { 2 } else { 1 } + i32::from(popping);
+            let rise = if reduce { 0.0 } else { age * 10.0 };
+            // Above the head of whoever is there, a little to one side.
+            let lean = if k % 2 == 0 { 5.0 } else { -5.0 };
+            let word = crate::lettering::word(text, scale, colours);
+            place(word, sx + lean, sy - 42.0 - rise, alpha);
         }
-        let (word, since, fill) = if age < GO_AT {
-            ("READY?", age, Color32::from_rgb(0xff, 0xf3, 0xc4))
-        } else {
-            ("GO!", age - GO_AT, ink::BRASS_LIGHT)
-        };
-        let pop = if self.table.reduce_motion {
-            1.0
-        } else {
-            let t = (since / 0.14).min(1.0);
-            0.5 + 0.6 * (1.0 - (1.0 - t).powi(3)) - 0.1 * ((since - 0.14) / 0.1).clamp(0.0, 1.0)
-        };
-        let alpha = if age < GO_AT {
-            1.0
-        } else {
-            1.0 - ((age - READY_SECS + 0.25) / 0.25).clamp(0.0, 1.0)
-        };
-        let centre = pos2(board.center().x, board.min.y + board.height() * 0.42);
-        comic(painter, centre, word, 46.0 * pop, fill, -0.06, alpha, u);
+        if let Some((at, _)) = self.ready {
+            let age = now - at;
+            if age <= READY_SECS {
+                let (text, since, colours) = if age < GO_AT {
+                    ("READY?", age, crate::lettering::Paint::CREAM)
+                } else {
+                    ("GO!", age - GO_AT, crate::lettering::Paint::GOLD)
+                };
+                let scale = 3 + i32::from(!reduce && since < 0.1);
+                let alpha = if age < GO_AT {
+                    1.0
+                } else {
+                    1.0 - ((age - READY_SECS + 0.25) / 0.25).clamp(0.0, 1.0)
+                };
+                let word = crate::lettering::word(text, scale, colours);
+                place(word, w / 2.0, h * 0.42, alpha);
+            }
+        }
+        out
     }
 
     /// Confetti over the board when the Handler's team wins: a short shower, the same every time.
@@ -1418,63 +1465,6 @@ impl BattleApp {
                 0.0,
                 colours[(h % colours.len() as u32) as usize].gamma_multiply(fade),
             );
-        }
-    }
-
-    /// The cartoon words over the board, each popping up where its moment happened, rising a
-    /// little and fading: "POW!", "CLANG!", "BOOM!", and composure lost as a number. No more than
-    /// three words at once, so the board is never buried in them.
-    fn words(&self, painter: &egui::Painter, board: Rect, scale: f32, now: f32, u: f32) {
-        let reduce = self.table.reduce_motion;
-        let mut words = 0;
-        for (k, (c, born)) in self.live.iter().enumerate().rev() {
-            let (Some(word), Some((x, y))) = (c.word, c.place) else {
-                continue;
-            };
-            let age = now - born;
-            let life = match c.style {
-                Style::Big => 1.5,
-                Style::Word => 1.0,
-                Style::Damage => 1.1,
-            };
-            if age > life {
-                continue;
-            }
-            if c.style != Style::Damage {
-                words += 1;
-                if words > 3 {
-                    continue;
-                }
-            }
-            let alpha = 1.0 - ((age - life * 0.65) / (life * 0.35)).clamp(0.0, 1.0);
-            let (sx, sy) = self.view.screen(x, y);
-            if c.style == Style::Damage {
-                // Beside whoever lost it, floating up.
-                let rise = if reduce { 0.0 } else { age * 18.0 };
-                let centre = board.min + vec2(sx + 16.0, sy - 26.0 - rise) * scale;
-                comic(painter, centre, word, 19.0, ink::STAMP, 0.0, alpha, u);
-                continue;
-            }
-            let pop = if reduce {
-                1.0
-            } else if age < 0.16 {
-                let t = age / 0.16;
-                0.4 + 0.85 * (1.0 - (1.0 - t).powi(3))
-            } else {
-                1.25 - 0.25 * ((age - 0.16) / 0.12).min(1.0)
-            };
-            let rise = if reduce { 0.0 } else { age * 10.0 };
-            // Above the head of whoever is there, a little to one side.
-            let lean = if k % 2 == 0 { 1.0 } else { -1.0 };
-            let centre = board.min + vec2(sx + lean * 6.0, sy - 40.0 - rise) * scale;
-            let big = c.style == Style::Big;
-            let fill = match c.good_for {
-                _ if big => ink::BRASS_LIGHT,
-                Some(side) => color(TEAM[side.index()].light),
-                None => Color32::from_rgb(0xff, 0xf3, 0xc4),
-            };
-            let size = if big { 32.0 } else { 24.0 } * pop;
-            comic(painter, centre, word, size, fill, lean * 0.12, alpha, u);
         }
     }
 
@@ -2866,68 +2856,6 @@ fn name_tag(
     if let Some(state) = state {
         painter.galley(top + vec2(0.0, line), state, ink::MUTED);
     }
-}
-
-/// A cartoon word, comic-book style: bold capitals in a bright colour inside a thick dark
-/// outline, tilted by `angle`, centred on `centre`.
-#[allow(clippy::too_many_arguments)]
-fn comic(
-    painter: &egui::Painter,
-    centre: egui::Pos2,
-    word: &str,
-    size: f32,
-    fill: Color32,
-    angle: f32,
-    alpha: f32,
-    u: f32,
-) {
-    let mut painter = painter.clone();
-    painter.set_opacity(alpha);
-    let job = |colour: Color32| {
-        let mut job = egui::text::LayoutJob::default();
-        job.append(
-            word,
-            0.0,
-            egui::TextFormat {
-                font_id: FontId::monospace(size),
-                color: colour,
-                extra_letter_spacing: size * 0.04,
-                ..Default::default()
-            },
-        );
-        job
-    };
-    let face = painter.layout_job(job(fill));
-    let edge = painter.layout_job(job(ink::LINE));
-    let (s, c) = angle.sin_cos();
-    let half = face.size() / 2.0;
-    let at = |offset: egui::Vec2| {
-        let v = -half;
-        centre + offset + vec2(v.x * c - v.y * s, v.x * s + v.y * c)
-    };
-    // The outline: the word in the dark ink, all round, thick enough to read over any ground.
-    let thick = (size * 0.09).max(u);
-    let shadow = vec2(thick * 0.7, thick * 1.2);
-    painter.add(
-        egui::epaint::TextShape::new(at(shadow), edge.clone(), ink::LINE)
-            .with_angle(angle)
-            .with_override_text_color(Color32::from_black_alpha(90)),
-    );
-    for k in 0..12 {
-        let a = k as f32 / 12.0 * std::f32::consts::TAU;
-        painter.add(
-            egui::epaint::TextShape::new(
-                at(vec2(a.cos(), a.sin()) * thick),
-                edge.clone(),
-                ink::LINE,
-            )
-            .with_angle(angle),
-        );
-    }
-    // Twice, a hair apart, for a heavier letter than the font has.
-    let heavy = vec2((size * 0.03).max(0.5), 0.0);
-    painter.add(egui::epaint::TextShape::new(at(-heavy), face.clone(), fill).with_angle(angle));
-    painter.add(egui::epaint::TextShape::new(at(heavy), face, fill).with_angle(angle));
 }
 
 /// A little speaker, a box and a cone, with `waves` coming off it, or a cross when there are none.
