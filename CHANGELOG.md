@@ -2,8 +2,6 @@
 
 ## Unreleased
 
-- Rules version 9: a switch can no longer set the map event off again in the turn it came round
-  by itself, so a wave, the pond rising or a shaken tree comes at most once a turn.
 - A gate a twig keeps from closing no longer goes on looking as if it is about to swing for the
   rest of the turn.
 - A trio given a colour of its own flies the Handler's pennant as it is now in that colour, on the
