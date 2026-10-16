@@ -309,10 +309,9 @@ impl Station {
         }
     }
 
-    /// The lowest row nothing of the train reaches, steam and all: what the window may write
-    /// above without covering it.
-    pub fn clear_above(&self) -> i32 {
-        self.size.1 - RAIL - TRAIN_GROUND as i32
+    /// The scene's size, in its own pixels, after any resizing to fit the halt.
+    pub fn size(&self) -> (i32, i32) {
+        self.size
     }
 
     /// The station board, where the window writes the halt's name.
@@ -436,7 +435,7 @@ fn glass(scene: &mut Canvas, x: i32, y: i32) {
 /// The station board, on its posts at the back of the platform towards the engine's end.
 fn sign_area((width, height): (i32, i32)) -> Area {
     let rail = height - RAIL;
-    let w = 66;
+    let w = 96;
     let x = (width * 4 / 5 - w / 2).min(width - w - 6);
     (x, rail - PLATFORM_BACK - 30, w, 13)
 }
@@ -445,7 +444,9 @@ fn sign_area((width, height): (i32, i32)) -> Area {
 fn backdrop((width, height): (i32, i32)) -> Canvas {
     let mut canvas = Canvas::new(width as u32, height as u32);
     let rail = height - RAIL;
-    let horizon = rail - HORIZON;
+    // However tall the picture, the country takes up its lower half or so, not just a strip
+    // under a tall sky.
+    let horizon = (rail - HORIZON).min(height * 11 / 20);
     sky(&mut canvas, width, horizon);
     clouds(&mut canvas, width, horizon);
     hills(&mut canvas, width, horizon);

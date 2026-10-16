@@ -44,7 +44,7 @@ WINDOW:
     --snap <PNG>             Open, save a picture of the window after --at seconds (default 6)
                              and close
     --at <SECONDS>           With --snap
-    --review <STAGE>         With --snap: station (the train in at the halt, everyone hopping
+    --review <STAGE>         With --snap: station (the train in at the Battle Grounds, everyone
                              aboard), where (choosing a place), picking or who (the team
                              choice), friend (a friend's room about to be opened), history,
                              settings, orders (a

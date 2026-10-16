@@ -1,4 +1,4 @@
-//! The window. It opens at the halt (`station`), where the train comes in with the Handler's
+//! The window. It opens at the Battle Grounds (`station`), where the train comes in with the Handler's
 //! companions aboard and the Handler chooses where they are off to: out in the world to a friend,
 //! or close to home against the visitors. Then the Handler's notebook (`chrome`) opens, its pages
 //! turned one by one as Desktop's journal turns them (`menus`): where to play, who goes and, for a
@@ -54,7 +54,7 @@ const SHARED: [&str; 5] = [
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
-    /// At the halt, the train in with everyone aboard.
+    /// At the Battle Grounds, the notebook's first spread: the train in with everyone aboard.
     Station,
     /// The notebook open on getting ready: where, who, and the friend's room.
     Journal,
@@ -113,7 +113,7 @@ impl Step {
 /// What a review picture shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Review {
-    /// The halt, the train coming in or in.
+    /// The Battle Grounds, the train coming in or in.
     Station,
     /// Choosing where to play the visitors.
     Where,
@@ -196,7 +196,7 @@ pub struct BattleApp {
     step: Step,
     /// A page being turned.
     turn: Option<chrome::PageTurn>,
-    /// The halt, once there is a window to size it to; and its picture this frame.
+    /// The Battle Grounds, once there is a page to size them to; and their picture this frame.
     station: Option<crate::station::Station>,
     station_picture: Option<(i64, egui::TextureHandle)>,
     /// The friend's room was asked for by its code, not opened.
@@ -750,11 +750,7 @@ impl BattleApp {
         self.pokes.retain(|(_, at)| now - at < 0.6);
         let full = ui.max_rect();
         if self.stage == Stage::Station {
-            egui::CentralPanel::default()
-                .frame(egui::Frame::NONE)
-                .show(ui, |ui| self.station_page(ui, full, now));
-            self.take_snap(&ctx);
-            return;
+            self.station_tick(&ctx, now);
         }
         let layout = self.layout(&ctx, full);
         egui::CentralPanel::default()
@@ -780,7 +776,16 @@ impl BattleApp {
                             self.journal_right(ui, &ctx, u);
                         });
                     }
-                    Stage::Station => {}
+                    Stage::Station => {
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(left), |ui| {
+                            ui.multiply_opacity(fade);
+                            self.station_left(ui, &ctx, u, now);
+                        });
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                            ui.multiply_opacity(fade);
+                            self.station_right(ui, u, now);
+                        });
+                    }
                     Stage::Playing => {
                         self.board_view(ui, &ctx, layout.left.shrink(u * 4.0), now, u);
                         self.board_page(ui, layout.left, now, u);
@@ -808,6 +813,14 @@ impl BattleApp {
     }
 
     fn keys(&mut self, ctx: &egui::Context) {
+        if self.stage == Stage::Journal
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        {
+            crate::feel::emit(ctx, crate::feel::Feedback::Cancel);
+            self.go_back();
+            return;
+        }
         if self.stage != Stage::Playing || ctx.egui_wants_keyboard_input() {
             return;
         }
@@ -934,6 +947,14 @@ impl BattleApp {
         );
         if self.stage == Stage::Journal {
             self.journal_strip(ui, area, u, now);
+            return;
+        }
+        if self.stage == Stage::Station {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.label(label_job("The Battle Grounds", chrome::LABEL, ink::COVER));
+                });
+            });
             return;
         }
         let paused = self.paused;
@@ -1160,7 +1181,13 @@ impl BattleApp {
             ),
         );
         let line = match self.stage {
-            Stage::Station => String::new(),
+            Stage::Station => match &self.station {
+                Some(s) if s.leaving() => "Off they go…".to_owned(),
+                Some(s) if s.stopped(now) => {
+                    "Choose where they are off to, or look back over your history.".to_owned()
+                }
+                _ => "Click the picture, or press Space, to hurry the train in.".to_owned(),
+            },
             Stage::Journal => self.journal_hint(),
             Stage::Playing if self.table.finished(now) => {
                 "The match is over. Play again from the notes page.".to_owned()

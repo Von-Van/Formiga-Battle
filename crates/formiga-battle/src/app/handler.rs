@@ -18,7 +18,7 @@ const KEYS: [(&str, &str); 6] = [
     ("M, H, C", "MOVE, HOLD or CONTEST"),
     ("Enter", "locks in your orders"),
     ("Escape or right-click", "cancels an order being given"),
-    ("Tabs along the top", "turn the notebook back to any page"),
+    ("Escape", "turns the notebook back a page"),
 ];
 
 impl BattleApp {
@@ -184,7 +184,7 @@ impl BattleApp {
         });
         if reduce != self.table.reduce_motion {
             self.table.reduce_motion = reduce;
-            // The halt is painted again the way motion now is.
+            // The station is painted again the way motion now is.
             self.station = None;
             self.station_picture = None;
             self.turn = None;
