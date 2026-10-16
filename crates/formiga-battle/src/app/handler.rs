@@ -184,7 +184,7 @@ impl BattleApp {
         });
         if reduce != self.table.reduce_motion {
             self.table.reduce_motion = reduce;
-            // The halt is painted again the way motion now is.
+            // The station is painted again the way motion now is.
             self.station = None;
             self.station_picture = None;
             self.turn = None;

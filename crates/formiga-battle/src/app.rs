@@ -1,4 +1,4 @@
-//! The window. It opens at the halt (`station`), where the train comes in with the Handler's
+//! The window. It opens at the Battle Grounds (`station`), where the train comes in with the Handler's
 //! companions aboard and the Handler chooses where they are off to: out in the world to a friend,
 //! or close to home against the visitors. Then the Handler's notebook (`chrome`) opens, its pages
 //! turned one by one as Desktop's journal turns them (`menus`): where to play, who goes and, for a
@@ -54,7 +54,7 @@ const SHARED: [&str; 5] = [
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
-    /// At the halt, the train in with everyone aboard.
+    /// At the Battle Grounds, the notebook's first spread: the train in with everyone aboard.
     Station,
     /// The notebook open on getting ready: where, who, and the friend's room.
     Journal,
@@ -113,7 +113,7 @@ impl Step {
 /// What a review picture shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Review {
-    /// The halt, the train coming in or in.
+    /// The Battle Grounds, the train coming in or in.
     Station,
     /// Choosing where to play the visitors.
     Where,
@@ -196,7 +196,7 @@ pub struct BattleApp {
     step: Step,
     /// A page being turned.
     turn: Option<chrome::PageTurn>,
-    /// The halt, once there is a window to size it to; and its picture this frame.
+    /// The Battle Grounds, once there is a page to size them to; and their picture this frame.
     station: Option<crate::station::Station>,
     station_picture: Option<(i64, egui::TextureHandle)>,
     /// The friend's room was asked for by its code, not opened.

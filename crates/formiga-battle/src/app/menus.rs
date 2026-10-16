@@ -1,4 +1,4 @@
-//! Getting ready, before a match: the halt where the train picks the companions up, and the
+//! Getting ready, before a match: the Battle Grounds, where the train brings the companions in, and the
 //! notebook's pages after it, turned one by one as Desktop's journal turns its pages. Where to
 //! play, then who goes and, for a friend, the room: open one and pass on its code, or join theirs.
 //! Each page is a spread: what it is about on the left, and on the ruled right page what is
@@ -18,10 +18,10 @@ use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Str
 use formiga_battle_contract::Contender;
 use formiga_battle_core::TEAM_SIZE;
 
-/// How tall the halt is drawn, in its own pixels, whatever the window: each of them as many
+/// How tall the station is drawn, in its own pixels, whatever the window: each of them as many
 /// screen pixels as fit.
 const STATION_ROWS: f32 = 216.0;
-/// How often the halt is repainted while anything moves at it.
+/// How often the station is repainted while anything moves at it.
 const STATION_FRAMES_PER_SECOND: f32 = 30.0;
 /// The station's name, lettered on its board.
 const GROUNDS: &str = "The Battle Grounds";
@@ -73,7 +73,7 @@ impl BattleApp {
         }
     }
 
-    /// Back to the halt. From the notebook, the train is waiting with everyone aboard; after a
+    /// Back to the station. From the notebook, the train is waiting with everyone aboard; after a
     /// match, it comes in again for them, as it did the first time.
     pub(super) fn back_to_station(&mut self) {
         let now = self.clock;
@@ -281,7 +281,12 @@ impl BattleApp {
         let mat = u * 4.0;
         let room = area.shrink(mat + u * 2.0);
         let screen = room.size() * ppp;
-        let scale = (screen.y / STATION_ROWS).floor().max(1.0);
+        // As many screen pixels to the station's pixel as fit, with the station at least as wide
+        // as its train needs.
+        let scale = (screen.y / STATION_ROWS)
+            .floor()
+            .min((screen.x / 320.0).floor())
+            .max(1.0);
         let size = (
             (screen.x / scale).floor() as i32,
             (screen.y / scale).floor() as i32,
@@ -390,17 +395,21 @@ impl BattleApp {
         let mut chosen = None;
         let mut notes = false;
         let ready = stopped && !leaving;
-        for (i, (outing, title, small, hint)) in [
+        for (i, (outing, title, small, band, icon, hint)) in [
             (
                 Outing::World,
                 "Out in the World",
                 "Online",
+                ink::FOREST,
+                chrome::GLOBE,
                 "Play a friend: open a room and give them its code, or join theirs.",
             ),
             (
                 Outing::Home,
                 "Close to Home",
                 "Offline",
+                Color32::from_rgb(0x7a, 0x2c, 0x33),
+                chrome::HOUSE,
                 "Play the visiting team on this computer. Wins fill each place's cup.",
             ),
         ]
@@ -410,9 +419,18 @@ impl BattleApp {
             let (rect, _) = ui.allocate_exact_size(vec2(width, h), Sense::hover());
             if ready {
                 let picked = crate::feel::dropping(ui, since, i, u, |ui| {
-                    chrome::destination(ui, rect, Id::new(("destination", i)), title, small, u)
-                        .on_hover_text(hint)
-                        .clicked()
+                    chrome::ticket(
+                        ui,
+                        rect,
+                        Id::new(("destination", i)),
+                        title,
+                        small,
+                        band,
+                        icon,
+                        u,
+                    )
+                    .on_hover_text(hint)
+                    .clicked()
                 });
                 if picked {
                     chosen = Some(outing);

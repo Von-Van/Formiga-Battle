@@ -797,14 +797,55 @@ pub fn page_heading(ui: &mut egui::Ui, line: &str, title: &str, observation: &st
     );
 }
 
-/// A destination on the station's departure board: a big brass-rimmed button in the notebook's
-/// green, its name printed large and a word about it small and centred beneath.
-pub fn destination(
+/// A little picture for a ticket's stub, a row of characters at a time: `x` in the stub's
+/// cream, `o` in brass, anything else left as the stub.
+pub type Icon = &'static [&'static str];
+
+/// A house with a lit window and a door: close to home.
+pub const HOUSE: Icon = &[
+    "......x......",
+    ".....xxx.....",
+    "....xxxxx....",
+    "...xxxxxxx...",
+    "..xxxxxxxxx..",
+    ".xxxxxxxxxxx.",
+    "..xxxxxxxxx..",
+    "..xooxxxoox..",
+    "..xooxxxoox..",
+    "..xxxxooxxx..",
+    "..xxxxooxxx..",
+    "..xxxxooxxx..",
+];
+
+/// The world, its seas in cream and its land in brass: out in the world.
+pub const GLOBE: Icon = &[
+    "....xxxxx....",
+    "..xxoxxxxxx..",
+    ".xoooxxxoxxx.",
+    ".xooxxxxooxx.",
+    "xxooxxxxxooxx",
+    "xxxoxxxxxxoxx",
+    "xxxxxxooxxxxx",
+    "xxxxxooooxxxx",
+    ".xxxxxoooxxx.",
+    ".xxxxxxoxxxx.",
+    "..xxxxxxxxx..",
+    "....xxxxx....",
+];
+
+/// A railway ticket to somewhere, for the station's two choices: a stub in the ticket's own
+/// colour with a picture of where it goes, torn along a perforation from the card, which has the
+/// place printed large and a word about it stamped small and centred beneath. It lifts off the
+/// page when pointed at, and springs with a brass sparkle when taken.
+#[allow(clippy::too_many_arguments)]
+pub fn ticket(
     ui: &mut egui::Ui,
     rect: egui::Rect,
     id: egui::Id,
     title: &str,
     small: &str,
+    band: Color32,
+    icon: Icon,
     unit: f32,
 ) -> egui::Response {
     let response = ui.interact(rect, id, egui::Sense::click());
@@ -812,58 +853,114 @@ pub fn destination(
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     let press = crate::feel::press(ui.ctx(), id, &response, crate::feel::Feel::Confirm);
-    let lift = press.hover;
+    let lift = (press.hover * unit * 2.0).round();
     let pressed = response.is_pointer_button_down_on();
-    let mut painted = None;
+    let mut face = rect;
     ui.with_visual_transform(press.transform(rect, unit), |ui| {
         let painter = ui.painter();
-        let face = rect.translate(egui::vec2(
-            0.0,
-            if pressed {
-                unit
-            } else {
-                -(lift * unit * 2.0).round()
-            },
-        ));
-        let shadow = rect.translate(egui::vec2(unit * 2.0, unit * 2.0));
+        face = rect.translate(egui::vec2(0.0, if pressed { 0.0 } else { -lift }));
+        // A hard shadow that grows as it lifts.
+        let shadow = rect.translate(egui::vec2(unit * 2.0, unit * 2.0 + lift / 2.0));
         painter.rect_filled(shadow.shrink(unit), 0.0, ink::SHADOW);
-        let (fill, rim) = if response.hovered() {
-            (Color32::from_rgb(40, 90, 75), ink::BRASS_LIGHT)
+        let card = if press.hover > 0.5 {
+            Color32::from_rgb(0xff, 0xfa, 0xea)
         } else {
-            (ink::FOREST, ink::BRASS)
+            Color32::from_rgb(0xfb, 0xf3, 0xdc)
         };
-        let lip = egui::Rect::from_min_max(
-            egui::pos2(face.left(), face.bottom() - unit * 2.0),
-            egui::pos2(face.right(), face.bottom() + unit),
+        painter.rect_filled(face.shrink(unit), 0.0, card);
+        let edge = band.gamma_multiply(0.8);
+        // The stub, in the ticket's colour, a little lighter when pointed at.
+        let stub_w = ((face.height() * 0.95).min(face.width() * 0.3) / unit).round() * unit;
+        let stub = egui::Rect::from_min_max(
+            face.min + egui::vec2(unit, unit),
+            egui::pos2(face.left() + stub_w, face.bottom() - unit),
         );
-        painter.rect_filled(lip.shrink2(egui::vec2(unit, 0.0)), 0.0, ink::BRASS_EDGE);
-        painter.rect_filled(face.shrink(unit), 0.0, rim);
-        painter.rect_filled(face.shrink(unit * 3.0), 0.0, fill);
-        stepped(painter, face, unit, ink::BRASS_EDGE);
-        painter.hline(
-            (face.left() + unit * 3.0)..=(face.right() - unit * 3.0),
-            face.top() + unit * 3.5,
-            egui::Stroke::new(unit, Color32::from_rgba_unmultiplied(255, 255, 255, 30)),
+        let fill = if press.hover > 0.5 {
+            band.lerp_to_gamma(Color32::WHITE, 0.12)
+        } else {
+            band
+        };
+        painter.rect_filled(stub, 0.0, fill);
+        // Its picture, drawn a stub's pixel at a time.
+        let rows = icon.len() as f32;
+        let cols = icon.iter().map(|r| r.len()).max().unwrap_or(1) as f32;
+        let pixel = ((stub.height() * 0.62 / rows / unit).floor().max(1.0)) * unit;
+        let origin = stub.center() - egui::vec2(cols * pixel, rows * pixel) / 2.0;
+        let origin = egui::pos2(
+            (origin.x / unit).round() * unit,
+            (origin.y / unit).round() * unit,
         );
-        let big = painter.layout_job(label_job(title, 19.0, ink::COVER));
-        let little = painter.layout_job(label_job(small, LABEL, ink::DEBOSS));
-        let gap = unit * 3.0;
-        let total = big.size().y + gap + little.size().y;
-        let top = face.center().y - total / 2.0;
+        for (y, row) in icon.iter().enumerate() {
+            for (x, c) in row.chars().enumerate() {
+                let colour = match c {
+                    'x' => Color32::from_rgb(0xfb, 0xf3, 0xdc),
+                    'o' => ink::BRASS_LIGHT,
+                    _ => continue,
+                };
+                painter.rect_filled(
+                    egui::Rect::from_min_size(
+                        origin + egui::vec2(x as f32 * pixel, y as f32 * pixel),
+                        egui::vec2(pixel, pixel),
+                    ),
+                    0.0,
+                    colour,
+                );
+            }
+        }
+        // The perforation the stub tears along, with a notch bitten out at either end.
+        let mut y = face.top() + unit * 4.0;
+        while y < face.bottom() - unit * 4.0 {
+            painter.rect_filled(
+                egui::Rect::from_min_size(
+                    egui::pos2(stub.right(), y),
+                    egui::vec2(unit, unit * 2.0),
+                ),
+                0.0,
+                edge,
+            );
+            y += unit * 4.0;
+        }
+        let page = Color32::from_rgb(0xf9, 0xf0, 0xd4);
+        for notch_y in [face.top(), face.bottom()] {
+            painter.circle_filled(
+                egui::pos2(stub.right() + unit / 2.0, notch_y),
+                unit * 3.0,
+                page,
+            );
+        }
+        stepped(painter, face, unit, edge);
+        // The card: who it admits, the place, and the word stamped under it.
+        let body =
+            egui::Rect::from_min_max(egui::pos2(stub.right() + unit * 2.0, face.top()), face.max);
+        let admit = painter.layout_job(label_job("Admit three", 8.5, ink::MUTED));
         painter.galley(
-            egui::pos2(face.center().x - big.size().x / 2.0, top),
+            body.min + egui::vec2(unit * 5.0, unit * 4.0),
+            admit,
+            ink::MUTED,
+        );
+        let big = painter.layout_job(label_job(title, 18.0, band));
+        let little = painter.layout_job(label_job(small, LABEL, band));
+        let stamp = egui::Rect::from_center_size(
+            egui::pos2(0.0, 0.0),
+            little.size() + egui::vec2(unit * 8.0, unit * 4.0),
+        );
+        let gap = unit * 4.0;
+        let total = big.size().y + gap + stamp.height();
+        let top = body.center().y - total / 2.0 + unit * 2.0;
+        let big_h = big.size().y;
+        painter.galley(
+            egui::pos2(body.center().x - big.size().x / 2.0, top),
             big,
-            ink::COVER,
+            band,
         );
-        let below = top + total - little.size().y;
-        painter.galley(
-            egui::pos2(face.center().x - little.size().x / 2.0, below),
-            little,
-            ink::DEBOSS,
+        let stamp = egui::Rect::from_center_size(
+            egui::pos2(body.center().x, top + big_h + gap + stamp.height() / 2.0),
+            stamp.size(),
         );
-        painted = Some(face);
+        stepped(painter, stamp, unit, band.gamma_multiply(0.7));
+        painter.galley(stamp.center() - little.size() / 2.0, little, band);
     });
-    if let (Some(through), Some(face)) = (press.sparkle, painted) {
+    if let Some(through) = press.sparkle {
         crate::feel::sparkle(ui.painter(), face, through, unit);
     }
     response

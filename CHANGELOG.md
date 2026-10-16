@@ -2,12 +2,13 @@
 
 ## Unreleased
 
-- Battle opens at Battle Halt: the colony's train, the one Desktop and Hill share, pulls in with
-  every companion already riding it, a face at each window, and a coach more for every three past
-  six. Then choose where they are off to: Out in the World, to play a friend online, or Close to
-  Home, to play the visiting team offline. A click hurries the train in; with reduced motion it is
-  already in. After a match, Back to the station brings it in again.
-- History & settings, beneath the two choices: every match the colony has played with who went
+- Battle opens at the Battle Grounds, the first spread of the Handler's notebook. On its left page
+  the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
+  it, a face at each window, and a coach more for every three past six. On its right, two railway
+  tickets: Out in the World, to play a friend online, and Close to Home, to play the visiting team
+  offline. A click hurries the train in; with reduced motion it is already in. After a match, Back
+  to the station brings it in again.
+- History & settings, beneath the two tickets: every match the colony has played with who went
   and how it ended, beside the Open Circuit points and each cup's progress; and reduced motion and
   sound for the sitting, with keys to remember.
 - Every button, card and switch answers a touch the same way: it lifts when pointed at, sinks when

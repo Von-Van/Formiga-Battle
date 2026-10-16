@@ -444,7 +444,9 @@ fn sign_area((width, height): (i32, i32)) -> Area {
 fn backdrop((width, height): (i32, i32)) -> Canvas {
     let mut canvas = Canvas::new(width as u32, height as u32);
     let rail = height - RAIL;
-    let horizon = rail - HORIZON;
+    // However tall the picture, the country takes up its lower half or so, not just a strip
+    // under a tall sky.
+    let horizon = (rail - HORIZON).min(height * 11 / 20);
     sky(&mut canvas, width, horizon);
     clouds(&mut canvas, width, horizon);
     hills(&mut canvas, width, horizon);
