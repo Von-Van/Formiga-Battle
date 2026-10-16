@@ -520,12 +520,11 @@ mod tests {
     }
 
     #[test]
-    fn backyard_has_a_sprinkler_over_the_yards_arms_with_a_tap_on_each_side() {
+    fn backyard_has_a_sprinkler_over_the_whole_yard_with_a_tap_on_each_side() {
         let arena = Arena::backyard();
         let sprinkler = arena.scenery.clone().expect("Backyard has its sprinkler");
         assert_eq!(sprinkler.effect, Effect::Soak);
-        assert_eq!(sprinkler.tiles.len(), 4);
-        assert!(!sprinkler.tiles.contains(&arena.zone_centre()));
+        assert_eq!(sprinkler.tiles.len(), arena.zone.len());
         assert!(sprinkler.tiles.iter().all(|t| arena.in_zone(*t)));
         assert_eq!(arena.switches.len(), 2);
         assert!(sprinkler.due(4) && sprinkler.due(8) && !sprinkler.due(5));

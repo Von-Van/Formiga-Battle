@@ -2,7 +2,7 @@
 
 How a match of Formiga Battle resolves, as `formiga-battle-core` plays it. Every number here lives
 in `Ruleset` (`crates/formiga-battle-core/src/ruleset.rs`), travels with every recorded match, and
-is provisional until playtests settle it. `RULES_VERSION` is 5.
+is provisional until playtests settle it. `RULES_VERSION` is 6.
 
 ## A match
 
@@ -23,28 +23,35 @@ locked together and the turn resolves in `ticks_per_turn` ticks.
 | `detour_budget` | 2 | Steps a creature may take in a turn that bring it no closer |
 | `turn_seconds` | 40 | For clients and the room service; the rules never look at a clock |
 
-## The three orders
+## The orders
 
 | Order | Intent | Target |
 |---|---|---|
 | MOVE | Reach a tile | A tile. Walks round anyone standing still. Open to a contest the whole turn, arrived or not |
 | HOLD | Defend a tile | A tile. Walks there, then stands. If someone else is standing on it, holds beside it instead |
-| CONTEST | Disrupt | A creature of the other team, or a lever. Walks up next to it (one of the four tiles touching it) and settles once a turn |
+| CONTEST | Disrupt | A creature of the other team, a lever or a tap. Walks up next to it (one of the four tiles touching it) and settles once a turn |
+| USE | Use what it carries | A tile. Only for a creature carrying something it found (see [Found things](#found-things)). Walks until the tile is within the item's reach, uses it there once a turn, and the item is gone |
 
 There are no move sets, abilities, power ratings or Battle stats. Every creature has the same
-composure, the same pace and one order a turn.
+composure, the same pace and one order a turn. USE comes from something lying on the board,
+which any creature can pick up, never from the creature.
 
 ## A tick
 
 Every tick works from one shared picture of the board. Nobody moves first.
 
-1. A gate whose swing was telegraphed last tick swings.
+1. A gate whose swing was telegraphed last tick swings. Then whatever was marked to land this
+   tick lands: a leaf umbrella or a twig whose time is up folds or falls, things glinting since
+   last turn turn up (on a turn's first tick), items used last tick take effect, and the map event
+   comes.
 2. Contests already next to their target are settled, so a creature walking away from a contester
    beside it is caught before it can step.
 3. Each creature still carrying out its order picks one step (see [How a creature walks](#how-a-creature-walks)).
-4. The steps happen together.
+4. The steps happen together. Anyone with empty paws who stepped onto something lying there
+   picks it up.
 5. Anyone who has reached the tile it was told to hold starts holding.
-6. Contests that have just come into reach are settled.
+6. Contests that have just come into reach are settled. A USE, a pull or a turn of a tap in reach
+   is settled with them.
 7. The beacon counts.
 8. The match ends by knockout, then by capture.
 
@@ -134,7 +141,48 @@ Props use the three orders and grant nothing permanent. Each is data in the aren
 | Prop | Interaction | Effect | Telegraph | Counterplay |
 |---|---|---|---|---|
 | Beacon (`Z`) | HOLD in the zone | Capture progress | Progress shown to both teams | Stand in the zone unbroken to pause it; flank its holders to clear it |
-| Gate lever (`L`, gates `G`/`g`) | CONTEST from a tile touching the lever | Every gate swings `swing_ticks` later (at least 1), then the lever rests `cooldown_turns` whole turns | The pull, and the tick the gates will swing, are an event both teams see | HOLD on a tile touching the lever: a pull is turned away like a contest, one composure for each such holder. A gate cannot close on someone standing in it |
+| Gate lever (`L`, gates `G`/`g`) | CONTEST from a tile touching the lever | Every gate swings `swing_ticks` later (at least 1), then the lever rests `cooldown_turns` whole turns | The pull, and the tick the gates will swing, are an event both teams see | HOLD on a tile touching the lever: a pull is turned away like a contest, one composure for each such holder. A gate cannot close on someone standing in it, or on a twig |
+| Map event (`event:` and its tiles) | Comes round by itself on `event_first` and every `event_every` turns after | Its effect on everyone standing on its tiles | Its tiles are marked a whole turn before, from the end of the turn before it comes; it lands on that turn's second tick | Stand elsewhere when it comes, or under a leaf umbrella |
+| Tap (`S`) | CONTEST from a tile touching it | The map event lands a tick later; then every tap rests `switch_rest` whole turns | The turn, and the tiles, are an event both teams see | HOLD on a tile touching the tap, as at the lever. A tap does nothing while the event is already coming |
+| Item spot (`*`) | Step onto what turns up there | See [Found things](#found-things) | It glints a whole turn before | Get there first, or knock it out of the carrier's paws |
+
+## The map event
+
+An arena may have one map event. Its effects are ones a match already has, and none costs
+composure.
+
+| Effect | What happens to anyone on its tiles when it lands |
+|---|---|
+| Soak | Off balance, as when boxed in by a flank: it stops for the rest of the turn, stops holding, does not count in the zone, and drops what it carries. Under a leaf umbrella it stays dry |
+
+Backyard's is a sprinkler that soaks the whole yard on turns 4, 8 and 12, with a tap on each side
+of the near edge. It clears the yard for both teams alike: what it rewards is having someone
+waiting just outside to walk in, or a leaf umbrella over a holder. While it swept only the yard's
+four arms, whoever held the middle when it came gained two ticks for nothing, and 98% of 10,000
+Exhibition matches were won at the beacon in about 7 turns.
+
+## Found things
+
+Things turn up on an arena's item spots, which come in pairs mirrored across the board, on turn 2
+and every three turns after. At the end of the turn before, a seeded draw picks a pair whose
+spots are clear and one item, and the same item glints on both spots for both teams to see.
+Puffs turn up 40% of the time, twigs 35% and leaf umbrellas 25%.
+
+A creature that steps onto something with empty paws picks it up, whatever its order; one thing
+at a time, and both teams can see who carries what. Caught on the move, flanked, soaked, blown
+over or knocked out, it drops what it carries where it ends up (or loses it, if something already
+lies there). A USE is marked on its tiles the tick it is used and lands at the start of the next.
+Nothing found costs composure, nothing outlasts the match, and the fallback never uses anything.
+
+| Item | Reach | What USE does | Lasts |
+|---|---|---|---|
+| Dandelion puff | 2 | Blows across the tile and the two either side of it, across the way from its user to the tile (along whichever way is further; across the board when level). Everyone there is pushed one tile on and knocked off balance, or knocked off balance where it stands if the way on is blocked. A holder with a holder of its team beside it, corner to corner, braces and is not moved. Twigs there blow over | Lands and is gone |
+| Twig | 2 | Wedges into the tile, if nobody and nothing is there and anyone could stand there: nobody can stand there, and a gate cannot close on it | To the end of the turn two after it lands |
+| Leaf umbrella | 1 | Opens over whoever of its user's team stands on the tile, itself included: the map event cannot soak it, and a contest against it while it is not holding bounces off, hurting nobody. A puff catches it like a sail and carries it two tiles | To the end of the next turn |
+
+Things meet each other and the board in a few fixed ways: a leaf keeps off the sprinkler, a puff
+blows twigs over and carries a leaf two tiles, a twig wedged in an open gate keeps it open, and a
+puff can blow someone onto ground marked for the sprinkler just before it lands.
 
 ## Arenas
 
@@ -144,13 +192,13 @@ cross: an arm has open ground on three sides, so a holder on it can be flanked a
 the yard; the middle can be flanked only from the arms.
 
 ```text
-. . . # G # . . .
+* . . # G # . . *
 1 . . . . . . . 2
 . . # . Z . # . .
 1 . . Z Z Z . . 2
 . . # . Z . # . .
-1 . . . . . . . 2
-. . . . L . . . .
+1 . * . . . * . 2
+. S . . L . . S .
 ```
 
 Before rules version 4 the yard was the whole 3 by 3 square. With all six creatures fitting in it,
@@ -177,6 +225,8 @@ step of the best and looks again next tick.
 | Beside a teammate | +togetherness / 2, +100 for a high bond (+50 medium), −200 for high avoidance (−100 medium) |
 | How far out from the middle row | +wanderlust × rows out / half the board's height |
 | Against a wall or obstacle | +caution / 4 for each, likewise |
+| Marked for something about to land (the map event, or a puff used last tick) | −caution / 2, for a cautious creature; nothing for a bold one, which walks straight on and takes its chances |
+| Something lying there, with empty paws | +(wanderlust + opportunism) / 2, counting only leanings toward it: a curious or playful creature goes out of its way for it, one that keeps to its way does not |
 
 Counting a way's tiles four times over is the pull (`PULL` in `interpret.rs`, 400%), set so that
 each turn about one creature of a team's three does something of its own: in 200 Exhibition

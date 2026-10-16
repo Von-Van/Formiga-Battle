@@ -285,10 +285,11 @@ fn weigh(m: &Match, slot: Slot, tile: Tile, chasing: Option<Slot>, passing_zone:
     w.lane = (i32::from(tile.y) - middle).abs() * i32::from(b.wanderlust) / reach;
     let walls = tile.steps().iter().filter(|t| !m.walkable(**t)).count() as i32;
     w.cover = walls * caution.max(0) / 4;
-    // A cautious creature keeps off a tile marked for something about to land; a bold one walks
-    // straight on and takes its chances.
+    // A cautious creature keeps off a tile marked for something about to land, half as much as
+    // it keeps out of reach of one of the other team; a bold one walks straight on and takes its
+    // chances.
     if warned(m, tile) {
-        w.warned = -caution.max(0);
+        w.warned = -caution.max(0) / 2;
     }
     // Something lying there, and paws to carry it: a curious or playful creature is drawn to it,
     // one that keeps to its way is not.
