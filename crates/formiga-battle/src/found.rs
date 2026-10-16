@@ -22,7 +22,74 @@ pub fn icon(canvas: &mut Canvas, (x, y): (i32, i32), item: Item, small: bool) {
         Item::Puff => puff(canvas, x, y, small),
         Item::Twig => twig(canvas, x, y, small),
         Item::Leaf => leaf(canvas, x, y, small),
+        Item::Bell => bell(canvas, x, y, small),
+        Item::Honey => honey_drop(canvas, x, y, small),
+        Item::Seed => seed(canvas, x, y, small),
     }
+}
+
+const STONE: Ramp = Ramp::new(0x605a5d, 0x857d7c, 0xa69d94, 0xc2baae, 0xdcd5c8);
+const HONEY: Ramp = Ramp::new(0x7a4a0c, 0xb0700e, 0xdc9a1e, 0xf2c04a, 0xffe49a);
+const HUSK: Ramp = Ramp::new(0x2a2620, 0x4a4438, 0x6e6656, 0xa8a088, 0xe8e2c8);
+
+/// A pebble bell: a little bell of grey stone with a clapper showing under its lip, on a loop of
+/// grass.
+fn bell(canvas: &mut Canvas, x: i32, y: i32, small: bool) {
+    let (w, h) = if small { (3, 4) } else { (4, 7) };
+    let top = y - h - 1;
+    for row in 0..h {
+        let half = 1 + (w - 1) * row / (h - 1).max(1);
+        for dx in -half..=half {
+            let c = if dx < 0 {
+                STONE.light
+            } else if dx > half / 2 {
+                STONE.shadow
+            } else {
+                STONE.base
+            };
+            paint::put(canvas, x + dx, top + row, c);
+        }
+    }
+    paint::hline(canvas, x - w, top + h, w * 2 + 1, STONE.edge);
+    paint::put(canvas, x - 1, top + 1, STONE.shine);
+    paint::put(canvas, x, top + h + 1, BARK.shadow);
+    paint::put(canvas, x, top - 1, LEAF.base);
+    paint::put(canvas, x + 1, top - 2, LEAF.light);
+}
+
+/// A drop of honey: amber, rounder at the bottom, with a bright glint.
+fn honey_drop(canvas: &mut Canvas, x: i32, y: i32, small: bool) {
+    let r = if small { 2 } else { 3 };
+    let cy = y - r - 1;
+    paint::ellipse(canvas, x, cy, r, r, HONEY.base);
+    paint::vline(canvas, x, cy - r - 2, 2, HONEY.light);
+    paint::put(canvas, x, cy - r - 2, HONEY.shine);
+    paint::put(canvas, x + r - 1, cy + 1, HONEY.shadow);
+    paint::hline(canvas, x - r + 1, cy + r, r * 2 - 1, HONEY.edge);
+    paint::put(canvas, x - 1, cy - 1, HONEY.shine);
+}
+
+/// A springy seed: a striped seed standing on its point, with a coil of green spring at its foot.
+fn seed(canvas: &mut Canvas, x: i32, y: i32, small: bool) {
+    let h = if small { 4 } else { 7 };
+    let top = y - h - 2;
+    for row in 0..h {
+        let half = if row == 0 || row == h - 1 { 1 } else { 2 };
+        for dx in -half..=half {
+            let c = if dx == 0 {
+                HUSK.shine
+            } else if dx < 0 {
+                HUSK.base
+            } else {
+                HUSK.edge
+            };
+            paint::put(canvas, x + dx, top + row, c);
+        }
+    }
+    // The spring.
+    paint::put(canvas, x - 1, y - 2, LEAF.light);
+    paint::put(canvas, x + 1, y - 1, LEAF.base);
+    paint::put(canvas, x - 1, y, LEAF.shadow);
 }
 
 /// A dandelion clock on a short stem: a ball of seeds, lit from the upper left.
@@ -331,5 +398,261 @@ pub fn gust(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, fade: u8) {
             cy - 10 - (age * 30.0) as i32 + (a.sin() * 4.0) as i32,
         );
         paint::put(canvas, px, py, paint::faded(FLUFF.shine, fade));
+    }
+}
+
+/// Sticky ground: a spill of honey over the tile, glossy at its edges.
+pub fn honey(canvas: &mut Canvas, view: &View, tile: Tile, now: f32, still: bool) {
+    let (cx, cy) = view.centre(tile);
+    paint::ellipse(canvas, cx, cy, 14, 6, rgba(0xdc9a1e, 150));
+    paint::ellipse(canvas, cx - 3, cy - 1, 8, 3, rgba(0xf2c04a, 170));
+    let glint = if still {
+        0
+    } else {
+        ((now * 1.5 + f32::from(tile.x)).sin() * 3.0) as i32
+    };
+    paint::hline(canvas, cx - 6 + glint, cy - 3, 3, rgba(0xffe49a, 220));
+    for (dx, dy) in [(-12, 2), (11, -1), (4, 5)] {
+        paint::put(canvas, cx + dx, cy + dy, rgba(0xb0700e, 200));
+    }
+}
+
+/// Ground gone under: water over the tile, with a ripple moving across it.
+pub fn under(canvas: &mut Canvas, view: &View, tile: Tile, now: f32, still: bool) {
+    let mid = view.screen(f32::from(tile.x) + 0.5, f32::from(tile.y) + 0.5);
+    let face = view
+        .diamond(tile, 0.0)
+        .map(|p| (p.0 + (mid.0 - p.0) * 0.04, p.1 + (mid.1 - p.1) * 0.04));
+    paint::polygon(canvas, &face, rgba(0x5a94aa, 220));
+    let (cx, cy) = view.centre(tile);
+    let drift = if still {
+        0
+    } else {
+        ((now * 6.0) as i32) % 10 - 5
+    };
+    paint::hline(canvas, cx - 8 + drift, cy - 2, 6, WATER.shine);
+    paint::hline(canvas, cx + 2 - drift, cy + 3, 5, WATER.light);
+}
+
+/// A twig floating as a raft: three sticks lashed side by side, bobbing.
+pub fn raft(canvas: &mut Canvas, view: &View, tile: Tile, now: f32, still: bool) {
+    let (cx, cy) = view.centre(tile);
+    let bob = if still {
+        0
+    } else {
+        ((now * 2.0).sin() * 1.2).round() as i32
+    };
+    paint::ellipse(canvas, cx, cy + 2, 14, 4, rgba(0x3c6f86, 120));
+    for k in -1..=1 {
+        let y = cy + k * 3 + bob;
+        paint::line(
+            canvas,
+            (cx - 10 + k * 2, y),
+            (cx + 10 + k * 2, y - 2),
+            PLANK.light,
+        );
+        paint::line(
+            canvas,
+            (cx - 10 + k * 2, y + 1),
+            (cx + 10 + k * 2, y - 1),
+            BARK.shadow,
+        );
+    }
+    paint::vline(canvas, cx - 4, cy - 4 + bob, 8, BARK.edge);
+    paint::vline(canvas, cx + 5, cy - 5 + bob, 8, BARK.edge);
+}
+
+/// A pebble bell's ring: arcs spreading out from where it rang, `age` seconds in.
+pub fn ring(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, fade: u8) {
+    let (cx, cy) = view.centre(tile);
+    for k in 0..3 {
+        let r = 6.0 + age * 40.0 + k as f32 * 7.0;
+        for a in 0..28 {
+            let t = a as f32 / 28.0 * TAU;
+            paint::put(
+                canvas,
+                cx + (t.cos() * r) as i32,
+                cy - 16 + (t.sin() * r * 0.5) as i32,
+                rgba(0xfff3c4, fade / (k + 1) as u8),
+            );
+        }
+    }
+}
+
+/// A wave rolling over a tile, `age` seconds in: a curl of foam sweeping in and sinking back.
+pub fn wave(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, fade: u8) {
+    let (cx, cy) = view.centre(tile);
+    let t = (age / 0.7).clamp(0.0, 1.0);
+    let height = (14.0 * (1.0 - t)) as i32;
+    paint::ellipse(canvas, cx, cy, 15, 6, paint::faded(WATER.base, fade / 2));
+    for dx in -14..=14 {
+        let crest = height - (dx * dx) / 30;
+        if crest > 0 {
+            paint::vline(
+                canvas,
+                cx + dx,
+                cy - crest,
+                crest,
+                paint::faded(WATER.light, fade),
+            );
+            paint::put(
+                canvas,
+                cx + dx,
+                cy - crest - 1,
+                paint::faded(WATER.shine, fade),
+            );
+        }
+    }
+}
+
+/// Acorns falling round a shaken tree onto a tile, `age` seconds in, bouncing as they land.
+pub fn acorns(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, fade: u8) {
+    let (cx, cy) = view.centre(tile);
+    let t = (age / 0.7).clamp(0.0, 1.0);
+    for k in 0..4 {
+        let dx = [-8, -1, 5, 10][k];
+        let fall = ((t * 1.6 - k as f32 * 0.12).clamp(0.0, 1.0) * 34.0) as i32;
+        // A little bounce once it lands.
+        let bounce = if fall >= 34 {
+            ((t * 12.0).sin().abs() * 3.0) as i32
+        } else {
+            0
+        };
+        let y = cy - 36 + fall - bounce + (k as i32 % 2) * 3;
+        paint::ellipse(canvas, cx + dx, y, 2, 2, paint::faded(BARK.light, fade));
+        paint::put(canvas, cx + dx - 1, y - 1, paint::faded(BARK.shine, fade));
+        paint::hline(
+            canvas,
+            cx + dx - 2,
+            y - 2,
+            5,
+            paint::faded(BARK.shadow, fade),
+        );
+        paint::put(canvas, cx + dx, y - 3, paint::faded(BARK.edge, fade));
+    }
+}
+
+/// The water rising over a tile, `age` seconds in: rings spreading on the surface.
+pub fn rising(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, fade: u8) {
+    let (cx, cy) = view.centre(tile);
+    for k in 0..2 {
+        let r = 4.0 + age * 20.0 + k as f32 * 6.0;
+        for a in 0..24 {
+            let t = a as f32 / 24.0 * TAU;
+            paint::put(
+                canvas,
+                cx + (t.cos() * r) as i32,
+                cy + (t.sin() * r * 0.5) as i32,
+                paint::faded(WATER.shine, fade),
+            );
+        }
+    }
+}
+
+/// A big spiral shell on the sand, its mouth toward the yard: blown, it calls the next wave.
+pub fn shell(canvas: &mut Canvas, view: &View, tile: Tile, ready: bool, now: f32, still: bool) {
+    const SHELL: Ramp = Ramp::new(0x8a5a46, 0xc08a6e, 0xe4b496, 0xf4d4bc, 0xfff0e2);
+    let (cx, cy) = view.centre(tile);
+    paint::ellipse(canvas, cx + 3, cy, 10, 3, rgba(0x6a5a3c, 80));
+    paint::ellipse(canvas, cx, cy - 6, 9, 6, SHELL.base);
+    paint::ellipse(canvas, cx - 2, cy - 8, 5, 3, SHELL.light);
+    paint::put(canvas, cx - 4, cy - 10, SHELL.shine);
+    // The spiral's turns, and the pink of its mouth.
+    paint::line(canvas, (cx - 6, cy - 4), (cx + 4, cy - 10), SHELL.shadow);
+    paint::line(canvas, (cx - 2, cy - 2), (cx + 7, cy - 7), SHELL.shadow);
+    paint::ellipse(canvas, cx + 7, cy - 4, 2, 3, rgb(0xe88a9a));
+    paint::put(canvas, cx + 10, cy - 12, SHELL.edge);
+    paint::line(canvas, (cx + 6, cy - 11), (cx + 10, cy - 13), SHELL.shadow);
+    if !ready {
+        paint::ellipse(canvas, cx + 8, cy + 2, 5, 2, rgba(0x7fb8c8, 150));
+    } else if !still && (now * 1.2 + f32::from(tile.x)).sin() > 0.7 {
+        paint::put(canvas, cx + 9, cy - 4, rgba(0xffffff, 200));
+    }
+}
+
+/// A sluice in the bank: a wooden board in a frame of posts, with an iron wheel to wind it up.
+/// Raised, water spills from under it.
+pub fn sluice(canvas: &mut Canvas, view: &View, tile: Tile, ready: bool, now: f32, still: bool) {
+    let (cx, cy) = view.centre(tile);
+    let lift = if ready { 0 } else { 5 };
+    for post in [cx - 9, cx + 8] {
+        paint::vline(canvas, post, cy - 20, 22, BARK.light);
+        paint::vline(canvas, post + 1, cy - 20, 22, BARK.shadow);
+    }
+    paint::hline(canvas, cx - 9, cy - 21, 19, BARK.base);
+    for row in 0..10 {
+        let c = if row % 3 == 0 {
+            PLANK.shadow
+        } else {
+            PLANK.base
+        };
+        paint::hline(canvas, cx - 7, cy - 12 - lift + row, 14, c);
+    }
+    paint::hline(canvas, cx - 7, cy - 12 - lift, 14, PLANK.light);
+    paint::ellipse(canvas, cx, cy - 25, 3, 3, rgb(0x48434a));
+    paint::put(canvas, cx - 1, cy - 26, rgb(0xb0aab2));
+    if !ready {
+        let run = if still { 0 } else { ((now * 8.0) as i32) % 3 };
+        for k in 0..4 {
+            paint::put(canvas, cx - 5 + k * 3, cy - 1 + run, WATER.shine);
+        }
+    }
+}
+
+/// One of the glade's old oaks by the lanes, still in leaf and hung with acorns: shaken, it sheds
+/// them on whoever stands round it. It sways while it can be shaken, and stands still while it
+/// rests.
+pub fn tree(canvas: &mut Canvas, view: &View, tile: Tile, ready: bool, now: f32, still: bool) {
+    let (cx, cy) = view.centre(tile);
+    paint::ellipse(canvas, cx + 6, cy + 1, 14, 4, rgba(0x24452b, 90));
+    // Roots, and the trunk: lit on its left.
+    paint::line(canvas, (cx - 7, cy + 1), (cx - 2, cy - 3), BARK.shadow);
+    paint::line(canvas, (cx + 8, cy + 1), (cx + 3, cy - 3), BARK.edge);
+    for dy in 0..26 {
+        paint::put(canvas, cx - 3, cy - dy, BARK.light);
+        paint::put(canvas, cx - 2, cy - dy, BARK.base);
+        paint::put(canvas, cx - 1, cy - dy, BARK.base);
+        paint::put(canvas, cx, cy - dy, BARK.base);
+        paint::put(canvas, cx + 1, cy - dy, BARK.shadow);
+        paint::put(canvas, cx + 2, cy - dy, BARK.edge);
+    }
+    for dy in [6, 13, 19] {
+        paint::hline(canvas, cx - 2, cy - dy, 2, BARK.shadow);
+    }
+    let sway = if still || !ready {
+        0
+    } else {
+        ((now * 1.3 + f32::from(tile.y)).sin() * 1.2).round() as i32
+    };
+    let lumps = [
+        (-9, -32, 8),
+        (8, -33, 8),
+        (0, -40, 9),
+        (-4, -28, 7),
+        (5, -27, 7),
+    ];
+    for (dx, dy, r) in lumps {
+        paint::ellipse(canvas, cx + dx + sway, cy + dy, r, r - 1, LEAF.shadow);
+    }
+    for (dx, dy, r) in lumps {
+        paint::ellipse(
+            canvas,
+            cx + dx + sway - 1,
+            cy + dy - 1,
+            r - 1,
+            r - 2,
+            LEAF.base,
+        );
+    }
+    for (dx, dy) in [(-10, -35), (-3, -45), (3, -40), (-6, -31)] {
+        paint::ellipse(canvas, cx + dx + sway, cy + dy, 3, 2, LEAF.light);
+    }
+    paint::put(canvas, cx - 4 + sway, cy - 46, LEAF.shine);
+    // Acorns among the leaves, gone while it rests.
+    if ready {
+        for (dx, dy) in [(-5, -27), (7, -30), (1, -35), (-10, -31)] {
+            paint::rect(canvas, cx + dx + sway, cy + dy, 2, 2, BARK.light);
+            paint::hline(canvas, cx + dx + sway, cy + dy - 1, 2, BARK.edge);
+        }
     }
 }

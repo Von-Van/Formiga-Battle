@@ -69,6 +69,7 @@ fn a_leaf_umbrella_keeps_the_sprinkler_off() {
     // The sprinkler is coming at the start of turn 4's second tick; the leaf opens a tick after
     // it is used, in the first.
     m.board.event_at = Some(4 * 3 + 2);
+    m.board.event_tiles = m.arena.scenery_tiles(&[]);
     let report = m.resolve_orders(orders(&[(L0, hold(3, 3)), (L1, use_on(3, 3))]));
     assert!(
         kinds(&report)
@@ -284,6 +285,7 @@ fn a_cautious_creature_goes_round_ground_marked_for_the_sprinkler_and_a_bold_one
         ];
         let mut m = board_with(Arena::backyard(), rosters, &[(L0, (1, 3)), (R0, (8, 6))]);
         m.board.event_at = Some(100);
+        m.board.event_tiles = m.arena.scenery_tiles(&[]);
         m.resolve_orders(orders(&[(L0, walk(4, 3)), (R0, hold(8, 6))]))
     };
     let wary = walk_past(leaning(0, 1000));
@@ -324,4 +326,166 @@ fn a_match_with_the_sprinkler_and_found_things_replays_the_same() {
     assert!(seen_items);
     let (replayed, _) = m.record().replay().expect("replays");
     assert_eq!(replayed.hash(), m.hash());
+}
+
+/// The map event coming next tick on these tiles, as if warned or set off.
+fn coming(m: &mut Match, tiles: Vec<Tile>, from: Vec<Tile>) {
+    m.board.event_at = Some(u16::from(m.board.turn + 1) * 3 + 1);
+    m.board.event_tiles = tiles;
+    m.board.event_from = from;
+}
+
+fn moved(report: &TurnReport) -> Vec<Blown> {
+    report
+        .events
+        .iter()
+        .find_map(|e| match &e.kind {
+            EventKind::SceneryLanded { moved, .. } => Some(moved.clone()),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_wave_washes_whoever_stands_on_the_sandbars_ends_toward_the_middle_of_the_beach() {
+    let arena = Arena::by_id("cove").unwrap();
+    let tiles = arena.scenery_tiles(&[]);
+    let mut m = board_on(arena, &[(L0, (8, 1)), (R0, (4, 1))]);
+    coming(&mut m, tiles, Vec::new());
+    let report = m.resolve_orders(orders(&[(L0, hold(8, 1)), (R0, hold(4, 1))]));
+    assert_eq!(at(&m, R0), (4, 2));
+    assert_eq!(moved(&report).len(), 1);
+    assert!(m.fighter(R0).interrupted && !m.fighter(R0).holding);
+    assert_eq!(composure(&m, R0), 3);
+}
+
+#[test]
+fn the_pond_rises_over_the_jettys_sides_for_a_turn_washing_off_whoever_is_there() {
+    let arena = Arena::by_id("millpond").unwrap();
+    let tiles = arena.scenery_tiles(&[]);
+    let mut m = board_on(arena, &[(L0, (3, 3)), (R0, (8, 5))]);
+    coming(&mut m, tiles, Vec::new());
+    m.resolve_orders(orders(&[(L0, hold(3, 3)), (R0, hold(8, 5))]));
+    assert_eq!(at(&m, L0), (3, 2));
+    assert!(!m.walkable(Tile::new(3, 3)) && !m.walkable(Tile::new(5, 3)));
+    m.resolve_orders(orders(&[(L0, hold(3, 2)), (R0, hold(8, 5))]));
+    assert!(!m.walkable(Tile::new(3, 3)), "under through the turn after");
+    let report = m.resolve_orders(orders(&[(L0, hold(3, 2)), (R0, hold(8, 5))]));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::GroundReopened { .. }))
+    );
+    assert!(m.walkable(Tile::new(3, 3)));
+}
+
+#[test]
+fn a_twig_thrown_in_the_millpond_floats_as_a_raft_anyone_can_stand_on() {
+    let mut m = board_on(
+        Arena::by_id("millpond").unwrap(),
+        &[(L0, (2, 2)), (R0, (8, 5))],
+    );
+    carry(&mut m, L0, Item::Twig);
+    assert!(!m.walkable(Tile::new(2, 1)));
+    let report = m.resolve_orders(orders(&[(L0, use_on(2, 1)), (R0, hold(8, 5))]));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::RaftFloated { .. }))
+    );
+    assert!(m.walkable(Tile::new(2, 1)));
+}
+
+#[test]
+fn shaking_a_tree_bonks_whoever_stands_round_it_and_drops_a_twig_beside_it() {
+    let mut m = board_on(
+        Arena::by_id("woodland").unwrap(),
+        &[(L0, (2, 2)), (R0, (0, 1))],
+    );
+    let report = m.resolve_orders(orders(&[(L0, tap(1, 2)), (R0, hold(0, 1))]));
+    let (hit, _) = landed(&report).expect("the acorns fall");
+    assert_eq!(hit, vec![L0, R0]);
+    assert!(m.board.ground.contains(&(Tile::new(1, 1), Item::Twig)));
+    let mirrored = m.arena.scenery_tiles(&[Tile::new(7, 2)]);
+    assert!(mirrored.contains(&Tile::new(8, 1)) && mirrored.contains(&Tile::new(6, 2)));
+}
+
+#[test]
+fn a_pebble_bell_spoils_a_contest_not_yet_settled_nearby() {
+    // R0 needs two steps to reach L1; the bell rings before it gets there.
+    let mut m = board(&[(L0, (3, 3)), (L1, (2, 2)), (R0, (5, 2))]);
+    carry(&mut m, L0, Item::Bell);
+    let report = m.resolve_orders(orders(&[
+        (L0, use_on(3, 3)),
+        (L1, hold(2, 2)),
+        (R0, contest(L1)),
+    ]));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::Rung { hushed, .. } if hushed == &vec![R0]))
+    );
+    assert!(
+        !kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::Countered { .. }))
+    );
+    assert_eq!(composure(&m, R0), 3);
+}
+
+#[test]
+fn a_pebble_bell_rung_beside_a_tap_sets_the_sprinkler_off() {
+    let mut m = board_on(Arena::backyard(), &[(L0, (1, 5)), (R0, (8, 1))]);
+    carry(&mut m, L0, Item::Bell);
+    let report = m.resolve_orders(orders(&[(L0, use_on(1, 5)), (R0, hold(8, 1))]));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::SwitchTurned { slot: L0, .. }))
+    );
+}
+
+#[test]
+fn honey_stops_whoever_steps_in_and_whoever_is_pushed_onto_it() {
+    let mut m = board(&[(L0, (0, 2)), (R0, (6, 4))]);
+    m.board.honey.push((Tile::new(2, 2), 100));
+    let report = m.resolve_orders(orders(&[(L0, walk(5, 2)), (R0, hold(6, 4))]));
+    assert_eq!(at(&m, L0), (2, 2));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::Stuck { slot: L0, .. }))
+    );
+
+    // A sail's two tiles stop on the first honey.
+    let mut m = board(&[(L0, (1, 2)), (R0, (3, 2))]);
+    carry(&mut m, L0, Item::Puff);
+    m.board.fighters[1][0].shelter_until = 100;
+    m.board.honey.push((Tile::new(4, 2), 100));
+    m.resolve_orders(orders(&[(L0, use_on(3, 2)), (R0, hold(3, 2))]));
+    assert_eq!(at(&m, R0), (4, 2));
+}
+
+#[test]
+fn a_springy_seed_hops_over_a_creature_but_never_over_a_wall() {
+    let mut m = board(&[(L0, (1, 2)), (R0, (2, 2))]);
+    carry(&mut m, L0, Item::Seed);
+    m.resolve_orders(orders(&[(L0, use_on(3, 2)), (R0, hold(2, 2))]));
+    assert_eq!(at(&m, L0), (3, 2));
+
+    let walled = Arena::parse(
+        "id: w\nname: W\n1 1 1 . . . Z\n. . . . . . .\n. . # . . . .\n. . . . . . .\n2 2 2 . . . .\n",
+    )
+    .unwrap();
+    let mut m = board_on(walled, &[(L0, (1, 2)), (R0, (6, 4))]);
+    carry(&mut m, L0, Item::Seed);
+    let report = m.resolve_orders(orders(&[(L0, use_on(3, 2)), (R0, hold(6, 4))]));
+    assert!(kinds(&report).iter().any(|k| matches!(
+        k,
+        EventKind::ItemFizzled {
+            item: Item::Seed,
+            ..
+        }
+    )));
+    assert_eq!(at(&m, L0), (1, 2));
 }

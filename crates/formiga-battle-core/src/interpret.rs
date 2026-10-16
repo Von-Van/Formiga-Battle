@@ -66,7 +66,7 @@ fn hangs_back(m: &Match, slot: Slot, to: Tile) -> bool {
 /// The step a creature means to take this tick, if any. A plan to its own tile is hanging back.
 pub fn plan_step(m: &Match, slot: Slot, now: u16) -> Option<Plan> {
     let f = m.fighter(slot);
-    if f.out || f.interrupted || f.holding {
+    if f.out || f.interrupted || f.holding || f.stuck {
         return None;
     }
     let goals: Vec<Tile> = match f.order? {
@@ -299,12 +299,14 @@ fn weigh(m: &Match, slot: Slot, tile: Tile, chasing: Option<Slot>, passing_zone:
     w
 }
 
-/// Whether something is marked to land on this tile: the map event once it is warned, or an item
-/// used and about to take effect.
+/// Whether something is marked to land on this tile, or the tile is sticky: the map event once it
+/// is warned, a puff or honey used and about to land, honey already spilled.
 pub fn warned(m: &Match, tile: Tile) -> bool {
-    (m.board.event_at.is_some() && m.arena.in_scenery(tile))
+    (m.board.event_at.is_some() && m.board.event_tiles.contains(&tile))
+        || m.sticky(tile)
         || m.board.pending.iter().any(|p| match p.item {
             crate::items::Item::Puff => crate::items::puff_tiles(p.from, p.target).contains(&tile),
+            crate::items::Item::Honey => crate::items::honey_tiles(p.target).contains(&tile),
             _ => false,
         })
 }

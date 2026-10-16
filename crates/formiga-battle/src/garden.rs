@@ -223,7 +223,9 @@ impl Garden {
             woodland::fire_ring(&mut ground, view, arena.zone_centre());
         }
         // Shadows, before anything that casts them. A tap casts its own as it is drawn.
-        for tile in arena.tiles().filter(|t| !arena.switches.contains(t)) {
+        // A switch is drawn as it stands, ready or resting, with whoever stands round it.
+        let drawn_apart = |t: &Tile| arena.switches.contains(t);
+        for tile in arena.tiles().filter(|t| !drawn_apart(t)) {
             let height = match (dressing, arena.terrain(tile)) {
                 (Dressing::Millpond, _) => continue,
                 (Dressing::Garden, Terrain::Obstacle) => HEDGE_HEIGHT,
@@ -277,7 +279,7 @@ impl Garden {
 
         let mut pieces = HashMap::new();
         let mut gates = HashMap::new();
-        for tile in arena.tiles().filter(|t| !arena.switches.contains(t)) {
+        for tile in arena.tiles().filter(|t| !drawn_apart(t)) {
             match (dressing, arena.terrain(tile)) {
                 (Dressing::Garden, Terrain::Obstacle) => {
                     let beside_gate = arena.gates.iter().any(|g| {

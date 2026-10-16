@@ -426,6 +426,16 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
             | EventKind::Composure { .. }
             | EventKind::ShelterFolded { .. }
             | EventKind::CaptureContested => {}
+            // Rafts, the bell, honey, the seed and the pond going down: their words and sounds
+            // are the match screen's to add.
+            EventKind::GroundReopened { .. }
+            | EventKind::RaftFloated { .. }
+            | EventKind::RaftSank { .. }
+            | EventKind::Rung { .. }
+            | EventKind::HoneySpilled { .. }
+            | EventKind::HoneyDried { .. }
+            | EventKind::Stuck { .. }
+            | EventKind::Hopped { .. } => {}
         }
         // A headline is shown over whoever it is about; one about the beacon, over the beacon.
         if c.headline.is_some() && c.place.is_none() {

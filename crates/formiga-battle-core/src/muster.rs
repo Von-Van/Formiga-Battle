@@ -30,7 +30,7 @@ use crate::arena::{TEAM_SIZE, Terrain};
 use crate::event::{Event, EventKind};
 use crate::game::Match;
 use crate::grid::Tile;
-use crate::items::Item;
+use crate::items::{self, Item};
 use crate::order::{Directive, MAX_SQUARES, Order, Orders, PLAN_SIZE, Side, Slot, Target, TeamPlan};
 use crate::rng::{self, Purpose};
 use serde::{Deserialize, Serialize};
@@ -714,7 +714,7 @@ fn use_for(m: &Match, slot: Slot, squares: &[Tile], asked: bool) -> Option<Tile>
                 .filter(|t| {
                     at.distance(*t) <= item.reach()
                         && m.board.event_at.is_some()
-                        && m.arena.in_scenery(*t)
+                        && m.board.event_tiles.contains(t)
                 })
                 .min_by_key(by);
             soaking.or_else(|| {
@@ -737,6 +737,35 @@ fn use_for(m: &Match, slot: Slot, squares: &[Tile], asked: bool) -> Option<Tile>
                     .flatten()
             })
         }
+        // Rung where it stands: the other team's contests nearby come to nothing.
+        Item::Bell => m
+            .team(side.other())
+            .any(|e| {
+                let there = m.fighter(e).at;
+                !m.fighter(e).holding
+                    && there.distance(at) <= items::BELL_REACH
+                    && (asked || m.team(side).any(|x| m.fighter(x).at.touches(there)))
+            })
+            .then_some(at),
+        // Honey where one of theirs not holding walks in: near a square of the plan, or anywhere
+        // in reach when asked.
+        Item::Honey => m
+            .team(side.other())
+            .filter(|e| !m.fighter(*e).holding)
+            .map(|e| m.fighter(e).at)
+            .filter(|t| near(*t) && (asked || squares.iter().any(|s| s.distance(*t) <= 2)))
+            .min_by_key(by),
+        // A hop onto a square of the plan two tiles off.
+        Item::Seed => squares
+            .iter()
+            .copied()
+            .filter(|t| {
+                at.distance(*t) == 2
+                    && m.walkable(*t)
+                    && m.occupant(*t).is_none()
+                    && !crate::interpret::warned(m, *t)
+            })
+            .min_by_key(by),
     }
 }
 

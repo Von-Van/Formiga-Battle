@@ -88,6 +88,9 @@ pub struct Fighter {
     /// It has thought again this turn; it does not twice.
     #[serde(default, skip_serializing_if = "is_false")]
     pub rethought: bool,
+    /// It stepped into honey: it stays where it is for the rest of the turn, and can still hold.
+    #[serde(default)]
+    pub stuck: bool,
 }
 
 fn is_zero(n: &u16) -> bool {
@@ -118,6 +121,7 @@ impl Fighter {
             shelter_until: 0,
             task: None,
             rethought: false,
+            stuck: false,
         }
     }
 
@@ -130,6 +134,7 @@ impl Fighter {
     pub fn stationary(&self) -> bool {
         self.holding
             || self.interrupted
+            || self.stuck
             || self.bumped
             || self.order.is_none()
             || match self.order {
@@ -172,6 +177,21 @@ pub struct Board {
     /// Items used, marked on their tiles, landing next tick.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending: Vec<Pending>,
+    /// Where the map event lands, once it is warned.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub event_tiles: Vec<Tile>,
+    /// The switches that set it off, when it lands round them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub event_from: Vec<Tile>,
+    /// Ground gone under, each tile with the last tick nobody can stand there.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub closed: Vec<(Tile, u16)>,
+    /// Twigs floating on water, each with the last tick anyone can stand on it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rafts: Vec<(Tile, u16)>,
+    /// Sticky ground, each tile with the last tick it stays sticky.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub honey: Vec<(Tile, u16)>,
 }
 
 /// One turn as it was played: each team's plan as it was sent (empty for none in time), or each
@@ -253,6 +273,11 @@ impl Match {
             glint: Vec::new(),
             twigs: Vec::new(),
             pending: Vec::new(),
+            event_tiles: Vec::new(),
+            event_from: Vec::new(),
+            closed: Vec::new(),
+            rafts: Vec::new(),
+            honey: Vec::new(),
         };
         Ok(Self {
             arena,
@@ -315,8 +340,12 @@ impl Match {
 
     /// Whether the ground lets anyone stand on it just now.
     pub fn walkable(&self, tile: Tile) -> bool {
-        if self.board.twigs.iter().any(|(t, _)| *t == tile) {
+        let on = |list: &[(Tile, u16)]| list.iter().any(|(t, _)| *t == tile);
+        if on(&self.board.twigs) || on(&self.board.closed) {
             return false;
+        }
+        if on(&self.board.rafts) {
+            return true;
         }
         match self.arena.terrain(tile) {
             Terrain::Open => true,
@@ -337,6 +366,19 @@ impl Match {
 
     pub fn outcome(&self) -> Option<Outcome> {
         self.board.outcome
+    }
+
+    /// Whether a twig thrown here floats as a raft: open water, not a switch standing in it.
+    pub fn floats(&self, tile: Tile) -> bool {
+        self.arena.water
+            && self.arena.contains(tile)
+            && self.arena.terrain(tile) == Terrain::Obstacle
+            && !self.arena.switches.contains(&tile)
+    }
+
+    /// Whether this tile is sticky with honey.
+    pub fn sticky(&self, tile: Tile) -> bool {
+        self.board.honey.iter().any(|(t, _)| *t == tile)
     }
 
     /// Whether a switch can set the map event off this turn.
@@ -380,7 +422,7 @@ impl Match {
             Order::Use { at } => {
                 self.arena.contains(at)
                     && match self.fighter(slot).carrying {
-                        Some(Item::Twig) => ground(at),
+                        Some(Item::Twig) => ground(at) || self.floats(at),
                         Some(_) => true,
                         None => false,
                     }
@@ -468,6 +510,7 @@ impl Match {
             f.bumped = false;
             f.hung_back = false;
             f.turned_away = false;
+            f.stuck = false;
             f.holding = matches!(order, Some(Order::Hold { at }) if at == f.at) && !f.out;
             if f.holding {
                 let at = f.at;
@@ -640,6 +683,7 @@ impl Match {
         for (slot, _) in &moving {
             if !failed.contains(slot) {
                 self.pick_up(*slot, turn, tick, events);
+                self.stick(*slot, turn, tick, events);
             }
         }
         let mut push = |kind| events.push(Event { turn, tick, kind });
@@ -1024,30 +1068,23 @@ impl Match {
             if !defenders.is_empty() {
                 self.fighter_mut(c).turned_away = true;
                 damage[c.side.index()][c.index as usize] += defenders.len() as u8;
-                push(EventKind::SwitchDefended {
-                    slot: c,
-                    switch,
-                    holders: defenders,
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::SwitchDefended {
+                        slot: c,
+                        switch,
+                        holders: defenders,
+                    },
                 });
             } else if !self.switch_ready() {
-                push(EventKind::SwitchResting { slot: c, switch });
-            } else {
-                let rest = self.arena.scenery.as_ref().map_or(0, |s| s.rest);
-                self.board.event_at = Some(now + 1);
-                self.board.switch_ready_turn = turn.saturating_add(rest).saturating_add(1);
-                push(EventKind::SwitchTurned { slot: c, switch });
-                let tiles = self
-                    .arena
-                    .scenery
-                    .as_ref()
-                    .map(|s| s.tiles.clone())
-                    .unwrap_or_default();
-                let (lands_turn, lands_tick) = self.when(now + 1);
-                push(EventKind::SceneryWarned {
-                    tiles,
-                    lands_turn,
-                    lands_tick,
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::SwitchResting { slot: c, switch },
                 });
+            } else {
+                self.set_off(c, switch, turn, tick, now, events);
             }
         }
         uses.sort();

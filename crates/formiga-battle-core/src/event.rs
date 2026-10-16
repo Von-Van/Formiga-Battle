@@ -229,12 +229,19 @@ pub enum EventKind {
         switch: Tile,
     },
     /// The map event landed: everyone in `hit` got the effect; those in `sheltered` were under a
-    /// leaf umbrella.
+    /// leaf umbrella. A wave or the rising water washed each of `moved` toward the middle of the
+    /// board (`to` is `None` for one with nowhere to go, knocked off its feet where it stood).
     SceneryLanded {
         effect: Effect,
         tiles: Vec<Tile>,
         hit: Vec<Slot>,
         sheltered: Vec<Slot>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        moved: Vec<Blown>,
+    },
+    /// Ground that went under is back above the water.
+    GroundReopened {
+        tiles: Vec<Tile>,
     },
     /// Something is glinting on these spots: this item turns up on each of them at the start of
     /// the given turn.
@@ -285,6 +292,43 @@ pub enum EventKind {
     /// A twig fell over, and its tile is open again.
     TwigFell {
         at: Tile,
+    },
+    /// A twig thrown into water floats there as a raft until the end of the given turn.
+    RaftFloated {
+        by: Slot,
+        at: Tile,
+        until_turn: u8,
+    },
+    RaftSank {
+        at: Tile,
+    },
+    /// A pebble bell rang where its user stood: everyone in `hushed` lost the contest it had not
+    /// settled yet.
+    Rung {
+        by: Slot,
+        at: Tile,
+        hushed: Vec<Slot>,
+    },
+    /// Honey spilled over these tiles, sticky until the end of the given turn.
+    HoneySpilled {
+        by: Slot,
+        tiles: Vec<Tile>,
+        until_turn: u8,
+    },
+    HoneyDried {
+        tiles: Vec<Tile>,
+    },
+    /// It got into honey and is stuck where it stands for the rest of the turn; it can still
+    /// hold.
+    Stuck {
+        slot: Slot,
+        at: Tile,
+    },
+    /// A springy seed hopped it two tiles in one go.
+    Hopped {
+        slot: Slot,
+        from: Tile,
+        to: Tile,
     },
     /// A gate could not close with a twig wedged in it, and stays open.
     GateWedged {
