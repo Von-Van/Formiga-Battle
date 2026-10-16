@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+- Field Lessons, from the station: six short lessons on the Backyard, under the real rules, on
+  lighting the beacon, holding and contesting, flanks, team orders, the sprinkler and found
+  things, and who your companions are. Each begins from a board set up part way through a match,
+  with a goal, the squares that matter marked, notes where the field guide would be, and a few
+  turns to do it in; the timer waits, and a lesson earns and keeps nothing. Your own three play
+  them, doing exactly as told until the last lesson, where they are themselves. A colony that has
+  never played is pointed to them. `--review lessons` and `--review lesson` picture them.
+
 ## [0.67.10] - 2026-10-16
 
 A patch to 0.67.9, built on Formiga Desktop 0.67.10, which takes the colony to Battle by train as
