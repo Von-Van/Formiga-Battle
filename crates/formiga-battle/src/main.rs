@@ -1,19 +1,25 @@
 //! Formiga Battle: 3v3 simultaneous-order tactics for Formiga Desktop's companions. With no
 //! command it opens the window; the headless commands are in `cli`.
 
+mod announce;
 mod app;
 mod chrome;
 mod cli;
+mod feel;
 mod friend;
 mod garden;
 mod host;
 mod icon;
 mod iso;
+mod lettering;
 mod look;
 mod playback;
 mod rewards;
 mod scene;
+mod sound;
+mod station;
 mod table;
+mod ticket;
 
 use anyhow::{Context, Result, bail};
 use formiga_art::Canvas;
@@ -39,12 +45,17 @@ WINDOW:
     --snap <PNG>             Open, save a picture of the window after --at seconds (default 6)
                              and close
     --at <SECONDS>           With --snap
-    --review <STAGE>         With --snap: picking (the team choice), orders (a turn's orders
-                             half given, MOVE chosen), playing (the AI giving your orders too,
+    --review <STAGE>         With --snap: station (the train in at the Battle Grounds, everyone
+                             aboard), where (choosing a place), picking or who (the team
+                             choice), friend (a friend's room about to be opened), history,
+                             settings, orders (a
+                             turn's orders half given, MOVE chosen), playing (the AI giving
+                             your orders too,
                              every turn locked at once; the default) or notebook (the sample
                              colony's notebook, as Desktop would send it, open) or room (a room
                              opened on the relay, its code showing; FORMIGA_BATTLE_RELAY points
-                             at a local one from `formiga-battle relay`)
+                             at a local one from `formiga-battle relay`) or account (as
+                             playing, with the whole match open)
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
                              (default 0), at --scale (default 3), --into seconds into the
                              turn after (default: still)
@@ -126,11 +137,17 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
             "--at" => parsed.at = value()?.parse().context("--at takes seconds")?,
             "--review" => {
                 parsed.review = match value()?.as_str() {
-                    "picking" => app::Review::Picking,
+                    "station" => app::Review::Station,
+                    "where" => app::Review::Where,
+                    "picking" | "who" => app::Review::Picking,
+                    "friend" => app::Review::Friend,
+                    "history" => app::Review::History,
+                    "settings" => app::Review::Settings,
                     "orders" => app::Review::Orders,
                     "playing" => app::Review::Playing,
                     "notebook" => app::Review::Notebook,
                     "room" => app::Review::Room,
+                    "account" => app::Review::Account,
                     other => bail!("unknown stage {other:?}"),
                 }
             }
@@ -208,7 +225,15 @@ fn window(args: Vec<String>) -> Result<()> {
         options,
         Box::new(move |cc| {
             cc.egui_ctx.set_theme(eframe::egui::ThemePreference::Dark);
-            Ok(Box::new(app::BattleApp::new(host, table, review, snap)))
+            // A window opened only for its picture plays nothing.
+            let sound = if reviewing {
+                sound::Sound::silent()
+            } else {
+                sound::Sound::open()
+            };
+            Ok(Box::new(app::BattleApp::new(
+                host, table, review, snap, sound,
+            )))
         }),
     )
     .map_err(|error| anyhow::anyhow!("the window could not open: {error}"))

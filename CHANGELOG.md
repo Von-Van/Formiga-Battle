@@ -7,6 +7,27 @@
   none, sometimes two (about one team-turn in four before). Fewer matches are won at the beacon
   (13%, from 21%), and the kinds score further apart under the Exhibition coach. Recorded matches
   from earlier builds no longer replay.
+- Battle opens at the Battle Grounds, the first spread of the Handler's notebook. On its left page
+  the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
+  it, a face at each window, and a coach more for every three past six. On its right, two railway
+  tickets: Out in the World, to play a friend online, and Close to Home, to play the visiting team
+  offline. A click hurries the train in; with reduced motion it is already in. After a match, Back
+  to the station brings it in again.
+- History & settings, beneath the two tickets: every match the colony has played with who went
+  and how it ended, beside the Open Circuit points and each cup's progress; and reduced motion and
+  sound for the sitting, with keys to remember.
+- Every button, card and switch answers a touch the same way: it lifts when pointed at, sinks when
+  pressed and springs back, with a brass sparkle for the way on and a shake for the way back. Cards
+  drop onto each page as it turns, a chosen companion hops, and the next place in the team breathes
+  until it is filled. None of it moves under reduced motion.
+- Getting ready is the Handler's notebook, its pages turned as Desktop's journal turns them: where
+  to play, with the place pictured large and each cup's progress; who goes, every companion on a
+  card with temperament, habits and notebook note, beside a lineup of the three chosen; and, for a
+  friend, the room. Tabs along the top turn back to any page, and the way back to the station is
+  beside them.
+- The friend's room is its own page: sign the name your friend sees on a line, then open a room or
+  join one side by side. An open room's code is shown on a ticket with a button to copy it, and a
+  mistyped code says what a code is made of.
 
 ## [0.67.8] - 2026-10-15
 

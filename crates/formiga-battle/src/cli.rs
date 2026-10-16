@@ -18,6 +18,8 @@ HEADLESS COMMANDS:
     tournament   Play many AI matches between random trios and report fairness
     replay       Replay a recorded match and check every turn
     arena        Draw an arena's tiles
+    sounds       Write every sound effect and some of each piece of music as WAV files into a
+                 folder (sounds <folder>), to listen to them without the window
     relay        For development: a local copy of the friend-match relay (--bind <addr:port>,
                  default 127.0.0.1:7878); point Battle at it with FORMIGA_BATTLE_RELAY
 
@@ -92,7 +94,15 @@ impl Args {
 }
 
 /// The commands this module answers.
-pub const COMMANDS: [&str; 6] = ["roster", "match", "tournament", "replay", "arena", "relay"];
+pub const COMMANDS: [&str; 7] = [
+    "roster",
+    "match",
+    "tournament",
+    "replay",
+    "arena",
+    "relay",
+    "sounds",
+];
 
 pub fn run(mut args: Vec<String>) -> Result<()> {
     let command = args.remove(0);
@@ -127,6 +137,16 @@ pub fn run(mut args: Vec<String>) -> Result<()> {
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(3600));
             }
+        }
+        "sounds" => {
+            let folder = args.0.first().cloned().context("sounds needs a folder")?;
+            args.0.remove(0);
+            args.done()?;
+            for line in crate::sound::render(&PathBuf::from(&folder))? {
+                println!("{line}");
+            }
+            println!("Wrote Battle's sounds to {folder}");
+            Ok(())
         }
         "arena" => {
             let arena = load_arena(args.value("--file")?)?;

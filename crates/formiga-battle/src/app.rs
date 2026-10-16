@@ -1,14 +1,28 @@
-//! The window: the Handler's notebook (`chrome`), open on the board on its left page and the
-//! Handler's notes on its right one; the turn, the beacon and the timer on the leather along the
-//! top, and what to do next along the foot. Everything it shows comes from the `Table`.
+//! The window. It opens at the Battle Grounds (`station`), where the train comes in with the Handler's
+//! companions aboard and the Handler chooses where they are off to: out in the world to a friend,
+//! or close to home against the visitors. Then the Handler's notebook (`chrome`) opens, its pages
+//! turned one by one as Desktop's journal turns them (`menus`): where to play, who goes and, for a
+//! friend, the room. In a match it lies open on the board on its left page and the Handler's notes
+//! on its right one; the turn, the beacon and the timer on the leather along the top, and what to
+//! do next along the foot. Everything it shows comes from the `Table`.
+//!
+//! While a turn plays out it is told over the board (`announce`): a headline on a slip at the
+//! top, a cartoon word where it happened, and its sound. The last two headlines stay on a card
+//! in the board's corner, and the whole match, in full sentences, opens from there. The right
+//! page keeps the orders and a field guide to the arena, the rules and the controls.
 
+mod handler;
+mod menus;
+
+use crate::announce::{Callout, Style};
 use crate::chrome::{self, Kind, ink, label_job};
 use crate::garden::Garden;
 use crate::host::Host;
 use crate::iso::View;
 use crate::look::Look;
 use crate::scene::{self, TEAM};
-use crate::table::{Table, Verb};
+use crate::sound::{Cue, Sound, Track};
+use crate::table::{Aim, Table, Verb};
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
 use formiga_art::Canvas;
 use formiga_battle_contract::Contender;
@@ -26,7 +40,7 @@ const FOOT: f32 = 17.0;
 const FOLD: f32 = 3.0;
 /// How long a page takes to settle in when it changes, in seconds.
 const SETTLE: f32 = 0.22;
-/// The side tabs, left to right.
+/// The side tabs in a match, left to right.
 const TABS: [&str; 2] = ["Orders", "Notebook"];
 
 /// What a friend match sends, said in full before the first is opened.
@@ -40,20 +54,83 @@ const SHARED: [&str; 5] = [
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
-    Picking,
+    /// At the Battle Grounds, the notebook's first spread: the train in with everyone aboard.
+    Station,
+    /// The notebook open on getting ready: where, who, and the friend's room.
+    Journal,
     Playing,
+}
+
+/// Where the companions are off to, chosen at the station.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outing {
+    /// Out in the world: a friend's Battle, through the relay. Online.
+    World,
+    /// Close to home: the visiting team, on this computer. Offline.
+    Home,
+}
+
+impl Outing {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::World => "Out in the World",
+            Self::Home => "Close to Home",
+        }
+    }
+
+    /// The pages of the notebook this outing turns through.
+    pub fn steps(self) -> &'static [Step] {
+        match self {
+            Self::World => &[Step::Where, Step::Who, Step::Room],
+            Self::Home => &[Step::Where, Step::Who],
+        }
+    }
+}
+
+/// A page of getting ready, in the order they are turned.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Step {
+    Where,
+    Who,
+    Room,
+    /// The Handler's own pages, opened from the station rather than on the way anywhere.
+    History,
+    Settings,
+}
+
+impl Step {
+    pub fn tab(self) -> &'static str {
+        match self {
+            Self::Where => "Where",
+            Self::Who => "Who",
+            Self::Room => "Friend",
+            Self::History => "History",
+            Self::Settings => "Settings",
+        }
+    }
 }
 
 /// What a review picture shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Review {
+    /// The Battle Grounds, the train coming in or in.
+    Station,
+    /// Choosing where to play the visitors.
+    Where,
     Picking,
+    /// A friend's room about to be opened: three chosen, a name signed.
+    Friend,
+    /// The sample colony's history, and its settings.
+    History,
+    Settings,
     Orders,
     Playing,
     /// A few matches played out of sight first, then the notebook open beside the board.
     Notebook,
     /// A room opened for a friend on the room service, its code showing.
     Room,
+    /// As `Playing`, with the whole match open over the board.
+    Account,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -72,6 +149,8 @@ struct Layout {
     right: Rect,
     patch: Rect,
     tabs: Vec<Rect>,
+    /// Which tab is open.
+    open_tab: usize,
 }
 
 /// The painted cover, kept until the window changes size or a tab is turned.
@@ -112,8 +191,18 @@ pub struct BattleApp {
     finished_at: Option<f32>,
     /// Whether the beacon is held by both at this moment of the turn shown.
     paused: bool,
-    /// The picking page shows how to play a friend, not just the button for it.
-    friend_open: bool,
+    /// Where the companions are off to, and which page of getting ready is open.
+    outing: Outing,
+    step: Step,
+    /// A page being turned.
+    turn: Option<chrome::PageTurn>,
+    /// The Battle Grounds, once there is a page to size them to; and their picture this frame.
+    station: Option<crate::station::Station>,
+    station_picture: Option<(i64, egui::TextureHandle)>,
+    /// The friend's room was asked for by its code, not opened.
+    joining: bool,
+    /// What was felt away from the window's context, told with the rest at the next frame.
+    felt: Vec<crate::feel::Feedback>,
     /// The chosen arena, pictured under the companions while choosing.
     preview: Option<(String, egui::TextureHandle)>,
     /// The board's marks, painted for the key on its page.
@@ -122,15 +211,79 @@ pub struct BattleApp {
     board_scale: f32,
     /// Every built-in arena, with a little picture of it, for choosing where to play.
     arenas: Vec<(formiga_battle_core::Arena, Option<egui::TextureHandle>)>,
+    sound: Sound,
+    /// The turn being announced (when it began showing) and how many of its callouts have been.
+    announced: (f32, usize),
+    /// Callouts on the board now, and when each came.
+    live: Vec<(Callout, f32)>,
+    /// The last two headlines, newest last, and whose good news each was.
+    recent: Vec<(String, Option<Side>)>,
+    /// The whole match, told in full, is open over the board.
+    account_open: bool,
+    /// The last of the timer's final seconds ticked.
+    ticked: Option<u32>,
+    /// The end of the match has been heard.
+    ended_heard: bool,
+    /// The card of sound volumes is open.
+    sound_open: bool,
+    /// Which part of the field guide is showing.
+    guide: Guide,
+    /// When the match's ready-up began, and whether its "Go!" has been heard.
+    ready: Option<(f32, bool)>,
+    /// The turn whose orders began last, as the table's clock has it, for its chirp.
+    orders_heard: f32,
 }
 
+/// The field guide's topics, one showing at a time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Guide {
+    Win,
+    Orders,
+    Marks,
+}
+
+impl Guide {
+    const ALL: [Self; 3] = [Self::Win, Self::Orders, Self::Marks];
+
+    fn word(self) -> &'static str {
+        match self {
+            Self::Win => "How to win",
+            Self::Orders => "Orders",
+            Self::Marks => "Marks",
+        }
+    }
+}
+
+/// A field guide row's picture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Glyph {
+    /// One of the board's marks, by its place in `scene::Key::ALL`.
+    Key(usize),
+    Stars,
+    Watch,
+}
+
+/// The least time a headline is shown before the next takes its place.
+const HEADLINE_SECS: f32 = 0.8;
+
+/// How long the ready-up takes: "Ready?", then "Go!".
+const READY_SECS: f32 = 1.5;
+/// When in it "Go!" comes.
+const GO_AT: f32 = 0.85;
+
 impl BattleApp {
-    pub fn new(host: Host, table: Table, review: Option<Review>, snap: Option<Snap>) -> Self {
+    pub fn new(
+        host: Host,
+        table: Table,
+        review: Option<Review>,
+        snap: Option<Snap>,
+        sound: Sound,
+    ) -> Self {
         let view = View::new(table.arena.width, table.arena.height);
         let mut app = Self {
             host,
             table,
-            stage: Stage::Picking,
+            stage: Stage::Station,
             view,
             board: None,
             garden: None,
@@ -142,7 +295,7 @@ impl BattleApp {
             handler: String::new(),
             join_code: String::new(),
             understood: false,
-            autoplay: review == Some(Review::Playing),
+            autoplay: matches!(review, Some(Review::Playing | Review::Account)),
             snap,
             clock: 0.0,
             styled: false,
@@ -150,7 +303,13 @@ impl BattleApp {
             pokes: Vec::new(),
             finished_at: None,
             paused: false,
-            friend_open: false,
+            outing: Outing::Home,
+            step: Step::Where,
+            turn: None,
+            station: None,
+            station_picture: None,
+            joining: false,
+            felt: Vec::new(),
             preview: None,
             keys: Vec::new(),
             board_scale: 2.0,
@@ -158,9 +317,24 @@ impl BattleApp {
                 .into_iter()
                 .map(|a| (a, None))
                 .collect(),
+            sound,
+            announced: (-1.0, 0),
+            live: Vec::new(),
+            recent: Vec::new(),
+            account_open: false,
+            ticked: None,
+            ended_heard: false,
+            sound_open: false,
+            guide: Guide::Win,
+            ready: None,
+            orders_heard: 0.0,
         };
         match review {
             Some(Review::Playing) => app.begin(),
+            Some(Review::Account) => {
+                app.begin();
+                app.account_open = true;
+            }
             Some(Review::Orders) => {
                 app.begin();
                 app.table.coach_orders();
@@ -175,26 +349,190 @@ impl BattleApp {
                 app.begin();
                 app.notebook_open = true;
             }
+            Some(Review::Where) => app.open_journal(Outing::Home, Step::Where),
+            Some(Review::History) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.open_journal(Outing::Home, Step::History);
+            }
+            Some(Review::Settings) => app.open_journal(Outing::Home, Step::Settings),
+            Some(Review::Picking) => app.open_journal(Outing::Home, Step::Who),
+            Some(Review::Friend) => {
+                app.open_journal(Outing::World, Step::Room);
+                app.table.picked = (0..TEAM_SIZE.min(app.table.home.len())).collect();
+                app.handler = "Jake".to_owned();
+            }
             Some(Review::Room) => {
-                app.friend_open = true;
+                app.open_journal(Outing::World, Step::Room);
+                app.table.picked = (0..TEAM_SIZE.min(app.table.home.len())).collect();
                 app.handler = "Jake".to_owned();
                 app.understood = true;
                 app.table.open_room("Jake", None);
             }
-            Some(Review::Picking) | None => {}
+            Some(Review::Station) | None => {}
         }
         app
     }
 
+    /// Plays what was felt last frame. A companion chosen or taken out is heard as that, not
+    /// as the click on its card as well.
+    fn hear(&mut self, felt: &[crate::feel::Feedback]) {
+        use crate::feel::Feedback;
+        let picked = felt
+            .iter()
+            .any(|f| matches!(f, Feedback::Hop | Feedback::Unpick));
+        for f in felt {
+            let cue = match f {
+                Feedback::Hover => Cue::Hover,
+                Feedback::Select if picked => continue,
+                Feedback::Select => Cue::Click,
+                Feedback::Confirm => Cue::Confirm,
+                Feedback::Cancel => Cue::Back,
+                Feedback::PageTurn => Cue::PageTurn,
+                Feedback::Hop => Cue::Pick,
+                Feedback::Unpick => Cue::Unpick,
+                Feedback::TrainIn => Cue::TrainArrive,
+                Feedback::TrainStops => continue,
+                Feedback::TrainOut => Cue::TrainDepart,
+            };
+            self.sound.play(cue);
+        }
+    }
+
     fn begin(&mut self) {
-        match self.table.start(self.clock) {
+        // The first turn's clock starts once the ready-up is over.
+        match self.table.start(self.clock + READY_SECS) {
             Ok(()) => {
                 self.stage = Stage::Playing;
                 self.error = None;
                 self.turned = self.clock;
-                self.finished_at = None;
+                self.fresh_match();
+                self.ready_up();
             }
             Err(error) => self.error = Some(format!("{error:#}")),
+        }
+    }
+
+    /// "Ready?", then "Go!" over the board as a match begins.
+    fn ready_up(&mut self) {
+        self.ready = Some((self.clock, false));
+        self.orders_heard = self.table.turn_began;
+        self.sound.play(Cue::Begin);
+    }
+
+    /// Forgets what was announced in the last match.
+    fn fresh_match(&mut self) {
+        self.finished_at = None;
+        self.announced = (-1.0, 0);
+        self.live.clear();
+        self.recent.clear();
+        self.account_open = false;
+        self.ticked = None;
+        self.ended_heard = false;
+    }
+
+    /// Locks in the orders, if they can be: the button, Enter, or nothing left to give.
+    fn lock_in(&mut self, now: f32) {
+        if self.lock_quietly(now) {
+            self.sound.play(Cue::Lock);
+        }
+    }
+
+    /// Locks in the orders without a sound of its own: for the button, which the interaction kit
+    /// already answers. True if they were locked.
+    fn lock_quietly(&mut self, now: f32) -> bool {
+        let sent = self.table.friend.as_ref().is_some_and(|f| {
+            self.table
+                .m
+                .as_ref()
+                .is_some_and(|m| f.sent(m.board.turn + 1))
+        });
+        let can = self.table.shown.is_none() && self.table.outcome().is_none() && !sent;
+        if can {
+            self.table.lock(now);
+        }
+        can
+    }
+
+    /// Fires whatever of the turn being shown has come due: its sound, its word on the board and
+    /// its headline, which also goes on the card of the last two.
+    fn announce(&mut self, now: f32) {
+        self.live.retain(|(_, born)| now - born < 4.0);
+        let Some(shown) = &self.table.shown else {
+            return;
+        };
+        if self.announced.0 != shown.started {
+            // A new turn: the last one's words and slips make way for it.
+            self.announced = (shown.started, 0);
+            self.live.clear();
+            self.sound.play(Cue::Reveal);
+        }
+        let t = now - shown.started;
+        while let Some(c) = shown.callouts.get(self.announced.1)
+            && c.at <= t
+        {
+            if let Some(cue) = c.cue {
+                self.sound.play(cue);
+            }
+            // The same news twice running is kept once.
+            if let Some(headline) = &c.headline
+                && self.recent.last().is_none_or(|(last, _)| last != headline)
+            {
+                self.recent.push((headline.clone(), c.good_for));
+                if self.recent.len() > 2 {
+                    self.recent.remove(0);
+                }
+            }
+            if c.word.is_some() || c.headline.is_some() {
+                self.live.push((c.clone(), now));
+            }
+            self.announced.1 += 1;
+        }
+    }
+
+    /// The sounds that come with the clock: the music for where the Handler is, the timer's
+    /// last seconds, and the end of a match.
+    fn listen(&mut self, now: f32) {
+        let finished = self.stage == Stage::Playing && self.table.finished(now);
+        let track = if self.stage == Stage::Playing && !finished {
+            Track::Match
+        } else {
+            Track::Lobby
+        };
+        self.sound.music(Some(track));
+        if self.stage != Stage::Playing {
+            return;
+        }
+        if let Some((at, go)) = &mut self.ready
+            && !*go
+            && now - *at >= GO_AT
+        {
+            *go = true;
+            self.sound.play(Cue::Whistle);
+        }
+        // Each new turn's orders begin with a chirp from the team, ready for them.
+        if self.table.shown.is_none()
+            && self.table.outcome().is_none()
+            && self.table.turn_began != self.orders_heard
+        {
+            self.orders_heard = self.table.turn_began;
+            self.sound.play(Cue::Ready);
+        }
+        if self.table.shown.is_none() && self.table.outcome().is_none() {
+            let left = self.table.time_left(now);
+            let second = left.ceil() as u32;
+            if (1..=5).contains(&second) && self.ticked != Some(second) {
+                self.ticked = Some(second);
+                self.sound.play(Cue::Tick);
+            }
+        }
+        if finished && !self.ended_heard {
+            self.ended_heard = true;
+            self.sound
+                .play(match self.table.outcome().and_then(|o| o.winner) {
+                    Some(side) if side == self.table.you => Cue::Fanfare,
+                    Some(_) => Cue::Womp,
+                    None => Cue::Shrug,
+                });
         }
     }
 
@@ -254,17 +592,24 @@ impl BattleApp {
             ),
         );
         let mut tabs = Vec::new();
-        if self.stage == Stage::Playing {
-            let mut x = right.min.x + unit * 4.0;
-            for word in TABS {
-                let w = snap(measure(word, chrome::LABEL) + unit * 12.0);
-                tabs.push(Rect::from_min_size(
-                    pos2(x, patch.min.y),
-                    vec2(w, patch.height()),
-                ));
-                x += w + unit * 3.0;
-            }
+        let words = self.tab_words();
+        let mut x = right.min.x + unit * 4.0;
+        for word in &words {
+            let w = snap(measure(word, chrome::LABEL) + unit * 12.0);
+            tabs.push(Rect::from_min_size(
+                pos2(x, patch.min.y),
+                vec2(w, patch.height()),
+            ));
+            x += w + unit * 3.0;
         }
+        let open_tab = match self.stage {
+            Stage::Playing => usize::from(self.notebook_open),
+            _ => self
+                .steps()
+                .iter()
+                .position(|s| *s == self.step)
+                .unwrap_or(0),
+        };
         Layout {
             unit,
             full,
@@ -273,6 +618,22 @@ impl BattleApp {
             right,
             patch,
             tabs,
+            open_tab,
+        }
+    }
+
+    /// The tabs stitched to the cover: a match's two pages, or the pages of getting ready,
+    /// numbered in the order they are turned.
+    fn tab_words(&self) -> Vec<String> {
+        match self.stage {
+            Stage::Playing => TABS.iter().map(|w| (*w).to_owned()).collect(),
+            Stage::Journal => self
+                .steps()
+                .iter()
+                .enumerate()
+                .map(|(i, s)| format!("{} {}", i + 1, s.tab()))
+                .collect(),
+            Stage::Station => Vec::new(),
         }
     }
 
@@ -301,7 +662,7 @@ impl BattleApp {
                 .enumerate()
                 .map(|(i, r)| chrome::Tab {
                     at: px(*r),
-                    open: (i == 1) == self.notebook_open,
+                    open: i == layout.open_tab,
                 })
                 .collect(),
             rules: (24, 14),
@@ -352,6 +713,10 @@ impl BattleApp {
             self.styled = true;
         }
         self.clock = ctx.input(|input| input.time) as f32;
+        crate::feel::set_still(&ctx, self.table.reduce_motion);
+        let mut felt = std::mem::take(&mut self.felt);
+        felt.extend(crate::feel::take(&ctx));
+        self.hear(&felt);
         let now = self.clock;
         if self.turned < 0.0 {
             self.turned = now;
@@ -360,27 +725,36 @@ impl BattleApp {
             self.stage = Stage::Playing;
             self.notebook_open = false;
             self.turned = now;
+            self.fresh_match();
+            self.ready_up();
         }
         if self.stage == Stage::Playing {
-            if self.autoplay && self.table.shown.is_none() && !self.table.finished(now) {
+            let readying = self.ready.is_some_and(|(at, _)| now - at < READY_SECS);
+            if self.autoplay && !readying && self.table.shown.is_none() && !self.table.finished(now)
+            {
                 self.table.coach_orders();
-                self.table.lock(now);
+                self.lock_in(now);
             }
             if self.table.shown.is_none()
                 && self.table.outcome().is_none()
                 && self.table.time_left(now) <= 0.0
             {
-                self.table.lock(now);
+                self.lock_in(now);
             }
             if self.table.finished(now) {
                 self.finished_at.get_or_insert(now);
             }
+            self.announce(now);
         }
+        self.listen(now);
         // The garden moves even while nobody does.
         ctx.request_repaint();
         self.keys(&ctx);
         self.pokes.retain(|(_, at)| now - at < 0.6);
         let full = ui.max_rect();
+        if self.stage == Stage::Station {
+            self.station_tick(&ctx, now);
+        }
         let layout = self.layout(&ctx, full);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
@@ -393,19 +767,31 @@ impl BattleApp {
                 let right = Rect::from_min_max(pos2(right.min.x + u * 6.0, right.min.y), right.max);
                 let fade = self.settled(now);
                 match self.stage {
-                    Stage::Picking => {
+                    Stage::Journal => {
+                        // A page being turned shows itself turning; otherwise it settles in.
+                        let fade = if self.turn.is_some() { 1.0 } else { fade };
                         ui.scope_builder(egui::UiBuilder::new().max_rect(left), |ui| {
                             ui.multiply_opacity(fade);
-                            self.picking(ui, &ctx, u);
+                            self.journal_left(ui, &ctx, u);
                         });
                         ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
                             ui.multiply_opacity(fade);
-                            self.lobby_page(ui, u);
+                            self.journal_right(ui, &ctx, u);
+                        });
+                    }
+                    Stage::Station => {
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(left), |ui| {
+                            ui.multiply_opacity(fade);
+                            self.station_left(ui, &ctx, u, now);
+                        });
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                            ui.multiply_opacity(fade);
+                            self.station_right(ui, u, now);
                         });
                     }
                     Stage::Playing => {
                         self.board_view(ui, &ctx, layout.left.shrink(u * 4.0), now, u);
-                        self.board_page(ui, &ctx, layout.left, now, u);
+                        self.board_page(ui, layout.left, now, u);
                         ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
                             ui.multiply_opacity(fade);
                             self.side_panel(ui, &ctx, now, u);
@@ -415,31 +801,59 @@ impl BattleApp {
                 self.top_bar(ui, &layout, now);
                 self.foot_bar(ui, &layout, now);
             });
+        if let Some(turn) = self.turn {
+            let painter = ctx
+                .layer_painter(egui::LayerId::new(
+                    egui::Order::Foreground,
+                    Id::new("page-turn"),
+                ))
+                .with_clip_rect(layout.left.union(layout.right));
+            if !chrome::turn_leaf(&painter, turn, now, layout.left, layout.right, layout.unit) {
+                self.turn = None;
+            }
+        }
         self.take_snap(&ctx);
     }
 
     fn keys(&mut self, ctx: &egui::Context) {
-        if self.stage != Stage::Playing
-            || self.table.shown.is_some()
-            || ctx.egui_wants_keyboard_input()
+        if self.stage == Stage::Journal
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input(|i| i.key_pressed(egui::Key::Escape))
         {
+            crate::feel::emit(ctx, crate::feel::Feedback::Cancel);
+            self.go_back();
+            return;
+        }
+        if self.stage != Stage::Playing || ctx.egui_wants_keyboard_input() {
             return;
         }
         let pressed = |key| ctx.input(|i| i.key_pressed(key));
-        if pressed(egui::Key::M) {
-            self.table.choose_verb(Verb::Move);
-        }
-        if pressed(egui::Key::H) {
-            self.table.choose_verb(Verb::Hold);
-        }
-        if pressed(egui::Key::C) {
-            self.table.choose_verb(Verb::Contest);
+        if pressed(egui::Key::L) {
+            self.toggle_account_by_key();
         }
         if pressed(egui::Key::Escape) {
-            self.table.verb = None;
+            if self.account_open {
+                self.toggle_account_by_key();
+            } else if self.table.verb.is_some() {
+                self.table.verb = None;
+                self.sound.play(Cue::Cancel);
+            }
+        }
+        if self.table.shown.is_some() {
+            return;
+        }
+        for (key, verb) in [
+            (egui::Key::M, Verb::Move),
+            (egui::Key::H, Verb::Hold),
+            (egui::Key::C, Verb::Contest),
+        ] {
+            if pressed(key) && self.table.selected.is_some() {
+                self.table.choose_verb(verb);
+                self.sound.play(Cue::Click);
+            }
         }
         if pressed(egui::Key::Enter) {
-            self.table.lock(self.clock);
+            self.lock_in(self.clock);
         }
         for (key, index) in [
             (egui::Key::Num1, 0),
@@ -448,36 +862,104 @@ impl BattleApp {
         ] {
             if pressed(key) {
                 self.table.select(index);
+                if self.table.selected == Some(index) {
+                    self.sound.play(Cue::Select);
+                }
             }
         }
+    }
+
+    /// Opens or closes the whole match. Buttons are heard through the interaction kit; the L
+    /// key is heard here.
+    fn toggle_account(&mut self) {
+        self.account_open = !self.account_open;
+    }
+
+    fn toggle_account_by_key(&mut self) {
+        self.toggle_account();
+        self.sound.play(if self.account_open {
+            Cue::Pick
+        } else {
+            Cue::Unpick
+        });
     }
 
     /// The tabs and what is written on the leather along the top: the arena, the turn, how near
     /// each team is to lighting the beacon, and the timer.
     fn top_bar(&mut self, ui: &mut egui::Ui, layout: &Layout, now: f32) {
         let u = layout.unit;
+        let words = self.tab_words();
         for (i, rect) in layout.tabs.iter().enumerate() {
-            let open = (i == 1) == self.notebook_open;
-            let response = ui.interact(*rect, Id::new(("tab", i)), Sense::click());
-            if response.hovered() && !open {
+            let open = i == layout.open_tab;
+            let reachable = match self.stage {
+                Stage::Journal => self.reachable(self.steps()[i]).is_ok(),
+                _ => true,
+            };
+            let mut response = ui.interact(
+                *rect,
+                Id::new(("tab", i)),
+                if reachable {
+                    Sense::click()
+                } else {
+                    Sense::hover()
+                },
+            );
+            if self.stage == Stage::Playing && !open {
+                crate::feel::press(
+                    ui.ctx(),
+                    Id::new(("tab", i)),
+                    &response,
+                    crate::feel::Feel::Select,
+                );
+            }
+            if response.hovered() && !open && reachable {
                 chrome::stepped(ui.painter(), *rect, u, Color32::from_rgb(0x87, 0x60, 0x4a));
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             }
-            let colour = if open { ink::PAGE } else { ink::DEBOSS };
+            let colour = if open {
+                ink::PAGE
+            } else if reachable {
+                ink::DEBOSS
+            } else {
+                ink::DEBOSS.gamma_multiply(0.45)
+            };
             let galley = ui
                 .painter()
-                .layout_job(label_job(TABS[i], chrome::LABEL, colour));
+                .layout_job(label_job(&words[i], chrome::LABEL, colour));
             ui.painter()
                 .galley(rect.center() - galley.size() / 2.0, galley, colour);
+            if self.stage == Stage::Journal
+                && let Err(why) = self.reachable(self.steps()[i])
+            {
+                response = response.on_hover_text(why);
+            }
             if response.clicked() && !open {
-                self.notebook_open = i == 1;
-                self.turned = now;
+                match self.stage {
+                    Stage::Journal => self.turn_to(self.steps()[i], now),
+                    _ => {
+                        self.notebook_open = i == 1;
+                        self.turned = now;
+                    }
+                }
             }
         }
+        self.sound_button(ui, layout);
         let area = Rect::from_min_max(
             pos2(layout.patch.max.x + u * 8.0, layout.patch.min.y),
             pos2(layout.left.max.x - u * 4.0, layout.patch.max.y),
         );
+        if self.stage == Stage::Journal {
+            self.journal_strip(ui, area, u, now);
+            return;
+        }
+        if self.stage == Stage::Station {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.label(label_job("The Battle Grounds", chrome::LABEL, ink::COVER));
+                });
+            });
+            return;
+        }
         let paused = self.paused;
         ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
             ui.horizontal_centered(|ui| {
@@ -558,6 +1040,135 @@ impl BattleApp {
         });
     }
 
+    /// The sound, on the leather at the top right: a little speaker that opens a card with the
+    /// music's and the sounds' volumes and a mute.
+    fn sound_button(&mut self, ui: &mut egui::Ui, layout: &Layout) {
+        let u = layout.unit;
+        let levels = self.sound.levels();
+        let word = if levels.muted { "Muted" } else { "Sound" };
+        let galley = ui
+            .painter()
+            .layout_job(label_job(word, chrome::LABEL, ink::DEBOSS));
+        let size = vec2(galley.size().x + u * 23.0, layout.patch.height());
+        let rect = Rect::from_min_size(
+            pos2(layout.right.max.x - size.x - u * 2.0, layout.patch.min.y),
+            size,
+        );
+        let response = ui
+            .interact(rect, Id::new("sound"), Sense::click())
+            .on_hover_text("Music and sound volume");
+        crate::feel::press(
+            ui.ctx(),
+            Id::new("sound"),
+            &response,
+            if self.sound_open {
+                crate::feel::Feel::Cancel
+            } else {
+                crate::feel::Feel::Select
+            },
+        );
+        let painter = ui.painter();
+        let colour = if response.hovered() || self.sound_open {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            chrome::stepped(painter, rect, u, Color32::from_rgb(0x87, 0x60, 0x4a));
+            ink::COVER
+        } else {
+            ink::DEBOSS
+        };
+        let waves = if levels.muted || levels.music + levels.sounds == 0.0 {
+            0
+        } else if levels.music.max(levels.sounds) < 0.5 {
+            1
+        } else {
+            2
+        };
+        speaker(
+            painter,
+            pos2(rect.min.x + u * 7.0, rect.center().y),
+            waves,
+            colour,
+            u,
+        );
+        let galley = painter.layout_job(label_job(word, chrome::LABEL, colour));
+        painter.galley(
+            pos2(
+                rect.min.x + u * 18.0,
+                rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            colour,
+        );
+        if response.clicked() {
+            self.sound_open = !self.sound_open;
+        }
+        if self.sound_open {
+            self.sound_card(ui.ctx(), rect, u);
+        }
+    }
+
+    /// The card of volumes under the speaker: music, sounds, and a mute for everything.
+    fn sound_card(&mut self, ctx: &egui::Context, under: Rect, u: f32) {
+        let mut levels = self.sound.levels();
+        let before = levels;
+        let width = 230.0;
+        let mut close = false;
+        egui::Area::new(Id::new("sound-card"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos2(under.max.x - width, under.max.y + u * 3.0))
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(ink::CARD)
+                    .stroke(Stroke::new(u, ink::LINE))
+                    .shadow(egui::Shadow {
+                        offset: [2, 3],
+                        blur: 0,
+                        spread: 0,
+                        color: Color32::from_black_alpha(60),
+                    })
+                    .inner_margin(egui::Margin::same((u * 6.0).round() as i8))
+                    .show(ui, |ui| {
+                        ui.set_width(width - u * 12.0);
+                        ui.horizontal(|ui| {
+                            chrome::kicker(ui, "Sound");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if chrome::button(ui, "close", Kind::Back, false, true, None, u)
+                                        .clicked()
+                                    {
+                                        close = true;
+                                    }
+                                },
+                            );
+                        });
+                        ui.spacing_mut().slider_width = width - u * 12.0 - 70.0;
+                        for (word, level) in
+                            [("Music", &mut levels.music), ("Sounds", &mut levels.sounds)]
+                        {
+                            ui.horizontal(|ui| {
+                                ui.add_sized(
+                                    vec2(56.0, 18.0),
+                                    egui::Label::new(RichText::new(word).size(12.5)),
+                                );
+                                ui.add(egui::Slider::new(level, 0.0..=1.0).show_value(false));
+                            });
+                        }
+                        ui.checkbox(&mut levels.muted, "Mute everything");
+                    });
+            });
+        if levels != before {
+            let louder = levels.sounds > before.sounds || (before.muted && !levels.muted);
+            self.sound.set_levels(levels);
+            // A sound to hear how loud the sounds now are.
+            if louder || levels.sounds < before.sounds {
+                self.sound.play(Cue::Tick);
+            }
+        }
+        if close {
+            self.sound_open = false;
+        }
+    }
+
     /// What to do next, along the leather at the foot; and who Battle is open for.
     fn foot_bar(&self, ui: &mut egui::Ui, layout: &Layout, now: f32) {
         let u = layout.unit;
@@ -573,13 +1184,14 @@ impl BattleApp {
             ),
         );
         let line = match self.stage {
-            Stage::Picking => match self.table.picked.len() {
-                3 => "Your three are ready: play the visitors, or open a room for a friend."
-                    .to_owned(),
-                0 => "You are their Handler: choose three, then give each one order a turn."
-                    .to_owned(),
-                n => format!("Choose {} more of your companions to play.", TEAM_SIZE - n),
+            Stage::Station => match &self.station {
+                Some(s) if s.leaving() => "Off they go…".to_owned(),
+                Some(s) if s.stopped(now) => {
+                    "Choose where they are off to, or look back over your history.".to_owned()
+                }
+                _ => "Click the picture, or press Space, to hurry the train in.".to_owned(),
             },
+            Stage::Journal => self.journal_hint(),
             Stage::Playing if self.table.finished(now) => {
                 "The match is over. Play again from the notes page.".to_owned()
             }
@@ -592,11 +1204,17 @@ impl BattleApp {
                     "Click a tile to hold. Right-click or Escape cancels.".to_owned()
                 }
                 (Some(_), Some(Verb::Contest)) => {
-                    "Click someone of theirs, or the lever.".to_owned()
+                    "Click someone of theirs, or the lever. Right-click or Escape cancels."
+                        .to_owned()
                 }
-                _ => {
-                    "Choose MOVE, HOLD or CONTEST (M, H, C), then where. Enter locks in.".to_owned()
-                }
+                (Some(i), None) => format!(
+                    "{}: click the ground to MOVE, theirs or the lever to CONTEST; right-click to HOLD. Enter locks in.",
+                    self.table.m.as_ref().map_or(String::new(), |m| m
+                        .profile(Slot::new(self.table.you, i))
+                        .name
+                        .clone())
+                ),
+                (None, _) => "Click one of yours on the board to give it an order.".to_owned(),
             },
         };
         let painter = ui.painter();
@@ -616,244 +1234,13 @@ impl BattleApp {
         );
     }
 
-    /// The left page while choosing: every companion, on a card.
-    fn picking(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
-        chrome::kicker(ui, "Choose three to play");
-        ui.add_space(u * 4.0);
-        let count = self.table.home.len();
-        let card_w = 220.0;
-        let gap = u * 6.0;
-        let per_row = ((ui.available_width() + gap) / (card_w + gap))
-            .floor()
-            .max(1.0) as usize;
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                for row in (0..count).collect::<Vec<_>>().chunks(per_row) {
-                    ui.horizontal_top(|ui| {
-                        ui.spacing_mut().item_spacing.x = gap;
-                        for &place in row {
-                            let contender = self.table.home[place].0.clone();
-                            let texture = self.portrait(ctx, &contender);
-                            let chosen = self.table.picked.iter().position(|p| *p == place);
-                            let note = match self.table.page(contender.traveler.id.0) {
-                                Some(page) => {
-                                    page.notes().into_iter().next().unwrap_or_else(|| {
-                                        "In your notebook; no habits noted yet".to_owned()
-                                    })
-                                }
-                                None => "Not in your notebook yet".to_owned(),
-                            };
-                            let card = Companion {
-                                place,
-                                contender: &contender,
-                                texture: &texture,
-                                chosen,
-                                note: &note,
-                            };
-                            if card.show(ui, card_w, u).clicked() {
-                                self.table.toggle_pick(place);
-                            }
-                        }
-                    });
-                    ui.add_space(gap);
-                }
-                if let Some(error) = &self.error {
-                    ui.colored_label(ink::STAMP, error);
-                }
-                // Where they will play, pictured below them.
-                let garden = self
-                    .garden
-                    .get_or_insert_with(|| Garden::new(&self.table.arena, &self.view));
-                let key = format!("preview-{}", self.table.arena.id);
-                let fresh = !matches!(&self.preview, Some((k, _)) if *k == key);
-                let picture = if fresh { Some(garden.picture()) } else { None };
-                let size_px = (garden.ground.width() as f32, garden.ground.height() as f32);
-                let area = ui.available_rect_before_wrap();
-                let ppp = ctx.pixels_per_point();
-                let (w, h) = size_px;
-                let pixels = ((area.width() * ppp) / w)
-                    .min((area.height() * ppp) / h)
-                    .floor()
-                    .min(3.0);
-                if pixels >= 1.0 {
-                    let texture = match (picture, &self.preview) {
-                        (Some(picture), _) => {
-                            let t = texture(ctx, &key, &picture);
-                            self.preview = Some((key, t.clone()));
-                            t
-                        }
-                        (None, Some((_, t))) => t.clone(),
-                        (None, None) => return,
-                    };
-                    let size = vec2(w, h) * pixels / ppp;
-                    let min = pos2(area.center().x - size.x / 2.0, area.max.y - size.y);
-                    let min = pos2((min.x * ppp).round() / ppp, (min.y * ppp).round() / ppp);
-                    ui.painter().image(
-                        texture.id(),
-                        Rect::from_min_size(min, size),
-                        Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-                        Color32::WHITE,
-                    );
-                }
-            });
-    }
-
-    /// The right page while choosing: the cups, the button to play, and playing a friend.
-    fn lobby_page(&mut self, ui: &mut egui::Ui, u: f32) {
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                self.arena_choice(ui, u);
-                ui.add_space(u * 6.0);
-                let open = crate::rewards::open_to_play(&self.table.record)
-                    .contains(&self.table.arena.id.as_str());
-                let ready = self.table.picked.len() == TEAM_SIZE && open;
-                let label = if !open {
-                    format!("Win the {} first", locked_behind(&self.table.arena.id))
-                } else if ready {
-                    "Play the visitors".to_owned()
-                } else {
-                    format!("Choose {} more", TEAM_SIZE - self.table.picked.len())
-                };
-                let width = ui.available_width();
-                if chrome::button(ui, &label, Kind::Primary, false, ready, Some(width), u)
-                    .on_hover_text(
-                        "Wins against the visitors fill the arena's cup, and earn journal entries and keepsakes.",
-                    )
-                    .clicked()
-                {
-                    self.begin();
-                }
-                ui.add_space(u * 8.0);
-                dashed_rule(ui, u);
-                ui.add_space(u * 4.0);
-                // Playing a friend waits behind one button, until it is wanted.
-                if self.friend_open || self.table.friend.is_some() {
-                    self.lobby(ui, u);
-                } else if chrome::button(ui, "Play a friend", Kind::Plain, false, true, Some(width), u)
-                    .on_hover_text("Open a room for a friend, or join theirs with its code")
-                    .clicked()
-                {
-                    self.friend_open = true;
-                }
-            });
-    }
-
-    /// Where to play: each built-in arena on a little card with its picture. Against the visitors
-    /// an arena opens once the cup before it is won; a friend match can be played on any of them,
-    /// and the choice holds while a room is open, since the room was opened for it.
-    fn arena_choice(&mut self, ui: &mut egui::Ui, u: f32) {
-        chrome::kicker(ui, "Where to play");
-        let ctx = ui.ctx().clone();
-        let open_room = self.table.friend.is_some();
-        let mut chosen = None;
-        for i in 0..self.arenas.len() {
-            let (arena, thumb) = &mut self.arenas[i];
-            let picture = thumb
-                .get_or_insert_with(|| {
-                    let view = View::new(arena.width, arena.height);
-                    let garden = Garden::new(arena, &view);
-                    texture(
-                        &ctx,
-                        &format!("arena-{}", arena.id),
-                        &shrunk(&garden.picture(), 3),
-                    )
-                })
-                .clone();
-            let here = self.table.arena.id == arena.id;
-            let name = arena.name.clone();
-            let unlocked =
-                crate::rewards::open_to_play(&self.table.record).contains(&arena.id.as_str());
-            let blurb = if unlocked {
-                crate::garden::Dressing::of(arena).blurb().to_owned()
-            } else {
-                format!(
-                    "Against the visitors once you win the {}. Open for friends now.",
-                    locked_behind(&arena.id)
-                )
-            };
-            let cup = crate::rewards::cup_for(&arena.id);
-            let wins = cup.map_or(0, |c| {
-                self.table
-                    .record
-                    .cup_wins(c.id)
-                    .min(crate::rewards::CUP_WINS)
-            });
-            let (response, _) = card(
-                ui,
-                Id::new(("arena", i)),
-                here,
-                !open_room || here,
-                !open_room,
-                u,
-                |ui| {
-                    ui.horizontal(|ui| {
-                        let size = picture.size_vec2();
-                        let w = 64.0;
-                        let (rect, _) =
-                            ui.allocate_exact_size(vec2(w, w * size.y / size.x), Sense::hover());
-                        ui.painter().image(
-                            picture.id(),
-                            rect,
-                            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-                            Color32::WHITE,
-                        );
-                        ui.vertical(|ui| {
-                            ui.label(label_job(
-                                &name,
-                                chrome::LABEL,
-                                if here { ink::FOREST } else { ink::PAGE },
-                            ));
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = u;
-                                if unlocked {
-                                    for k in 0..crate::rewards::CUP_WINS {
-                                        rosette(ui, k < wins, u);
-                                    }
-                                } else {
-                                    ui.label(label_job("Locked", 9.0, ink::MUTED));
-                                }
-                            });
-                        });
-                    });
-                },
-            );
-            let response = response.on_hover_ui(|ui| {
-                if let Some(cup) = cup {
-                    ui.label(label_job(cup.name, 9.0, ink::FOREST));
-                }
-                ui.label(RichText::new(&blurb).size(12.0));
-            });
-            if response.hovered() && !open_room {
-                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            }
-            if response.clicked() && !here {
-                chosen = Some(i);
-            }
-            ui.add_space(u * 2.0);
-        }
-        if open_room {
-            ui.label(
-                RichText::new(format!("Your room plays in the {}.", self.table.arena.name))
-                    .size(11.5)
-                    .italics()
-                    .color(ink::MUTED),
-            );
-        }
-        if let Some(i) = chosen {
-            self.table.arena = self.arenas[i].0.clone();
-            self.view = View::new(self.table.arena.width, self.table.arena.height);
-            self.garden = None;
-        }
-    }
-
     fn board_view(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, area: Rect, now: f32, u: f32) {
         let Some(frame) = self.table.frame(now) else {
             return;
         };
         self.paused = frame.paused;
         let mut marks = self.table.marks(self.hover, now);
+        marks.lettering = self.lettering(now);
         marks.pokes = self.pokes.iter().map(|(t, at)| (*t, now - at)).collect();
         let m = self.table.m.as_ref().expect("a match is on");
         let garden = self
@@ -905,18 +1292,39 @@ impl BattleApp {
             self.view.tile_at(local.x, local.y)
         };
         self.hover = response.hover_pos().and_then(to_tile);
-        if self.hover.is_some() && self.table.shown.is_none() && !marks.choices.is_empty() {
+        let giving = self.table.shown.is_none() && self.table.outcome().is_none();
+        let aims = self
+            .hover
+            .filter(|_| giving)
+            .map(|tile| (self.table.aim(tile, false), self.table.aim(tile, true)));
+        if aims.is_some_and(|(plain, right)| plain != Aim::Nothing || right != Aim::Nothing) {
             ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
         }
-        if self.table.shown.is_none()
-            && response.clicked()
+        let pressed = if response.clicked() {
+            Some(false)
+        } else if response.secondary_clicked() {
+            Some(true)
+        } else {
+            None
+        };
+        if giving
+            && let Some(hold) = pressed
             && let Some(tile) = response.interact_pointer_pos().and_then(to_tile)
-            && self.table.click(tile)
         {
-            self.pokes.push((tile, now));
-        }
-        if response.secondary_clicked() {
-            self.table.verb = None;
+            // An order picked by its button or key is let go by a right click, as before.
+            if hold && self.table.verb.is_some() {
+                self.table.verb = None;
+                self.sound.play(Cue::Cancel);
+            } else {
+                match self.table.press(tile, hold) {
+                    Aim::Choose(_) => self.sound.play(Cue::Select),
+                    Aim::Give(_) => {
+                        self.pokes.push((tile, now));
+                        self.sound.play(Cue::Order);
+                    }
+                    Aim::Nothing => {}
+                }
+            }
         }
         // A name tag over whoever is pointed at or chosen, saying how they stand.
         let painter = ui.painter().clone();
@@ -942,75 +1350,494 @@ impl BattleApp {
             name_tag(&painter, at, &look.name, state, TEAM[slot.side.index()], u);
         }
         self.board_scale = scale;
+        if self.table.shown.is_none()
+            && self.table.outcome().is_none()
+            && let Some(slot) = marks.selected
+        {
+            let f = frame.figure(slot);
+            let look = &self.table.looks[slot.side.index()][slot.index as usize];
+            let (hx, hy) = scene::head(&self.view, f, look);
+            let bob = if self.table.reduce_motion {
+                0.0
+            } else {
+                (now * 5.0).sin().abs() * 3.0
+            };
+            let tip =
+                rect.min + vec2(hx as f32, hy as f32 - 7.0) * scale - vec2(0.0, u * 22.0 + bob * u);
+            pointer_arrow(&painter, tip, color(TEAM[slot.side.index()].light), u);
+        }
+        self.headlines(&painter, rect, scale, now, u);
+        self.confetti(&painter, rect, now, u);
         self.result_stamp(&painter, rect, now, u);
+        if let (Some(pointer), Some((plain, right))) = (response.hover_pos(), aims) {
+            self.cursor_hint(&painter, pointer, plain, right, u);
+        }
     }
 
-    /// What is written on the board's page round it: where this is and what it is for at the
-    /// top, the turn's slip when one plays out, and a key to the board's marks in the corner.
-    fn board_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, page: Rect, now: f32, u: f32) {
-        let painter = ui.painter().clone();
-        let top = page.min + vec2(u * 8.0, u * 6.0);
-        let name = painter.layout_job(label_job(
-            &format!("The {}", self.table.arena.name),
-            chrome::LABEL,
-            ink::FOREST,
-        ));
-        let line = name.size().y;
-        painter.galley(top, name, ink::FOREST);
-        painter.text(
-            top + vec2(0.0, line + u * 2.0),
-            Align2::LEFT_TOP,
-            "Keep someone steady in the yard to light the beacon.",
-            FontId::proportional(12.0),
-            ink::MUTED,
-        );
-        self.turn_banner(&painter, page, now, u);
-        if self.keys.is_empty() {
-            self.keys = scene::Key::ALL
-                .iter()
-                .enumerate()
-                .map(|(i, key)| texture(ctx, &format!("key-{i}"), &key.picture()))
-                .collect();
+    /// The cartoon words to paint into the board this frame, in Formiga's pixel art: each moment's
+    /// word over whoever it happened to, rising a little and fading; composure lost as a number;
+    /// and "READY?" then "GO!" as a match begins. Each pops in a size larger for a moment, by
+    /// whole board pixels, so it stays crisp. No more than three words at once.
+    fn lettering(&self, now: f32) -> Vec<(Canvas, i32, i32, u8)> {
+        let reduce = self.table.reduce_motion;
+        let (w, h) = (self.view.size.0 as f32, self.view.size.1 as f32);
+        let mut out = Vec::new();
+        let mut place = |word: Canvas, cx: f32, cy: f32, alpha: f32| {
+            let x = (cx - word.width() as f32 / 2.0).round() as i32;
+            let y = (cy - word.height() as f32 / 2.0).round() as i32;
+            out.push((word, x, y, (alpha.clamp(0.0, 1.0) * 255.0) as u8));
+        };
+        let mut words = 0;
+        for (k, (c, born)) in self.live.iter().enumerate().rev() {
+            let (Some(text), Some((x, y))) = (c.word, c.place) else {
+                continue;
+            };
+            let age = now - born;
+            let life = match c.style {
+                Style::Big => 1.5,
+                Style::Word => 1.0,
+                Style::Damage => 1.1,
+            };
+            if age > life {
+                continue;
+            }
+            if c.style != Style::Damage {
+                words += 1;
+                if words > 3 {
+                    continue;
+                }
+            }
+            let alpha = 1.0 - ((age - life * 0.65) / (life * 0.35)).clamp(0.0, 1.0);
+            let popping = !reduce && age < 0.1;
+            let (sx, sy) = self.view.screen(x, y);
+            if c.style == Style::Damage {
+                // Beside whoever lost it, floating up.
+                let rise = if reduce { 0.0 } else { age * 18.0 };
+                let word = crate::lettering::word(text, 1, crate::lettering::Paint::HURT);
+                place(word, sx + 14.0, sy - 22.0 - rise, alpha);
+                continue;
+            }
+            let big = c.style == Style::Big;
+            let colours = match c.good_for {
+                _ if big => crate::lettering::Paint::GOLD,
+                Some(side) => crate::lettering::Paint::team(TEAM[side.index()]),
+                None => crate::lettering::Paint::CREAM,
+            };
+            let scale = if big { 2 } else { 1 } + i32::from(popping);
+            let rise = if reduce { 0.0 } else { age * 10.0 };
+            // Above the head of whoever is there, a little to one side.
+            let lean = if k % 2 == 0 { 5.0 } else { -5.0 };
+            let word = crate::lettering::word(text, scale, colours);
+            place(word, sx + lean, sy - 42.0 - rise, alpha);
         }
-        // The key, in the page's upper right corner, where the board leaves the paper bare.
-        let ppp = ctx.pixels_per_point();
-        let px = ppp.round().max(1.0) / ppp;
-        let icon = vec2(34.0, 24.0) * px;
-        let words: Vec<_> = scene::Key::ALL
-            .iter()
-            .map(|k| {
-                painter.layout_no_wrap(k.words().to_owned(), FontId::proportional(11.5), ink::PAGE)
+        if let Some((at, _)) = self.ready {
+            let age = now - at;
+            if age <= READY_SECS {
+                let (text, since, colours) = if age < GO_AT {
+                    ("READY?", age, crate::lettering::Paint::CREAM)
+                } else {
+                    ("GO!", age - GO_AT, crate::lettering::Paint::GOLD)
+                };
+                let scale = 3 + i32::from(!reduce && since < 0.1);
+                let alpha = if age < GO_AT {
+                    1.0
+                } else {
+                    1.0 - ((age - READY_SECS + 0.25) / 0.25).clamp(0.0, 1.0)
+                };
+                let word = crate::lettering::word(text, scale, colours);
+                place(word, w / 2.0, h * 0.42, alpha);
+            }
+        }
+        out
+    }
+
+    /// Confetti over the board when the Handler's team wins: a short shower, the same every time.
+    fn confetti(&self, painter: &egui::Painter, board: Rect, now: f32, u: f32) {
+        let (Some(at), Some(outcome)) = (self.finished_at, self.table.outcome()) else {
+            return;
+        };
+        if outcome.winner != Some(self.table.you) || self.table.reduce_motion {
+            return;
+        }
+        let age = now - at;
+        if age > 3.0 {
+            return;
+        }
+        let team = TEAM[self.table.you.index()];
+        let colours = [
+            color(team.light),
+            color(team.shine),
+            ink::BRASS_LIGHT,
+            ink::MINT,
+            Color32::from_rgb(0xff, 0xf3, 0xc4),
+        ];
+        let fade = 1.0 - ((age - 2.2) / 0.8).clamp(0.0, 1.0);
+        for k in 0..70u32 {
+            // A scrap's own numbers, from its index alone.
+            let h = k.wrapping_mul(2_654_435_761).rotate_left(7) ^ 0x5bd1_e995;
+            let unit = |shift: u32| ((h >> shift) & 0xff) as f32 / 255.0;
+            let start = unit(0) * 0.6;
+            let t = age - start;
+            if t < 0.0 {
+                continue;
+            }
+            let x = board.min.x
+                + board.width() * (0.1 + 0.8 * unit(8))
+                + (t * (2.0 + 3.0 * unit(16))).sin() * u * 6.0;
+            let y =
+                board.min.y + board.height() * 0.05 + t * board.height() * (0.25 + 0.15 * unit(24));
+            if y > board.max.y {
+                continue;
+            }
+            let spin = (t * (4.0 + 6.0 * unit(4))).sin();
+            let size = vec2(u * 3.0 * spin.abs().max(0.25), u * 2.0);
+            painter.rect_filled(
+                Rect::from_center_size(pos2(x, y), size),
+                0.0,
+                colours[(h % colours.len() as u32) as usize].gamma_multiply(fade),
+            );
+        }
+    }
+
+    /// A little card by the pointer saying what a click there would do, and a right click.
+    fn cursor_hint(
+        &self,
+        painter: &egui::Painter,
+        pointer: egui::Pos2,
+        plain: Aim,
+        right: Aim,
+        u: f32,
+    ) {
+        let Some(m) = &self.table.m else {
+            return;
+        };
+        let say = |aim: Aim| match aim {
+            Aim::Choose(i) => Some(format!(
+                "choose {}",
+                m.profile(Slot::new(self.table.you, i)).name
+            )),
+            Aim::Give(order) => Some(speak(m, &order)),
+            Aim::Nothing => None,
+        };
+        let mut lines = Vec::new();
+        if let Some(text) = say(plain) {
+            lines.push((false, text));
+        }
+        if self.table.verb.is_some() {
+            lines.push((true, "cancel".to_owned()));
+        } else if let Some(text) = say(right).filter(|_| right != plain) {
+            lines.push((true, text));
+        }
+        if lines.is_empty() {
+            return;
+        }
+        let galleys: Vec<_> = lines
+            .into_iter()
+            .map(|(right, text)| {
+                (
+                    right,
+                    painter.layout_no_wrap(text, FontId::proportional(12.5), ink::PAGE),
+                )
             })
             .collect();
-        let widest = words.iter().map(|g| g.size().x).fold(0.0, f32::max);
-        let row = icon.y + u;
-        let size = vec2(
-            icon.x + widest + u * 14.0,
-            u * 15.0 + row * words.len() as f32,
-        );
-        let corner = pos2(page.max.x - u * 8.0 - size.x, page.min.y + u * 6.0);
+        let icon = vec2(u * 6.0, u * 9.0);
+        let row = galleys
+            .iter()
+            .map(|(_, g)| g.size().y)
+            .fold(icon.y, f32::max)
+            + u * 2.0;
+        let width = galleys.iter().map(|(_, g)| g.size().x).fold(0.0, f32::max) + icon.x + u * 14.0;
+        let height = row * galleys.len() as f32 + u * 6.0;
+        let min = pointer + vec2(u * 10.0, u * 12.0);
         let rect = Rect::from_min_size(
-            pos2((corner.x / u).round() * u, (corner.y / u).round() * u),
-            size,
+            pos2((min.x / u).round() * u, (min.y / u).round() * u),
+            vec2(width, height),
         );
-        chrome::card(&painter, rect, u, ink::CARD, ink::LINE.gamma_multiply(0.45));
-        let title = painter.layout_job(label_job("Reading the board", 9.5, ink::FOREST));
-        painter.galley(rect.min + vec2(u * 5.0, u * 4.0), title, ink::FOREST);
-        for (i, galley) in words.into_iter().enumerate() {
-            let y = rect.min.y + u * 12.0 + i as f32 * row;
-            let at = Rect::from_min_size(pos2(rect.min.x + u * 4.0, y), icon);
-            painter.image(
-                self.keys[i].id(),
-                at,
-                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-                Color32::WHITE,
+        chrome::card(painter, rect, u, ink::CARD, ink::LINE);
+        for (k, (right, galley)) in galleys.into_iter().enumerate() {
+            let top = rect.min.y + u * 3.0 + k as f32 * row;
+            let at = Rect::from_min_size(
+                pos2(rect.min.x + u * 5.0, top + (row - icon.y) / 2.0 - u),
+                icon,
             );
+            mouse(painter, at, right, u);
             let h = galley.size().y;
             painter.galley(
-                pos2(at.max.x + u * 4.0, at.center().y - h / 2.0),
+                pos2(at.max.x + u * 4.0, top + (row - h) / 2.0 - u),
                 galley,
                 ink::PAGE,
             );
+        }
+    }
+
+    /// What is written on the board's page round it: the turn's slip and its headlines across
+    /// the top, the last two headlines on a card in the upper right (the whole match opens from
+    /// there), and the controls in the lower left while orders are being given.
+    fn board_page(&mut self, ui: &mut egui::Ui, page: Rect, now: f32, u: f32) {
+        let painter = ui.painter().clone();
+        self.turn_banner(&painter, page, now, u);
+        self.orders_banner(&painter, page, now, u);
+        let card = self.recent_card(ui, page, u);
+        if self.account_open {
+            self.account(ui.ctx(), page, card, u);
+        }
+        if self.table.shown.is_none() && self.table.outcome().is_none() {
+            controls(&painter, page, u);
+        }
+    }
+
+    /// The turn's headlines as it plays, each on a little slip over the head of whoever it
+    /// happened to (or over the beacon), with a point down to them. A headline fades as the next
+    /// one comes, so only the newest stays.
+    fn headlines(&self, painter: &egui::Painter, board: Rect, scale: f32, now: f32, u: f32) {
+        let reduce = self.table.reduce_motion;
+        // Each headline gets a moment of its own: one that comes on the heels of another waits
+        // for it, so two in the same tick are both read.
+        let mut told: Vec<(&Callout, f32)> = Vec::new();
+        for (c, born) in &self.live {
+            if c.headline.is_none() || c.place.is_none() {
+                continue;
+            }
+            let shown = told
+                .last()
+                .map_or(*born, |(_, last)| born.max(last + HEADLINE_SECS));
+            told.push((c, shown));
+        }
+        // Only the newest, and the one before it while it fades out.
+        let current = told.iter().rposition(|(_, shown)| *shown <= now);
+        let Some(current) = current else {
+            return;
+        };
+        for k in current.saturating_sub(1)..=current {
+            let (c, shown) = told[k];
+            let age = now - shown;
+            let next = told
+                .get(k + 1)
+                .map(|(_, b)| now - b)
+                .filter(|since| *since >= 0.0);
+            let alpha = match next {
+                // Fading as the next one comes in.
+                Some(since) => 1.0 - (since / 0.2).clamp(0.0, 1.0),
+                None => {
+                    let fade_in = if reduce { 1.0 } else { (age / 0.15).min(1.0) };
+                    fade_in * ((2.2 - age) / 0.4).clamp(0.0, 1.0)
+                }
+            };
+            if alpha <= 0.0 {
+                continue;
+            }
+            let (Some(headline), Some((x, y))) = (&c.headline, c.place) else {
+                continue;
+            };
+            let galley =
+                painter.layout_no_wrap(headline.clone(), FontId::proportional(13.0), ink::PAGE);
+            let size = galley.size() + vec2(u * 16.0, u * 6.0);
+            let (sx, sy) = self.view.screen(x, y);
+            let rise = if reduce {
+                0.0
+            } else {
+                (1.0 - (age / 0.2).min(1.0)) * 4.0 * u
+            };
+            let tip = board.min + vec2(sx, sy - 56.0) * scale + vec2(0.0, rise);
+            let left = (tip.x - size.x / 2.0).clamp(
+                board.min.x + u * 2.0,
+                (board.max.x - size.x - u * 2.0).max(board.min.x),
+            );
+            let top = (tip.y - u * 3.0 - size.y).max(board.min.y + u * 2.0);
+            let rect =
+                Rect::from_min_size(pos2((left / u).round() * u, (top / u).round() * u), size);
+            let mut painter = painter.clone();
+            painter.set_opacity(alpha);
+            chrome::card(&painter, rect, u, ink::CARD, ink::LINE);
+            tick(&painter, rect, c.good_for, u);
+            // A little point down towards whoever it is about.
+            let px = tip.x.clamp(rect.min.x + u * 4.0, rect.max.x - u * 4.0);
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    pos2(px - u * 2.5, rect.max.y - u),
+                    pos2(px + u * 2.5, rect.max.y - u),
+                    pos2(px, rect.max.y + u * 2.5),
+                ],
+                ink::LINE,
+                Stroke::NONE,
+            ));
+            painter.galley(
+                pos2(
+                    rect.min.x + u * 9.0,
+                    rect.center().y - galley.size().y / 2.0,
+                ),
+                galley,
+                ink::PAGE,
+            );
+        }
+    }
+
+    /// The last two headlines, kept on a card in the board's upper right as a reminder, newest
+    /// first; and under them, the way into the whole match told in full. Returns the card.
+    fn recent_card(&mut self, ui: &mut egui::Ui, page: Rect, u: f32) -> Rect {
+        let painter = ui.painter().clone();
+        let width = (page.width() * 0.3).clamp(220.0, 300.0);
+        let inner = width - u * 14.0;
+        let lines: Vec<(std::sync::Arc<egui::Galley>, Option<Side>)> = if self.recent.is_empty() {
+            vec![(
+                painter.layout(
+                    "Nothing yet: the first turn is yours.".to_owned(),
+                    FontId::proportional(12.5),
+                    ink::MUTED,
+                    inner,
+                ),
+                None,
+            )]
+        } else {
+            self.recent
+                .iter()
+                .rev()
+                .enumerate()
+                .map(|(k, (text, side))| {
+                    let colour = if k == 0 { ink::PAGE } else { ink::MUTED };
+                    (
+                        painter.layout(text.clone(), FontId::proportional(12.5), colour, inner),
+                        *side,
+                    )
+                })
+                .collect()
+        };
+        let title = painter.layout_job(label_job("Just now", 9.5, ink::FOREST));
+        let link_text = if self.account_open {
+            "Close the whole match (L)"
+        } else {
+            "The whole match (L)"
+        };
+        let link = painter.layout_job(label_job(link_text, 9.0, ink::FOREST));
+        let body: f32 = lines.iter().map(|(g, _)| g.size().y + u * 2.0).sum();
+        let height = u * 9.0 + title.size().y + body + link.size().y + u * 6.0;
+        let corner = pos2(page.max.x - u * 8.0 - width, page.min.y + u * 6.0);
+        let rect = Rect::from_min_size(
+            pos2((corner.x / u).round() * u, (corner.y / u).round() * u),
+            vec2(width, height),
+        );
+        chrome::card(&painter, rect, u, ink::CARD, ink::LINE.gamma_multiply(0.45));
+        let mut y = rect.min.y + u * 4.0;
+        painter.galley(pos2(rect.min.x + u * 5.0, y), title.clone(), ink::FOREST);
+        y += title.size().y + u * 3.0;
+        for (galley, side) in lines {
+            let h = galley.size().y;
+            if side.is_some() || !self.recent.is_empty() {
+                let mark = Rect::from_min_size(
+                    pos2(rect.min.x + u * 5.0, y + u),
+                    vec2(u * 1.5, h - u * 2.0),
+                );
+                painter.rect_filled(
+                    mark,
+                    0.0,
+                    side.map_or(ink::LINE.gamma_multiply(0.4), |s| {
+                        color(TEAM[s.index()].base)
+                    }),
+                );
+            }
+            painter.galley(pos2(rect.min.x + u * 9.0, y), galley, ink::PAGE);
+            y += h + u * 2.0;
+        }
+        y += u;
+        let link_rect =
+            Rect::from_min_size(pos2(rect.min.x + u * 5.0, y), link.size() + vec2(0.0, u));
+        let response = ui.interact(link_rect, Id::new("whole-match"), Sense::click());
+        crate::feel::press(
+            ui.ctx(),
+            Id::new("whole-match"),
+            &response,
+            if self.account_open {
+                crate::feel::Feel::Cancel
+            } else {
+                crate::feel::Feel::Select
+            },
+        );
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            painter.hline(
+                link_rect.x_range(),
+                link_rect.bottom(),
+                Stroke::new(u * 0.7, ink::FOREST),
+            );
+        }
+        painter.galley(link_rect.min, link, ink::FOREST);
+        if response.clicked() {
+            self.toggle_account();
+        }
+        rect
+    }
+
+    /// The whole match told in full sentences, every turn, in a little menu that opens under the
+    /// card of the last two: for checking what happened.
+    fn account(&mut self, ctx: &egui::Context, page: Rect, card: Rect, u: f32) {
+        let width = card.width().max(320.0);
+        let top = card.max.y + u * 3.0;
+        let mut close = false;
+        egui::Area::new(Id::new("account"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos2(card.max.x - width, top))
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(ink::CARD)
+                    .stroke(Stroke::new(u, ink::LINE))
+                    .shadow(egui::Shadow {
+                        offset: [2, 3],
+                        blur: 0,
+                        spread: 0,
+                        color: Color32::from_black_alpha(60),
+                    })
+                    .inner_margin(egui::Margin::same((u * 6.0).round() as i8))
+                    .show(ui, |ui| {
+                        ui.set_width(width - u * 12.0);
+                        ui.horizontal(|ui| {
+                            chrome::kicker(ui, "The whole match");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if chrome::button(ui, "close", Kind::Back, false, true, None, u)
+                                        .clicked()
+                                    {
+                                        close = true;
+                                    }
+                                },
+                            );
+                        });
+                        egui::ScrollArea::vertical()
+                            .max_height((page.max.y - top - u * 16.0).max(120.0))
+                            .min_scrolled_height((page.max.y - top - u * 16.0).clamp(120.0, 420.0))
+                            .stick_to_bottom(true)
+                            .show(ui, |ui| {
+                                if self.table.log.is_empty() {
+                                    ui.label(
+                                        RichText::new("Nothing yet: the first turn is yours.")
+                                            .size(12.5)
+                                            .italics()
+                                            .color(ink::MUTED),
+                                    );
+                                }
+                                for (turn, lines) in &self.table.log {
+                                    ui.add_space(u);
+                                    ui.label(label_job(
+                                        &format!("Turn {turn}"),
+                                        chrome::LABEL,
+                                        ink::MUTED,
+                                    ));
+                                    if lines.is_empty() {
+                                        ui.label(
+                                            RichText::new("· Everyone went where they were told.")
+                                                .size(12.5)
+                                                .color(ink::MUTED),
+                                        );
+                                    }
+                                    for line in lines {
+                                        ui.label(RichText::new(format!("· {line}")).size(12.5));
+                                    }
+                                }
+                            });
+                    });
+            });
+        if close {
+            self.toggle_account();
         }
     }
 
@@ -1020,7 +1847,8 @@ impl BattleApp {
             return;
         };
         let age = now - shown.started;
-        let life = crate::playback::REVEAL_SECS + 0.5;
+        // Gone by the first tick, when the turn's own headlines begin.
+        let life = crate::playback::REVEAL_SECS;
         if age > life || self.table.finished(now) {
             return;
         }
@@ -1029,7 +1857,7 @@ impl BattleApp {
         } else {
             let t = (age / 0.25).min(1.0);
             let ease = 1.0 - (1.0 - t).powi(3);
-            let out = ((life - age) / 0.25).clamp(0.0, 1.0);
+            let out = ((life - age) / 0.2).clamp(0.0, 1.0);
             ((1.0 - ease) * -14.0 * u, out)
         };
         let galley = painter.layout_job(label_job(
@@ -1061,6 +1889,51 @@ impl BattleApp {
             );
         }
         painter.galley(rect.center() - galley.size() / 2.0, galley, ink::FOREST);
+    }
+
+    /// As each turn's orders begin, a slip in the Handler's colour says so: whose move it is.
+    fn orders_banner(&self, painter: &egui::Painter, page: Rect, now: f32, u: f32) {
+        let Some(m) = &self.table.m else {
+            return;
+        };
+        let age = now - self.table.turn_began;
+        let life = 1.4;
+        if self.table.shown.is_some() || m.outcome().is_some() || !(0.0..life).contains(&age) {
+            return;
+        }
+        let (drop, alpha) = if self.table.reduce_motion {
+            (0.0, 1.0)
+        } else {
+            let t = (age / 0.22).min(1.0);
+            let out = ((life - age) / 0.3).clamp(0.0, 1.0);
+            ((1.0 - (1.0 - t).powi(3)) * 14.0 * u - 14.0 * u, out)
+        };
+        let galley = painter.layout_job(label_job(
+            &format!("Turn {}: your orders", m.board.turn + 1),
+            13.0,
+            ink::FOREST,
+        ));
+        let size = galley.size() + vec2(u * 22.0, u * 9.0);
+        let rect = Rect::from_min_size(
+            pos2(page.center().x - size.x / 2.0, page.min.y + u * 8.0 + drop),
+            size,
+        );
+        let rect = Rect::from_min_size(
+            pos2((rect.min.x / u).round() * u, (rect.min.y / u).round() * u),
+            rect.size(),
+        );
+        let mut painter = painter.clone();
+        painter.set_opacity(alpha);
+        chrome::card(&painter, rect, u, ink::MINT, ink::FOREST);
+        tick(&painter, rect, Some(self.table.you), u);
+        painter.galley(
+            pos2(
+                rect.min.x + u * 13.0,
+                rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            ink::FOREST,
+        );
     }
 
     /// When the match is over, a rubber stamp comes down on the board saying how it ended.
@@ -1153,14 +2026,14 @@ impl BattleApp {
             let chosen = giving && self.table.selected == Some(i);
             let order = self.table.orders[i as usize];
             let order_text = match (standing[i as usize], order) {
-                (false, _) => "Sitting out, dizzy, for the rest of the match".to_owned(),
+                (false, _) => "Sitting out, dizzy".to_owned(),
                 (true, Some(order)) => speak(self.table.m.as_ref().expect("on"), &order),
                 (true, None) => match self.table.fallback(i) {
                     Some(f) => format!(
-                        "No order yet. Left to itself: {}",
+                        "No order: will {}",
                         speak(self.table.m.as_ref().expect("on"), &f)
                     ),
-                    None => "No order yet".to_owned(),
+                    None => "No order".to_owned(),
                 },
             };
             let has_order = order.is_some();
@@ -1214,7 +2087,7 @@ impl BattleApp {
                                         && chrome::button(
                                             ui,
                                             "clear",
-                                            Kind::Quiet,
+                                            Kind::Back,
                                             false,
                                             true,
                                             None,
@@ -1233,6 +2106,7 @@ impl BattleApp {
                     })
                     .inner
                 });
+            // Heard through the interaction kit, as every button and card is.
             if let Some(v) = picked {
                 self.table.select(i);
                 self.table.choose_verb(v);
@@ -1255,19 +2129,13 @@ impl BattleApp {
                 Some(width),
                 u,
             )
-            .on_hover_text("Enter")
+            .on_hover_text(
+                "Enter. Anyone without an order chooses for itself when the timer runs out.",
+            )
             .clicked()
             {
-                self.table.lock(now);
+                self.lock_quietly(now);
             }
-            ui.label(
-                RichText::new(
-                    "Anyone left without an order chooses for itself when the timer runs out.",
-                )
-                .size(11.5)
-                .italics()
-                .color(ink::MUTED),
-            );
         }
         if sent && self.table.shown.is_none() {
             ui.add_space(u * 3.0);
@@ -1283,35 +2151,154 @@ impl BattleApp {
         }
         ui.add_space(u * 4.0);
         dashed_rule(ui, u);
-        self.recap(ui, u);
+        self.field_guide(ui, ctx, u);
     }
 
-    fn recap(&self, ui: &mut egui::Ui, u: f32) {
-        chrome::kicker(ui, "What happened");
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .stick_to_bottom(true)
-            .show(ui, |ui| {
-                if self.table.log.is_empty() {
-                    ui.label(
-                        RichText::new("Nothing yet: the first turn is yours.")
-                            .size(12.5)
-                            .italics()
-                            .color(ink::MUTED),
-                    );
+    /// A glance at the arena and the rules under the orders: one topic at a time (how to win,
+    /// the orders, the board's marks), each a few short lines with a picture, the detail on
+    /// hover. The controls are on the board itself.
+    fn field_guide(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
+        if self.keys.is_empty() {
+            self.keys = scene::Key::ALL
+                .iter()
+                .enumerate()
+                .map(|(i, key)| texture(ctx, &format!("key-{i}"), &key.picture()))
+                .collect();
+        }
+        let arena = &self.table.arena;
+        ui.horizontal(|ui| {
+            chrome::kicker(ui, &format!("The {}", arena.name));
+        })
+        .response
+        .on_hover_text(crate::garden::Dressing::of(arena).blurb());
+        ui.add_space(u * 2.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = u * 2.0;
+            for topic in Guide::ALL {
+                if chrome::button(
+                    ui,
+                    topic.word(),
+                    Kind::Plain,
+                    self.guide == topic,
+                    true,
+                    None,
+                    u,
+                )
+                .clicked()
+                {
+                    self.guide = topic;
                 }
-                for (turn, lines) in self.table.log.iter().rev().take(3).rev() {
-                    ui.add_space(u);
-                    ui.label(label_job(
-                        &format!("Turn {turn}"),
-                        chrome::LABEL,
-                        ink::MUTED,
-                    ));
-                    for line in lines {
-                        ui.label(RichText::new(format!("· {line}")).size(12.5));
-                    }
+            }
+        });
+        ui.add_space(u * 3.0);
+        let ruleset = self.table.ruleset;
+        let key =
+            |k: scene::Key| Glyph::Key(scene::Key::ALL.iter().position(|x| *x == k).unwrap_or(0));
+        let rows: Vec<(Glyph, String, String, String)> = match self.guide {
+            Guide::Win => vec![
+                (
+                    key(scene::Key::Beacon),
+                    "Light the beacon".to_owned(),
+                    format!("hold the yard alone, {} ticks", ruleset.capture_ticks),
+                    "Keep someone steady in the yard while none of theirs is there. Each tick of it lights a lamp; light them all and you win.".to_owned(),
+                ),
+                (
+                    Glyph::Stars,
+                    "Or make them dizzy".to_owned(),
+                    "all three of theirs".to_owned(),
+                    "A Formiga out of composure sits out, dizzy, for the rest of the match. Nobody is hurt.".to_owned(),
+                ),
+                (
+                    Glyph::Watch,
+                    format!("Turn {}", ruleset.turn_cap),
+                    "nearest the beacon wins".to_owned(),
+                    "If time runs out: the most beacon lamps, then the most composure left, then the most still standing.".to_owned(),
+                ),
+            ],
+            Guide::Orders => vec![
+                (
+                    key(scene::Key::Move),
+                    "MOVE".to_owned(),
+                    "walk to a tile".to_owned(),
+                    Verb::Move.hint().to_owned(),
+                ),
+                (
+                    key(scene::Key::Holding),
+                    "HOLD".to_owned(),
+                    "stand firm, light the beacon".to_owned(),
+                    Verb::Hold.hint().to_owned(),
+                ),
+                (
+                    key(scene::Key::Contest),
+                    "CONTEST".to_owned(),
+                    "bump theirs, or pull the lever".to_owned(),
+                    Verb::Contest.hint().to_owned(),
+                ),
+            ],
+            Guide::Marks => scene::Key::ALL
+                .iter()
+                .map(|k| (key(*k), k.words().to_owned(), String::new(), String::new()))
+                .collect(),
+        };
+        for (glyph, label, gloss, hover) in rows {
+            let response = ui
+                .horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = u * 3.0;
+                    self.glyph(ui, ctx, glyph, u);
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        ui.label(RichText::new(&label).size(13.0).strong().color(ink::PAGE));
+                        if !gloss.is_empty() {
+                            ui.label(RichText::new(&gloss).size(11.5).color(ink::MUTED));
+                        }
+                    });
+                })
+                .response;
+            if !hover.is_empty() {
+                response.on_hover_text(hover);
+            }
+            ui.add_space(u * 1.5);
+        }
+    }
+
+    /// A row's picture in the field guide: one of the board's marks, stars, or a little watch.
+    fn glyph(&self, ui: &mut egui::Ui, ctx: &egui::Context, glyph: Glyph, u: f32) {
+        let ppp = ctx.pixels_per_point();
+        let px = ppp.round().max(1.0) / ppp;
+        let size = vec2(34.0, 24.0) * px;
+        let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+        let painter = ui.painter();
+        match glyph {
+            Glyph::Key(i) => {
+                painter.image(
+                    self.keys[i].id(),
+                    rect,
+                    Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+            }
+            Glyph::Stars => {
+                for (k, dx) in [-1.0f32, 0.0, 1.0].into_iter().enumerate() {
+                    let c = rect.center() + vec2(dx * u * 6.0, if k == 1 { -u * 2.0 } else { u });
+                    star(painter, c, u * 3.2, ink::BRASS_LIGHT, ink::BRASS_EDGE);
                 }
-            });
+            }
+            Glyph::Watch => {
+                let c = rect.center();
+                let r = u * 6.0;
+                painter.circle_filled(c, r, ink::BRASS);
+                painter.circle_stroke(c, r, Stroke::new(u * 0.7, ink::BRASS_EDGE));
+                painter.circle_filled(c, r - u * 1.5, ink::CARD);
+                painter.line_segment(
+                    [c, c + vec2(0.0, -r + u * 2.5)],
+                    Stroke::new(u * 0.8, ink::LINE),
+                );
+                painter.line_segment(
+                    [c, c + vec2(r - u * 3.0, 0.0)],
+                    Stroke::new(u * 0.8, ink::LINE),
+                );
+            }
+        }
     }
 
     fn result(&mut self, ui: &mut egui::Ui, u: f32) {
@@ -1377,10 +2364,22 @@ impl BattleApp {
                 .wrapping_add(1442695040888963407);
             self.table.shown = None;
             self.portraits.clear();
-            self.stage = Stage::Picking;
-            self.turned = self.clock;
-            self.finished_at = None;
+            self.fresh_match();
             self.notebook_open = false;
+            let outing = self.outing;
+            self.open_journal(outing, Step::Who);
+            // Back through the notebook to choosing who goes.
+            self.leaf(false);
+        }
+        if chrome::button(ui, "Back to the station", Kind::Back, false, true, None, u)
+            .on_hover_text("Choose again where your companions are off to")
+            .clicked()
+        {
+            self.table.shown = None;
+            self.portraits.clear();
+            self.fresh_match();
+            self.notebook_open = false;
+            self.back_to_station();
         }
         if !self.table.earned.is_empty() {
             ui.add_space(u * 5.0);
@@ -1396,119 +2395,14 @@ impl BattleApp {
             ui.label(RichText::new(kept).size(11.5).italics().color(ink::MUTED));
         }
         ui.add_space(u * 4.0);
-        dashed_rule(ui, u);
-        self.recap(ui, u);
-    }
-
-    /// Playing a friend: open a room and pass on its code, or join one with the code a friend
-    /// gave. What is shared is said here, every time, before anything is sent.
-    fn lobby(&mut self, ui: &mut egui::Ui, u: f32) {
-        ui.horizontal(|ui| {
-            chrome::kicker(ui, "Play a friend");
-            if self.table.friend.is_none() {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if chrome::button(ui, "hide", Kind::Quiet, false, true, None, u).clicked() {
-                        self.friend_open = false;
-                    }
-                });
-            }
-        });
-        ui.label(
-            RichText::new(format!(
-                "Open Circuit points: {}. Friend matches earn points, match history and notebook entries.",
-                self.table.record.circuit_points
-            ))
-            .size(11.5)
-            .color(ink::MUTED),
-        );
-        if let Some(friend) = &self.table.friend {
-            match &friend.code {
-                Some(code) => {
-                    ui.label(
-                        RichText::new("Your room is open. Give your friend this code:").size(13.0),
-                    );
-                    ui.add_space(u * 2.0);
-                    let galley = ui.painter().layout_job(label_job(code, 26.0, ink::FOREST));
-                    let size = galley.size() + vec2(u * 16.0, u * 10.0);
-                    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-                    chrome::card(ui.painter(), rect, u, ink::NOTE, ink::LINE);
-                    ui.painter()
-                        .galley(rect.center() - galley.size() / 2.0, galley, ink::FOREST);
-                    ui.add_space(u * 2.0);
-                    ui.label(
-                        RichText::new("The match begins when they join.")
-                            .size(12.5)
-                            .color(ink::MUTED),
-                    );
-                }
-                None => {
-                    ui.label(
-                        RichText::new("Opening the room…")
-                            .size(13.0)
-                            .color(ink::MUTED),
-                    );
-                }
-            }
-            if chrome::button(ui, "Cancel", Kind::Plain, false, true, None, u).clicked() {
-                self.table.leave_room();
-            }
+        let width = ui.available_width();
+        let read = if self.account_open {
+            "Close the whole match"
         } else {
-            ui.add_space(u * 2.0);
-            let understood = &mut self.understood;
-            card(ui, Id::new("shared"), false, true, false, u, |ui| {
-                ui.label(label_job(
-                    "What a friend match shares",
-                    chrome::LABEL,
-                    ink::PAGE,
-                ));
-                for line in SHARED {
-                    ui.label(RichText::new(format!("· {line}")).size(12.0));
-                }
-                ui.add_space(u * 2.0);
-                ui.checkbox(understood, "I understand what is shared");
-            });
-            ui.add_space(u * 4.0);
-            let ready = self.table.picked.len() == TEAM_SIZE && self.understood;
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new("Your name for your friend")
-                        .size(12.5)
-                        .color(ink::MUTED),
-                );
-                ui.add(egui::TextEdit::singleline(&mut self.handler).desired_width(140.0));
-            });
-            ui.add_space(u * 2.0);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = u * 3.0;
-                if chrome::button(ui, "Open a room", Kind::Plain, false, ready, None, u).clicked() {
-                    let handler = self.handler.clone();
-                    self.table.open_room(&handler, None);
-                }
-                ui.label(RichText::new("or").size(12.5).color(ink::MUTED));
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.join_code)
-                        .hint_text("code")
-                        .desired_width(70.0),
-                );
-                if chrome::button(
-                    ui,
-                    "Join",
-                    Kind::Plain,
-                    false,
-                    ready && !self.join_code.trim().is_empty(),
-                    None,
-                    u,
-                )
-                .clicked()
-                {
-                    let (handler, code) = (self.handler.clone(), self.join_code.clone());
-                    self.table.open_room(&handler, Some(&code));
-                }
-            });
-        }
-        if let Some(notice) = self.table.notice.clone() {
-            ui.add_space(u * 3.0);
-            sticky(ui, &notice, u);
+            "Read the whole match"
+        };
+        if chrome::button(ui, read, Kind::Plain, false, true, Some(width), u).clicked() {
+            self.toggle_account();
         }
     }
 
@@ -1714,6 +2608,7 @@ fn card<R>(
     u: f32,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (egui::Response, R) {
+    let mark = crate::feel::mark(ui);
     let under = ui.painter().add(egui::Shape::Noop);
     let inner = egui::Frame::new()
         .inner_margin(egui::Margin::same((u * 5.0).round() as i8))
@@ -1732,9 +2627,12 @@ fn card<R>(
     };
     let response = ui.interact(rect, id, sense);
     let pointed = lively && up && response.hovered();
-    let lift = ui
-        .ctx()
-        .animate_bool_with_time(id.with("lift"), pointed, 0.12);
+    let press = if lively && up {
+        crate::feel::press(ui.ctx(), id, &response, crate::feel::Feel::Select)
+    } else {
+        crate::feel::Press::REST
+    };
+    let lift = press.hover;
     let fill = if chosen {
         ink::MINT
     } else if pointed {
@@ -1761,78 +2659,8 @@ fn card<R>(
         shapes.push(egui::Shape::rect_filled(strip, 0.0, edge));
     }
     ui.painter().set(under, egui::Shape::Vec(shapes));
+    crate::feel::transform_since(ui, mark, press.transform(rect, u));
     (response, inner.inner)
-}
-
-/// A companion's card while choosing: its portrait, name, temperament and what the notebook
-/// says of it; chosen, it turns mint and gets its place in the team stamped on its corner.
-struct Companion<'a> {
-    place: usize,
-    contender: &'a Contender,
-    texture: &'a egui::TextureHandle,
-    chosen: Option<usize>,
-    note: &'a str,
-}
-
-impl Companion<'_> {
-    fn show(&self, ui: &mut egui::Ui, width: f32, u: f32) -> egui::Response {
-        let id = Id::new(("companion", self.place));
-        let (response, _) = ui
-            .allocate_ui(vec2(width, 0.0), |ui| {
-                card(ui, id, self.chosen.is_some(), true, true, u, |ui| {
-                    ui.horizontal(|ui| {
-                        portrait_mat(ui, self.texture, 60.0, u, true);
-                        ui.vertical(|ui| {
-                            ui.label(
-                                RichText::new(&self.contender.traveler.name)
-                                    .size(16.0)
-                                    .strong()
-                                    .color(ink::PAGE),
-                            );
-                            ui.label(
-                                RichText::new(&self.contender.traveler.character.phrase)
-                                    .size(12.5)
-                                    .color(ink::MUTED),
-                            );
-                        });
-                    });
-                })
-            })
-            .inner;
-        // The rest, for whoever wants it: temperament in a word or three, and the notebook.
-        let response = response.on_hover_ui(|ui| {
-            ui.label(label_job(
-                &self.contender.traveler.character.traits.join(" · "),
-                9.0,
-                ink::MUTED,
-            ));
-            ui.label(
-                RichText::new(self.note)
-                    .size(12.0)
-                    .italics()
-                    .color(ink::FOREST),
-            );
-        });
-        if response.hovered() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-        }
-        if let Some(n) = self.chosen {
-            // Its place in the team, stamped on the corner.
-            let rect = response.rect;
-            let centre = pos2(rect.max.x - u * 9.0, rect.min.y + u * 9.0);
-            let painter = ui.painter();
-            painter.circle_filled(centre, u * 6.5, ink::STAMP);
-            painter.circle_stroke(centre, u * 5.0, Stroke::new(u * 0.7, ink::CARD));
-            painter.text(
-                centre,
-                Align2::CENTER_CENTER,
-                format!("{}", n + 1),
-                FontId::monospace(12.0),
-                ink::CARD,
-            );
-        }
-        response
-    }
 }
 
 /// A portrait on a little mat of paper, so it sits on the card like a pasted-in photo.
@@ -2094,6 +2922,187 @@ fn name_tag(
     painter.galley(top, galley, ink::PAGE);
     if let Some(state) = state {
         painter.galley(top + vec2(0.0, line), state, ink::MUTED);
+    }
+}
+
+/// A little speaker, a box and a cone, with `waves` coming off it, or a cross when there are none.
+fn speaker(painter: &egui::Painter, c: egui::Pos2, waves: u8, colour: Color32, u: f32) {
+    painter.rect_filled(
+        Rect::from_center_size(c - vec2(u * 1.5, 0.0), vec2(u * 2.0, u * 3.0)),
+        0.0,
+        colour,
+    );
+    painter.add(egui::Shape::convex_polygon(
+        vec![
+            c + vec2(-u * 0.5, -u * 1.5),
+            c + vec2(u * 2.0, -u * 3.5),
+            c + vec2(u * 2.0, u * 3.5),
+            c + vec2(-u * 0.5, u * 1.5),
+        ],
+        colour,
+        Stroke::NONE,
+    ));
+    for k in 0..waves {
+        let r = u * (4.0 + 2.0 * f32::from(k));
+        let arc: Vec<egui::Pos2> = (0..=8)
+            .map(|i| {
+                let a = -0.8 + 1.6 * i as f32 / 8.0;
+                c + vec2(u * 1.5 + a.cos() * r, a.sin() * r)
+            })
+            .collect();
+        painter.add(egui::Shape::line(arc, Stroke::new(u * 0.8, colour)));
+    }
+    if waves == 0 {
+        let x = c + vec2(u * 5.0, 0.0);
+        for d in [vec2(u * 1.6, u * 1.6), vec2(u * 1.6, -u * 1.6)] {
+            painter.line_segment([x - d, x + d], Stroke::new(u * 0.8, colour));
+        }
+    }
+}
+
+/// A little arrow pointing down at whoever is chosen, in its team's colour on a dark edge.
+fn pointer_arrow(painter: &egui::Painter, tip: egui::Pos2, fill: Color32, u: f32) {
+    let shape = |grow: f32| {
+        vec![
+            tip + vec2(-u * 5.0 - grow, -u * 6.0 - grow),
+            tip + vec2(u * 5.0 + grow, -u * 6.0 - grow),
+            tip + vec2(0.0, grow),
+        ]
+    };
+    painter.add(egui::Shape::convex_polygon(
+        shape(u * 1.2),
+        ink::LINE,
+        Stroke::NONE,
+    ));
+    painter.add(egui::Shape::convex_polygon(shape(0.0), fill, Stroke::NONE));
+}
+
+/// A five-pointed star, for the dizzy.
+fn star(painter: &egui::Painter, c: egui::Pos2, r: f32, fill: Color32, edge: Color32) {
+    let points: Vec<egui::Pos2> = (0..10)
+        .map(|k| {
+            let a = -std::f32::consts::FRAC_PI_2 + k as f32 * std::f32::consts::PI / 5.0;
+            let reach = if k % 2 == 0 { r } else { r * 0.45 };
+            c + vec2(a.cos(), a.sin()) * reach
+        })
+        .collect();
+    // A star is not convex: drawn as five points round a middle.
+    for k in 0..5 {
+        let tri = vec![
+            c,
+            points[(2 * k + 9) % 10],
+            points[2 * k],
+            points[2 * k + 1],
+        ];
+        painter.add(egui::Shape::convex_polygon(tri, fill, Stroke::NONE));
+    }
+    painter.add(egui::Shape::closed_line(
+        points,
+        Stroke::new(r * 0.18, edge),
+    ));
+}
+
+/// A tick of whose good news it is down a slip's left side: the team's colour, or the ink.
+fn tick(painter: &egui::Painter, rect: Rect, side: Option<Side>, u: f32) {
+    painter.rect_filled(
+        Rect::from_min_size(
+            rect.min + vec2(u * 4.0, u * 3.0),
+            vec2(u * 2.0, rect.height() - u * 6.0),
+        ),
+        0.0,
+        side.map_or(ink::LINE.gamma_multiply(0.4), |s| {
+            color(TEAM[s.index()].base)
+        }),
+    );
+}
+
+/// A little mouse, its left button lit for a click or its right one for a right click.
+fn mouse(painter: &egui::Painter, rect: Rect, right: bool, u: f32) {
+    painter.rect_filled(rect, u * 2.5, ink::LINE);
+    painter.rect_filled(rect.shrink(u * 0.8), u * 2.0, ink::CARD);
+    let split = rect.min.y + rect.height() * 0.42;
+    let half = Rect::from_min_max(
+        pos2(
+            if right {
+                rect.center().x
+            } else {
+                rect.min.x + u * 0.8
+            },
+            rect.min.y + u * 0.8,
+        ),
+        pos2(
+            if right {
+                rect.max.x - u * 0.8
+            } else {
+                rect.center().x
+            },
+            split,
+        ),
+    );
+    painter.rect_filled(half, u, ink::STAMP);
+    painter.hline(rect.x_range(), split, Stroke::new(u * 0.6, ink::LINE));
+    painter.vline(
+        rect.center().x,
+        rect.min.y..=split,
+        Stroke::new(u * 0.6, ink::LINE),
+    );
+}
+
+/// The controls, on a card in the board page's lower left while orders are given: what a click
+/// and a right click do, and the keys.
+fn controls(painter: &egui::Painter, page: Rect, u: f32) {
+    let rows: [(Option<bool>, &str); 3] = [
+        (Some(false), "Move, contest, or choose"),
+        (Some(true), "Hold there"),
+        (None, "Enter lock in  ·  Esc let go  ·  L whole match"),
+    ];
+    let galleys: Vec<_> = rows
+        .iter()
+        .map(|(_, text)| {
+            painter.layout_no_wrap((*text).to_owned(), FontId::proportional(11.5), ink::PAGE)
+        })
+        .collect();
+    let icon = vec2(u * 6.0, u * 9.0);
+    let row = galleys.iter().map(|g| g.size().y).fold(icon.y, f32::max) + u * 1.5;
+    let title = painter.layout_job(label_job("Controls", 9.5, ink::FOREST));
+    let width = galleys
+        .iter()
+        .map(|g| g.size().x)
+        .fold(title.size().x, f32::max)
+        + icon.x
+        + u * 16.0;
+    let height = u * 10.0 + title.size().y + row * rows.len() as f32;
+    let corner = pos2(page.min.x + u * 8.0, page.max.y - u * 6.0 - height);
+    let rect = Rect::from_min_size(
+        pos2((corner.x / u).round() * u, (corner.y / u).round() * u),
+        vec2(width, height),
+    );
+    let mut painter = painter.clone();
+    painter.set_opacity(0.92);
+    chrome::card(&painter, rect, u, ink::CARD, ink::LINE.gamma_multiply(0.45));
+    painter.galley(
+        rect.min + vec2(u * 5.0, u * 4.0),
+        title.clone(),
+        ink::FOREST,
+    );
+    let mut y = rect.min.y + u * 7.0 + title.size().y;
+    for ((button, _), galley) in rows.iter().zip(galleys) {
+        let x = rect.min.x + u * 5.0;
+        if let Some(right) = button {
+            mouse(
+                &painter,
+                Rect::from_min_size(pos2(x, y + (row - icon.y) / 2.0 - u * 0.5), icon),
+                *right,
+                u,
+            );
+        }
+        let h = galley.size().y;
+        painter.galley(
+            pos2(x + icon.x + u * 4.0, y + (row - h) / 2.0 - u * 0.5),
+            galley,
+            ink::PAGE,
+        );
+        y += row;
     }
 }
 
