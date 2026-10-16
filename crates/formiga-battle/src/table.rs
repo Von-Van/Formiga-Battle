@@ -12,6 +12,7 @@ use formiga_battle_contract::{BattleRecord, BattleResult};
 use formiga_battle_contract::{BattleSnapshot, Contender};
 use formiga_battle_core::Event;
 use formiga_battle_core::ai::Coach;
+use formiga_battle_core::lesson::{Lesson, Verdict};
 use formiga_battle_core::muster::checked;
 use formiga_battle_core::notebook::Page;
 use formiga_battle_core::recap::recap_naming;
@@ -28,6 +29,14 @@ use std::path::PathBuf;
 pub struct Session {
     pub directory: PathBuf,
     pub result: BattleResult,
+}
+
+/// A Field Lesson on the board: which, every plan the Handler has given in it, and how it
+/// stands. A lesson keeps nothing and earns nothing.
+pub struct LessonRun {
+    pub lesson: Lesson,
+    pub given: Vec<TeamPlan>,
+    pub verdict: Verdict,
 }
 
 /// The longest a reason from the relay for a match ending is shown.
@@ -236,6 +245,8 @@ pub struct Table {
     pub notice: Option<String>,
     /// Why the match ended without a turn to show it, such as a forfeit.
     pub ended_because: Option<String>,
+    /// The Field Lesson being played, if the match is one.
+    pub lesson: Option<LessonRun>,
 }
 
 impl Table {
@@ -292,6 +303,7 @@ impl Table {
             desktop_version: roster.desktop_version.clone(),
             notice: None,
             ended_because: None,
+            lesson: None,
         }
     }
 
@@ -315,6 +327,11 @@ impl Table {
         let Some(m) = &self.m else {
             return;
         };
+        // A lesson earns nothing and keeps nothing.
+        if self.lesson.is_some() {
+            self.earned.clear();
+            return;
+        }
         // A match whose two boards came out differently was not played by the same rules on both
         // sides, so nobody can say who won it: it earns nothing.
         if self
@@ -484,9 +501,22 @@ impl Table {
 
     /// Puts both teams on the board. Fails only if a look cannot be drawn.
     pub fn start(&mut self, now: f32) -> anyhow::Result<()> {
+        self.field(now, None)
+    }
+
+    /// Puts both teams on the board for a Field Lesson, on the Backyard, as the lesson sets it
+    /// up.
+    pub fn start_lesson(&mut self, lesson: Lesson, now: f32) -> anyhow::Result<()> {
+        self.field(now, Some(lesson))
+    }
+
+    fn field(&mut self, now: f32, lesson: Option<Lesson>) -> anyhow::Result<()> {
         anyhow::ensure!(self.picked.len() == TEAM_SIZE, "pick three");
-        // The visitors play only on arenas whose cup is open; anywhere else, the Backyard.
-        if !rewards::open_to_play(&self.record).contains(&self.arena.id.as_str()) {
+        // The visitors play only on arenas whose cup is open; anywhere else, the Backyard. Every
+        // lesson is on the Backyard.
+        if lesson.is_some()
+            || !rewards::open_to_play(&self.record).contains(&self.arena.id.as_str())
+        {
             self.arena = Arena::backyard();
         }
         let away = self.opponents();
@@ -508,7 +538,10 @@ impl Table {
                 p.name = format!("Visiting {}", p.name);
             }
         }
-        let m = Match::new(self.arena.clone(), self.ruleset, self.seed, rosters)?;
+        let m = match lesson {
+            Some(lesson) => lesson.stage(self.ruleset, self.seed, rosters)?,
+            None => Match::new(self.arena.clone(), self.ruleset, self.seed, rosters)?,
+        };
         let look = |pool: &[(Contender, Profile)], picks: &[usize]| -> anyhow::Result<Vec<Look>> {
             picks
                 .iter()
@@ -531,6 +564,11 @@ impl Table {
         self.other_name = "The visiting team".to_owned();
         self.friend = None;
         self.begin_match(m, now);
+        self.lesson = lesson.map(|lesson| LessonRun {
+            lesson,
+            given: Vec::new(),
+            verdict: Verdict::Going,
+        });
         Ok(())
     }
 
@@ -544,6 +582,7 @@ impl Table {
         self.match_events.clear();
         self.earned.clear();
         self.ended_because = None;
+        self.lesson = None;
     }
 
     /// The three the Handler has picked, and how they get on: the team sent to a room.
@@ -931,6 +970,10 @@ impl Table {
 
     /// Seconds left on the timer: the room's, against a friend.
     pub fn time_left(&self, now: f32) -> f32 {
+        // A lesson waits for the Handler.
+        if self.lesson.is_some() {
+            return f32::INFINITY;
+        }
         match &self.friend {
             Some(f) => (f.deadline - now).max(0.0),
             None => (f32::from(self.ruleset.turn_seconds) - (now - self.turn_began)).max(0.0),
@@ -1404,6 +1447,12 @@ impl Table {
             },
             hover,
             orders: Vec::new(),
+            lesson: match &self.lesson {
+                Some(run) if self.shown.is_none() && self.outcome().is_none() => {
+                    run.lesson.marked()
+                }
+                _ => Vec::new(),
+            },
             ..Marks::default()
         };
         match &self.shown {
@@ -1444,13 +1493,31 @@ impl Table {
             self.put_down();
             return;
         }
-        let away = Coach::Exhibition.plan(m, self.you.other());
+        let away = match &self.lesson {
+            Some(run) => run.lesson.visitors(m),
+            None => Coach::Exhibition.plan(m, self.you.other()),
+        };
         let plans = match self.you {
-            Side::Left => [ours, away],
-            Side::Right => [away, ours],
+            Side::Left => [ours.clone(), away],
+            Side::Right => [away, ours.clone()],
         };
         let before = m.board.clone();
         let report = m.resolve_turn(plans);
+        if let Some(run) = &mut self.lesson {
+            run.given.push(ours);
+            let mut seen = self.match_events.clone();
+            seen.extend(report.events.iter().cloned());
+            run.verdict = run.lesson.judge(m, &seen, &run.given);
+            // Decided before the board says so: the lesson ends here, its way.
+            if run.verdict.decided() && m.board.outcome.is_none() {
+                let learned = matches!(run.verdict, Verdict::Learned(_));
+                m.board.outcome = Some(Outcome {
+                    winner: Some(if learned { self.you } else { self.you.other() }),
+                    victory: None,
+                    turn: m.board.turn,
+                });
+            }
+        }
         self.show_turn(before, report, now);
     }
 

@@ -2,7 +2,8 @@
 //! notebook's pages after it, turned one by one as Desktop's journal turns its pages. Where to
 //! play, then who goes and, for a friend, the room: open one and pass on its code, or join theirs.
 //! Each page is a spread: what it is about on the left, and on the ruled right page what is
-//! chosen so far and the way on.
+//! chosen so far and the way on. Field Lessons turn the same way: which lesson, then who plays
+//! it.
 
 use super::{
     BattleApp, Kind, Outing, SHARED, Stage, Step, card, dashed_rule, locked_behind, portrait_mat,
@@ -19,6 +20,7 @@ use crate::ticket::Destination;
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
 use formiga_battle_contract::Contender;
 use formiga_battle_core::TEAM_SIZE;
+use formiga_battle_core::lesson::Lesson;
 
 /// How tall the station is drawn, in its own pixels, whatever the window: each of them as many
 /// screen pixels as fit.
@@ -106,7 +108,7 @@ impl BattleApp {
         crate::rewards::open_to_play(&self.table.record).contains(&id)
     }
 
-    fn choose_arena(&mut self, arena: formiga_battle_core::Arena) {
+    pub(super) fn choose_arena(&mut self, arena: formiga_battle_core::Arena) {
         self.view = View::new(arena.width, arena.height);
         self.table.arena = arena;
         self.garden = None;
@@ -191,7 +193,7 @@ impl BattleApp {
                     ui.label(label_job(
                         match self.outing {
                             Outing::World => "· online",
-                            Outing::Home => "· offline",
+                            Outing::Home | Outing::Lessons => "· offline",
                         },
                         chrome::LABEL,
                         ink::DEBOSS,
@@ -207,8 +209,13 @@ impl BattleApp {
     /// What to do next, along the foot, while getting ready.
     pub(super) fn journal_hint(&self) -> String {
         match self.step {
+            Step::Lessons => {
+                "Choose a lesson, then turn the page to choose who plays it.".to_owned()
+            }
             Step::Where => match self.outing {
-                Outing::Home => "Choose where to play the visiting team, then turn the page.",
+                Outing::Home | Outing::Lessons => {
+                    "Choose where to play the visiting team, then turn the page."
+                }
                 Outing::World => "Choose where to play your friend, then turn the page.",
             }
             .to_owned(),
@@ -217,6 +224,7 @@ impl BattleApp {
                     "You are their Handler: choose three of your companions to go.".to_owned()
                 }
                 (3, Outing::Home) => "Your three are ready: play the visiting team.".to_owned(),
+                (3, Outing::Lessons) => "Your three are ready: begin the lesson.".to_owned(),
                 (3, Outing::World) => {
                     "Your three are ready: turn the page to your friend's room.".to_owned()
                 }
@@ -530,11 +538,36 @@ impl BattleApp {
             }
             ui.add_space(u * 6.0);
         }
+        let mut lessons = false;
         if ready {
             crate::feel::dropping(ui, since, 2, u, |ui| {
                 ui.add_space(u * 2.0);
                 dashed_rule(ui, u);
                 ui.add_space(u * 4.0);
+                // A colony that has never played is told where to begin.
+                if self.table.record.applied.is_empty() {
+                    ui.label(
+                        RichText::new("New here? Field Lessons show how a match works.")
+                            .size(12.5)
+                            .italics()
+                            .color(ink::MUTED),
+                    );
+                    ui.add_space(u * 2.0);
+                }
+                lessons = chrome::button(
+                    ui,
+                    "Field Lessons",
+                    Kind::Plain,
+                    false,
+                    true,
+                    Some(width),
+                    u,
+                )
+                .on_hover_text(
+                    "Short lessons on the Backyard: the beacon, holding and facing, flanks, tricks, team orders, the sprinkler and found things, and who your companions are. Nothing is kept.",
+                )
+                .clicked();
+                ui.add_space(u * 3.0);
                 notes = chrome::button(
                     ui,
                     "Your Handler & history",
@@ -552,6 +585,8 @@ impl BattleApp {
         }
         if notes {
             self.open_journal(self.outing, Step::Handler);
+        } else if lessons {
+            self.open_journal(Outing::Lessons, Step::Lessons);
         } else if let Some(outing) = chosen {
             self.outing = outing;
             if let Some(station) = &mut self.station {
@@ -577,7 +612,7 @@ impl BattleApp {
         match self.step {
             Step::Where => {
                 let observation = match self.outing {
-                    Outing::Home => {
+                    Outing::Home | Outing::Lessons => {
                         "Pick a place for the match. Each has a cup to win against the visiting team, and winning one opens the next."
                     }
                     Outing::World => {
@@ -587,6 +622,16 @@ impl BattleApp {
                 chrome::page_heading(ui, &line, "Where to?", observation);
                 ui.add_space(u * 6.0);
                 self.arena_picture(ui, ctx, u);
+            }
+            Step::Lessons => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "Field Lessons",
+                    "Short situations on the Backyard, under the real rules, that show how a match works. Play them in any order, as often as you like. Nothing is kept.",
+                );
+                ui.add_space(u * 6.0);
+                self.lesson_page(ui, u);
             }
             Step::Who => {
                 chrome::page_heading(
@@ -652,6 +697,7 @@ impl BattleApp {
             .show(ui, |ui| {
                 match self.step {
                     Step::Where => self.places(ui, u),
+                    Step::Lessons => self.lessons(ui, u),
                     Step::Who => self.lineup(ui, ctx, u),
                     Step::Room => self.shared(ui, ctx, u),
                     Step::Handler => self.standing_and_trios(ui, ctx, u),
@@ -681,6 +727,7 @@ impl BattleApp {
         Some(match at.checked_sub(1).map(|i| steps[i]) {
             None => "The station",
             Some(Step::Where) => "Where to",
+            Some(Step::Lessons) => "Lessons",
             Some(Step::Who) => "Who goes",
             Some(Step::Handler) => "Your Handler",
             Some(Step::History) => "History",
@@ -925,6 +972,105 @@ impl BattleApp {
         }
     }
 
+    /// The chosen lesson, on the left page: what it asks, and what it says before it begins.
+    fn lesson_page(&mut self, ui: &mut egui::Ui, u: f32) {
+        let lesson = self.lesson;
+        ui.label(label_job(
+            &format!("Lesson {} \u{b7} {}", lesson.number(), lesson.title()),
+            14.0,
+            ink::FOREST,
+        ));
+        ui.add_space(u * 2.0);
+        ui.label(
+            RichText::new(lesson.goal())
+                .size(14.0)
+                .strong()
+                .color(ink::PAGE),
+        );
+        ui.add_space(u * 3.0);
+        egui::ScrollArea::vertical()
+            .id_salt("lesson-page")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for note in lesson.notes() {
+                    ui.label(RichText::new(*note).size(13.0).color(ink::PAGE));
+                    ui.add_space(u * 2.0);
+                }
+                let yours = if lesson.plain() {
+                    "Your three play it doing exactly as told, so the board does what the lesson says. In a real match, and in the last lesson, they are themselves."
+                } else {
+                    "Your three play this one as they really are."
+                };
+                ui.label(RichText::new(yours).size(12.0).italics().color(ink::MUTED));
+            });
+    }
+
+    /// Every lesson, on a card, ticked once learned this sitting; and the page's way on.
+    fn lessons(&mut self, ui: &mut egui::Ui, u: f32) {
+        chrome::kicker(ui, "Lessons");
+        ui.add_space(u * 2.0);
+        let since = self.turned;
+        let mut chosen = None;
+        for (i, lesson) in Lesson::ALL.into_iter().enumerate() {
+            let here = self.lesson == lesson;
+            let learned = self.learned.contains(&lesson);
+            let (response, _) = crate::feel::dropping(ui, since, i, u, |ui| {
+                card(ui, Id::new(("lesson", i)), here, true, true, u, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(label_job(&format!("{}", lesson.number()), 13.0, ink::STAMP));
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            ui.label(label_job(
+                                lesson.title(),
+                                chrome::LABEL,
+                                if here { ink::FOREST } else { ink::PAGE },
+                            ));
+                            ui.label(
+                                RichText::new(if learned { "Learned" } else { lesson.goal() })
+                                    .size(11.5)
+                                    .color(ink::MUTED),
+                            );
+                        });
+                    });
+                })
+            });
+            if response.hovered() && !here {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            if response.clicked() && !here {
+                chosen = Some(lesson);
+            }
+            ui.add_space(u * 2.0);
+        }
+        if let Some(lesson) = chosen {
+            self.lesson = lesson;
+        }
+        ui.add_space(u * 2.0);
+        dashed_rule(ui, u);
+        ui.add_space(u * 2.0);
+        chrome::kicker(ui, "After the lessons");
+        for line in crate::app::AFTER_LESSONS {
+            ui.label(RichText::new(line).size(11.5).color(ink::MUTED));
+            ui.add_space(u);
+        }
+        ui.add_space(u * 4.0);
+        let width = ui.available_width();
+        let now = self.clock;
+        if chrome::button(
+            ui,
+            "Turn the page: who goes",
+            Kind::Primary,
+            false,
+            true,
+            Some(width),
+            u,
+        )
+        .clicked()
+        {
+            self.turn_to(Step::Who, now);
+        }
+    }
+
     /// Every companion, on a card: tap three to send them.
     fn companions(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         let count = self.table.home.len();
@@ -1066,15 +1212,21 @@ impl BattleApp {
         dashed_rule(ui, u);
         ui.add_space(u * 2.0);
         ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(format!("Playing in the {}", self.table.arena.name))
-                    .size(12.5)
-                    .color(ink::MUTED),
-            );
+            let (playing, back_to) = match self.outing {
+                Outing::Lessons => (
+                    format!("Lesson {}: {}", self.lesson.number(), self.lesson.title()),
+                    Step::Lessons,
+                ),
+                _ => (
+                    format!("Playing in the {}", self.table.arena.name),
+                    Step::Where,
+                ),
+            };
+            ui.label(RichText::new(playing).size(12.5).color(ink::MUTED));
             if !waiting && chrome::button(ui, "change", Kind::Quiet, false, true, None, u).clicked()
             {
                 let now = self.clock;
-                self.turn_to(Step::Where, now);
+                self.turn_to(back_to, now);
             }
         });
         ui.add_space(u * 4.0);
@@ -1098,6 +1250,19 @@ impl BattleApp {
                     .clicked()
                 {
                     self.begin();
+                }
+            }
+            Outing::Lessons => {
+                let label = if short == 0 {
+                    "Begin the lesson".to_owned()
+                } else {
+                    format!("Choose {short} more")
+                };
+                if chrome::button(ui, &label, Kind::Primary, false, short == 0, Some(width), u)
+                    .on_hover_text("A lesson earns nothing and keeps nothing.")
+                    .clicked()
+                {
+                    self.begin_lesson();
                 }
             }
             Outing::World => {

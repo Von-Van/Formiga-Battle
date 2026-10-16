@@ -11,6 +11,7 @@
 //!   something), and what each creature does about it: MOVE, HOLD, PRESS, TRICK and INTERACT.
 //! - [`muster`]: how a team shares out its plan, and thinks again when the board changes.
 //! - [`items`]: found things, and what each does.
+//! - [`lesson`]: Field Lessons, short situations that teach how a match works.
 //! - [`scenery`]: the map event, and found things turning up, being carried and used.
 //! - [`game`]: a match and how a turn resolves, tick by tick.
 //! - [`profile`]: who a creature is, read from Desktop's own record.
@@ -29,6 +30,7 @@ pub mod game;
 pub mod grid;
 pub mod interpret;
 pub mod items;
+pub mod lesson;
 pub mod muster;
 pub mod notebook;
 pub mod order;

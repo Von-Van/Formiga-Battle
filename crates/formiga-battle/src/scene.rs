@@ -67,6 +67,8 @@ pub struct Marks {
     /// The footprints are where the team will probably go if the plan is locked as it stands,
     /// not where it went: drawn fainter.
     pub trails_likely: bool,
+    /// The squares a Field Lesson points at, while orders are given.
+    pub lesson: Vec<Tile>,
 }
 
 /// Footprints from one of the team to its job: from where it stands, to where it is headed, in
@@ -497,6 +499,15 @@ fn floor_marks(
             f.tile,
             0.06,
             paint::faded(CREAM, (160.0 + 90.0 * breath) as u8),
+        );
+    }
+    for tile in &marks.lesson {
+        diamond_outline(
+            canvas,
+            view,
+            *tile,
+            0.03,
+            paint::faded(CREAM, (110.0 + 90.0 * breath) as u8),
         );
     }
     if let Some(tile) = marks.hover {

@@ -10,6 +10,10 @@
 //! top, a cartoon word where it happened, and its sound. The last two headlines stay on a card
 //! in the board's corner, and the whole match, in full sentences, opens from there. The right
 //! page keeps the orders and a field guide to the arena, the rules and the controls.
+//!
+//! Field Lessons, from the station too, are matches like any other begun from a board a lesson
+//! sets up (`formiga_battle_core::lesson`): the lesson's goal and notes take the field guide's
+//! place, the timer waits, and nothing is kept.
 
 mod handler;
 mod menus;
@@ -27,6 +31,7 @@ use crate::table::{Aim, Table, Verb};
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
 use formiga_art::Canvas;
 use formiga_battle_contract::Contender;
+use formiga_battle_core::lesson::{Lesson, Verdict};
 use formiga_battle_core::{Directive, Facing, Match, Tile};
 use formiga_battle_core::{PLAN_SIZE, Side, Slot, TEAM_SIZE, Victory};
 use std::collections::HashMap;
@@ -42,6 +47,13 @@ const FOLD: f32 = 3.0;
 const SETTLE: f32 = 0.22;
 /// The side tabs in a match, left to right.
 const TABS: [&str; 2] = ["Orders", "Notebook"];
+
+/// What comes after the Field Lessons, said once the last is learned and on the page of lessons.
+pub(crate) const AFTER_LESSONS: [&str; 3] = [
+    "Turn 12 is the last. If nobody has won by then, the most beacon lamps wins, then the most composure left, then the most still standing.",
+    "Close to Home, every place has a cup: win three matches there against the visiting team to fill it, and the next place opens.",
+    "Out in the World, play a friend with a room's code. Your Handler's pages keep your name, pennant and trios, and the notebook what each companion was seen to do.",
+];
 
 /// What a friend match sends, said in full before the first is opened.
 const SHARED: [&str; 5] = [
@@ -68,6 +80,8 @@ pub enum Outing {
     World,
     /// Close to home: the visiting team, on this computer. Offline.
     Home,
+    /// Field Lessons: short situations that teach how a match works. Offline, and nothing kept.
+    Lessons,
 }
 
 impl Outing {
@@ -75,6 +89,7 @@ impl Outing {
         match self {
             Self::World => "Out in the World",
             Self::Home => "Close to Home",
+            Self::Lessons => "Field Lessons",
         }
     }
 
@@ -83,6 +98,7 @@ impl Outing {
         match self {
             Self::World => &[Step::Where, Step::Who, Step::Room],
             Self::Home => &[Step::Where, Step::Who],
+            Self::Lessons => &[Step::Lessons, Step::Who],
         }
     }
 }
@@ -91,6 +107,8 @@ impl Outing {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Step {
     Where,
+    /// Which Field Lesson.
+    Lessons,
     Who,
     Room,
     /// The Handler's own pages, opened from the station rather than on the way anywhere: who
@@ -104,6 +122,7 @@ impl Step {
     pub fn tab(self) -> &'static str {
         match self {
             Self::Where => "Where",
+            Self::Lessons => "Lessons",
             Self::Who => "Who",
             Self::Room => "Friend",
             Self::Handler => "Handler",
@@ -136,6 +155,10 @@ pub enum Review {
     Room,
     /// As `Playing`, with the whole match open over the board.
     Account,
+    /// Choosing a Field Lesson.
+    Lessons,
+    /// A Field Lesson on the board, its orders not yet given: the lesson on flanks.
+    Lesson,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -256,6 +279,9 @@ pub struct BattleApp {
     ready: Option<(f32, bool)>,
     /// The turn whose orders began last, as the table's clock has it, for its chirp.
     orders_heard: f32,
+    /// The Field Lesson chosen, and the ones learned this sitting.
+    lesson: Lesson,
+    learned: Vec<Lesson>,
     /// How far the mouse wheel has turned over the board since it last turned a HOLD, in points.
     wheel: f32,
 }
@@ -380,6 +406,8 @@ impl BattleApp {
             guide: Guide::Win,
             ready: None,
             orders_heard: 0.0,
+            lesson: Lesson::Beacon,
+            learned: Vec::new(),
             wheel: 0.0,
         };
         match review {
@@ -439,6 +467,15 @@ impl BattleApp {
                 app.understood = true;
                 app.table.open_room("Jake", None);
             }
+            Some(Review::Lessons) => {
+                app.lesson = Lesson::Flank;
+                app.open_journal(Outing::Lessons, Step::Lessons);
+            }
+            Some(Review::Lesson) => {
+                app.lesson = Lesson::Flank;
+                app.outing = Outing::Lessons;
+                app.begin_lesson();
+            }
             Some(Review::Station) | None => {}
         }
         app
@@ -470,8 +507,25 @@ impl BattleApp {
     }
 
     fn begin(&mut self) {
+        self.field(None);
+    }
+
+    /// Puts the chosen Field Lesson on the board, on the Backyard.
+    fn begin_lesson(&mut self) {
+        if self.table.arena.id != formiga_battle_core::Arena::backyard().id {
+            self.choose_arena(formiga_battle_core::Arena::backyard());
+        }
+        self.field(Some(self.lesson));
+    }
+
+    fn field(&mut self, lesson: Option<Lesson>) {
         // The first turn's clock starts once the ready-up is over.
-        match self.table.start(self.clock + READY_SECS) {
+        let now = self.clock + READY_SECS;
+        let started = match lesson {
+            Some(lesson) => self.table.start_lesson(lesson, now),
+            None => self.table.start(now),
+        };
+        match started {
             Ok(()) => {
                 self.stage = Stage::Playing;
                 self.error = None;
@@ -598,12 +652,22 @@ impl BattleApp {
         }
         if finished && !self.ended_heard {
             self.ended_heard = true;
-            self.sound
-                .play(match self.table.outcome().and_then(|o| o.winner) {
+            let cue = match self.table.lesson.as_ref().map(|run| &run.verdict) {
+                Some(Verdict::Learned(_)) => Cue::Fanfare,
+                Some(_) => Cue::Shrug,
+                None => match self.table.outcome().and_then(|o| o.winner) {
                     Some(side) if side == self.table.you => Cue::Fanfare,
                     Some(_) => Cue::Womp,
                     None => Cue::Shrug,
-                });
+                },
+            };
+            self.sound.play(cue);
+            if let Some(run) = &self.table.lesson
+                && matches!(run.verdict, Verdict::Learned(_))
+                && !self.learned.contains(&run.lesson)
+            {
+                self.learned.push(run.lesson);
+            }
         }
     }
 
@@ -1064,8 +1128,16 @@ impl BattleApp {
         ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = u * 4.0;
+                let lesson = self
+                    .table
+                    .lesson
+                    .as_ref()
+                    .map(|run| (run.lesson, run.given.len() as u8));
                 ui.label(label_job(
-                    &self.table.arena.name,
+                    &match lesson {
+                        Some((lesson, _)) => format!("Lesson {}", lesson.number()),
+                        None => self.table.arena.name.clone(),
+                    },
                     chrome::LABEL,
                     ink::DEBOSS,
                 ));
@@ -1073,15 +1145,20 @@ impl BattleApp {
                     return;
                 };
                 ui.add_space(u * 4.0);
-                let turn =
-                    m.board.turn + u8::from(self.table.shown.is_none() && m.outcome().is_none());
+                let giving = self.table.shown.is_none() && m.outcome().is_none();
+                // A lesson counts its own few turns.
+                let (turn, cap) = match lesson {
+                    Some((lesson, given)) => (given + u8::from(giving), lesson.turns()),
+                    None => (m.board.turn + u8::from(giving), m.ruleset.turn_cap),
+                };
+                let turn = turn.min(cap);
                 // The last turn says so, in brass: whatever the tally says after it decides.
-                let last = turn >= m.ruleset.turn_cap;
+                let last = turn >= cap;
                 ui.label(label_job(
-                    &if last {
-                        format!("Last turn, {} of {}", turn, m.ruleset.turn_cap)
+                    &if last && cap > 1 {
+                        format!("Last turn, {turn} of {cap}")
                     } else {
-                        format!("Turn {} of {}", turn.max(1), m.ruleset.turn_cap)
+                        format!("Turn {} of {cap}", turn.max(1))
                     },
                     chrome::LABEL,
                     if last { ink::BRASS_LIGHT } else { ink::COVER },
@@ -1118,7 +1195,7 @@ impl BattleApp {
                 if paused && (self.table.reduce_motion || (now * 2.0).sin() > -0.4) {
                     ui.label(label_job("Held by both", chrome::LABEL, ink::COVER));
                 }
-                if self.table.shown.is_none() && m.outcome().is_none() {
+                if self.table.shown.is_none() && m.outcome().is_none() && lesson.is_none() {
                     ui.add_space(u * 3.0);
                     let left = self.table.time_left(now);
                     let of = f32::from(self.table.ruleset.turn_seconds).max(left);
@@ -1306,6 +1383,9 @@ impl BattleApp {
                 _ => "Click the picture, or press Space, to hurry the train in.".to_owned(),
             },
             Stage::Journal => self.journal_hint(),
+            Stage::Playing if self.table.finished(now) && self.table.lesson.is_some() => {
+                "The lesson is over. Try it again, or go on, from the notes page.".to_owned()
+            }
             Stage::Playing if self.table.finished(now) => {
                 "The match is over. Play again from the notes page.".to_owned()
             }
@@ -2351,11 +2431,15 @@ impl BattleApp {
             return;
         };
         let you = self.table.you;
-        let word = match (outcome.winner, outcome.victory) {
-            (Some(s), Some(Victory::Capture)) if s == you => "Beacon lit!",
-            (Some(s), _) if s == you => "You win!",
-            (Some(_), _) => "Well played",
-            (None, _) => "A draw",
+        let word = match (self.table.lesson.as_ref().map(|r| &r.verdict), outcome) {
+            (Some(Verdict::Learned(_)), _) => "Learned!",
+            (Some(_), _) => "Not yet",
+            (None, outcome) => match (outcome.winner, outcome.victory) {
+                (Some(s), Some(Victory::Capture)) if s == you => "Beacon lit!",
+                (Some(s), _) if s == you => "You win!",
+                (Some(_), _) => "Well played",
+                (None, _) => "A draw",
+            },
         };
         let t = if self.table.reduce_motion {
             1.0
@@ -2419,6 +2503,17 @@ impl BattleApp {
         let composure: Vec<u8> = (0..TEAM_SIZE as u8)
             .map(|i| m.fighter(Slot::new(you, i)).composure)
             .collect();
+        if let Some(run) = &self.table.lesson {
+            let lesson = run.lesson;
+            let turn =
+                (run.given.len() + usize::from(giving)).clamp(1, usize::from(lesson.turns()));
+            sticky(
+                ui,
+                &format!("{}\nTurn {turn} of {}", lesson.goal(), lesson.turns()),
+                u,
+            );
+            ui.add_space(u * 3.0);
+        }
         chrome::kicker(
             ui,
             if giving {
@@ -2681,9 +2776,11 @@ impl BattleApp {
                 Some(width),
                 u,
             )
-            .on_hover_text(
-                "Enter. With no orders at all, each of the team chooses for itself when the timer runs out.",
-            )
+            .on_hover_text(if self.table.lesson.is_some() {
+                "Enter. With no orders at all, each of the team chooses for itself."
+            } else {
+                "Enter. With no orders at all, each of the team chooses for itself when the timer runs out."
+            })
             .clicked()
             {
                 self.lock_quietly(now);
@@ -2703,7 +2800,143 @@ impl BattleApp {
         }
         ui.add_space(u * 4.0);
         dashed_rule(ui, u);
-        self.field_guide(ui, ctx, u);
+        if self.table.lesson.is_some() {
+            self.lesson_notes(ui, u);
+        } else {
+            self.field_guide(ui, ctx, u);
+        }
+    }
+
+    /// In a Field Lesson, its notes where the field guide would be: what it teaches, and how
+    /// to do it.
+    fn lesson_notes(&mut self, ui: &mut egui::Ui, u: f32) {
+        let Some(run) = &self.table.lesson else {
+            return;
+        };
+        let lesson = run.lesson;
+        chrome::kicker(
+            ui,
+            &format!(
+                "Lesson {} of {} \u{b7} {}",
+                lesson.number(),
+                Lesson::ALL.len(),
+                lesson.title()
+            ),
+        );
+        ui.add_space(u * 2.0);
+        egui::ScrollArea::vertical()
+            .id_salt("lesson-notes")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for note in lesson.notes() {
+                    ui.label(RichText::new(*note).size(12.5).color(ink::PAGE));
+                    ui.add_space(u * 2.0);
+                }
+            });
+    }
+
+    /// A Field Lesson's end: what it showed, or what to try, and where next.
+    fn lesson_result(&mut self, ui: &mut egui::Ui, u: f32) {
+        let Some(run) = &self.table.lesson else {
+            return;
+        };
+        let lesson = run.lesson;
+        let (title, words, learned) = match &run.verdict {
+            Verdict::Learned(words) => ("Learned!", words.clone(), true),
+            Verdict::TryAgain(words) => ("Not yet", words.clone(), false),
+            Verdict::Going => ("Not yet", String::new(), false),
+        };
+        chrome::kicker(
+            ui,
+            &format!("Lesson {} \u{b7} {}", lesson.number(), lesson.title()),
+        );
+        ui.label(RichText::new(title).size(22.0).color(ink::FOREST).strong());
+        ui.label(RichText::new(words).size(13.0));
+        ui.add_space(u * 5.0);
+        let width = ui.available_width();
+        let next = lesson.next().filter(|_| learned);
+        let mut go = None;
+        let mut to_list = false;
+        let mut to_station = false;
+        if let Some(next) = next
+            && chrome::button(
+                ui,
+                &format!("Next: {}", next.title()),
+                Kind::Primary,
+                false,
+                true,
+                Some(width),
+                u,
+            )
+            .clicked()
+        {
+            go = Some(next);
+        }
+        let again = if learned {
+            "Play it again"
+        } else {
+            "Try again"
+        };
+        let kind = if learned { Kind::Plain } else { Kind::Primary };
+        if chrome::button(ui, again, kind, false, true, Some(width), u).clicked() {
+            go = Some(lesson);
+        }
+        if chrome::button(
+            ui,
+            "All the lessons",
+            Kind::Plain,
+            false,
+            true,
+            Some(width),
+            u,
+        )
+        .clicked()
+        {
+            to_list = true;
+        }
+        if chrome::button(ui, "Back to the station", Kind::Back, false, true, None, u).clicked() {
+            to_station = true;
+        }
+        if learned && next.is_none() {
+            ui.add_space(u * 5.0);
+            chrome::kicker(ui, "After the lessons");
+            for line in AFTER_LESSONS {
+                ui.label(RichText::new(format!("\u{b7} {line}")).size(12.5));
+            }
+        }
+        ui.add_space(u * 3.0);
+        ui.label(
+            RichText::new("A lesson: nothing is kept.")
+                .size(11.5)
+                .italics()
+                .color(ink::MUTED),
+        );
+        ui.add_space(u * 4.0);
+        let read = if self.account_open {
+            "Close the whole match"
+        } else {
+            "Read the whole match"
+        };
+        if chrome::button(ui, read, Kind::Plain, false, true, Some(width), u).clicked() {
+            self.toggle_account();
+        }
+        if go.is_some() || to_list || to_station {
+            self.table.shown = None;
+            self.portraits.clear();
+            self.fresh_match();
+            self.notebook_open = false;
+        }
+        if let Some(lesson) = go {
+            // Your own three walk a little differently each time; the others are the same.
+            self.table.seed = self.table.seed.wrapping_add(1);
+            self.lesson = lesson;
+            self.begin_lesson();
+        } else if to_list {
+            self.open_journal(Outing::Lessons, Step::Lessons);
+            self.leaf(false);
+        } else if to_station {
+            self.back_to_station();
+        }
     }
 
     /// A glance at the arena and the rules under the orders: one topic at a time (how to win,
@@ -2879,6 +3112,10 @@ impl BattleApp {
     }
 
     fn result(&mut self, ui: &mut egui::Ui, u: f32) {
+        if self.table.lesson.is_some() {
+            self.lesson_result(ui, u);
+            return;
+        }
         let you = self.table.you;
         let outcome = self.table.outcome().expect("finished");
         let tally = self.table.m.as_ref().map_or(Tally::Beacon, tally);
@@ -4082,6 +4319,131 @@ mod tests {
         h.click("Back to the station", 0);
         h.frames(2);
         assert_eq!(h.app.stage, Stage::Station);
+    }
+
+    /// Frames until something says `label`, or panics.
+    fn until(h: &mut Headless, label: &str) {
+        let label = label.to_uppercase();
+        for _ in 0..600 {
+            if h.drawn.iter().any(|(w, _)| w.to_uppercase() == label) {
+                return;
+            }
+            h.frame(Vec::new());
+        }
+        panic!("nothing ever said {label:?}");
+    }
+
+    /// Plays the lesson on the board to its end with these orders each turn.
+    fn play_lesson(h: &mut Headless, plan: impl Fn(&Match) -> formiga_battle_core::TeamPlan) {
+        let mut now = h.time as f32 + READY_SECS;
+        while !h.app.table.finished(now) {
+            let orders = plan(h.app.table.m.as_ref().expect("on the board"));
+            h.app.table.orders = [0, 1, 2].map(|i| orders.get(i).cloned());
+            h.app.table.lock(now);
+            now += 20.0;
+            h.app.table.frame(now);
+        }
+        h.time = f64::from(now) + 1.0;
+        h.frames(4);
+    }
+
+    #[test]
+    fn field_lessons_open_from_the_station_and_begin_with_the_three_chosen() {
+        let mut h = Headless::new();
+        until(&mut h, "Field Lessons");
+        h.click("Field Lessons", 0);
+        h.frames(20);
+        assert_eq!(h.app.stage, Stage::Journal);
+        assert_eq!((h.app.outing, h.app.step), (Outing::Lessons, Step::Lessons));
+        h.click("Flanks", 0);
+        h.frames(2);
+        assert_eq!(h.app.lesson, Lesson::Flank);
+        h.click("Turn the page: who goes", 0);
+        h.frames(20);
+        assert_eq!(h.app.step, Step::Who);
+        until(&mut h, "Begin the lesson");
+        h.click("Begin the lesson", 0);
+        h.frames(4);
+        assert_eq!(h.app.stage, Stage::Playing);
+        let run = h.app.table.lesson.as_ref().expect("a lesson on the board");
+        assert_eq!(run.lesson, Lesson::Flank);
+        assert_eq!(h.app.table.arena.id, "backyard");
+        assert!(
+            h.drawn
+                .iter()
+                .any(|(w, _)| w.starts_with(Lesson::Flank.goal()))
+        );
+    }
+
+    #[test]
+    fn a_lesson_waits_for_the_handler_and_keeps_nothing() {
+        let mut h = Headless::new();
+        h.frames(2);
+        let record = h.app.table.record.clone();
+        h.app.lesson = Lesson::Beacon;
+        h.app.outing = Outing::Lessons;
+        h.app.begin_lesson();
+        // Minutes go by with no orders given: no timer runs out on a lesson.
+        for _ in 0..40 {
+            h.time += 10.0;
+            h.frame(Vec::new());
+        }
+        assert!(h.app.table.shown.is_none());
+        assert!(
+            h.app
+                .table
+                .lesson
+                .as_ref()
+                .is_some_and(|r| r.given.is_empty())
+        );
+        play_lesson(&mut h, |m| {
+            vec![formiga_battle_core::Directive::Press {
+                squares: vec![m.arena.zone_centre()],
+            }]
+        });
+        let run = h.app.table.lesson.as_ref().expect("still the lesson");
+        assert!(
+            matches!(run.verdict, Verdict::Learned(_)),
+            "{:?}",
+            run.verdict
+        );
+        assert!(h.app.table.earned.is_empty());
+        assert_eq!(h.app.table.record, record);
+        assert!(h.app.learned.contains(&Lesson::Beacon));
+        until(&mut h, "Next: Hold, and face them");
+        h.click("Next: Hold, and face them", 0);
+        h.frames(2);
+        assert_eq!(
+            h.app.table.lesson.as_ref().map(|r| r.lesson),
+            Some(Lesson::Facing)
+        );
+    }
+
+    #[test]
+    fn a_lesson_not_learned_says_what_to_try_and_can_be_tried_again() {
+        let mut h = Headless::new();
+        h.frames(2);
+        h.app.lesson = Lesson::Flank;
+        h.app.outing = Outing::Lessons;
+        h.app.begin_lesson();
+        play_lesson(&mut h, |_| Vec::new());
+        let run = h.app.table.lesson.as_ref().expect("still the lesson");
+        assert!(
+            matches!(run.verdict, Verdict::TryAgain(_)),
+            "{:?}",
+            run.verdict
+        );
+        until(&mut h, "Try again");
+        h.click("Try again", 0);
+        h.frames(2);
+        let run = h.app.table.lesson.as_ref().expect("the lesson again");
+        assert_eq!(run.lesson, Lesson::Flank);
+        assert!(run.given.is_empty() && h.app.table.outcome().is_none());
+        play_lesson(&mut h, |_| Vec::new());
+        until(&mut h, "All the lessons");
+        h.click("All the lessons", 0);
+        h.frames(2);
+        assert_eq!((h.app.stage, h.app.step), (Stage::Journal, Step::Lessons));
     }
 
     #[test]

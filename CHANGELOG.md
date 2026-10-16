@@ -25,6 +25,13 @@ protocol 3 is unchanged: a friend match needs both Handlers on Battle 0.67.11 an
 - Recorded matches from earlier rules versions are refused rather than replayed differently, and
   Battles on rules version 8 and 9 do not meet in friend matches. The relay protocol stays 3; a
   plan may now carry a USE ITEM for each creature besides its three orders.
+- Field Lessons, from the station: seven short lessons on the Backyard, under the real rules, on
+  lighting the beacon, holding and which way a holder faces, flanks, tricks, team orders, the
+  sprinkler and USE ITEM, and who your companions are. Each begins from a board set up part way through a match,
+  with a goal, the squares that matter marked, notes where the field guide would be, and a few
+  turns to do it in; the timer waits, and a lesson earns and keeps nothing. Your own three play
+  them, doing exactly as told until the last lesson, where they are themselves. A colony that has
+  never played is pointed to them. `--review lessons` and `--review lesson` picture them.
 - A gate a twig keeps from closing no longer goes on looking as if it is about to swing for the
   rest of the turn.
 - A trio given a colour of its own flies the Handler's pennant as it is now in that colour, on the
