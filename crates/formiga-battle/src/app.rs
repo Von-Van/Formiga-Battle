@@ -1328,7 +1328,21 @@ impl BattleApp {
         };
         let (lettering, caption) = self.overlays(&frame, ctx, scale, u, now);
         marks.lettering = lettering;
-        marks.trails = self.trails(now);
+        // While orders are given, who will probably go where: faint footprints and a word on
+        // the name tag. Played out, the turn's own.
+        let likely = self.table.likely();
+        if likely.is_empty() {
+            marks.trails = self.trails(now);
+        } else {
+            marks.trails_likely = true;
+            marks.trails = likely
+                .iter()
+                .map(|(slot, task, _)| {
+                    let to = (f32::from(task.at.x) + 0.5, f32::from(task.at.y) + 0.5);
+                    (frame.figure(*slot).at, to, task.directive)
+                })
+                .collect();
+        }
         marks.pokes = self.pokes.iter().map(|(t, at)| (*t, now - at)).collect();
         let m = self.table.m.as_ref().expect("a match is on");
         let garden = self
@@ -1439,14 +1453,28 @@ impl BattleApp {
             let look = &self.table.looks[slot.side.index()][slot.index as usize];
             let (hx, hy) = scene::head(&self.view, f, look);
             let at = rect.min + vec2(hx as f32, hy as f32 - 7.0) * scale;
+            let threatened = self.table.m.as_ref().is_some_and(|m| {
+                self.table.shown.is_none() && formiga_battle_core::ai::flank_threatened(m, slot)
+            });
             let state = if f.off_balance {
-                Some("off balance")
+                Some("off balance".to_owned())
+            } else if let Some((_, task, why)) = likely.iter().find(|(s, _, _)| *s == slot) {
+                Some(likely_words(&self.table, task, why))
+            } else if threatened {
+                Some("holding, could be flanked".to_owned())
             } else if f.holding {
-                Some("holding")
+                Some("holding".to_owned())
             } else {
                 None
             };
-            name_tag(&painter, at, &look.name, state, TEAM[slot.side.index()], u);
+            name_tag(
+                &painter,
+                at,
+                &look.name,
+                state.as_deref(),
+                TEAM[slot.side.index()],
+                u,
+            );
         }
         self.board_scale = scale;
         if self.table.shown.is_none()
@@ -3264,6 +3292,49 @@ fn watch(ui: &mut egui::Ui, left: f32, of: f32, u: f32) {
         }
     }
     painter.circle_filled(c, u * 0.8, ink::LINE);
+}
+
+/// What one of the team will probably do with the plan as it stands, and why, in a few words
+/// for its name tag: "probably flanks, keen to go".
+fn likely_words(
+    table: &Table,
+    task: &formiga_battle_core::Task,
+    why: &formiga_battle_core::Why,
+) -> String {
+    use formiga_battle_core::{Role, Why};
+    let name = |s: &Slot| {
+        table
+            .m
+            .as_ref()
+            .map_or(String::new(), |m| m.profile(*s).name.clone())
+    };
+    let job = match task.role {
+        Role::Claim => "holds",
+        Role::Oust => "moves one off",
+        Role::Flank => "flanks",
+        Role::Pin => "waits beside",
+        Role::Guard => "guards",
+        Role::Intercept => "heads one off",
+        Role::Fetch => "fetches",
+        Role::Pull => "pulls it",
+        Role::Wait => "waits by it",
+        Role::Use => "uses what it has",
+        Role::Spare => "sees for itself",
+    };
+    let leaning = match why {
+        Why::Bold => Some("keen to go".to_owned()),
+        Why::Careful => Some("would rather hold".to_owned()),
+        Why::Friendly { ally } => Some(format!("to be by {}", name(ally))),
+        Why::Avoiding { ally } => Some(format!("away from {}", name(ally))),
+        Why::Curious => Some("curious".to_owned()),
+        Why::Whim => Some("on a whim".to_owned()),
+        Why::Alone => Some("alone".to_owned()),
+        Why::Nearest | Why::KeptAtIt => None,
+    };
+    match leaning {
+        Some(l) => format!("probably {job}, {l}"),
+        None => format!("probably {job}"),
+    }
 }
 
 /// A name tag over someone on the board: Home's hover tag, card on a hard shadow with a stepped

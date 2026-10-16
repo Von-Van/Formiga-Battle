@@ -890,6 +890,31 @@ impl Table {
         self.orders.iter().flatten().cloned().collect()
     }
 
+    /// Who of the Handler's team would probably take which job if the plan were locked as it
+    /// stands, and why: the team's own sharing out, from the board as it is, for this team only.
+    /// It says nothing of how each will walk, who will think again, or what the other team will
+    /// do, so it is a likelihood, never the turn itself. Empty unless orders are being given.
+    pub fn likely(&self) -> Vec<(Slot, formiga_battle_core::Task, formiga_battle_core::Why)> {
+        let Some(m) = &self.m else {
+            return Vec::new();
+        };
+        let plan = self.plan();
+        if plan.is_empty() || self.shown.is_some() || m.outcome().is_some() {
+            return Vec::new();
+        }
+        let (_, _, events) =
+            formiga_battle_core::muster::muster(m, self.you, &plan, m.board.turn + 1);
+        events
+            .into_iter()
+            .filter_map(|e| match e.kind {
+                formiga_battle_core::EventKind::Assigned {
+                    slot, task, why, ..
+                } => Some((slot, task, why)),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Whether this order could be carried out at all just now.
     fn fits(&self, d: &Directive) -> bool {
         self.m
@@ -1370,6 +1395,21 @@ mod tests {
         assert_eq!(t.orders, [None, None, None]);
         assert_eq!(t.log.len(), 1);
         assert_eq!(t.m.as_ref().unwrap().board.turn, 1);
+    }
+
+    #[test]
+    fn while_orders_are_given_the_team_says_who_will_probably_go_where_and_nothing_of_theirs() {
+        let mut t = table();
+        assert!(t.likely().is_empty(), "no plan, nothing to say");
+        t.coach_orders();
+        let likely = t.likely();
+        assert!(!likely.is_empty());
+        assert!(likely.iter().all(|(slot, _, _)| slot.side == t.you));
+        // Locked, it is the turn's own business.
+        t.lock(0.0);
+        assert!(t.likely().is_empty());
+        // And what came of each order is told once the turn has been played.
+        assert!(!t.told.is_empty());
     }
 
     #[test]

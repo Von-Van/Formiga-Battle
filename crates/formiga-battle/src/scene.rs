@@ -60,6 +60,9 @@ pub struct Marks {
     /// point it starts from, the one it is headed for, and which order it serves (`None` for a
     /// job it found for itself).
     pub trails: Vec<Trail>,
+    /// The footprints are where the team will probably go if the plan is locked as it stands,
+    /// not where it went: drawn fainter.
+    pub trails_likely: bool,
 }
 
 /// Footprints from one of the team to its job: from where it stands, to where it is headed, in
@@ -614,8 +617,16 @@ fn trails(canvas: &mut Canvas, marks: &Marks, view: &View) {
             let x = a.0 + ux * d - uy * side;
             let y = a.1 + uy * d + ux * side;
             let (px, py) = (x.round() as i32, y.round() as i32);
-            paint::rect(canvas, px, py + 1, 2, 1, paint::faded(dark, 170));
-            paint::rect(canvas, px, py, 2, 1, light);
+            if marks.trails_likely {
+                // Every other print, fainter: a likelihood, not a promise.
+                if k % 2 == 0 {
+                    paint::rect(canvas, px, py + 1, 2, 1, paint::faded(dark, 90));
+                    paint::rect(canvas, px, py, 2, 1, paint::faded(light, 150));
+                }
+            } else {
+                paint::rect(canvas, px, py + 1, 2, 1, paint::faded(dark, 170));
+                paint::rect(canvas, px, py, 2, 1, light);
+            }
             d += 6.0;
             k += 1;
         }

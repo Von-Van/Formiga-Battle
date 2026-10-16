@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- While you give orders, faint footprints show who of your three would probably take which job
+  with the plan as it stands, and pointing at one says what it would probably do and why
+  ("probably flanks, keen to go"). It is your own team's sharing out only: how each walks, who
+  thinks again and what the other team does stay unknown. A holder that two of theirs could
+  flank now says so on its tag.
 - As a turn plays, the lines that matter most come first: a knockout, a breakthrough or the
   beacon lit is never crowded out by a lesser line. When one of your own goes its own way (the
   long way round, beside a friend, along the edge, on a whim, hanging back), a word goes over it
