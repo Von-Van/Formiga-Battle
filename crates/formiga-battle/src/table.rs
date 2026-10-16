@@ -7,7 +7,7 @@ use crate::friend::{Ask, Line, Told};
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
 use crate::rewards;
-use crate::scene::{Choice, Marks};
+use crate::scene::{Choice, Marks, PlanKind, PlanMark};
 use formiga_battle_contract::{BattleRecord, BattleResult};
 use formiga_battle_contract::{BattleSnapshot, Contender};
 use formiga_battle_core::Event;
@@ -18,7 +18,7 @@ use formiga_battle_core::recap::recap_naming;
 use formiga_battle_core::rng::{self, Purpose};
 use formiga_battle_core::{
     Arena, Directive, Match, Outcome, PLAN_SIZE, Profile, Ruleset, Side, Slot, TEAM_SIZE, TeamPlan,
-    Tile, TurnReport,
+    Tile, TurnReport, order::MAX_SQUARES,
 };
 use formiga_battle_room::roster::{check_team, room_match};
 use formiga_battle_room::{Build, Entrant, View, relay_base};
@@ -738,7 +738,7 @@ impl Table {
         } else {
             "the visitors"
         };
-        let callouts = crate::announce::callouts(m, &playback, teams);
+        let callouts = crate::announce::callouts(m, &playback, &report.events, teams, self.you);
         let over = m.outcome().is_some();
         self.shown = Some(Shown {
             callouts,
@@ -806,28 +806,99 @@ impl Table {
             .is_some_and(|m| checked(m, self.you, &vec![d.clone()]).0.len() == 1)
     }
 
-    /// What the board marks: every square the plan names, by the kind of order naming it, and,
-    /// with INTERACT picked, everything there is to interact with.
+    /// The squares the plan names, each with its order's colour and kind, a square named by more
+    /// than one order stacked.
+    pub fn plan_marks(&self) -> Vec<PlanMark> {
+        let mut out: Vec<PlanMark> = Vec::new();
+        for (i, d) in self.orders.iter().enumerate() {
+            let Some(d) = d else {
+                continue;
+            };
+            let kind = match d {
+                Directive::Take { .. } => PlanKind::Take,
+                Directive::Defend { .. } => PlanKind::Defend,
+                Directive::Interact { .. } => PlanKind::Interact,
+            };
+            for t in d.squares() {
+                let stack = out.iter().filter(|m| m.tile == *t).count() as u8;
+                out.push(PlanMark {
+                    tile: *t,
+                    order: i as u8,
+                    kind,
+                    stack,
+                    chosen: self.selected == Some(i as u8) && self.verb.is_some(),
+                });
+            }
+        }
+        out
+    }
+
+    /// Adds a square to the TAKE or DEFEND being given, as the pointer is dragged across the
+    /// board; never takes one out. True if it changed anything.
+    pub fn add_square(&mut self, tile: Tile) -> bool {
+        let (Some(index), Some(verb)) = (self.selected, self.verb) else {
+            return false;
+        };
+        if !matches!(verb, Verb::Take | Verb::Defend) {
+            return false;
+        }
+        let mut squares = match &self.orders[usize::from(index)] {
+            Some(d) if Verb::of(d) == verb => d.squares().to_vec(),
+            _ => Vec::new(),
+        };
+        if squares.contains(&tile) || squares.len() >= MAX_SQUARES {
+            return false;
+        }
+        squares.push(tile);
+        let order = match verb {
+            Verb::Take => Directive::Take { squares },
+            _ => Directive::Defend { squares },
+        };
+        if !self.fits(&order) {
+            return false;
+        }
+        self.orders[usize::from(index)] = Some(order);
+        true
+    }
+
+    /// Picks an order to give: into the chosen place in the plan if it is empty or already of
+    /// this kind, otherwise into the first empty one. False if all three are given.
+    pub fn take_token(&mut self, verb: Verb) -> bool {
+        let fits_here = |i: u8| {
+            self.orders[usize::from(i)]
+                .as_ref()
+                .is_none_or(|d| Verb::of(d) == verb)
+        };
+        let place = self
+            .selected
+            .filter(|i| fits_here(*i) && self.verb.is_some_and(|v| v == verb))
+            .or_else(|| (0..PLAN_SIZE as u8).find(|i| self.orders[usize::from(*i)].is_none()));
+        match place {
+            Some(i) => {
+                self.selected = Some(i);
+                self.verb = Some(verb);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// What the board marks: with INTERACT picked, everything there is to interact with.
     pub fn choices(&self) -> Vec<(Tile, Choice)> {
         let Some(m) = &self.m else {
             return Vec::new();
         };
         let mut marks: Vec<(Tile, Choice)> = Vec::new();
-        for d in self.orders.iter().flatten() {
-            let choice = match d {
-                Directive::Take { .. } => Choice::Contest,
-                Directive::Defend { .. } => Choice::Hold,
-                Directive::Interact { .. } => Choice::Use,
-            };
-            for t in d.squares() {
-                marks.push((*t, choice));
-            }
-        }
         if self.verb == Some(Verb::Interact) {
+            let named: Vec<Tile> = self
+                .orders
+                .iter()
+                .flatten()
+                .flat_map(|d| d.squares().to_vec())
+                .collect();
             for t in m.arena.tiles() {
-                if !marks.iter().any(|(m, _)| *m == t) && self.fits(&Directive::Interact { at: t })
-                {
-                    marks.push((t, Choice::Walk));
+                if !named.contains(&t) && self.fits(&Directive::Interact { at: t }) {
+                    marks.push((t, Choice::Use));
                 }
             }
         }
@@ -925,6 +996,11 @@ impl Table {
         let mut marks = Marks {
             selected: None,
             choices: self.choices(),
+            plan: if self.shown.is_none() {
+                self.plan_marks()
+            } else {
+                Vec::new()
+            },
             hover,
             orders: Vec::new(),
             ..Marks::default()
@@ -1071,7 +1147,59 @@ mod tests {
                 squares: vec![centre]
             })
         );
-        assert!(t.choices().contains(&(centre, Choice::Contest)));
+        assert!(
+            t.plan_marks()
+                .iter()
+                .any(|m| m.tile == centre && m.kind == PlanKind::Take && m.order == 0)
+        );
+    }
+
+    #[test]
+    fn dragging_adds_squares_to_the_order_in_hand_and_never_takes_one_out() {
+        let mut t = table();
+        let zone = t.arena.zone.clone();
+        assert!(t.take_token(Verb::Defend));
+        assert!(t.add_square(zone[0]));
+        assert!(t.add_square(zone[1]));
+        assert!(!t.add_square(zone[1]), "a square already named stays");
+        assert_eq!(
+            t.orders[0],
+            Some(Directive::Defend {
+                squares: vec![zone[0], zone[1]]
+            })
+        );
+    }
+
+    #[test]
+    fn a_square_named_by_two_orders_is_marked_twice_stacked() {
+        let mut t = table();
+        let centre = yard(&t);
+        t.take_token(Verb::Take);
+        t.press(centre, false);
+        t.verb = None;
+        t.take_token(Verb::Defend);
+        t.press(centre, false);
+        let marks: Vec<_> = t
+            .plan_marks()
+            .into_iter()
+            .filter(|m| m.tile == centre)
+            .collect();
+        assert_eq!(marks.len(), 2);
+        assert_eq!(marks[1].stack, 1);
+        assert_ne!(marks[0].order, marks[1].order);
+    }
+
+    #[test]
+    fn with_all_three_orders_given_no_more_can_be_picked() {
+        let mut t = table();
+        let zone = t.arena.zone.clone();
+        for (i, tile) in zone.iter().take(3).enumerate() {
+            assert!(t.take_token(Verb::Defend), "order {i}");
+            t.press(*tile, false);
+            t.verb = None;
+        }
+        t.selected = None;
+        assert!(!t.take_token(Verb::Take));
     }
 
     #[test]

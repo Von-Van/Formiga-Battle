@@ -8,7 +8,8 @@
 
 use crate::playback::Playback;
 use crate::sound::Cue;
-use formiga_battle_core::{EventKind, Match, Side, Slot, Victory};
+use formiga_battle_core::recap::recap_naming;
+use formiga_battle_core::{Because, EventKind, Match, Role, Side, Slot, Victory, Why};
 
 /// One moment of a turn, as it is announced.
 #[derive(Clone, Debug, PartialEq)]
@@ -102,7 +103,7 @@ impl Map {
                 missed: "The wave washed over the sand!",
             },
             "pond" => Self {
-                event: "water",
+                event: "pond",
                 warning: "The water is rising!",
                 warn_word: "GLUG...",
                 warn_cue: Cue::Gurgle,
@@ -113,7 +114,7 @@ impl Map {
                 land_word: "SPLASH!",
                 land_cue: Cue::Splash,
                 did: "washed off",
-                missed: "The water rose over the jetty!",
+                missed: "The pond rose over the banks by the jetty!",
             },
             "tree" => Self {
                 event: "oak",
@@ -156,7 +157,13 @@ fn pick(words: &'static [&'static str], turn: u8, k: usize) -> &'static str {
 
 /// Everything announced in a turn, in order. `teams` names each side for a headline, as the
 /// Handler would say it: "you", "the visitors", a friend's name.
-pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout> {
+pub fn callouts(
+    m: &Match,
+    playback: &Playback,
+    events: &[formiga_battle_core::Event],
+    teams: [&str; 2],
+    you: Side,
+) -> Vec<Callout> {
     let name = |s: &Slot| m.profile(*s).name.clone();
     let list = |slots: &[Slot]| -> String {
         let names: Vec<String> = slots.iter().map(name).collect();
@@ -188,7 +195,49 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
     let mut contested_told = false;
     let mut appeared_told = false;
     let map = Map::of(m);
+    // A moment as the full account tells it, for the line over the board.
+    let told = |kind: &EventKind| -> Option<String> {
+        let event = formiga_battle_core::Event {
+            turn: 0,
+            tick: 1,
+            kind: kind.clone(),
+        };
+        recap_naming(m, &[event], teams).into_iter().next()
+    };
     let mut progress_told = [false; 2];
+    // How the team shared out the plan, as the orders are revealed: only where a companion's
+    // own leanings chose its job, and only for the Handler's team.
+    let mut leaning = 0;
+    for event in events {
+        let EventKind::Assigned {
+            slot, why, task, ..
+        } = &event.kind
+        else {
+            continue;
+        };
+        if slot.side != you || matches!(why, Why::Nearest | Why::KeptAtIt) {
+            continue;
+        }
+        let when = crate::playback::REVEAL_SECS * (0.15 + 0.3 * leaning as f32);
+        leaning += 1;
+        let mut c = Callout::new(when);
+        c.place = Some(playback.at(when).figure(*slot).at);
+        c.about = Some(*slot);
+        c.word = Some(match why {
+            Why::Bold => "CHARGE!",
+            Why::Careful => "STEADY!",
+            Why::Friendly { .. } => "PALS!",
+            Why::Avoiding { .. } => "HMPH!",
+            Why::Curious => "OOH!",
+            Why::Whim => "WHIM!",
+            Why::Alone if task.role == Role::Pin => "WAIT!",
+            Why::Alone | Why::Nearest | Why::KeptAtIt => "SOLO!",
+        });
+        c.headline = told(&event.kind);
+        c.good_for = Some(slot.side);
+        c.cue = Some(Cue::Ready);
+        out.push(c);
+    }
     for (k, (when, event)) in playback.moments().iter().enumerate() {
         let turn = event.turn;
         let mut c = Callout::new(*when);
@@ -567,17 +616,22 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
                 c.cue = Some(Cue::Fizzle);
             }
             // Partway through, a creature whose job came to nothing takes another.
-            EventKind::Rethought {
-                slot, task, order, ..
-            } => {
+            EventKind::Rethought { slot, because, .. } => {
                 c.place = Some(at(*slot));
                 c.about = Some(*slot);
-                c.word = Some("!");
-                c.headline = Some(format!(
-                    "{} changed plan: {}.",
-                    name(slot),
-                    formiga_battle_core::recap::job(m, *slot, task, order)
-                ));
+                c.word = Some(match because {
+                    Because::ItemGone => "AW!",
+                    Because::GotIt => "GOT IT!",
+                    Because::TargetDown => "NEXT!",
+                    Because::DugIn { .. } => "UH-OH",
+                    Because::SquareCleared => "GO GO!",
+                    Because::SquareTaken { .. } => "TOO LATE!",
+                    Because::Warned => "EEK!",
+                    Because::AllyDown { .. } => "ON IT!",
+                    Because::Spotted => "OOH!",
+                });
+                c.headline = told(&event.kind);
+                c.good_for = Some(slot.side);
                 c.cue = Some(Cue::Hmm);
             }
             // Orders filled and the plan shared out come before the first tick, and are told in
@@ -634,7 +688,13 @@ mod tests {
                 &report.events,
                 m.ruleset.ticks_per_turn,
             );
-            all.extend(callouts(&m, &playback, ["you", "the visitors"]));
+            all.extend(callouts(
+                &m,
+                &playback,
+                &report.events,
+                ["you", "the visitors"],
+                Side::Left,
+            ));
         }
         all
     }

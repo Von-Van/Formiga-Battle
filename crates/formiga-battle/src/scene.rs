@@ -33,10 +33,7 @@ const GOLD: Rgba = rgb(0xf5d25e);
 /// What a tile can be chosen for, while an order is being given.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Choice {
-    Walk,
-    Hold,
-    Contest,
-    /// Where what it carries could be used.
+    /// Something the team could go and get or set off: an INTERACT's choices.
     Use,
 }
 
@@ -57,7 +54,46 @@ pub struct Marks {
     /// Cartoon words (`lettering`), over everything: each picture, where its top-left corner
     /// goes, and how much of it shows, out of 255.
     pub lettering: Vec<Lettered>,
+    /// The squares the team's plan names, each with its order's colour and mark.
+    pub plan: Vec<PlanMark>,
+    /// Where each of the team is off to this turn, as footprints from it to its job: the floor
+    /// point it starts from, the one it is headed for, and which order it serves (`None` for a
+    /// job it found for itself).
+    pub trails: Vec<Trail>,
 }
+
+/// Footprints from one of the team to its job: from where it stands, to where it is headed, in
+/// the colour of the order it serves (`None` for a job it found for itself).
+pub type Trail = ((f32, f32), (f32, f32), Option<u8>);
+
+/// What kind of order names a square.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlanKind {
+    Take,
+    Defend,
+    Interact,
+}
+
+/// One order's mark on a square of the plan. A square named by more than one order is marked
+/// once for each, the later ones stacked beside the first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlanMark {
+    pub tile: Tile,
+    /// Which of the three orders, by its place in the plan: its colour.
+    pub order: u8,
+    pub kind: PlanKind,
+    /// How many orders before this one name the same square.
+    pub stack: u8,
+    /// The order being given just now: its marks breathe.
+    pub chosen: bool,
+}
+
+/// Each of the three orders' colours: gold, sky and plum, so they read apart from both teams'.
+pub const ORDER_COLOURS: [Ramp; 3] = [
+    Ramp::new(0x6e4f1c, 0xb8862a, 0xe8b23c, 0xf5d25e, 0xfff0a0),
+    Ramp::new(0x1d4a6e, 0x2f6fa0, 0x4f97cf, 0x86c0ea, 0xc4e4fa),
+    Ramp::new(0x4a2358, 0x7a3d8e, 0xa65fbd, 0xc98fdc, 0xe9c8f2),
+];
 
 /// The board at one moment, as a picture of `view.size`. `still` holds the garden's own motion
 /// and the marks' pulsing, for reduced motion.
@@ -77,6 +113,8 @@ pub fn paint(
     beacon(&mut canvas, arena, frame, capture_ticks, now, still, view);
     garden.behind(&mut canvas, view, now, still);
     floor_marks(&mut canvas, frame, marks, view, now, still);
+    plan_floor(&mut canvas, marks, view, now, still);
+    trails(&mut canvas, marks, view);
     for tile in &frame.closed {
         found::under(&mut canvas, view, *tile, now, still);
     }
@@ -229,6 +267,7 @@ pub fn paint(
         found::glint(&mut canvas, view, *tile, now, still);
     }
     order_marks(&mut canvas, frame, marks, view, now, still);
+    plan_signs(&mut canvas, marks, view, now, still);
     for effect in &frame.effects {
         burst(&mut canvas, arena, view, effect, now);
     }
@@ -409,9 +448,6 @@ fn floor_marks(
     let breath = pulse(now, still, 3.2);
     for (tile, choice) in &marks.choices {
         let (fill, edge) = match choice {
-            Choice::Walk => (rgb(0xfffcf2), CREAM),
-            Choice::Hold => (rgb(0xbfe6ff), rgb(0xdff3ff)),
-            Choice::Contest => (rgb(0xff8a6a), rgb(0xffc0a8)),
             Choice::Use => (GOLD, rgb(0xfff0a0)),
         };
         diamond_fill(
@@ -520,6 +556,162 @@ fn order_marks(
 }
 
 /// A pennant on a garden cane, where a move is going.
+/// The plan's squares on the ground: washed in each order's colour, ringed in its light, a ring
+/// inside the last for each order more naming the same square.
+fn plan_floor(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: bool) {
+    let breath = pulse(now, still, 3.0);
+    for mark in &marks.plan {
+        let ramp = ORDER_COLOURS[usize::from(mark.order) % ORDER_COLOURS.len()];
+        let inset = 0.08 + 0.1 * f32::from(mark.stack);
+        let wash = if mark.chosen {
+            (60.0 + 40.0 * breath) as u8
+        } else {
+            60
+        };
+        if mark.stack == 0 {
+            diamond_fill(
+                canvas,
+                view,
+                mark.tile,
+                inset,
+                paint::faded(ramp.base, wash),
+            );
+        }
+        diamond_outline(
+            canvas,
+            view,
+            mark.tile,
+            inset,
+            paint::faded(ramp.light, 230),
+        );
+    }
+}
+
+/// Footprints from each of the team to its job, in its order's colour, a pair every few pixels.
+fn trails(canvas: &mut Canvas, marks: &Marks, view: &View) {
+    for (from, to, order) in &marks.trails {
+        let (light, dark) = match order {
+            Some(i) => {
+                let ramp = ORDER_COLOURS[usize::from(*i) % ORDER_COLOURS.len()];
+                (ramp.light, ramp.edge)
+            }
+            None => (rgb(0xf4efdc), rgb(0x6b6455)),
+        };
+        let a = view.screen(from.0, from.1);
+        let b = view.screen(to.0, to.1);
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let length = (dx * dx + dy * dy).sqrt();
+        if length < 8.0 {
+            continue;
+        }
+        let (ux, uy) = (dx / length, dy / length);
+        // Left, right, left: little paw prints across the line, a pace apart, stopping short
+        // at each end, each a light print on a dark heel so it reads on any ground.
+        let mut d = 8.0;
+        let mut k = 0;
+        while d < length - 6.0 {
+            let side = if k % 2 == 0 { 2.0 } else { -2.0 };
+            let x = a.0 + ux * d - uy * side;
+            let y = a.1 + uy * d + ux * side;
+            let (px, py) = (x.round() as i32, y.round() as i32);
+            paint::rect(canvas, px, py + 1, 2, 1, paint::faded(dark, 170));
+            paint::rect(canvas, px, py, 2, 1, light);
+            d += 6.0;
+            k += 1;
+        }
+        // Where it is headed: a small spot on the ground.
+        let (tx, ty) = (b.0.round() as i32, b.1.round() as i32);
+        paint::ellipse(canvas, tx, ty, 5, 2, paint::faded(dark, 140));
+        paint::ellipse(canvas, tx, ty, 4, 2, paint::faded(light, 200));
+    }
+}
+
+/// Each order's sign over its square, standing up out of the ground so it reads over whoever
+/// is there: a flag for TAKE, a shield for DEFEND, a sparkle for INTERACT. Stacked side by
+/// side when more than one order names a square.
+fn plan_signs(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: bool) {
+    for mark in &marks.plan {
+        let ramp = ORDER_COLOURS[usize::from(mark.order) % ORDER_COLOURS.len()];
+        let (cx, cy) = view.centre(mark.tile);
+        let bob = if mark.chosen && !still {
+            ((now * 4.0).sin() * 1.2).round() as i32
+        } else {
+            0
+        };
+        let x = cx - 9 + 7 * i32::from(mark.stack);
+        let y = cy - 3 + bob;
+        match mark.kind {
+            PlanKind::Take => {
+                paint::vline(canvas, x, y - 13, 13, ramp.edge);
+                paint::polygon(
+                    canvas,
+                    &[
+                        (x as f32 + 1.0, y as f32 - 13.0),
+                        (x as f32 + 8.0, y as f32 - 10.0),
+                        (x as f32 + 1.0, y as f32 - 7.0),
+                    ],
+                    ramp.base,
+                );
+                paint::line(canvas, (x + 1, y - 13), (x + 7, y - 10), ramp.shine);
+                paint::put(canvas, x, y - 14, ramp.shine);
+            }
+            PlanKind::Defend => {
+                let top = y - 13;
+                let shield = [
+                    (x as f32 - 3.0, top as f32),
+                    (x as f32 + 4.0, top as f32),
+                    (x as f32 + 4.0, top as f32 + 5.0),
+                    (x as f32 + 0.5, top as f32 + 9.0),
+                    (x as f32 - 3.0, top as f32 + 5.0),
+                ];
+                paint::polygon(canvas, &shield, ramp.edge);
+                let inner = shield.map(|(px, py)| {
+                    (
+                        px + (x as f32 + 0.5 - px) * 0.3,
+                        py + (top as f32 + 4.0 - py) * 0.3,
+                    )
+                });
+                paint::polygon(canvas, &inner, ramp.base);
+                paint::hline(canvas, x - 1, top + 2, 3, ramp.shine);
+            }
+            PlanKind::Interact => {
+                let (sx, sy) = (x + 1, y - 9);
+                for (dx, dy, len) in [(0, -1, 4), (0, 1, 4), (-1, 0, 4), (1, 0, 4)] {
+                    for k in 1..=len {
+                        let colour = if k <= 2 { ramp.light } else { ramp.base };
+                        paint::put(canvas, sx + dx * k, sy + dy * k, colour);
+                    }
+                }
+                paint::rect(canvas, sx - 1, sy - 1, 3, 3, ramp.base);
+                paint::put(canvas, sx, sy, ramp.shine);
+                paint::ring(
+                    canvas,
+                    &star_sprite(),
+                    sx - 5,
+                    sy - 5,
+                    paint::faded(ramp.edge, 140),
+                );
+            }
+        }
+    }
+}
+
+/// The sparkle's shape alone, for ringing it in its edge colour.
+fn star_sprite() -> Canvas {
+    let mut c = Canvas::new(11, 11);
+    for (dx, dy) in [(0, -1), (0, 1), (-1, 0), (1, 0)] {
+        for k in 0..=4 {
+            c.set(5 + dx * k, 5 + dy * k, rgb(0xffffff));
+        }
+    }
+    for y in 4..=6 {
+        for x in 4..=6 {
+            c.set(x, y, rgb(0xffffff));
+        }
+    }
+    c
+}
+
 fn pennant(canvas: &mut Canvas, at: (i32, i32), team: Ramp, now: f32, still: bool) {
     let (x, y) = at;
     paint::ellipse(canvas, x + 1, y, 3, 1, rgba(0x24452b, 60));

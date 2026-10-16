@@ -351,11 +351,15 @@ impl BattleApp {
             }
             Some(Review::Orders) => {
                 app.begin();
+                // One order as the coach would give it, a DEFEND of two of the yard's squares
+                // (one named twice), and TAKE in hand for the third.
                 app.table.coach_orders();
-                app.table.orders[1] = None;
+                let zone = app.table.arena.zone.clone();
+                app.table.orders[1] = Some(formiga_battle_core::Directive::Defend {
+                    squares: zone.iter().take(2).copied().collect(),
+                });
                 app.table.orders[2] = None;
-                app.table.select(1);
-                app.table.choose_verb(Verb::Take);
+                app.table.take_token(Verb::Take);
             }
             Some(Review::Notebook) => {
                 // A colony that has played a little with friends, as Desktop would send it.
@@ -861,8 +865,7 @@ impl BattleApp {
             (egui::Key::D, Verb::Defend),
             (egui::Key::I, Verb::Interact),
         ] {
-            if pressed(key) && self.table.selected.is_some() {
-                self.table.choose_verb(verb);
+            if pressed(key) && self.table.take_token(verb) {
                 self.sound.play(Cue::Click);
             }
         }
@@ -1264,6 +1267,7 @@ impl BattleApp {
         };
         let (lettering, caption) = self.overlays(&frame, ctx, scale, u, now);
         marks.lettering = lettering;
+        marks.trails = self.trails(now);
         marks.pokes = self.pokes.iter().map(|(t, at)| (*t, now - at)).collect();
         let m = self.table.m.as_ref().expect("a match is on");
         let garden = self
@@ -1303,7 +1307,7 @@ impl BattleApp {
             }
         }
         let texture = self.board.as_ref().expect("just made").id();
-        let response = ui.allocate_rect(rect, Sense::click());
+        let response = ui.allocate_rect(rect, Sense::click_and_drag());
         ui.painter().image(
             texture,
             rect,
@@ -1350,6 +1354,15 @@ impl BattleApp {
                     Aim::Nothing => {}
                 }
             }
+        }
+        // Dragging across the board with TAKE or DEFEND in hand adds every square it passes.
+        if giving
+            && response.dragged_by(egui::PointerButton::Primary)
+            && let Some(tile) = ctx.pointer_latest_pos().and_then(to_tile)
+            && self.table.add_square(tile)
+        {
+            self.pokes.push((tile, now));
+            self.sound.play(Cue::Order);
         }
         // A name tag over whoever is pointed at or chosen, saying how they stand.
         let painter = ui.painter().clone();
@@ -1688,6 +1701,32 @@ impl BattleApp {
         );
     }
 
+    /// Footprints from each of the Handler's team to the job it took on, as the turn's orders are
+    /// revealed and into its first tick, in the colour of the order it serves.
+    fn trails(&self, now: f32) -> Vec<scene::Trail> {
+        let Some(shown) = &self.table.shown else {
+            return Vec::new();
+        };
+        if now - shown.started > crate::playback::REVEAL_SECS + crate::playback::TICK_SECS {
+            return Vec::new();
+        }
+        let start = shown.playback.at(0.0);
+        shown
+            .report
+            .events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                formiga_battle_core::EventKind::Assigned { slot, task, .. }
+                    if slot.side == self.table.you =>
+                {
+                    let to = (f32::from(task.at.x) + 0.5, f32::from(task.at.y) + 0.5);
+                    Some((start.figure(*slot).at, to, task.directive))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Confetti over the board when the Handler's team wins: a short shower, the same every time.
     fn confetti(&self, painter: &egui::Painter, board: Rect, now: f32, u: f32) {
         let (Some(at), Some(outcome)) = (self.finished_at, self.table.outcome()) else {
@@ -1749,7 +1788,10 @@ impl BattleApp {
             return;
         };
         let say = |aim: &Aim| match aim {
-            Aim::Give(order) => Some(speak_order(m, self.table.you, order)),
+            Aim::Give(order) => Some(match self.table.selected {
+                Some(i) => format!("{}. {}", i + 1, speak_order(m, self.table.you, order)),
+                None => speak_order(m, self.table.you, order),
+            }),
             Aim::Nothing => None,
         };
         let mut lines = Vec::new();
@@ -2193,76 +2235,122 @@ impl BattleApp {
             }
         });
         ui.add_space(u * 2.0);
+        // The three orders in hand: pick one, then the squares or the thing on the board.
+        if giving {
+            let left = self.table.orders.iter().filter(|o| o.is_none()).count();
+            ui.horizontal(|ui| {
+                ui.label(label_job("Give an order", chrome::LABEL, ink::FOREST));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(label_job(
+                        &format!("{left} of {PLAN_SIZE} left"),
+                        9.0,
+                        if left == 0 { ink::STAMP } else { ink::MUTED },
+                    ));
+                });
+            });
+            ui.add_space(u);
+            let row = egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true);
+            let mut picked = None;
+            ui.with_layout(row, |ui| {
+                ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
+                for (v, key) in Verb::ALL.into_iter().zip(["T", "D", "I"]) {
+                    let on = self.table.verb == Some(v);
+                    let can = left > 0
+                        || self
+                            .table
+                            .selected
+                            .and_then(|i| self.table.orders[usize::from(i)].as_ref())
+                            .is_some_and(|d| d.verb() == v.word());
+                    if chrome::button(ui, v.word(), Kind::Plain, on, can, None, u)
+                        .on_hover_text(format!("{} ({key})", v.hint()))
+                        .clicked()
+                    {
+                        picked = Some(v);
+                    }
+                }
+            });
+            if let Some(v) = picked {
+                self.table.take_token(v);
+            }
+            ui.add_space(u * 3.0);
+        }
         for i in 0..PLAN_SIZE as u8 {
-            let chosen = giving && self.table.selected == Some(i);
+            let chosen = giving && self.table.selected == Some(i) && self.table.verb.is_some();
             let order = self.table.orders[i as usize].clone();
-            let order_text = match &order {
-                Some(order) => speak_order(self.table.m.as_ref().expect("on"), you, order),
-                None => "No order".to_owned(),
+            let (title, line) = match &order {
+                Some(order) => (
+                    order.verb().to_owned(),
+                    speak_order(self.table.m.as_ref().expect("on"), you, order),
+                ),
+                None if chosen => ("Now".to_owned(), "Click the board to place it.".to_owned()),
+                None => ("Empty".to_owned(), "Not given yet.".to_owned()),
             };
             let has_order = order.is_some();
-            let verb = self.table.verb;
-            let (response, (picked, cleared)) = card(
+            let (response, cleared) = card(
                 ui,
                 Id::new(("order-card", i)),
                 chosen,
                 true,
-                true,
+                giving && has_order,
                 u,
                 |ui| {
-                    ui.vertical(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(label_job(&format!("{}", i + 1), chrome::LABEL, ink::MUTED));
-                            ui.label(
-                                RichText::new(format!("Order {}", i + 1))
-                                    .size(15.0)
-                                    .strong()
-                                    .color(ink::PAGE),
-                            );
+                    ui.horizontal(|ui| {
+                        token(ui, i, has_order || chosen, u);
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            ui.label(label_job(
+                                &title,
+                                chrome::LABEL,
+                                if has_order { ink::PAGE } else { ink::MUTED },
+                            ));
+                            let words: String = line
+                                .split_once(": ")
+                                .map_or(line.clone(), |(_, rest)| rest.to_owned());
+                            let words = words
+                                .strip_prefix(&format!("{title} "))
+                                .map_or(words.clone(), str::to_owned);
+                            ui.label(RichText::new(words).size(12.0).color(if has_order {
+                                ink::PAGE
+                            } else {
+                                ink::MUTED
+                            }));
                         });
-                        let colour = if has_order { ink::PAGE } else { ink::MUTED };
-                        ui.label(RichText::new(&order_text).size(12.5).color(colour));
-                        let mut picked = None;
                         let mut cleared = false;
-                        if giving {
-                            ui.add_space(u);
-                            let row =
-                                egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true);
-                            ui.with_layout(row, |ui| {
-                                ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
-                                for v in Verb::ALL {
-                                    let on = chosen && verb == Some(v);
-                                    if chrome::button(ui, v.word(), Kind::Plain, on, true, None, u)
-                                        .on_hover_text(v.hint())
+                        if giving && has_order {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if chrome::button(ui, "clear", Kind::Back, false, true, None, u)
+                                        .on_hover_text("Take this order back")
                                         .clicked()
                                     {
-                                        picked = Some(v);
+                                        cleared = true;
                                     }
-                                }
-                                if has_order
-                                    && chrome::button(ui, "clear", Kind::Back, false, true, None, u)
-                                        .on_hover_text("Clear this order")
-                                        .clicked()
-                                {
-                                    cleared = true;
-                                }
-                            });
+                                },
+                            );
                         }
-                        (picked, cleared)
+                        cleared
                     })
                     .inner
                 },
             );
-            // Heard through the interaction kit, as every button and card is.
-            if let Some(v) = picked {
-                self.table.select(i);
-                self.table.choose_verb(v);
-            } else if cleared {
+            if cleared {
                 self.table.clear_order(i);
+                if self.table.selected == Some(i) {
+                    self.table.verb = None;
+                }
             } else if giving && response.clicked() {
+                // A placed order picked up again, to add squares or move it.
                 self.table.select(i);
+                if let Some(v) = order.as_ref().map(|d| match d {
+                    formiga_battle_core::Directive::Take { .. } => Verb::Take,
+                    formiga_battle_core::Directive::Defend { .. } => Verb::Defend,
+                    formiga_battle_core::Directive::Interact { .. } => Verb::Interact,
+                }) {
+                    self.table.choose_verb(v);
+                }
             }
-            ui.add_space(u * 3.0);
+            ui.add_space(u * 2.0);
         }
         if giving {
             ui.add_space(u * 2.0);
@@ -2731,9 +2819,6 @@ fn tally(m: &Match) -> Tally {
     Tally::Standing
 }
 
-/// An order in the Handler's words: where, by what is there, never by coordinates.
-/// An order in the Handler's words: where, by what is there, never by coordinates. `carrying`
-/// is what the one given it carries, for a USE.
 /// A team order in a few words, as the order cards and the pointer's card say it.
 pub fn speak_order(m: &Match, you: Side, order: &formiga_battle_core::Directive) -> String {
     use formiga_battle_core::Directive;
@@ -3160,6 +3245,29 @@ fn pointer_arrow(painter: &egui::Painter, tip: egui::Pos2, fill: Color32, u: f32
     painter.add(egui::Shape::convex_polygon(shape(0.0), fill, Stroke::NONE));
 }
 
+/// One of the three orders as a token: a disc in its colour with its number, pale until it is
+/// given.
+fn token(ui: &mut egui::Ui, order: u8, given: bool, u: f32) {
+    let (rect, _) = ui.allocate_exact_size(vec2(u * 14.0, u * 14.0), Sense::hover());
+    let ramp = scene::ORDER_COLOURS[usize::from(order) % scene::ORDER_COLOURS.len()];
+    let painter = ui.painter();
+    let c = rect.center();
+    let r = u * 6.0;
+    painter.circle_filled(c + vec2(u, u), r, ink::SHADOW);
+    let (fill, edge) = if given {
+        (color(ramp.base), color(ramp.edge))
+    } else {
+        (color(ramp.shine).gamma_multiply(0.6), color(ramp.light))
+    };
+    painter.circle_filled(c, r, fill);
+    painter.circle_stroke(c, r, Stroke::new(u * 0.8, edge));
+    if given {
+        painter.circle_filled(c - vec2(u * 2.0, u * 2.0), u * 1.2, color(ramp.shine));
+    }
+    let galley = painter.layout_job(label_job(&format!("{}", order + 1), 11.0, edge));
+    painter.galley(c - galley.size() / 2.0 + vec2(u * 0.3, 0.0), galley, edge);
+}
+
 /// A five-pointed star, for the dizzy.
 fn star(painter: &egui::Painter, c: egui::Pos2, r: f32, fill: Color32, edge: Color32) {
     let points: Vec<egui::Pos2> = (0..10)
@@ -3234,10 +3342,11 @@ fn mouse(painter: &egui::Painter, rect: Rect, right: bool, u: f32) {
 /// The controls, on a card in the board page's lower left while orders are given: what a click
 /// and a right click do, and the keys.
 fn controls(painter: &egui::Painter, page: Rect, u: f32) {
-    let rows: [(Option<bool>, &str); 3] = [
-        (Some(false), "Move, contest, or choose"),
-        (Some(true), "Hold there"),
-        (None, "Enter lock in  ·  Esc let go  ·  L whole match"),
+    let rows: [(Option<bool>, &str); 4] = [
+        (Some(false), "Take a square, or what is there"),
+        (Some(true), "Defend a square"),
+        (None, "Drag to name more squares"),
+        (None, "T D I pick  ·  Enter lock in  ·  L whole match"),
     ];
     let galleys: Vec<_> = rows
         .iter()
