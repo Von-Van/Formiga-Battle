@@ -14,7 +14,7 @@
 
 use crate::build::{Build, Mismatch, Released};
 use crate::code;
-use formiga_battle_contract::Contender;
+use formiga_battle_contract::{Contender, Pennant};
 use formiga_battle_core::{Ruleset, Side, TEAM_SIZE, TeamPlan};
 use formiga_travel::TravelRelationship;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,8 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 /// The version of the relay's requests and answers. 2: an entrant says which Battle and Desktop
-/// it plays with ([`Build`]). 3: a side sends its team's plan, not an order per creature.
+/// it plays with ([`Build`]). 3: a side sends its team's plan, not an order per creature, and an
+/// entrant may carry the Handler's [`Card`].
 pub const RELAY_VERSION: u32 = 3;
 /// The largest body the relay reads.
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
@@ -97,6 +98,55 @@ pub struct Entrant {
     /// room's; a joiner's says nothing.
     #[serde(default = "backyard")]
     pub arena: String,
+    /// What the Handler shows their friend of themselves besides their name. Optional, and
+    /// cleaned like the name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<Card>,
+}
+
+/// What a Handler shows a friend of themselves besides their name: their club, pennant and
+/// standing, and the trio their three are, if they are one. Every part is optional; text is
+/// cleaned and bounded as the name is, and a pennant whose parts are not plain ids is left out.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Card {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub club: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pennant: Option<Pennant>,
+    /// The Handler's standing, as their Battle words it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standing: Option<String>,
+    /// The name of the trio the three are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trio: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trio_pennant: Option<Pennant>,
+}
+
+/// The most characters each of a card's words may have.
+pub const MAX_CLUB_CHARS: usize = 32;
+pub const MAX_STANDING_CHARS: usize = 48;
+pub const MAX_TRIO_CHARS: usize = 32;
+
+impl Card {
+    /// The card with every part cleaned: text plain and bounded, an empty part left out, and a
+    /// pennant left out unless all four of its parts are plain ids. `None` if nothing is left.
+    pub fn cleaned(&self) -> Option<Self> {
+        let text = |t: &Option<String>, max: usize| {
+            t.as_deref()
+                .map(|t| formiga_expansion_rulebook::sanitize_text(t, max))
+                .filter(|t| !t.is_empty())
+        };
+        let flag = |p: &Option<Pennant>| p.clone().filter(Pennant::holds);
+        let card = Self {
+            club: text(&self.club, MAX_CLUB_CHARS),
+            pennant: flag(&self.pennant),
+            standing: text(&self.standing, MAX_STANDING_CHARS),
+            trio: text(&self.trio, MAX_TRIO_CHARS),
+            trio_pennant: flag(&self.trio_pennant),
+        };
+        (card != Self::default()).then_some(card)
+    }
 }
 
 fn backyard() -> String {
@@ -424,6 +474,7 @@ impl Relay {
         } else {
             name
         };
+        entrant.card = entrant.card.as_ref().and_then(Card::cleaned);
         entrant
     }
 

@@ -11,10 +11,12 @@ mod friend;
 mod garden;
 mod host;
 mod icon;
+mod identity;
 mod iso;
 mod lettering;
 mod look;
 mod masthead;
+mod pennant;
 mod playback;
 mod rewards;
 mod scene;
@@ -149,6 +151,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "picking" | "who" => app::Review::Picking,
                     "friend" => app::Review::Friend,
                     "history" => app::Review::History,
+                    "handler" => app::Review::Handler,
                     "settings" => app::Review::Settings,
                     "orders" => app::Review::Orders,
                     "playing" => app::Review::Playing,

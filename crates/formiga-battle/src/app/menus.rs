@@ -38,7 +38,7 @@ impl BattleApp {
     /// The pages the notebook is turning through: an outing's, or the Handler's own.
     pub(super) fn steps(&self) -> &'static [Step] {
         if self.own_pages() {
-            &[Step::History, Step::Settings]
+            &[Step::Handler, Step::History, Step::Settings]
         } else {
             self.outing.steps()
         }
@@ -46,7 +46,7 @@ impl BattleApp {
 
     /// The notebook is open at the Handler's own pages, not on the way anywhere.
     pub(super) fn own_pages(&self) -> bool {
-        matches!(self.step, Step::History | Step::Settings)
+        matches!(self.step, Step::Handler | Step::History | Step::Settings)
     }
 
     /// Opens the notebook at a page of getting ready for an outing, or at the Handler's own
@@ -231,6 +231,9 @@ impl BattleApp {
                     "Sign your name, read what is shared, then open a room or join one.".to_owned()
                 }
             },
+            Step::Handler => {
+                "Sign your name, choose your pennant, and look after your trios.".to_owned()
+            }
             Step::History => "Every match your colony has played, newest first.".to_owned(),
             Step::Settings => "Settings last for this sitting.".to_owned(),
         }
@@ -385,10 +388,16 @@ impl BattleApp {
             ((width * 0.42 / u) as i32).clamp(76, 118),
         );
         let reduce = self.table.reduce_motion;
+        let flag = self
+            .table
+            .record
+            .handler
+            .as_ref()
+            .map(|h| crate::identity::Style::of(&h.pennant));
         let home = &self.table.home;
         let masthead = self.masthead.get_or_insert_with(|| {
             let look = |i: usize| home.get(i).and_then(|(c, _)| Look::of(c, reduce).ok());
-            Masthead::new([look(0), look(1)], reduce)
+            Masthead::new([look(0), look(1)], reduce).with_flag(flag)
         });
         let tick = if reduce {
             0
@@ -528,19 +537,21 @@ impl BattleApp {
                 ui.add_space(u * 4.0);
                 notes = chrome::button(
                     ui,
-                    "History & settings",
+                    "Your Handler & history",
                     Kind::Plain,
                     false,
                     true,
                     Some(width),
                     u,
                 )
-                .on_hover_text("Matches played, cups, and how Battle looks and sounds")
+                .on_hover_text(
+                    "Your name, pennant and trios, matches played, cups, and how Battle looks and sounds",
+                )
                 .clicked();
             });
         }
         if notes {
-            self.open_journal(self.outing, Step::History);
+            self.open_journal(self.outing, Step::Handler);
         } else if let Some(outing) = chosen {
             self.outing = outing;
             if let Some(station) = &mut self.station {
@@ -597,6 +608,19 @@ impl BattleApp {
                 ui.add_space(u * 6.0);
                 self.room(ui, u);
             }
+            Step::Handler => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "Your Handler",
+                    "Who you are when your companions play: your name, your club and your pennant. Friends see them beside your team.",
+                );
+                ui.add_space(u * 6.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("handler-card")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| self.handler_page(ui, ctx, u));
+            }
             Step::History => {
                 chrome::page_heading(
                     ui,
@@ -623,12 +647,14 @@ impl BattleApp {
     /// The ruled right page of getting ready: what is chosen so far, and the way on.
     pub(super) fn journal_right(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         egui::ScrollArea::vertical()
+            .id_salt("journal-right")
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 match self.step {
                     Step::Where => self.places(ui, u),
                     Step::Who => self.lineup(ui, ctx, u),
                     Step::Room => self.shared(ui, ctx, u),
+                    Step::Handler => self.standing_and_trios(ui, ctx, u),
                     Step::History => self.totals(ui, u),
                     Step::Settings => self.keys_and_about(ui, u),
                 }
@@ -656,6 +682,7 @@ impl BattleApp {
             None => "The station",
             Some(Step::Where) => "Where to",
             Some(Step::Who) => "Who goes",
+            Some(Step::Handler) => "Your Handler",
             Some(Step::History) => "History",
             Some(_) => "Back",
         })
@@ -1030,6 +1057,10 @@ impl BattleApp {
         if let Some(place) = take_out {
             self.table.toggle_pick(place);
             self.felt.push(Feedback::Unpick);
+        }
+        if self.table.picked.len() == TEAM_SIZE && !waiting {
+            ui.add_space(u * 2.0);
+            self.trio_corner(ui, ctx, u);
         }
         ui.add_space(u * 2.0);
         dashed_rule(ui, u);

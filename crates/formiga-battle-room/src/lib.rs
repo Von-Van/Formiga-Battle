@@ -18,4 +18,4 @@ pub mod roster;
 
 pub use build::{Build, Released};
 pub use http::{AskError, LocalRelay, RELAY_BASE, RELAY_ENV, RelayClient, relay_base, serve_relay};
-pub use relay::{Entrant, Limits, Locked, RELAY_VERSION, Relay, Stage, View};
+pub use relay::{Card, Entrant, Limits, Locked, RELAY_VERSION, Relay, Stage, View};

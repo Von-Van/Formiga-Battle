@@ -21,7 +21,7 @@ both are in, the match earns nothing. A match ended by a forfeit counts as it st
 | | |
 |---|---|
 | Open Circuit points | 10 for finishing, 5 more for a win or 2 for a draw. From the sixth friend match in one day (UTC), 2 each, so playing the same friend over and over is never the way to points. A Handler who forfeits earns none |
-| Match history | When, won or lost, how it ended, in how many turns, the three who played, and the other Handler's name as they typed it. The newest 20 are kept |
+| Match history | When, won or lost, how it ended, in how many turns, the three who played and the trio they played as, and the other Handler's name as they typed it, with their trio's name and pennant. The newest 20 are kept |
 | Notebook | What the match showed of each of the three (`docs/PERSONALITY.md`), and its moments. A page keeps its last ten friend matches |
 | Participation | A friend match played, for each of the three |
 
@@ -32,6 +32,27 @@ both are in, the match earns nothing. A match ended by a forfeit counts as it st
 | Cups | Each cup is played on its own arena: the Backyard Cup in the Backyard, open from the start; the Woodland Cup (`cup.woodland`) on Woodland Glade; the Millpond Cup (`cup.millpond`) on Millpond; the Sandy Cove Cup (`cup.cove`) on Sandy Cove. A win counts toward the cup of the arena it was played on, if that cup is open. The third wins it: a trophy and a medal (`battle.trophy.<arena>_cup`, `battle.medal.<arena>_cup`), and the next cup unlocks under its id. The visitors play only on arenas whose cup is open; friend matches may be played on any arena |
 | Journal | A line for every match: "Mochi, Biscuit and Fig won a Backyard Cup match against the visitors.", and one for winning a cup |
 
+## Trios
+
+A trio is three companions the Handler has named as a team, on the Who page. Whenever those
+three are picked, in any order, the match is played as that trio, and it counts on the trio's own
+record whoever the match was against: matches against friends and against the visitors, each
+played, won and drawn, and its wins toward each cup. Points still come only from friends, and
+cups only from the visitors. Any three still play exactly as before, and a trio changes nothing
+about how they play.
+
+A trio's members can change: picking two of its three with someone new offers to put the new one
+in. The trio keeps its name and record, and the three it had before are kept with the day they
+stopped playing together (the last eight lineups), so a past match is never credited to someone
+who was not there. A trio can be renamed, given its own colours or retired (kept with its record
+but no longer recognised); eight can be flown at once, and twelve kept in all. A companion who
+has left the colony leaves an empty place in its trio, and the trio's record stays.
+
+The Handler's own page keeps their name, club and pennant, and their standing: a title that
+rises with Open Circuit points (New Handler, then Handler at 30, Seasoned Handler at 100, Circuit
+Regular at 250, Circuit Veteran at 500 and Circuit Legend at 1000, all provisional), and the cups
+won against the visitors, with "Champion of the Circuit" once all four are.
+
 ## The contract
 
 `formiga-battle-contract` version 2 adds the record to the snapshot (`BattleRecord`) and the
@@ -39,3 +60,9 @@ result Battle answers with (`BattleResult`), and holds the one rule both sides a
 `BattleRecord::apply` adds a match's points, history line, notebook additions, cup win and
 unlocks, once per match id. Journal lines and keepsakes are Desktop's to keep. A result is
 refused if a friend match carries AI rewards or an AI match carries friend rewards.
+
+Version 3 adds the Handler card and trios to the record, the trio a match was played as to its
+rewards and history line, and the registry a session ends with to the result.
+`BattleRecord::register` keeps the registry (the card, and each trio's name, members, pennant
+and retirement) before the session's matches are applied, so a match played as a trio named
+that session counts for it; only `apply` adds to a trio's record.

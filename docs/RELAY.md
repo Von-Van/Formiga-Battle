@@ -33,7 +33,7 @@ Handler's name, and any reason given for a match ending, before showing or keepi
 A code is six characters from `34679ACDEFGHJKMNPQRTUVWXY`, read generously (any case; spaces and
 dashes ignored). A seat is 32 lowercase hex digits from a cryptographic random source.
 
-An **Entrant** is `{"protocol": 3, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3], "arena": "backyard"}`.
+An **Entrant** is `{"protocol": 3, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3], "arena": "backyard", "card": a Card}`, `card` optional.
 An entrant with any other numeric `protocol` is refused `version` before anything else about it is
 read, so an older Battle is told to update rather than that it was not understood. Otherwise the
 relay checks `protocol == 3`, three contenders and at most three bonds, and trims `handler` to
@@ -42,6 +42,15 @@ opener's. It does not look inside the contenders. `arena` (`"backyard"` when mis
 one of the arenas that come with Battle: 1 to 32 characters of lowercase letters, digits, `_` and
 `-`, anything else malformed. The relay passes it on as it is; the opener's is the room's, and
 both windows build the match on it, refusing an id their Battle does not have.
+
+A **Card** is what a Handler shows their friend besides their name, every part optional:
+`{"club": "…", "pennant": a Pennant, "standing": "…", "trio": "…", "trio_pennant": a Pennant}`.
+The relay cleans it as it does `handler`: `club` and `trio` to at most 32 printable characters
+and `standing` to at most 48, each left out if nothing is left; a Pennant is
+`{"shape", "field", "symbol", "trim"}`, each 1 to 24 characters of lowercase letters, digits, `_`
+and `-`, and is left out whole if any part is not. A card with nothing left on it is left out.
+It is passed on in each View's `entrants` with the rest of the entrant. Each window cleans it
+again on arrival, and draws a pennant part it does not know as its first choice.
 
 A **Build** is `{"battle": "0.67.7", "desktop": "0.67.7" or null, "digest": "…"}`: Battle's
 version, the version of the Desktop that opened it (`null` in a rehearsal), and the SHA-256 of

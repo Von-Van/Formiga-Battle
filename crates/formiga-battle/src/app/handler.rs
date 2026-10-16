@@ -62,11 +62,17 @@ impl BattleApp {
                                 stamp(ui, summary.won, u);
                                 ui.add_space(u * 3.0);
                                 ui.vertical(|ui| {
-                                    let against = match (&summary.mode, &summary.opponent) {
+                                    let mut against = match (&summary.mode, &summary.opponent) {
                                         (Mode::Friend, Some(name)) => format!("Against {name}"),
                                         (Mode::Friend, None) => "Against a friend".to_owned(),
                                         (Mode::Ai, _) => "Against the visiting team".to_owned(),
                                     };
+                                    if let Some(theirs) = &summary.opponent_trio {
+                                        against = format!("{against} and {theirs}");
+                                    }
+                                    let ours = summary.trio.as_ref().and_then(|id| {
+                                        self.table.record.trios.iter().find(|t| &t.id == id)
+                                    });
                                     ui.label(
                                         RichText::new(against).size(15.0).strong().color(ink::PAGE),
                                     );
@@ -80,6 +86,13 @@ impl BattleApp {
                                         .size(12.5)
                                         .color(ink::MUTED),
                                     );
+                                    if let Some(trio) = ours {
+                                        ui.label(
+                                            RichText::new(format!("Played as {}", trio.name))
+                                                .size(12.0)
+                                                .color(ink::FOREST),
+                                        );
+                                    }
                                 });
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
@@ -274,7 +287,12 @@ fn stamp(ui: &mut egui::Ui, won: Option<bool>, u: f32) {
 
 /// The day a match finished, as a notebook dates it: 15 Oct 2026.
 fn day(summary: &MatchSummary) -> String {
-    let date = summary.finished_at_utc.date();
+    date(summary.finished_at_utc)
+}
+
+/// A day as the notebook dates it: 15 Oct 2026.
+pub(super) fn date(at: time::OffsetDateTime) -> String {
+    let date = at.date();
     let month = format!("{:?}", date.month());
     format!("{} {} {}", date.day(), &month[..3], date.year())
 }

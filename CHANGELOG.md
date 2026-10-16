@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Your Handler, your trios and their records. "Your Handler & history" at the station opens the
+  Handler's own page first: sign your name, add a club if you like, and choose a pennant from
+  three cuts, eight cloths, twelve symbols and three trims, painted at the notebook's pixel. Your
+  standing sits beside it: a title that rises with Open Circuit points, and a rosette for each
+  cup won against the visitors, with "Champion of the Circuit" once all four are, each saying
+  how it is earned. On the Who page, name the three you picked as a trio. Whenever those three
+  are picked again, in any order, the match is played as that trio and counts on its own record,
+  against friends and against the visitors apart, with its cup wins; any three still play as
+  before, and nothing about a trio changes how they play. Two of a trio's three with someone new
+  offer to put the new one in: the trio keeps its name and record, and remembers who played with
+  it before and until when. Trios can be renamed, given their own colours, or retired and brought
+  back. Your pennant flies at the station, beside your side's name in a match and in the
+  introduction over the board as it begins ("The Thistle Three vs The visitors"); the result
+  says how your trio stands now, journal lines for matches against the visitors name the trio,
+  and History says which trio played. Against a friend, each side sees the other's pennant,
+  club, standing and trio, and the notice of what a friend match shares lists them. Desktop
+  keeps all of it with your colony (Battle contract version 3, Desktop save version 32), and a
+  name signed on the Friend page becomes your Handler's.
 - Rules version 7: team orders. Each turn a Handler gives the whole team up to three orders
   instead of one to each companion: TAKE some squares (walk onto an empty one, move theirs off
   one, two flanking a holder), DEFEND some squares (stand on them, guard beside them, head off
