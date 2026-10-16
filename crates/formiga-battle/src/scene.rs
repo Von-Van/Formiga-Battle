@@ -7,13 +7,14 @@
 //! filled one, in cream or gold, so the lawn still shows through and the board never turns into
 //! a grid of overlays.
 
+use crate::found;
 use crate::garden::{self, Garden, Sprite};
 use crate::iso::View;
 use crate::look::{Look, Pose};
 use crate::playback::{Burst, Figure, Frame};
 use formiga_art::paint::{self, Ramp, rgb, rgba};
 use formiga_art::{Canvas, FRAME_SIZE, Rgba};
-use formiga_battle_core::arena::Terrain;
+use formiga_battle_core::arena::{Effect, Terrain};
 use formiga_battle_core::{Arena, Order, Side, Slot, TEAM_SIZE, Target, Tile};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
@@ -32,10 +33,13 @@ const GOLD: Rgba = rgb(0xf5d25e);
 /// What a tile can be chosen for, while an order is being given.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Choice {
-    Walk,
-    Hold,
-    Contest,
+    /// Something the team could go and get or set off: an INTERACT's choices.
+    Use,
 }
+
+/// A cartoon word to paint over the board: its picture, where its top-left corner goes, and how
+/// much of it shows, out of 255.
+pub type Lettered = (Canvas, i32, i32, u8);
 
 /// What the window lays over the board: who is chosen, where an order could go, the orders given
 /// so far, and the little flourish wherever the Handler last clicked.
@@ -47,7 +51,49 @@ pub struct Marks {
     pub orders: Vec<(Slot, Order)>,
     /// Tiles just given an order, and how many seconds ago.
     pub pokes: Vec<(Tile, f32)>,
+    /// Cartoon words (`lettering`), over everything: each picture, where its top-left corner
+    /// goes, and how much of it shows, out of 255.
+    pub lettering: Vec<Lettered>,
+    /// The squares the team's plan names, each with its order's colour and mark.
+    pub plan: Vec<PlanMark>,
+    /// Where each of the team is off to this turn, as footprints from it to its job: the floor
+    /// point it starts from, the one it is headed for, and which order it serves (`None` for a
+    /// job it found for itself).
+    pub trails: Vec<Trail>,
 }
+
+/// Footprints from one of the team to its job: from where it stands, to where it is headed, in
+/// the colour of the order it serves (`None` for a job it found for itself).
+pub type Trail = ((f32, f32), (f32, f32), Option<u8>);
+
+/// What kind of order names a square.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlanKind {
+    Take,
+    Defend,
+    Interact,
+}
+
+/// One order's mark on a square of the plan. A square named by more than one order is marked
+/// once for each, the later ones stacked beside the first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlanMark {
+    pub tile: Tile,
+    /// Which of the three orders, by its place in the plan: its colour.
+    pub order: u8,
+    pub kind: PlanKind,
+    /// How many orders before this one name the same square.
+    pub stack: u8,
+    /// The order being given just now: its marks breathe.
+    pub chosen: bool,
+}
+
+/// Each of the three orders' colours: gold, sky and plum, so they read apart from both teams'.
+pub const ORDER_COLOURS: [Ramp; 3] = [
+    Ramp::new(0x6e4f1c, 0xb8862a, 0xe8b23c, 0xf5d25e, 0xfff0a0),
+    Ramp::new(0x1d4a6e, 0x2f6fa0, 0x4f97cf, 0x86c0ea, 0xc4e4fa),
+    Ramp::new(0x4a2358, 0x7a3d8e, 0xa65fbd, 0xc98fdc, 0xe9c8f2),
+];
 
 /// The board at one moment, as a picture of `view.size`. `still` holds the garden's own motion
 /// and the marks' pulsing, for reduced motion.
@@ -67,20 +113,53 @@ pub fn paint(
     beacon(&mut canvas, arena, frame, capture_ticks, now, still, view);
     garden.behind(&mut canvas, view, now, still);
     floor_marks(&mut canvas, frame, marks, view, now, still);
+    plan_floor(&mut canvas, marks, view, now, still);
+    trails(&mut canvas, marks, view);
+    for tile in &frame.closed {
+        found::under(&mut canvas, view, *tile, now, still);
+    }
+    for tile in &frame.rafts {
+        found::raft(&mut canvas, view, *tile, now, still);
+    }
+    for tile in &frame.honey {
+        found::honey(&mut canvas, view, *tile, now, still);
+    }
+    if frame.sprinkler_coming {
+        for tile in &frame.event_tiles {
+            found::warned(&mut canvas, view, *tile, now, still);
+        }
+    }
+    for tile in &frame.gusty {
+        found::gusty(&mut canvas, view, *tile, now, still);
+    }
 
+    let dressing = garden::Dressing::of(arena);
     // Everyone and everything standing, back to front by how far down the board it is.
     let mut standing: Vec<(i32, i32, Item)> = Vec::new();
     for tile in arena.tiles() {
         let depth = i32::from(tile.x) + i32::from(tile.y);
         match arena.terrain(tile) {
+            Terrain::Obstacle if arena.switches.contains(&tile) => {
+                standing.push((depth, 0, Item::Tap(tile)))
+            }
             Terrain::Obstacle => standing.push((depth, 0, Item::Piece(tile))),
             Terrain::Gate => standing.push((depth, 0, Item::Gate(tile))),
             Terrain::Lever => standing.push((depth, 0, Item::Lever(tile))),
             Terrain::Open => {}
         }
     }
-    // Where each creature's frame lands, for seeing pieces through where they would hide one.
-    let mut bodies: Vec<(i32, Bounds)> = Vec::new();
+    for (tile, thing) in &frame.ground {
+        let depth = i32::from(tile.x) + i32::from(tile.y);
+        standing.push((depth, 0, Item::Found(*tile, *thing)));
+    }
+    for tile in &frame.twigs {
+        let depth = i32::from(tile.x) + i32::from(tile.y);
+        standing.push((depth, 0, Item::Twig(*tile)));
+    }
+    // Each creature's picture as it will be drawn, for seeing pieces through only where they would
+    // hide its shape, and its shadow and rings, painted on the ground under everyone so they never
+    // lie across a neighbour or over a hedge in front.
+    let mut bodies: Vec<Body> = Vec::new();
     for side in Side::BOTH {
         for i in 0..TEAM_SIZE as u8 {
             let slot = Slot::new(side, i);
@@ -92,13 +171,19 @@ pub fn paint(
             // the right turn.
             let depth = (f.at.0 + f.at.1 - 1.0).floor() as i32;
             standing.push((depth, 1, Item::Creature(slot)));
-            let look = &looks[side.index()][i as usize];
-            let (ox, oy) = frame_origin(view, f, look);
-            let size = FRAME_SIZE as i32;
-            bodies.push((
-                depth,
-                (ox + 8, oy + 4, ox + size - 8, oy + look.foot_row + 2),
-            ));
+            footing(
+                &mut canvas,
+                view,
+                slot,
+                f,
+                marks.selected == Some(slot),
+                now,
+                still,
+            );
+            let look = &mut looks[side.index()][i as usize];
+            let (x, y) = placed(view, f, look, now, still);
+            let pic = look.frame(f.pose, f.posed_for, f.facing_right).clone();
+            bodies.push(Body { depth, pic, x, y });
         }
     }
     standing.sort_by_key(|(depth, order, item)| (*depth, *order, item.key()));
@@ -127,27 +212,72 @@ pub fn paint(
             Item::Creature(slot) => {
                 let f = frame.figure(slot);
                 let look = &mut looks[slot.side.index()][slot.index as usize];
-                creature(
-                    &mut canvas,
-                    view,
-                    slot,
-                    f,
-                    look,
-                    marks.selected == Some(slot),
-                    now,
-                    still,
-                );
+                let (x, y) = placed(view, f, look, now, still);
+                let sprite = look.frame(f.pose, f.posed_for, f.facing_right);
+                paint::blit_faded(&mut canvas, sprite, x, y, (f.opacity * 255.0).round() as u8);
+                if f.opacity > 0.0 && !f.out {
+                    let top = head_point(x, y);
+                    // What it carries, held up at its side, and drops running off it if it is
+                    // soaked. Its umbrella goes over everyone, with its pips.
+                    if let Some(thing) = f.carrying {
+                        let side = if f.facing_right { 14 } else { -14 };
+                        found::icon(&mut canvas, (top.0 + side, top.1 + 32), thing, false);
+                    }
+                    if f.soaked {
+                        found::dripping(&mut canvas, top, now, still);
+                    }
+                }
+            }
+            // A map's switch and a wedged twig stand up off the ground, so like a hedge they are
+            // seen through wherever they would hide someone behind them.
+            Item::Tap(tile) => {
+                let mut full = Canvas::new(canvas.width(), canvas.height());
+                let (ready, c) = (frame.tap_ready, &mut full);
+                match dressing {
+                    garden::Dressing::Cove => found::shell(c, view, tile, ready, now, still),
+                    garden::Dressing::Millpond => found::sluice(c, view, tile, ready, now, still),
+                    garden::Dressing::Woodland => found::tree(c, view, tile, ready, now, still),
+                    _ => found::tap(c, view, tile, ready, now, still),
+                }
+                see_through(&mut canvas, &Sprite::cut(&full), depth, &bodies);
+            }
+            Item::Found(tile, thing) => {
+                found::on_ground(&mut canvas, view, tile, thing, now, still);
+            }
+            Item::Twig(tile) => {
+                let mut full = Canvas::new(canvas.width(), canvas.height());
+                found::wedged(&mut full, view, tile);
+                see_through(&mut canvas, &Sprite::cut(&full), depth, &bodies);
             }
         }
     }
+    // Composure and the off-balance swirl over everyone, so a neighbour standing in front never
+    // covers them and theirs never sit on someone else's face.
+    for side in Side::BOTH {
+        for i in 0..TEAM_SIZE as u8 {
+            let slot = Slot::new(side, i);
+            let f = frame.figure(slot);
+            if f.opacity > 0.0 && !f.out {
+                let look = &looks[side.index()][i as usize];
+                tags(&mut canvas, view, slot, f, look, now, still);
+            }
+        }
+    }
+    for tile in &frame.glint {
+        found::glint(&mut canvas, view, *tile, now, still);
+    }
     order_marks(&mut canvas, frame, marks, view, now, still);
+    plan_signs(&mut canvas, marks, view, now, still);
     for effect in &frame.effects {
-        burst(&mut canvas, view, effect, now);
+        burst(&mut canvas, arena, view, effect, now);
     }
     for &(tile, age) in &marks.pokes {
         poke(&mut canvas, view, tile, age, still);
     }
     garden.over(&mut canvas, view, now, still);
+    for (word, x, y, opacity) in &marks.lettering {
+        paint::blit_faded(&mut canvas, word, *x, *y, *opacity);
+    }
     canvas
 }
 
@@ -157,37 +287,71 @@ enum Item {
     Gate(Tile),
     Lever(Tile),
     Creature(Slot),
+    Tap(Tile),
+    /// Something found, lying on its tile.
+    Found(Tile, formiga_battle_core::Item),
+    /// A twig wedged upright.
+    Twig(Tile),
 }
 
 impl Item {
     fn key(&self) -> (i32, i32) {
         match self {
-            Self::Piece(t) | Self::Gate(t) | Self::Lever(t) => (i32::from(t.y), 0),
+            Self::Piece(t)
+            | Self::Gate(t)
+            | Self::Lever(t)
+            | Self::Tap(t)
+            | Self::Found(t, _)
+            | Self::Twig(t) => (i32::from(t.y), 0),
             Self::Creature(s) => (s.side.index() as i32, i32::from(s.index)),
         }
     }
 }
 
-/// A box on the canvas: left, top, right, bottom.
-type Bounds = (i32, i32, i32, i32);
+/// A creature's picture where it will be drawn, and how far down the board it stands.
+struct Body {
+    depth: i32,
+    pic: Canvas,
+    x: i32,
+    y: i32,
+}
+
+impl Body {
+    /// Whether its picture covers this canvas pixel.
+    fn covers(&self, px: i32, py: i32) -> bool {
+        let (sx, sy) = (px - self.x, py - self.y);
+        sx >= 0
+            && sy >= 0
+            && sx < self.pic.width() as i32
+            && sy < self.pic.height() as i32
+            && self.pic.get(sx, sy).a > 0
+    }
+
+    fn overlaps(&self, (l, t, r, b): (i32, i32, i32, i32)) -> bool {
+        self.x < r
+            && self.x + self.pic.width() as i32 > l
+            && self.y < b
+            && self.y + self.pic.height() as i32 > t
+    }
+}
 
 /// A standing piece, seen through wherever it stands in front of someone it would hide: Home's
-/// rule for furniture, so nobody on the board is ever lost behind a hedge.
-fn see_through(canvas: &mut Canvas, sprite: &Sprite, depth: i32, bodies: &[(i32, Bounds)]) {
-    let (l, t, r, b) = sprite.bounds();
-    let hidden: Vec<Bounds> = bodies
+/// rule for furniture, so nobody on the board is ever lost behind a hedge. Only the creature's own
+/// shape shows through, so the piece never has a box cut out of it.
+fn see_through(canvas: &mut Canvas, sprite: &Sprite, depth: i32, bodies: &[Body]) {
+    let hidden: Vec<&Body> = bodies
         .iter()
-        .filter(|(d, (x0, y0, x1, y1))| *d < depth && *x0 < r && *x1 > l && *y0 < b && *y1 > t)
-        .map(|(_, rect)| *rect)
+        .filter(|b| b.depth < depth && b.overlaps(sprite.bounds()))
         .collect();
     if hidden.is_empty() {
         paint::blit(canvas, &sprite.pic, sprite.x, sprite.y);
     } else {
         paint::blit_through(canvas, &sprite.pic, sprite.x, sprite.y, |px, py| {
-            let behind = hidden
-                .iter()
-                .any(|(x0, y0, x1, y1)| px >= *x0 && px < *x1 && py >= *y0 && py < *y1);
-            if behind { 110 } else { 255 }
+            if hidden.iter().any(|b| b.covers(px, py)) {
+                110
+            } else {
+                255
+            }
         });
     }
 }
@@ -284,9 +448,7 @@ fn floor_marks(
     let breath = pulse(now, still, 3.2);
     for (tile, choice) in &marks.choices {
         let (fill, edge) = match choice {
-            Choice::Walk => (rgb(0xfffcf2), CREAM),
-            Choice::Hold => (rgb(0xbfe6ff), rgb(0xdff3ff)),
-            Choice::Contest => (rgb(0xff8a6a), rgb(0xffc0a8)),
+            Choice::Use => (GOLD, rgb(0xfff0a0)),
         };
         diamond_fill(
             canvas,
@@ -355,6 +517,12 @@ fn order_marks(
                 pennant(canvas, b, team, now, still);
             }
             Order::Hold { .. } => {}
+            // Where something is to be used: a gold diamond on its tile, in the team's light.
+            Order::Use { at } => {
+                let team = TEAM[slot.side.index()];
+                diamond_fill(canvas, view, *at, 0.2, paint::faded(team.light, 70));
+                brackets(canvas, view, *at, 0.12, 0.3, GOLD);
+            }
             Order::Contest { target } => {
                 let (at, lever) = match target {
                     Target::Creature { slot } => (frame.figure(*slot).tile, false),
@@ -388,6 +556,162 @@ fn order_marks(
 }
 
 /// A pennant on a garden cane, where a move is going.
+/// The plan's squares on the ground: washed in each order's colour, ringed in its light, a ring
+/// inside the last for each order more naming the same square.
+fn plan_floor(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: bool) {
+    let breath = pulse(now, still, 3.0);
+    for mark in &marks.plan {
+        let ramp = ORDER_COLOURS[usize::from(mark.order) % ORDER_COLOURS.len()];
+        let inset = 0.08 + 0.1 * f32::from(mark.stack);
+        let wash = if mark.chosen {
+            (60.0 + 40.0 * breath) as u8
+        } else {
+            60
+        };
+        if mark.stack == 0 {
+            diamond_fill(
+                canvas,
+                view,
+                mark.tile,
+                inset,
+                paint::faded(ramp.base, wash),
+            );
+        }
+        diamond_outline(
+            canvas,
+            view,
+            mark.tile,
+            inset,
+            paint::faded(ramp.light, 230),
+        );
+    }
+}
+
+/// Footprints from each of the team to its job, in its order's colour, a pair every few pixels.
+fn trails(canvas: &mut Canvas, marks: &Marks, view: &View) {
+    for (from, to, order) in &marks.trails {
+        let (light, dark) = match order {
+            Some(i) => {
+                let ramp = ORDER_COLOURS[usize::from(*i) % ORDER_COLOURS.len()];
+                (ramp.light, ramp.edge)
+            }
+            None => (rgb(0xf4efdc), rgb(0x6b6455)),
+        };
+        let a = view.screen(from.0, from.1);
+        let b = view.screen(to.0, to.1);
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let length = (dx * dx + dy * dy).sqrt();
+        if length < 8.0 {
+            continue;
+        }
+        let (ux, uy) = (dx / length, dy / length);
+        // Left, right, left: little paw prints across the line, a pace apart, stopping short
+        // at each end, each a light print on a dark heel so it reads on any ground.
+        let mut d = 8.0;
+        let mut k = 0;
+        while d < length - 6.0 {
+            let side = if k % 2 == 0 { 2.0 } else { -2.0 };
+            let x = a.0 + ux * d - uy * side;
+            let y = a.1 + uy * d + ux * side;
+            let (px, py) = (x.round() as i32, y.round() as i32);
+            paint::rect(canvas, px, py + 1, 2, 1, paint::faded(dark, 170));
+            paint::rect(canvas, px, py, 2, 1, light);
+            d += 6.0;
+            k += 1;
+        }
+        // Where it is headed: a small spot on the ground.
+        let (tx, ty) = (b.0.round() as i32, b.1.round() as i32);
+        paint::ellipse(canvas, tx, ty, 5, 2, paint::faded(dark, 140));
+        paint::ellipse(canvas, tx, ty, 4, 2, paint::faded(light, 200));
+    }
+}
+
+/// Each order's sign over its square, standing up out of the ground so it reads over whoever
+/// is there: a flag for TAKE, a shield for DEFEND, a sparkle for INTERACT. Stacked side by
+/// side when more than one order names a square.
+fn plan_signs(canvas: &mut Canvas, marks: &Marks, view: &View, now: f32, still: bool) {
+    for mark in &marks.plan {
+        let ramp = ORDER_COLOURS[usize::from(mark.order) % ORDER_COLOURS.len()];
+        let (cx, cy) = view.centre(mark.tile);
+        let bob = if mark.chosen && !still {
+            ((now * 4.0).sin() * 1.2).round() as i32
+        } else {
+            0
+        };
+        let x = cx - 9 + 7 * i32::from(mark.stack);
+        let y = cy - 3 + bob;
+        match mark.kind {
+            PlanKind::Take => {
+                paint::vline(canvas, x, y - 13, 13, ramp.edge);
+                paint::polygon(
+                    canvas,
+                    &[
+                        (x as f32 + 1.0, y as f32 - 13.0),
+                        (x as f32 + 8.0, y as f32 - 10.0),
+                        (x as f32 + 1.0, y as f32 - 7.0),
+                    ],
+                    ramp.base,
+                );
+                paint::line(canvas, (x + 1, y - 13), (x + 7, y - 10), ramp.shine);
+                paint::put(canvas, x, y - 14, ramp.shine);
+            }
+            PlanKind::Defend => {
+                let top = y - 13;
+                let shield = [
+                    (x as f32 - 3.0, top as f32),
+                    (x as f32 + 4.0, top as f32),
+                    (x as f32 + 4.0, top as f32 + 5.0),
+                    (x as f32 + 0.5, top as f32 + 9.0),
+                    (x as f32 - 3.0, top as f32 + 5.0),
+                ];
+                paint::polygon(canvas, &shield, ramp.edge);
+                let inner = shield.map(|(px, py)| {
+                    (
+                        px + (x as f32 + 0.5 - px) * 0.3,
+                        py + (top as f32 + 4.0 - py) * 0.3,
+                    )
+                });
+                paint::polygon(canvas, &inner, ramp.base);
+                paint::hline(canvas, x - 1, top + 2, 3, ramp.shine);
+            }
+            PlanKind::Interact => {
+                let (sx, sy) = (x + 1, y - 9);
+                for (dx, dy, len) in [(0, -1, 4), (0, 1, 4), (-1, 0, 4), (1, 0, 4)] {
+                    for k in 1..=len {
+                        let colour = if k <= 2 { ramp.light } else { ramp.base };
+                        paint::put(canvas, sx + dx * k, sy + dy * k, colour);
+                    }
+                }
+                paint::rect(canvas, sx - 1, sy - 1, 3, 3, ramp.base);
+                paint::put(canvas, sx, sy, ramp.shine);
+                paint::ring(
+                    canvas,
+                    &star_sprite(),
+                    sx - 5,
+                    sy - 5,
+                    paint::faded(ramp.edge, 140),
+                );
+            }
+        }
+    }
+}
+
+/// The sparkle's shape alone, for ringing it in its edge colour.
+fn star_sprite() -> Canvas {
+    let mut c = Canvas::new(11, 11);
+    for (dx, dy) in [(0, -1), (0, 1), (-1, 0), (1, 0)] {
+        for k in 0..=4 {
+            c.set(5 + dx * k, 5 + dy * k, rgb(0xffffff));
+        }
+    }
+    for y in 4..=6 {
+        for x in 4..=6 {
+            c.set(x, y, rgb(0xffffff));
+        }
+    }
+    c
+}
+
 fn pennant(canvas: &mut Canvas, at: (i32, i32), team: Ramp, now: f32, still: bool) {
     let (x, y) = at;
     paint::ellipse(canvas, x + 1, y, 3, 1, rgba(0x24452b, 60));
@@ -427,13 +751,13 @@ fn chevron(canvas: &mut Canvas, at: (i32, i32), team: Ramp) {
     paint::put(canvas, x, y + 5, team.light);
 }
 
-#[allow(clippy::too_many_arguments)]
-fn creature(
+/// A creature's shadow, Hill's two flat ellipses, and its team's ring round its feet: whole while
+/// it stands steady, broken while it is off balance, doubled while it holds.
+fn footing(
     canvas: &mut Canvas,
     view: &View,
     slot: Slot,
     f: &Figure,
-    look: &mut Look,
     chosen: bool,
     now: f32,
     still: bool,
@@ -441,8 +765,9 @@ fn creature(
     let team = TEAM[slot.side.index()];
     let (fx, fy) = view.pixel(f.at.0, f.at.1);
     let alpha = (f.opacity * 255.0).round() as u8;
-    // Its shadow first, Hill's two flat ellipses, then its team's ring round its feet: whole
-    // while it stands steady, broken while it is off balance, doubled while it holds.
+    if f.soaked && !f.out {
+        found::puddle(canvas, (fx, fy));
+    }
     paint::ellipse(canvas, fx + 1, fy, 10, 3, rgba(0x2c3a24, alpha / 4));
     paint::ellipse(canvas, fx + 1, fy, 7, 2, rgba(0x2c3a24, alpha / 6));
     let ring = if chosen { CREAM } else { team.base };
@@ -508,26 +833,46 @@ fn creature(
             0,
         );
     }
-    let (ox, oy) = frame_origin(view, f, look);
-    let sprite = look.frame(f.pose, f.posed_for, f.facing_right);
-    // Off balance, it sways a pixel either way until the turn is over.
-    let sway = if f.off_balance && !f.out && !still {
+}
+
+/// Off balance, it sways a pixel either way until the turn is over.
+fn sway(f: &Figure, now: f32, still: bool) -> i32 {
+    if f.off_balance && !f.out && !still {
         ((now * 5.0).sin() * 1.4).round() as i32
     } else {
         0
-    };
+    }
+}
+
+/// Where a creature's picture is drawn this moment: at its feet, swaying or slumped as it is.
+fn placed(view: &View, f: &Figure, look: &Look, now: f32, still: bool) -> (i32, i32) {
+    let (ox, oy) = frame_origin(view, f, look);
     if f.pose == Pose::Dizzy {
-        paint::blit_faded(canvas, sprite, ox, oy + 4, alpha);
+        (ox, oy + 4)
     } else {
-        paint::blit_faded(canvas, sprite, ox + sway, oy, alpha);
+        (ox + sway(f, now, still), oy)
     }
-    if f.out {
-        return;
-    }
+}
+
+/// Over a creature's head: its composure, and the swirl while it is off balance.
+fn tags(
+    canvas: &mut Canvas,
+    view: &View,
+    slot: Slot,
+    f: &Figure,
+    look: &Look,
+    now: f32,
+    still: bool,
+) {
+    let (ox, oy) = frame_origin(view, f, look);
     let top = head_point(ox, oy);
-    pips(canvas, top, f.composure, team);
+    if f.sheltered {
+        let (px, py) = placed(view, f, look, now, still);
+        found::umbrella(canvas, head_point(px, py));
+    }
+    pips(canvas, top, f.composure, TEAM[slot.side.index()]);
     if f.off_balance {
-        swirl(canvas, (top.0 + sway, top.1 - 6), now, still);
+        swirl(canvas, (top.0 + sway(f, now, still), top.1 - 6), now, still);
     }
 }
 
@@ -633,11 +978,30 @@ fn poke(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, still: bool) {
     }
 }
 
-fn burst(canvas: &mut Canvas, view: &View, effect: &crate::playback::Effect, now: f32) {
+fn burst(
+    canvas: &mut Canvas,
+    arena: &Arena,
+    view: &View,
+    effect: &crate::playback::Effect,
+    now: f32,
+) {
     let (cx, cy) = view.centre(effect.tile);
     let age = effect.age;
     let fade = ((1.0 - age / 0.7).clamp(0.0, 1.0) * 255.0) as u8;
     match effect.burst {
+        Burst::Splash => match arena.scenery.as_ref().map(|s| (s.effect, s.around)) {
+            Some((Effect::Wash, _)) => found::wave(canvas, view, effect.tile, age, fade),
+            Some((Effect::Close, _)) => found::rising(canvas, view, effect.tile, age, fade),
+            Some((Effect::Soak, true)) => found::acorns(canvas, view, effect.tile, age, fade),
+            _ => found::splash(canvas, view, effect.tile, age, fade),
+        },
+        Burst::Ring => found::ring(canvas, view, effect.tile, age, fade),
+        Burst::Gust => found::gust(canvas, view, effect.tile, age, fade),
+        Burst::Twinkle => {
+            let lift = (age * 14.0) as i32;
+            star(canvas, (cx - 4, cy - 10 - lift), rgba(0xfbe6a2, fade));
+            star(canvas, (cx + 5, cy - 6 - lift / 2), rgba(0xffffff, fade));
+        }
         Burst::Hit => {
             // A cartoon "pow": a burst of rays round a cream star.
             let r = 4.0 + age * 14.0;

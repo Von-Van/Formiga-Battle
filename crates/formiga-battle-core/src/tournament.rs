@@ -62,11 +62,11 @@ pub fn play(
     let mut m = Match::new(arena.clone(), ruleset, seed, rosters).expect("rosters of three");
     let mut reports = Vec::new();
     while m.outcome().is_none() {
-        let orders = [
-            coaches[0].orders(&m, Side::Left),
-            coaches[1].orders(&m, Side::Right),
+        let plans = [
+            coaches[0].plan(&m, Side::Left),
+            coaches[1].plan(&m, Side::Right),
         ];
-        reports.push(m.resolve_turn(orders));
+        reports.push(m.resolve_turn(plans));
     }
     (m, reports)
 }

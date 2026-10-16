@@ -2,8 +2,9 @@
 
 A separate desktop app for Formiga Desktop's companions: isometric, simultaneous-order 3v3
 tactics, against the AI or a friend in a private room. You are the Handler: each turn you give
-each of your three Formigas one order (MOVE, HOLD or CONTEST), both teams' orders lock together,
-and the turn plays out at once. How each creature carries out its order comes from who it is in
+your team up to three orders (TAKE some squares, DEFEND some squares, INTERACT with something),
+both teams' plans lock together, and the turn plays out at once. The Formigas share the plan out
+among themselves, and who takes which job, and how each carries it out, comes from who it is in
 Desktop, never from stats, so knowing your Formigas is the skill and rerolling them for a better
 trio is not.
 
@@ -13,13 +14,13 @@ neighbouring colony, in one of four arenas, each a little isometric place of its
 Backyard (a garden of hedges, a brick wall and a potting shed), Woodland Glade (stumps, boulders
 and pines), Millpond (a meadow with a footbridge, a jetty and a watermill) and Sandy Cove (a
 beach with a sandbar, sea-worn rocks and a lighthouse). The creatures are
-drawn exactly as Desktop draws them. Each turn you give your orders on their
-cards and the board (or let the timer run out and they choose for themselves), lock in, and watch
-the turn play out tick by tick with a recap that says why each of them did what it did. The
+drawn exactly as Desktop draws them. Each turn you give your orders on the order cards and the
+board (or let the timer run out and they choose for themselves), lock in, and watch the turn play
+out tick by tick with a recap that says who took on what and why each of them did what it did. The
 Handler's Notebook beside the board keeps what each of your companions has been seen to do, match
 after match, so you can learn how they carry out an order. To play a friend, one of you opens a
 room and reads out its code, and the other joins with it; the relay on the Formiga site passes
-the orders on and keeps nothing once the match is over ([docs/FRIENDS.md](docs/FRIENDS.md)). The same match also runs headless from the command line. Desktop
+the plans on and keeps nothing once the match is over ([docs/FRIENDS.md](docs/FRIENDS.md)). The same match also runs headless from the command line. Desktop
 opens Battle from its tray on a Desktop branch not yet released; Battle's side of that hand-off is
 `--formiga-battle <dir>`.
 
@@ -51,11 +52,17 @@ cargo run --release -p formiga-battle -- arena                           # draws
 cargo run --release -p formiga-battle -- relay                           # a local relay, for development
 ```
 
-In the window: choose a card (or 1, 2, 3), then MOVE, HOLD or CONTEST (or M, H, C), then a tile
-or a creature on the board; Enter locks in, right-click or Escape cancels.
+Battle opens at the Battleground, the first spread of the Handler's notebook: the colony's
+train pulls in with your companions aboard on its left page, and on its right you
+choose Out in the World (a friend, online) or Close to Home (the visitors, offline). The notebook
+then turns to where to play, who goes and, for a friend, the room.
+
+In a match: give the team up to three orders a turn, each a Take, Defend or Interact (or T, D,
+I) put on a square of the board; Enter locks in, Escape puts an order back, and L opens the whole
+match turn by turn.
 
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
-window (`--turns`, `--into`, `--scale`); `--snap <png> --review picking|orders|playing --at <s>`
+window (`--turns`, `--into`, `--scale`); `--snap <png> --review station|where|who|friend|orders|playing --at <s>`
 opens the window behind everything, pictures it and closes. Either takes `--arena
 backyard|woodland|millpond|cove`. Look at them after changing anything
 visual.
@@ -87,9 +94,10 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
 ## Crates
 
 - **`formiga-battle-core`**: the rules, with no drawing, clock or network. `arena` (boards as
-  data, in `arenas/`), `order`, `game` (a match, and a turn tick by tick), `profile` (a creature
-  as Desktop records it), `interpret` (how a creature carries out its order, and why), `ai` (the
-  fallback for a missing order, and the AI coaches), `plan` (coaches that think a turn ahead,
+  data, in `arenas/`), `order` (a team's plan, and each creature's order), `muster` (how a team
+  shares out its plan, and thinks again partway through a turn), `game` (a match, and a turn tick
+  by tick), `profile` (a creature as Desktop records it), `interpret` (how a creature carries out
+  its order, and why), `ai` (the fallback for a creature with no plan, and the AI coaches), `plan` (coaches that think a turn ahead,
   knowing their creatures or not), `notebook` (what each creature was seen to do), `recap`,
   `replay` and `tournament`.
 - **`formiga-battle-contract`**: what Desktop hands Battle, a read-only roster built from
@@ -108,8 +116,10 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
   `formiga-art`'s tools at pixel scale, and the marks laid over it), `garden` (each arena as a
   place: its ground, what stands on it and round it, and what moves there, dressed by the
-  arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `app` (the egui
-  window), `rewards` (what a finished match earns) and `cli` (the headless commands).
+  arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the Battleground the
+  train brings the companions to), `feel` (how every control answers a touch), `ticket` (the station's two choices, painted as
+  railway tickets), `masthead` (the painted scene heading the station's page), `app` (the egui window; `app/menus` the station and the
+  notebook's pages of getting ready, `app/handler` its history and settings), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
 by one release tag (`v0.67.8`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is

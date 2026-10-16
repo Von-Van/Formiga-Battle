@@ -1,20 +1,20 @@
-//! Coaches that think a turn ahead: for each creature they try each order it could sensibly be
-//! given, play the turn out in their head against what they expect the other team to do, and keep
-//! whatever leaves the board best for them.
+//! Coaches that think a turn ahead: for each of the team's three orders they try each order it
+//! could sensibly be, play the turn out in their head against what they expect the other team to
+//! do, and keep whatever leaves the board best for them.
 //!
 //! The two differ only in how well they know their own team. The familiar coach imagines its
 //! creatures as they are. The generic coach imagines every one of them as a creature that leans no
-//! way at all, so it plans the same way and is wrong about which way each will walk, who will
-//! step back, and who will take a chance. Whatever the familiar coach wins beyond the generic one
+//! way at all, so it plans the same way and is wrong about who will take which job, which way
+//! each will walk, who will step back, and who will take a chance. Whatever the familiar coach wins beyond the generic one
 //! is what knowing your creatures is worth, and the handoff asks that it be worth something while
 //! no creature or trio is worth more than another.
 
-use crate::ai::{Coach, nearest_free_zone_tile};
+use crate::ai::Coach;
 use crate::game::Match;
-use crate::order::{Order, Orders, Side, Slot, Target};
+use crate::order::{Directive, PLAN_SIZE, Side, TeamPlan};
 use crate::profile::{Leanings, Nature, Profile};
 
-/// Each creature's orders are revisited this many times, each time with its teammates' best so
+/// Each of the plan's orders is revisited this many times, each time with the others' best so
 /// far.
 const PASSES: usize = 2;
 
@@ -30,65 +30,48 @@ fn imagined_plainly(m: &Match, side: Side) -> Match {
     m.imagining(side, plain)
 }
 
-/// The orders worth trying for one creature.
-fn options(m: &Match, slot: Slot) -> Vec<Order> {
-    let f = m.fighter(slot);
-    let mut options = vec![Order::Hold { at: f.at }];
-    let mut taken = Vec::new();
-    for _ in 0..2 {
-        if let Some(tile) = nearest_free_zone_tile(m, slot, &taken) {
-            options.push(Order::Hold { at: tile });
-            taken.push(tile);
+/// The orders worth trying: a square of the zone to take, the square of any of theirs to take,
+/// a square of ours to defend, and anything to interact with.
+fn options(m: &Match, side: Side) -> Vec<Directive> {
+    let mut options = Vec::new();
+    for t in &m.arena.zone {
+        options.push(Directive::Take { squares: vec![*t] });
+    }
+    for e in m.team(side.other()) {
+        let at = m.fighter(e).at;
+        if !m.arena.in_zone(at) {
+            options.push(Directive::Take { squares: vec![at] });
         }
     }
-    for enemy in m.team(slot.side.other()) {
-        options.push(Order::Contest {
-            target: Target::Creature { slot: enemy },
-        });
-    }
-    // A few places to walk to: next to where each of the other team stands, where a contest
-    // could come or be met, and the nearest tiles round the zone.
-    let dist = crate::interpret::distances(m, slot, &[f.at], false);
-    let w = m.arena.width as usize;
-    let reach = |t: crate::grid::Tile| {
-        m.arena.contains(t)
-            && m.walkable(t)
-            && m.occupant(t).is_none()
-            && dist[t.y as usize * w + t.x as usize]
-                .is_some_and(|d| (1..=m.ruleset.ticks_per_turn).contains(&d))
-    };
-    let mut walks: Vec<crate::grid::Tile> = Vec::new();
-    for enemy in m.team(slot.side.other()) {
-        for t in m.fighter(enemy).at.steps() {
-            if reach(t) && !walks.contains(&t) {
-                walks.push(t);
-            }
+    for s in m.team(side) {
+        let at = m.fighter(s).at;
+        if m.arena.in_zone(at) {
+            options.push(Directive::Defend { squares: vec![at] });
         }
     }
-    for t in m.arena.tiles() {
-        if reach(t)
-            && m.arena.zone.iter().any(|z| z.touches(t))
-            && !m.arena.in_zone(t)
-            && !walks.contains(&t)
-        {
-            walks.push(t);
-        }
-    }
-    walks.sort_by_key(|t| {
-        (
-            dist[t.y as usize * w + t.x as usize],
-            t.y,
-            m.arena.across(slot.side, *t),
+    let things = m
+        .board
+        .ground
+        .iter()
+        .chain(m.board.glint.iter())
+        .map(|(t, _)| *t)
+        .chain(m.arena.levers.iter().copied().filter(|_| m.lever_ready()))
+        .chain(
+            m.arena
+                .switches
+                .iter()
+                .copied()
+                .filter(|_| m.switch_ready()),
         )
-    });
-    for to in walks.into_iter().take(4) {
-        options.push(Order::Move { to });
-    }
-    if m.lever_ready() && m.board.gates_open.iter().any(|open| !open) {
-        for lever in &m.arena.levers {
-            options.push(Order::Contest {
-                target: Target::Lever { at: *lever },
-            });
+        .chain(
+            m.team(side)
+                .filter(|s| m.fighter(*s).carrying.is_some())
+                .map(|s| m.fighter(s).at),
+        );
+    for at in things {
+        let d = Directive::Interact { at };
+        if crate::muster::checked(m, side, &vec![d.clone()]).0.len() == 1 {
+            options.push(d);
         }
     }
     options.dedup();
@@ -96,7 +79,7 @@ fn options(m: &Match, slot: Slot) -> Vec<Order> {
 }
 
 /// How good the board is for `side`: the beacon most of all, then who is still standing and how
-/// steady they are, then holding in the zone.
+/// steady they are, then holding in the zone, then having something in hand.
 fn score(m: &Match, side: Side) -> i32 {
     if let Some(outcome) = m.outcome() {
         return match outcome.winner {
@@ -118,54 +101,52 @@ fn score(m: &Match, side: Side) -> i32 {
             .count() as i32
     };
     let capture = |sd: Side| i32::from(m.board.capture[sd.index()]);
+    let carrying = |sd: Side| {
+        m.team(sd)
+            .filter(|x| m.fighter(*x).carrying.is_some())
+            .count() as i32
+    };
     300 * (capture(s) - capture(o))
         + 80 * (composure(s) - composure(o))
         + 200 * (standing(s) - standing(o))
         + 40 * (holding(s) - holding(o))
+        + 25 * (carrying(s) - carrying(o))
 }
 
-/// One turn's orders for `side`, thought through on `model`.
-pub fn think_ahead(m: &Match, side: Side, familiar: bool) -> Orders {
+/// One turn's plan for `side`, thought through on `model`.
+pub fn think_ahead(m: &Match, side: Side, familiar: bool) -> TeamPlan {
     let model = if familiar {
         m.clone()
     } else {
         imagined_plainly(m, side)
     };
-    // What the other team will do: anyone holding goes on holding where it is, anyone on its way
-    // to hold somewhere goes on there, and anyone else does what the Exhibition coach would.
-    let mut theirs = Coach::Exhibition.orders(&model, side.other());
-    for e in model.team(side.other()) {
-        let f = model.fighter(e);
-        if f.holding {
-            theirs[e.index as usize] = Some(crate::order::Order::Hold { at: f.at });
-        } else if let Some(Order::Hold { at }) = f.order
-            && !f.interrupted
-        {
-            // On its way to hold somewhere: it goes on.
-            theirs[e.index as usize] = Some(Order::Hold { at });
-        }
-    }
-    let mut ours = Coach::Exhibition.orders(&model, side);
-    let play = |ours: Orders| {
+    // What the other team will do: what the Exhibition coach would.
+    let theirs = Coach::Exhibition.plan(&model, side.other());
+    let mut ours = Coach::Exhibition.plan(&model, side);
+    let play = |ours: &TeamPlan| {
         let mut sim = model.clone();
-        let orders = match side {
-            Side::Left => [ours, theirs],
-            Side::Right => [theirs, ours],
+        let plans = match side {
+            Side::Left => [ours.clone(), theirs.clone()],
+            Side::Right => [theirs.clone(), ours.clone()],
         };
-        sim.resolve_turn(orders);
+        sim.resolve_turn(plans);
         score(&sim, side)
     };
-    let mut best = play(ours);
-    let team: Vec<Slot> = m.team(side).collect();
+    let mut best = play(&ours);
+    let options = options(&model, side);
     for _ in 0..PASSES {
-        for slot in &team {
-            for option in options(&model, *slot) {
-                let mut trial = ours;
-                trial[slot.index as usize] = Some(option);
+        for place in 0..PLAN_SIZE {
+            for option in options.iter() {
+                let mut trial = ours.clone();
+                if place < trial.len() {
+                    trial[place] = option.clone();
+                } else {
+                    trial.push(option.clone());
+                }
                 if trial == ours {
                     continue;
                 }
-                let value = play(trial);
+                let value = play(&trial);
                 if value > best {
                     best = value;
                     ours = trial;

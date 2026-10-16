@@ -3,7 +3,7 @@
 
 use formiga_battle_contract::{Contender, sample};
 use formiga_battle_core::ai::Coach;
-use formiga_battle_core::{Match, RULES_VERSION, Side, TEAM_SIZE};
+use formiga_battle_core::{Directive, Match, RULES_VERSION, Side, TEAM_SIZE, TeamPlan, Tile};
 use formiga_battle_room::relay::{Answer, Limits, Refusal, Request, Stage};
 use formiga_battle_room::roster::{bonds_among, room_match};
 use formiga_battle_room::{
@@ -258,13 +258,13 @@ fn a_wrong_seat_opens_nothing() {
 fn a_turn_locks_when_both_are_in_and_neither_sees_the_other_s_orders_before() {
     let mut relay = Relay::with_entropy(Limits::default(), counting());
     let (code, host, guest) = room(&mut relay);
-    let orders = [None; TEAM_SIZE];
+    let orders: TeamPlan = Vec::new();
     let after_host = viewed(relay.handle(
         Request::Orders {
             code: code.clone(),
             seat: host.clone(),
             turn: 1,
-            orders,
+            orders: orders.clone(),
         },
         100,
     ));
@@ -286,7 +286,7 @@ fn a_turn_locks_when_both_are_in_and_neither_sees_the_other_s_orders_before() {
             code: code.clone(),
             seat: guest,
             turn: 1,
-            orders,
+            orders: orders.clone(),
         },
         120,
     ));
@@ -298,12 +298,38 @@ fn a_turn_locks_when_both_are_in_and_neither_sees_the_other_s_orders_before() {
                 code,
                 seat: host,
                 turn: 1,
-                orders
+                orders: orders.clone()
             },
             130
         )),
         Refusal::NotThisTurn
     );
+}
+
+#[test]
+fn a_plan_bigger_than_any_battle_sends_is_refused() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let (code, host, _) = room(&mut relay);
+    let take = Directive::Take {
+        squares: vec![Tile::new(4, 3)],
+    };
+    let wide = Directive::Take {
+        squares: (0..9).map(|x| Tile::new(x, 0)).collect(),
+    };
+    for orders in [vec![take.clone(); 4], vec![wide]] {
+        assert_eq!(
+            refusal(relay.handle(
+                Request::Orders {
+                    code: code.clone(),
+                    seat: host.clone(),
+                    turn: 1,
+                    orders,
+                },
+                100,
+            )),
+            Refusal::Malformed
+        );
+    }
 }
 
 #[test]
@@ -320,7 +346,7 @@ fn at_the_deadline_the_turn_locks_with_whatever_was_given_when_anyone_next_asks(
     assert!(v.locked.is_empty());
     let v = viewed(relay.handle(Request::Look { code, seat: host }, 50_000));
     assert_eq!(v.locked.len(), 1);
-    assert_eq!(v.locked[0].submitted, [[None; TEAM_SIZE]; 2]);
+    assert_eq!(v.locked[0].submitted, [Vec::new(), Vec::new()]);
 }
 
 #[test]
@@ -334,7 +360,7 @@ fn a_side_with_no_orders_three_turns_running_forfeits_in_words() {
                 code: code.clone(),
                 seat: host.clone(),
                 turn,
-                orders: [None; TEAM_SIZE],
+                orders: Vec::new(),
             },
             now,
         );
@@ -351,13 +377,13 @@ fn a_side_with_no_orders_three_turns_running_forfeits_in_words() {
 fn different_boards_after_the_same_turn_are_flagged_to_both() {
     let mut relay = Relay::with_entropy(Limits::default(), counting());
     let (code, host, guest) = room(&mut relay);
-    let orders = [None; TEAM_SIZE];
+    let orders: TeamPlan = Vec::new();
     relay.handle(
         Request::Orders {
             code: code.clone(),
             seat: host.clone(),
             turn: 1,
-            orders,
+            orders: orders.clone(),
         },
         10,
     );
@@ -366,7 +392,7 @@ fn different_boards_after_the_same_turn_are_flagged_to_both() {
             code: code.clone(),
             seat: guest.clone(),
             turn: 1,
-            orders,
+            orders: orders.clone(),
         },
         20,
     );
@@ -397,13 +423,13 @@ fn different_boards_after_the_same_turn_are_flagged_to_both() {
 fn a_finished_match_is_deleted_once_both_have_seen_its_end() {
     let mut relay = Relay::with_entropy(Limits::default(), counting());
     let (code, host, guest) = room(&mut relay);
-    let orders = [None; TEAM_SIZE];
+    let orders: TeamPlan = Vec::new();
     relay.handle(
         Request::Orders {
             code: code.clone(),
             seat: host.clone(),
             turn: 1,
-            orders,
+            orders: orders.clone(),
         },
         10,
     );
@@ -412,7 +438,7 @@ fn a_finished_match_is_deleted_once_both_have_seen_its_end() {
             code: code.clone(),
             seat: guest.clone(),
             turn: 1,
-            orders,
+            orders: orders.clone(),
         },
         20,
     );
@@ -466,7 +492,7 @@ fn play_turn(
                 code: code.to_owned(),
                 seat: seat.to_owned(),
                 turn,
-                orders: [None; TEAM_SIZE],
+                orders: Vec::new(),
             },
             now,
         );
@@ -498,7 +524,7 @@ fn a_match_is_confirmed_to_both_only_once_both_boards_after_its_last_turn_are_in
                 code: code.clone(),
                 seat: seat.clone(),
                 turn: 1,
-                orders: [None; TEAM_SIZE],
+                orders: Vec::new(),
             },
             at,
         );
@@ -616,7 +642,7 @@ fn a_body_too_big_to_read_is_answered_with_a_refusal_rather_than_a_reset() {
     let body = vec![b'x'; 200 * 1024];
     write!(
         stream,
-        "POST /api/battle/rooms HTTP/1.1\r\nHost: {host}\r\nContent-Length: {}\r\n\r\n",
+        "POST /api/battle/rooms HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
         body.len()
     )
     .unwrap();
@@ -720,7 +746,7 @@ impl Window {
             if locked.turn <= m.board.turn || m.outcome().is_some() {
                 continue;
             }
-            let report = m.resolve_turn(locked.submitted);
+            let report = m.resolve_turn(locked.submitted.clone());
             self.client
                 .board(
                     &self.code,
@@ -773,7 +799,7 @@ fn two_windows_play_a_whole_match_through_a_relay_and_agree_on_every_board() {
             if m.outcome().is_some() {
                 continue;
             }
-            let orders = Coach::Exhibition.orders(m, w.you);
+            let orders = Coach::Exhibition.plan(m, w.you);
             w.client
                 .orders(&w.code, &w.seat, m.board.turn + 1, orders)
                 .unwrap();
@@ -816,7 +842,7 @@ fn an_older_battle_is_told_to_update_whatever_else_its_entrant_lacks() {
     let mut stream = std::net::TcpStream::connect(address).unwrap();
     write!(
         stream,
-        "POST /api/battle/rooms HTTP/1.1\r\nContent-Length: {}\r\n\r\n{body}",
+        "POST /api/battle/rooms HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
         body.len()
     )
     .unwrap();
@@ -824,7 +850,7 @@ fn an_older_battle_is_told_to_update_whatever_else_its_entrant_lacks() {
     stream.read_to_string(&mut answer).unwrap();
     assert!(answer.starts_with("HTTP/1.1 409"), "{answer}");
     assert!(
-        answer.ends_with(r#"{"refused":"version","relay":2,"rules_version":3}"#),
+        answer.ends_with(r#"{"refused":"version","relay":3,"rules_version":3}"#),
         "{answer}"
     );
 }

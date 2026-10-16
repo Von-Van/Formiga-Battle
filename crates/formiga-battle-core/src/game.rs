@@ -1,19 +1,24 @@
 //! A match: the board, and how one turn of simultaneous orders resolves on it.
 //!
-//! Both teams' orders are locked together, then the turn plays out in a few ticks. Every tick
+//! Both teams' plans are locked together and each team shares its own out among its creatures
+//! (`muster`), then the turn plays out in a few ticks. Every tick
 //! works from one shared picture of the board: everyone decides their step from where everyone
 //! stood, every step happens at once, and then every contest is settled from where everyone
 //! ended up. Nobody moves first.
 //!
 //! A tick, in order:
 //!
-//! 1. A gate whose swing was telegraphed last tick swings.
+//! 1. A gate whose swing was telegraphed last tick swings. Then whatever was marked to land this
+//!    tick lands: things found on the board turn up, items used last tick take effect, the map
+//!    event comes (`scenery`). Anyone whose job has just come to nothing thinks again, once a
+//!    turn, from its team's plan (`muster`).
 //! 2. Contests already next to their target are settled, all from the same picture (see
 //!    `engage`), so someone walking away from a contester next to it is caught before it steps.
 //! 3. Each creature still carrying out its order picks one step (`interpret`).
 //! 4. The steps happen together. Two wanting one tile: a fair draw lets one in. Two wanting to
 //!    swap, or a step into a tile whose creature did not leave: they stay where they were. Nobody
-//!    is hurt by a bump.
+//!    is hurt by a bump. Anyone with empty paws who stepped onto something lying there picks it
+//!    up.
 //! 5. Anyone who has reached the tile it was told to hold starts holding.
 //! 6. Contests that have just come into reach are settled the same way. Composure is lost as each
 //!    is settled, at most `Ruleset::damage_cap` from one creature in a tick; anyone at zero is
@@ -25,10 +30,13 @@
 use crate::arena::{Arena, TEAM_SIZE, Terrain};
 use crate::event::{Event, EventKind, Fill, Outcome, Victory};
 use crate::grid::Tile;
-use crate::order::{Order, Orders, Side, Slot, Target};
+use crate::items::Item;
+use crate::muster::Task;
+use crate::order::{Order, Orders, Side, Slot, Target, TeamPlan};
 use crate::profile::{Behavior, Profile};
 use crate::rng::{self, Purpose};
 use crate::ruleset::{CaptureRule, RULES_VERSION, Ruleset};
+use crate::scenery::Pending;
 use crate::{ai, interpret};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -66,6 +74,31 @@ pub struct Fighter {
     /// Its contest this turn was turned away by a holder.
     #[serde(default)]
     pub turned_away: bool,
+    /// What it picked up, if anything. One thing at a time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carrying: Option<Item>,
+    /// The last tick, counted from the start of the match, a leaf umbrella is open over it; 0 for
+    /// none.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub shelter_until: u16,
+    /// The job it took on from its team's plan this turn, or last turn until the next is shared
+    /// out; `None` for a creature given an order of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<Task>,
+    /// It has thought again this turn; it does not twice.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub rethought: bool,
+    /// It stepped into honey: it stays where it is for the rest of the turn, and can still hold.
+    #[serde(default)]
+    pub stuck: bool,
+}
+
+fn is_zero(n: &u16) -> bool {
+    *n == 0
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl Fighter {
@@ -84,18 +117,29 @@ impl Fighter {
             hung_back: false,
             bumped: false,
             turned_away: false,
+            carrying: None,
+            shelter_until: 0,
+            task: None,
+            rethought: false,
+            stuck: false,
         }
+    }
+
+    /// Under a leaf umbrella at this tick of the match.
+    pub fn sheltered(&self, now: u16) -> bool {
+        self.shelter_until >= now
     }
 
     /// Not walking anywhere this tick, as far as anyone planning a route can tell.
     pub fn stationary(&self) -> bool {
         self.holding
             || self.interrupted
+            || self.stuck
             || self.bumped
             || self.order.is_none()
             || match self.order {
                 Some(Order::Move { .. }) => self.arrived,
-                Some(Order::Contest { .. }) => self.spent,
+                Some(Order::Contest { .. } | Order::Use { .. }) => self.spent,
                 _ => false,
             }
     }
@@ -115,13 +159,48 @@ pub struct Board {
     /// Each team's beacon progress, in ticks: left, then right.
     pub capture: [u8; 2],
     pub outcome: Option<Outcome>,
+    /// The tick, counted from the start of the match, the map event lands at, once it is warned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_at: Option<u16>,
+    /// The first turn a switch can set the map event off in.
+    #[serde(default)]
+    pub switch_ready_turn: u8,
+    /// Things lying on the ground, to be picked up.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ground: Vec<(Tile, Item)>,
+    /// Spots glinting: what turns up on them at the start of the next turn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub glint: Vec<(Tile, Item)>,
+    /// Twigs wedged into tiles, each with the last tick it stands.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub twigs: Vec<(Tile, u16)>,
+    /// Items used, marked on their tiles, landing next tick.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending: Vec<Pending>,
+    /// Where the map event lands, once it is warned.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub event_tiles: Vec<Tile>,
+    /// The switches that set it off, when it lands round them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub event_from: Vec<Tile>,
+    /// Ground gone under, each tile with the last tick nobody can stand there.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub closed: Vec<(Tile, u16)>,
+    /// Twigs floating on water, each with the last tick anyone can stand on it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rafts: Vec<(Tile, u16)>,
+    /// Sticky ground, each tile with the last tick it stays sticky.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub honey: Vec<(Tile, u16)>,
 }
 
-/// One turn as it was played: what each team sent (with `None` for an order not given in time),
-/// and the board's hash after it.
+/// One turn as it was played: each team's plan as it was sent (empty for none in time), or each
+/// creature's order for a turn set up order by order, and the board's hash after it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TurnRecord {
-    pub submitted: [Orders; 2],
+    pub submitted: [TeamPlan; 2],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orders: Option<[Orders; 2]>,
     pub hash: u64,
 }
 
@@ -129,7 +208,8 @@ pub struct TurnRecord {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TurnReport {
     pub turn: u8,
-    /// The orders carried out, the fallback's included; `None` for a creature already out.
+    /// Each creature's order as its team shared out the plan, the fallback's included; `None`
+    /// for a creature already out. One that thought again partway through says so in the events.
     pub orders: [Orders; 2],
     pub events: Vec<Event>,
     pub hash: u64,
@@ -152,6 +232,8 @@ pub struct Match {
     behaviors: [[Behavior; TEAM_SIZE]; 2],
     pub board: Board,
     pub history: Vec<TurnRecord>,
+    /// Each team's plan for the turn being resolved, to think again from.
+    pub(crate) plans: [TeamPlan; 2],
 }
 
 impl Match {
@@ -185,6 +267,17 @@ impl Match {
             lever_ready_turn: 1,
             capture: [0, 0],
             outcome: None,
+            event_at: None,
+            switch_ready_turn: 0,
+            ground: Vec::new(),
+            glint: Vec::new(),
+            twigs: Vec::new(),
+            pending: Vec::new(),
+            event_tiles: Vec::new(),
+            event_from: Vec::new(),
+            closed: Vec::new(),
+            rafts: Vec::new(),
+            honey: Vec::new(),
         };
         Ok(Self {
             arena,
@@ -194,6 +287,7 @@ impl Match {
             behaviors,
             board,
             history: Vec::new(),
+            plans: [Vec::new(), Vec::new()],
         })
     }
 
@@ -201,7 +295,7 @@ impl Match {
         &self.board.fighters[slot.side.index()][slot.index as usize]
     }
 
-    fn fighter_mut(&mut self, slot: Slot) -> &mut Fighter {
+    pub(crate) fn fighter_mut(&mut self, slot: Slot) -> &mut Fighter {
         &mut self.board.fighters[slot.side.index()][slot.index as usize]
     }
 
@@ -246,6 +340,13 @@ impl Match {
 
     /// Whether the ground lets anyone stand on it just now.
     pub fn walkable(&self, tile: Tile) -> bool {
+        let on = |list: &[(Tile, u16)]| list.iter().any(|(t, _)| *t == tile);
+        if on(&self.board.twigs) || on(&self.board.closed) {
+            return false;
+        }
+        if on(&self.board.rafts) {
+            return true;
+        }
         match self.arena.terrain(tile) {
             Terrain::Open => true,
             Terrain::Gate => self
@@ -267,8 +368,28 @@ impl Match {
         self.board.outcome
     }
 
+    /// Whether a twig thrown here floats as a raft: open water, not a switch standing in it.
+    pub fn floats(&self, tile: Tile) -> bool {
+        self.arena.water
+            && self.arena.contains(tile)
+            && self.arena.terrain(tile) == Terrain::Obstacle
+            && !self.arena.switches.contains(&tile)
+    }
+
+    /// Whether this tile is sticky with honey.
+    pub fn sticky(&self, tile: Tile) -> bool {
+        self.board.honey.iter().any(|(t, _)| *t == tile)
+    }
+
+    /// Whether a switch can set the map event off this turn.
+    pub fn switch_ready(&self) -> bool {
+        self.arena.scenery.is_some()
+            && self.board.event_at.is_none()
+            && self.board.turn >= self.board.switch_ready_turn
+    }
+
     /// The tick, counted from the start of the match.
-    fn clock(&self, turn: u8, tick: u8) -> u16 {
+    pub(crate) fn clock(&self, turn: u8, tick: u8) -> u16 {
         u16::from(turn) * u16::from(self.ruleset.ticks_per_turn) + u16::from(tick)
     }
 
@@ -297,13 +418,32 @@ impl Match {
             }
             Order::Contest {
                 target: Target::Lever { at },
-            } => self.arena.levers.contains(&at),
+            } => self.arena.levers.contains(&at) || self.arena.switches.contains(&at),
+            Order::Use { at } => {
+                self.arena.contains(at)
+                    && match self.fighter(slot).carrying {
+                        Some(Item::Twig) => ground(at) || self.floats(at),
+                        Some(_) => true,
+                        None => false,
+                    }
+            }
         }
     }
 
-    /// Locks both teams' orders, fills any that are missing or cannot be carried out with the
-    /// fallback (the same for both teams), and plays the turn out.
-    pub fn resolve_turn(&mut self, submitted: [Orders; 2]) -> TurnReport {
+    /// Locks both teams' plans, has each team share its own out among its creatures, fills any
+    /// order still missing with the fallback (the same for both teams), and plays the turn out.
+    pub fn resolve_turn(&mut self, plans: [TeamPlan; 2]) -> TurnReport {
+        self.resolve(plans, None)
+    }
+
+    /// Plays a turn out from each creature's order, given one by one rather than shared out from
+    /// a plan: how the tests set up one rule at a time. Orders missing or that cannot be carried
+    /// out are filled by the fallback.
+    pub fn resolve_orders(&mut self, submitted: [Orders; 2]) -> TurnReport {
+        self.resolve([Vec::new(), Vec::new()], Some(submitted))
+    }
+
+    fn resolve(&mut self, plans: [TeamPlan; 2], given: Option<[Orders; 2]>) -> TurnReport {
         let mut events = Vec::new();
         if self.board.outcome.is_some() {
             return TurnReport {
@@ -315,6 +455,19 @@ impl Match {
         }
         self.board.turn += 1;
         let turn = self.board.turn;
+        // Both teams share out their plans from the board as it stood when the timer ran out.
+        let mut submitted: [Orders; 2] = given.unwrap_or([[None; TEAM_SIZE]; 2]);
+        let mut tasks: [[Option<Task>; TEAM_SIZE]; 2] = [[None; TEAM_SIZE]; 2];
+        if given.is_none() {
+            for side in Side::BOTH {
+                let (orders, assigned, said) =
+                    crate::muster::muster(self, side, &plans[side.index()], turn);
+                submitted[side.index()] = orders;
+                tasks[side.index()] = assigned;
+                events.extend(said);
+            }
+        }
+        self.plans = plans.clone();
         // Every fallback order is chosen from the board as it stood when the timer ran out.
         let mut orders: [Orders; 2] = [[None; TEAM_SIZE]; 2];
         for slot in Slot::all() {
@@ -344,8 +497,11 @@ impl Match {
         let detours = self.ruleset.detour_budget;
         for slot in Slot::all() {
             let order = orders[slot.side.index()][slot.index as usize];
+            let task = tasks[slot.side.index()][slot.index as usize];
             let f = self.fighter_mut(slot);
             f.order = order;
+            f.task = task;
+            f.rethought = false;
             f.spent = false;
             f.interrupted = false;
             f.arrived = false;
@@ -354,6 +510,7 @@ impl Match {
             f.bumped = false;
             f.hung_back = false;
             f.turned_away = false;
+            f.stuck = false;
             f.holding = matches!(order, Some(Order::Hold { at }) if at == f.at) && !f.out;
             if f.holding {
                 let at = f.at;
@@ -370,6 +527,9 @@ impl Match {
                 break;
             }
         }
+        if self.board.outcome.is_none() {
+            self.foretell(turn, &mut events);
+        }
         if self.board.outcome.is_none() && turn >= self.ruleset.turn_cap {
             let outcome = self.decide_at_cap();
             self.board.outcome = Some(outcome);
@@ -380,7 +540,11 @@ impl Match {
             });
         }
         let hash = self.hash();
-        self.history.push(TurnRecord { submitted, hash });
+        self.history.push(TurnRecord {
+            submitted: plans,
+            orders: given,
+            hash,
+        });
         TurnReport {
             turn,
             orders,
@@ -401,8 +565,10 @@ impl Match {
                 .saturating_add(1);
             for (i, gate) in self.arena.gates.clone().into_iter().enumerate() {
                 let open = !self.board.gates_open[i];
+                let wedged = self.board.twigs.iter().any(|(t, _)| *t == gate);
                 match self.occupant(gate) {
                     Some(by) if !open => push(EventKind::GateJammed { gate, by }),
+                    None if !open && wedged => push(EventKind::GateWedged { gate }),
                     _ => {
                         self.board.gates_open[i] = open;
                         push(EventKind::GateSwung { gate, open });
@@ -410,6 +576,11 @@ impl Match {
                 }
             }
         }
+
+        // Then whatever was marked to land this tick, and anyone whose job came to nothing
+        // thinks again.
+        self.land(turn, tick, now, events);
+        self.rethink(turn, tick, events);
 
         // 2. Contests already in reach catch their target before anyone steps.
         let mut lost = [[0u8; TEAM_SIZE]; 2];
@@ -509,6 +680,13 @@ impl Match {
                 });
             }
         }
+        for (slot, _) in &moving {
+            if !failed.contains(slot) {
+                self.pick_up(*slot, turn, tick, events);
+                self.stick(*slot, turn, tick, events);
+            }
+        }
+        let mut push = |kind| events.push(Event { turn, tick, kind });
 
         // 5. Arrivals.
         for slot in self.standing_slots().collect::<Vec<_>>() {
@@ -638,6 +816,7 @@ impl Match {
                     tick,
                     kind: EventKind::KnockedOut { slot },
                 });
+                self.drop_carried(slot, turn, tick, events);
             }
         }
     }
@@ -665,6 +844,9 @@ impl Match {
         let mut push = |kind| events.push(Event { turn, tick, kind });
         let mut contests: Vec<(Slot, Slot)> = Vec::new();
         let mut pulls: Vec<(Slot, Tile)> = Vec::new();
+        let mut turns: Vec<(Slot, Tile)> = Vec::new();
+        let mut uses: Vec<(Slot, Tile)> = Vec::new();
+        let mut knocked: Vec<Slot> = Vec::new();
         for c in self.standing_slots().collect::<Vec<_>>() {
             let f = self.fighter(c).clone();
             if f.spent || f.interrupted {
@@ -711,7 +893,19 @@ impl Match {
                 }
                 Some(Order::Contest {
                     target: Target::Lever { at },
-                }) if f.at.touches(at) => pulls.push((c, at)),
+                }) if f.at.touches(at) => {
+                    if self.arena.switches.contains(&at) {
+                        turns.push((c, at));
+                    } else {
+                        pulls.push((c, at));
+                    }
+                }
+                Some(Order::Use { at }) => match f.carrying {
+                    Some(item) if f.at.distance(at) <= item.reach() => uses.push((c, at)),
+                    Some(_) => {}
+                    // Let go of on the way: there is nothing left to use.
+                    None => self.fighter_mut(c).spent = true,
+                },
                 _ => {}
             }
         }
@@ -719,6 +913,8 @@ impl Match {
             .iter()
             .map(|(c, _)| *c)
             .chain(pulls.iter().map(|(c, _)| *c))
+            .chain(turns.iter().map(|(c, _)| *c))
+            .chain(uses.iter().map(|(c, _)| *c))
             .collect();
         let mut targets: Vec<Slot> = contests.iter().map(|(_, t)| *t).collect();
         targets.sort();
@@ -791,6 +987,7 @@ impl Match {
                     if let Some(to) = pushed_to {
                         f.at = to;
                     }
+                    knocked.push(t);
                     push(EventKind::Flanked {
                         target: t,
                         by: cs,
@@ -819,9 +1016,13 @@ impl Match {
                         contesters: cs,
                     });
                 }
+            } else if self.fighter(t).sheltered(now) {
+                // Under a leaf umbrella, a contest bounces off: nobody is hurt.
+                push(EventKind::Sheltered { target: t, by: cs });
             } else {
                 damage[t.side.index()][t.index as usize] += cs.len() as u8;
                 self.fighter_mut(t).interrupted = true;
+                knocked.push(t);
                 push(EventKind::Interrupted { target: t, by: cs });
             }
         }
@@ -857,6 +1058,49 @@ impl Match {
                 });
             }
         }
+        turns.sort();
+        for (c, switch) in turns {
+            self.fighter_mut(c).spent = true;
+            let defenders: Vec<Slot> = self
+                .team(c.side.other())
+                .filter(|h| self.fighter(*h).holding && self.fighter(*h).at.touches(switch))
+                .collect();
+            if !defenders.is_empty() {
+                self.fighter_mut(c).turned_away = true;
+                damage[c.side.index()][c.index as usize] += defenders.len() as u8;
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::SwitchDefended {
+                        slot: c,
+                        switch,
+                        holders: defenders,
+                    },
+                });
+            } else if !self.switch_ready() {
+                events.push(Event {
+                    turn,
+                    tick,
+                    kind: EventKind::SwitchResting { slot: c, switch },
+                });
+            } else {
+                self.set_off(c, switch, turn, tick, now, events);
+            }
+        }
+        uses.sort();
+        for (c, at) in uses {
+            self.use_item(c, at, turn, tick, now, events);
+        }
+        for slot in knocked {
+            self.drop_carried(slot, turn, tick, events);
+        }
+    }
+
+    /// The turn and tick a tick counted from the start of the match falls in.
+    pub(crate) fn when(&self, at: u16) -> (u8, u8) {
+        let per = u16::from(self.ruleset.ticks_per_turn);
+        // The clock counts turn 1's first tick as `per + 1`.
+        (((at - 1) / per) as u8, ((at - 1) % per + 1) as u8)
     }
 
     /// Ends the match for a side whose Handler has been away too long: the other side wins. Only
