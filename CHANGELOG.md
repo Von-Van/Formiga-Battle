@@ -6,6 +6,9 @@
   by itself, so a wave, the pond rising or a shaken tree comes at most once a turn.
 - A gate a twig keeps from closing no longer goes on looking as if it is about to swing for the
   rest of the turn.
+- A trio given a colour of its own flies the Handler's pennant as it is now in that colour, on the
+  Handler's page and to a friend, rather than the pennant the Handler had when the colour was
+  chosen.
 
 ## [0.67.10] - 2026-10-16
 

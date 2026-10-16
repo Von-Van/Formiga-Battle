@@ -398,7 +398,11 @@ impl Table {
             pennant: handler.map(|h| h.pennant.clone()),
             standing: Some(crate::identity::Standing::of(&self.record).line()),
             trio: trio.map(|t| t.name.clone()),
-            trio_pennant: trio.and_then(|t| t.pennant.clone()),
+            trio_pennant: trio.filter(|t| t.pennant.is_some()).map(|t| {
+                use crate::identity::{Style, trio_style};
+                let flown = handler.map_or_else(Style::default, |h| Style::of(&h.pennant));
+                trio_style(flown, t).pennant()
+            }),
         }
         .cleaned()
     }
