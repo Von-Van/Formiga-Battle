@@ -8,7 +8,7 @@ use formiga_art::paint::{self, rgb};
 use formiga_art::{Canvas, Rgba};
 
 /// How tall a letter is, in its own pixels.
-const HEIGHT: i32 = 7;
+pub(crate) const HEIGHT: i32 = 7;
 
 /// A letter's pixels, a row to a string, `#` drawn. Anything not here is drawn as a space.
 fn glyph(letter: char) -> &'static [&'static str] {
@@ -143,7 +143,7 @@ impl Paint {
 
 /// The word's letters as a mask, one pixel to each of the alphabet's, each stroke doubled
 /// sideways so the letters are bold.
-fn mask(text: &str) -> (i32, Vec<Vec<bool>>) {
+pub(crate) fn mask(text: &str) -> (i32, Vec<Vec<bool>>) {
     let mut rows = vec![Vec::new(); HEIGHT as usize];
     for (k, letter) in text.chars().enumerate() {
         if k > 0 {

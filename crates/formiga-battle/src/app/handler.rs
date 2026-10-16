@@ -3,7 +3,7 @@
 //! record; Battle keeps no files, so the settings start fresh each time, with reduced motion as
 //! Desktop has it.
 
-use super::{BattleApp, card, portrait_mat, rosette};
+use super::{BattleApp, card, padlock, portrait_mat, rosette};
 use crate::chrome::{self, ink, label_job};
 use eframe::egui::{self, Id, RichText};
 use formiga_battle_contract::{MatchSummary, Mode};
@@ -159,10 +159,10 @@ impl BattleApp {
                     ui.spacing_mut().item_spacing.x = u;
                     if open.contains(&cup.arena) {
                         for k in (0..crate::rewards::CUP_WINS).rev() {
-                            rosette(ui, k < wins, u);
+                            rosette(ui, crate::rewards::cup_index(cup.id), k < wins, u);
                         }
                     } else {
-                        ui.label(label_job("Locked", 9.0, ink::MUTED));
+                        padlock(ui, "Win the cup before it to open this one", u);
                     }
                 });
             });

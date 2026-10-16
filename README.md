@@ -83,9 +83,10 @@ R or the mouse wheel turns the way a Hold faces. Enter locks in, Escape puts an 
 opens the whole match turn by turn.
 
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
-window (`--turns`, `--into`, `--scale`); `--snap <png> --review station|where|who|friend|orders|playing --at <s>`
-opens the window behind everything, pictures it and closes. Either takes `--arena
-backyard|woodland|millpond|cove`. Look at them after changing anything
+window (`--turns`, `--into`, `--scale`); `--render-window <png> --review
+station|where|who|friend|orders|playing --at <s>` pictures the whole window, as a Retina screen
+shows it, without opening one; `--snap <png>` with the same options opens the window behind
+everything, pictures it and closes. Each takes `--arena backyard|woodland|millpond|cove`. Look at them after changing anything
 visual.
 
 The gate, run locally (Battle has no GitHub Actions, so nothing runs on GitHub):

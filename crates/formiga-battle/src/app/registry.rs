@@ -13,7 +13,7 @@ use formiga_art::Canvas;
 use formiga_battle_contract::{HandlerCard, Trio, TrioCard, lineup_of};
 
 /// Thread cream, for words lettered on the notebook's green ribbon.
-const ON_RIBBON: Color32 = Color32::from_rgb(0xf3, 0xe4, 0xbc);
+pub(super) const ON_RIBBON: Color32 = Color32::from_rgb(0xf3, 0xe4, 0xbc);
 /// The engraver's brown, for words on brass.
 const ON_BRASS: Color32 = Color32::from_rgb(0x4a, 0x34, 0x12);
 
@@ -39,7 +39,7 @@ impl BattleApp {
     }
 
     /// A painted picture, painted once under its key and kept.
-    fn painted(
+    pub(super) fn painted(
         &mut self,
         ctx: &egui::Context,
         key: String,
@@ -839,7 +839,7 @@ impl BattleApp {
 
 /// A painted picture placed on the page, `scale` notebook pixels to each of its own, its corner on
 /// a whole screen pixel so it stays crisp.
-fn place(
+pub(super) fn place(
     ui: &mut egui::Ui,
     picture: &egui::TextureHandle,
     scale: f32,
@@ -994,7 +994,7 @@ fn letter_left(
 }
 
 /// Words lettered in the notebook's printed capitals, as large as `area` holds, centred on it.
-fn letter(painter: &egui::Painter, area: Rect, text: &str, colour: Color32, fill: f32) {
+pub(super) fn letter(painter: &egui::Painter, area: Rect, text: &str, colour: Color32, fill: f32) {
     let mut size = (area.height() * fill).clamp(8.0, 16.0);
     let mut galley = painter.layout_job(label_job(text, size, colour));
     while galley.size().x > area.width() * 0.92 && size > 7.0 {

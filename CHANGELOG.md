@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Less plain text where Battle should be pictures, painted at the notebook's pixel as its other
+  pictures are. A match ends with a rubber stamp inked onto the board in the board's own letters,
+  and the result is lettered on a ribbon beside a rosette: gold round the cup's colour for a win,
+  green for playing well, two colours for a draw, a brass star for a Field Lesson learned and a
+  pencilled one still to earn. Each thing a match earned sits beside its keepsake (a brass medal
+  for points, a punched ticket for a friend match, the cup's rosette, a trophy, a key for a place
+  opened, the colony's journal, a page of the Handler's Notebook, the trio's pennant). The turns
+  are brass studs along the leather, the last ringed and glinting while it is given. The slips
+  over the board saying a turn plays out, or that it is the Handler's move, are ribbons: the
+  notebook's green, or the Handler's team colour. Cups' wins are counted in painted rosettes in
+  each cup's colour, a place still to open hangs a padlock, and the place chosen has its name on
+  a garden sign under its picture.
+- For contributors: `--render-window <png>` makes the same picture of the window as `--snap`,
+  with the same `--review`, `--at` and `--window`, without opening a window, by painting egui's
+  last frame on the processor.
+
 ## [0.67.13] - 2026-10-16
 
 A patch to 0.67.12, built on Formiga Desktop 0.67.11 as it was. Rules version 9, relay protocol 3

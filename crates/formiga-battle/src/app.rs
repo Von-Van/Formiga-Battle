@@ -845,7 +845,7 @@ impl BattleApp {
         );
     }
 
-    fn frame(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn frame(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         if !self.styled {
             chrome::style(&ctx);
@@ -1154,15 +1154,21 @@ impl BattleApp {
                 let turn = turn.min(cap);
                 // The last turn says so, in brass: whatever the tally says after it decides.
                 let last = turn >= cap;
-                ui.label(label_job(
-                    &if last && cap > 1 {
-                        format!("Last turn, {turn} of {cap}")
-                    } else {
-                        format!("Turn {} of {cap}", turn.max(1))
-                    },
-                    chrome::LABEL,
-                    if last { ink::BRASS_LIGHT } else { ink::COVER },
-                ));
+                // A brass stud for each turn along the leather; the last glints while it is
+                // being given, since whatever the tally says after it decides.
+                let words = if last && cap > 1 {
+                    format!("Last turn, {turn} of {cap}")
+                } else {
+                    format!("Turn {} of {cap}", turn.max(1))
+                };
+                let glow = last && (self.table.reduce_motion || (now * 3.0).sin() > 0.0);
+                let shown_turn = turn.max(1);
+                let studs = kept_picture(
+                    ui.ctx(),
+                    &format!("studs-{shown_turn}-{cap}-{glow}"),
+                    || crate::keepsake::studs(shown_turn, cap, glow),
+                );
+                registry::place(ui, &studs, 1.0, u).1.on_hover_text(words);
                 ui.add_space(u * 4.0);
                 let shown = self.table.frame_capture(now);
                 for side in Side::BOTH {
@@ -1649,7 +1655,7 @@ impl BattleApp {
             self.caption(&painter, rect, scale, caption, u);
         }
         self.confetti(&painter, rect, now, u);
-        self.result_stamp(&painter, rect, now, u);
+        self.result_stamp(&painter, rect, now);
         self.introduction(&painter, rect, now, u);
         if let (Some(pointer), Some((plain, right))) = (response.hover_pos(), aims) {
             self.cursor_hint(&painter, pointer, plain, right, u);
@@ -2352,7 +2358,7 @@ impl BattleApp {
         let galley = painter.layout_job(label_job(
             &format!("Turn {} plays out", m.board.turn),
             13.0,
-            ink::FOREST,
+            registry::ON_RIBBON,
         ));
         let size = galley.size() + vec2(u * 16.0, u * 9.0);
         let rect = Rect::from_center_size(
@@ -2368,16 +2374,12 @@ impl BattleApp {
         );
         let mut painter = painter.clone();
         painter.set_opacity(alpha);
-        chrome::card(&painter, rect, u, ink::CARD, ink::LINE);
-        // Stitched at each end, like the cover's tabs.
-        for x in [rect.min.x + u * 3.0, rect.max.x - u * 4.0] {
-            painter.rect_filled(
-                Rect::from_min_size(pos2(x, rect.center().y - u * 0.5), vec2(u, u)),
-                0.0,
-                Color32::from_rgb(0x8a, 0x71, 0x48),
-            );
-        }
-        painter.galley(rect.center() - galley.size() / 2.0, galley, ink::FOREST);
+        slip_ribbon(&painter, rect, None, u);
+        painter.galley(
+            rect.center() - galley.size() / 2.0,
+            galley,
+            registry::ON_RIBBON,
+        );
     }
 
     /// As each turn's orders begin, a slip in the Handler's colour says so: whose move it is.
@@ -2400,7 +2402,7 @@ impl BattleApp {
         let galley = painter.layout_job(label_job(
             &format!("Turn {}: your orders", m.board.turn + 1),
             13.0,
-            ink::FOREST,
+            registry::ON_RIBBON,
         ));
         let size = galley.size() + vec2(u * 22.0, u * 9.0);
         let rect = Rect::from_min_size(
@@ -2413,20 +2415,17 @@ impl BattleApp {
         );
         let mut painter = painter.clone();
         painter.set_opacity(alpha);
-        chrome::card(&painter, rect, u, ink::MINT, ink::FOREST);
-        tick(&painter, rect, Some(self.table.you), u);
+        // In the Handler's own team colour: their move.
+        slip_ribbon(&painter, rect, Some(TEAM[self.table.you.index()]), u);
         painter.galley(
-            pos2(
-                rect.min.x + u * 13.0,
-                rect.center().y - galley.size().y / 2.0,
-            ),
+            rect.center() - galley.size() / 2.0,
             galley,
-            ink::FOREST,
+            registry::ON_RIBBON,
         );
     }
 
     /// When the match is over, a rubber stamp comes down on the board saying how it ended.
-    fn result_stamp(&self, painter: &egui::Painter, board: Rect, now: f32, u: f32) {
+    fn result_stamp(&self, painter: &egui::Painter, board: Rect, now: f32) {
         let (Some(at), Some(outcome)) = (self.finished_at, self.table.outcome()) else {
             return;
         };
@@ -2447,32 +2446,24 @@ impl BattleApp {
             ((now - at) / 0.32).clamp(0.0, 1.0)
         };
         let ease = 1.0 - (1.0 - t).powi(3);
+        // It comes down from a little above the page, large, and lands at its own size.
         let grow = 1.0 + (1.0 - ease) * 0.8;
-        let galley = painter.layout_job(label_job(word, 26.0 * grow, ink::STAMP));
+        let picture = kept_picture(painter.ctx(), &format!("stamp-{word}"), || {
+            crate::keepsake::stamp(&word.to_uppercase(), 2)
+        });
+        let scale = self.board_scale.max(1.0);
+        let size = picture.size_vec2() * scale * grow;
         let centre = pos2(board.center().x, board.min.y + board.height() * 0.2);
-        let angle: f32 = -0.09;
-        let half = (galley.size() + vec2(u * 14.0, u * 10.0) * grow) / 2.0;
-        let (s, c) = angle.sin_cos();
-        let rotate = |v: egui::Vec2| centre + vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+        let rect = Rect::from_center_size(centre, size);
+        let rect = Rect::from_min_size(rect.min.round(), rect.size());
         let mut painter = painter.clone();
         painter.set_opacity(ease);
-        for (inset, width) in [(0.0, 2.0 * u), (3.0 * u, u)] {
-            let h = half - vec2(inset, inset);
-            let corners = [
-                vec2(-h.x, -h.y),
-                vec2(h.x, -h.y),
-                vec2(h.x, h.y),
-                vec2(-h.x, h.y),
-            ]
-            .map(rotate)
-            .to_vec();
-            painter.add(egui::Shape::closed_line(
-                corners,
-                Stroke::new(width, ink::STAMP),
-            ));
-        }
-        let text_at = rotate(-galley.size() / 2.0);
-        painter.add(egui::epaint::TextShape::new(text_at, galley, ink::STAMP).with_angle(angle));
+        painter.image(
+            picture.id(),
+            rect,
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
     }
 
     fn side_panel(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, now: f32, u: f32) {
@@ -2853,6 +2844,28 @@ impl BattleApp {
     }
 
     /// A Field Lesson's end: what it showed, or what to try, and where next.
+    /// How it ended, pinned to the page: a rosette, with the result lettered on a ribbon beside
+    /// it, as wide as the page has room for.
+    fn award(&mut self, ui: &mut egui::Ui, award: crate::keepsake::Award, title: &str, u: f32) {
+        use crate::keepsake::{AWARD_H, AWARD_W};
+        let ctx = ui.ctx().clone();
+        let w = ((ui.available_width() / u).floor() as i32).clamp(120, 280);
+        let ribbon = (AWARD_W as i32 + 8, 8, w - AWARD_W as i32 - 15, 18);
+        let picture = self.painted(&ctx, format!("award-{award:?}-{w}"), |_| {
+            let mut canvas = Canvas::new(w as u32, AWARD_H);
+            crate::heraldry::ribbon(&mut canvas, ribbon);
+            formiga_art::paint::blit(&mut canvas, &crate::keepsake::award(award), 0, 0);
+            canvas
+        });
+        let rect = registry::place(ui, &picture, 1.0, u).0;
+        let (rx, ry, rw, rh) = ribbon;
+        let area = Rect::from_min_size(
+            rect.min + vec2(rx as f32, ry as f32) * u,
+            vec2(rw as f32, rh as f32) * u,
+        );
+        registry::letter(ui.painter(), area, title, registry::ON_RIBBON, 0.6);
+    }
+
     fn lesson_result(&mut self, ui: &mut egui::Ui, u: f32) {
         let Some(run) = &self.table.lesson else {
             return;
@@ -2867,7 +2880,12 @@ impl BattleApp {
             ui,
             &format!("Lesson {} \u{b7} {}", lesson.number(), lesson.title()),
         );
-        ui.label(RichText::new(title).size(22.0).color(ink::FOREST).strong());
+        let award = if learned {
+            crate::keepsake::Award::Learned
+        } else {
+            crate::keepsake::Award::NotYet
+        };
+        self.award(ui, award, title, u);
         ui.label(RichText::new(words).size(13.0));
         ui.add_space(u * 5.0);
         let width = ui.available_width();
@@ -3174,8 +3192,15 @@ impl BattleApp {
             (Some(_), _) => ("The visitors win on the tally", ahead_them),
             (None, _) => ("A draw", "Nobody could be split."),
         };
-        chrome::kicker(ui, "The match is over");
-        ui.label(RichText::new(title).size(22.0).color(ink::FOREST).strong());
+        let award = match outcome.winner {
+            Some(side) if side == you => crate::keepsake::Award::Won(
+                crate::rewards::cup_for(&self.table.arena.id)
+                    .map(|c| crate::rewards::cup_index(c.id)),
+            ),
+            Some(_) => crate::keepsake::Award::Lost,
+            None => crate::keepsake::Award::Drawn,
+        };
+        self.award(ui, award, title, u);
         // At the cap, the counts that decided it, yours first.
         let counts = self
             .table
@@ -3232,8 +3257,8 @@ impl BattleApp {
         if !self.table.earned.is_empty() {
             ui.add_space(u * 5.0);
             chrome::kicker(ui, "Earned");
-            for line in &self.table.earned {
-                ui.label(RichText::new(format!("· {line}")).size(12.5));
+            for line in self.table.earned.clone() {
+                earned_line(ui, &line, u);
             }
             let kept = if self.table.session.is_some() {
                 "Kept in your colony when Battle closes."
@@ -3655,24 +3680,75 @@ fn dashed_rule(ui: &mut egui::Ui, u: f32) {
 }
 
 /// A rosette for a cup win: brass when won, an empty ring when still to come.
-fn rosette(ui: &mut egui::Ui, won: bool, u: f32) {
-    let (rect, _) = ui.allocate_exact_size(vec2(u * 10.0, u * 10.0), Sense::hover());
-    let c = rect.center();
-    let painter = ui.painter();
-    if won {
-        for k in 0..8 {
-            let a = k as f32 / 8.0 * std::f32::consts::TAU;
-            painter.circle_filled(c + vec2(a.cos(), a.sin()) * u * 3.0, u * 1.8, ink::BRASS);
+fn rosette(ui: &mut egui::Ui, cup: usize, won: bool, u: f32) {
+    let picture = kept_picture(ui.ctx(), &format!("small-rosette-{cup}-{won}"), || {
+        crate::keepsake::small_rosette(cup, won)
+    });
+    registry::place(ui, &picture, 1.0, u);
+}
+
+/// A ribbon slip filling `rect`, its folded ends showing either side: the notebook's green, or a
+/// team's cloth.
+fn slip_ribbon(
+    painter: &egui::Painter,
+    rect: Rect,
+    cloth: Option<formiga_art::paint::Ramp>,
+    u: f32,
+) {
+    let w = (rect.width() / u).round() as i32;
+    let h = (rect.height() / u).round() as i32;
+    let key = format!("slip-{w}-{h}-{:?}", cloth.map(|c| c.base));
+    let picture = kept_picture(painter.ctx(), &key, || {
+        let mut canvas = Canvas::new((w + 14) as u32, (h + 2) as u32);
+        let area = (7, 0, w, h);
+        match cloth {
+            Some(cloth) => crate::heraldry::ribbon_in(&mut canvas, area, cloth),
+            None => crate::heraldry::ribbon(&mut canvas, area),
         }
-        painter.circle_filled(c, u * 2.6, ink::BRASS_LIGHT);
-        painter.circle_stroke(c, u * 2.6, Stroke::new(u * 0.6, ink::BRASS_EDGE));
-    } else {
-        painter.circle_stroke(
-            c,
-            u * 3.6,
-            Stroke::new(u * 0.8, ink::LINE.gamma_multiply(0.35)),
-        );
+        canvas
+    });
+    let min = rect.min - vec2(7.0 * u, 0.0);
+    painter.image(
+        picture.id(),
+        Rect::from_min_size(min, picture.size_vec2() * u),
+        Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+        Color32::WHITE,
+    );
+}
+
+/// A line of what a match earned, beside its keepsake.
+fn earned_line(ui: &mut egui::Ui, line: &str, u: f32) {
+    let (keepsake, words) = crate::rewards::keepsake_of(line);
+    let picture = kept_picture(ui.ctx(), &format!("keepsake-{keepsake:?}"), || {
+        crate::keepsake::icon(keepsake)
+    });
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = u * 3.0;
+        registry::place(ui, &picture, 1.0, u);
+        ui.add(egui::Label::new(RichText::new(words).size(12.5)).wrap());
+    });
+}
+
+/// A padlock on a place still to open, saying when pointed at what opens it.
+fn padlock(ui: &mut egui::Ui, why: &str, u: f32) {
+    let picture = kept_picture(ui.ctx(), "padlock", crate::keepsake::padlock);
+    registry::place(ui, &picture, 1.0, u).1.on_hover_text(why);
+}
+
+/// A painted picture kept in egui's memory under its key, painted the first time it is asked
+/// for: for the little pictures drawn by functions that keep nothing of their own.
+fn kept_picture(
+    ctx: &egui::Context,
+    key: &str,
+    paint: impl FnOnce() -> Canvas,
+) -> egui::TextureHandle {
+    let id = Id::new(("kept-picture", key));
+    if let Some(t) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(id)) {
+        return t;
     }
+    let t = texture(ctx, key, &paint());
+    ctx.data_mut(|d| d.insert_temp(id, t.clone()));
+    t
 }
 
 /// Composure as three pips: filled in the team's colour, empty as rings.

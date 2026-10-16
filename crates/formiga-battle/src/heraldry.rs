@@ -255,10 +255,15 @@ const CUP_RIBBONS: [usize; 4] = [0, 1, 2, 4];
 pub const ROSETTE_W: u32 = 15;
 pub const ROSETTE_H: u32 = 22;
 
+/// A cup's ribbon colour, by its place in `rewards::CUPS`.
+pub fn cup_ribbon(cup: usize) -> Ramp {
+    FIELDS[CUP_RIBBONS[cup % CUP_RIBBONS.len()]].2
+}
+
 pub fn rosette(cup: usize, won: bool) -> Canvas {
     let mut canvas = Canvas::new(ROSETTE_W, ROSETTE_H);
     let (cx, cy) = (7, 7);
-    let ramp = FIELDS[CUP_RIBBONS[cup % CUP_RIBBONS.len()]].2;
+    let ramp = cup_ribbon(cup);
     if !won {
         // Where it will go: a pencilled ring on the page, a little smudged, and an empty pin.
         let pencil = rgba(0x6e5a44, 120);
@@ -453,14 +458,19 @@ pub fn handler_card(width: i32, style: Style, t: f32, won: [bool; 4]) -> Canvas 
 
 /// A strip of ribbon of the notebook's green, with its ends folded back and notched and a stitch
 /// along each edge: what a trio's name or a match's opening is lettered on.
-pub fn ribbon(canvas: &mut Canvas, (x, y, w, h): Area) {
+pub fn ribbon(canvas: &mut Canvas, area: Area) {
+    ribbon_in(canvas, area, RIBBON);
+}
+
+/// The same ribbon in a cloth of another colour: a team's, for the Handler's own news.
+pub fn ribbon_in(canvas: &mut Canvas, (x, y, w, h): Area, cloth: Ramp) {
     for (tx, dir) in [(x - 7, 1), (x + w - 3, -1)] {
         for dy in 0..h {
             for dx in 0..10 {
                 let notch =
                     (dy - h / 2).abs() < h / 4 + 1 && ((dir > 0 && dx < 3) || (dir < 0 && dx > 6));
                 if !notch {
-                    canvas.set(tx + dx, y + 2 + dy, RIBBON.shadow);
+                    canvas.set(tx + dx, y + 2 + dy, cloth.shadow);
                 }
             }
         }
@@ -469,7 +479,7 @@ pub fn ribbon(canvas: &mut Canvas, (x, y, w, h): Area) {
     for py in y + 2..y + h - 2 {
         for px in x + 2..x + w - 2 {
             if (px + py) % 2 == 0 {
-                paint::put(canvas, px, py, paint::faded(RIBBON.light, 90));
+                paint::put(canvas, px, py, paint::faded(cloth.light, 90));
             }
         }
     }
