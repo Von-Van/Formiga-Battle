@@ -222,8 +222,8 @@ impl Garden {
         if matches!(dressing, Dressing::Woodland | Dressing::Cove) {
             woodland::fire_ring(&mut ground, view, arena.zone_centre());
         }
-        // Shadows, before anything that casts them.
-        for tile in arena.tiles() {
+        // Shadows, before anything that casts them. A tap casts its own as it is drawn.
+        for tile in arena.tiles().filter(|t| !arena.switches.contains(t)) {
             let height = match (dressing, arena.terrain(tile)) {
                 (Dressing::Millpond, _) => continue,
                 (Dressing::Garden, Terrain::Obstacle) => HEDGE_HEIGHT,
@@ -277,7 +277,7 @@ impl Garden {
 
         let mut pieces = HashMap::new();
         let mut gates = HashMap::new();
-        for tile in arena.tiles() {
+        for tile in arena.tiles().filter(|t| !arena.switches.contains(t)) {
             match (dressing, arena.terrain(tile)) {
                 (Dressing::Garden, Terrain::Obstacle) => {
                     let beside_gate = arena.gates.iter().any(|g| {
@@ -1874,8 +1874,11 @@ mod tests {
             let dressing = Dressing::of(&arena);
             for tile in arena.tiles() {
                 match arena.terrain(tile) {
-                    // By the pond, what stands in the way is water, drawn into the ground.
-                    Terrain::Obstacle if dressing != Dressing::Millpond => {
+                    // By the pond, what stands in the way is water, drawn into the ground; a tap
+                    // is drawn as it stands, ready or resting.
+                    Terrain::Obstacle
+                        if dressing != Dressing::Millpond && !arena.switches.contains(&tile) =>
+                    {
                         assert!(garden.pieces.contains_key(&tile), "{} {tile:?}", arena.id);
                     }
                     Terrain::Gate => {

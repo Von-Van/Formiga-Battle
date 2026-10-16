@@ -6,6 +6,7 @@ mod app;
 mod chrome;
 mod cli;
 mod feel;
+mod found;
 mod friend;
 mod garden;
 mod host;
