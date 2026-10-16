@@ -3826,6 +3826,19 @@ mod tests {
     }
 
     #[test]
+    fn a_name_typed_on_the_handlers_page_is_kept_before_the_field_is_left() {
+        let mut h = Headless::new();
+        h.frames(2);
+        h.app.open_journal(Outing::Home, Step::Handler);
+        h.frames(10);
+        h.click("The name your friends know you by", 0);
+        h.frame(vec![egui::Event::Text("Jo".to_owned())]);
+        h.frames(2);
+        let card = h.app.table.record.handler.as_ref();
+        assert_eq!(card.map(|c| c.name.as_str()), Some("Jo"));
+    }
+
+    #[test]
     fn back_to_the_station_after_a_match_goes_back_to_the_station() {
         let mut h = Headless::new();
         h.frames(2);

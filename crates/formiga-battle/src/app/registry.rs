@@ -165,7 +165,9 @@ impl BattleApp {
                             ink::LINE.gamma_multiply(0.5)
                         },
                     );
-                    changed |= field.lost_focus();
+                    // Kept as it is typed, so closing Battle with the field still in hand
+                    // loses nothing.
+                    changed |= field.changed();
                 }
             });
         });

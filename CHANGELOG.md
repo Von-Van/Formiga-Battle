@@ -9,6 +9,8 @@
 - A trio given a colour of its own flies the Handler's pennant as it is now in that colour, on the
   Handler's page and to a friend, rather than the pennant the Handler had when the colour was
   chosen.
+- The Handler's name and club are kept as they are typed, so closing Battle before leaving the
+  field no longer loses them.
 
 ## [0.67.10] - 2026-10-16
 
