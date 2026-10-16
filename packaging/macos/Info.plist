@@ -10,7 +10,7 @@
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundleName</key><string>Formiga Battle</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.67.12</string>
+    <key>CFBundleShortVersionString</key><string>0.67.13</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>FormigaBattleVersion</key><integer>2</integer>
     <key>LSMinimumSystemVersion</key><string>14.0</string>

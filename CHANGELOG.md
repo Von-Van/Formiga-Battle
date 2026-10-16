@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [0.67.13] - 2026-10-16
+
+A patch to 0.67.12, built on Formiga Desktop 0.67.11 as it was. Rules version 9, relay protocol 3
+and Battle contract version 4 are unchanged. A friend match needs both Handlers on Battle 0.67.13
+and Formiga Desktop 0.67.11.
 
 - The CLEAR and TURN buttons on the orders given work again: the card under them took their
   clicks. The words on each card now wrap short of its buttons instead of running under them.
