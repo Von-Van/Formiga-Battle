@@ -1,0 +1,12 @@
+// Woodland Glade: a clearing in the trees with no gate and no lever, only the old stumps and
+// boulders. The beacon stands in a ring of stones, a plus of five tiles, open on every side, and
+// the stumps cut the glade into lanes that meet at it.
+id: woodland
+name: Woodland Glade
+. . . # . # . . .
+1 . . . . . . . 2
+. # . . Z . . # .
+1 . . Z Z Z . . 2
+. # . . Z . . # .
+1 . . . . . . . 2
+. . . # . # . . .

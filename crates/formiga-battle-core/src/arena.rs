@@ -29,7 +29,11 @@ use crate::order::Side;
 
 /// The arenas that come with Battle, by id, Backyard first. A new arena is a file in `arenas/`
 /// and a line here.
-const BUILT_IN: &[(&str, &str)] = &[("backyard", include_str!("../../../arenas/backyard.arena"))];
+const BUILT_IN: &[(&str, &str)] = &[
+    ("backyard", include_str!("../../../arenas/backyard.arena")),
+    ("woodland", include_str!("../../../arenas/woodland.arena")),
+    ("millpond", include_str!("../../../arenas/millpond.arena")),
+];
 use serde::{Deserialize, Serialize};
 
 /// The largest board the rules accept on either side.

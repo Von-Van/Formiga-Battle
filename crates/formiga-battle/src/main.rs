@@ -2,8 +2,10 @@
 //! command it opens the window; the headless commands are in `cli`.
 
 mod app;
+mod chrome;
 mod cli;
 mod friend;
+mod garden;
 mod host;
 mod iso;
 mod look;
@@ -30,6 +32,8 @@ WINDOW:
     --snapshot <FILE>        A Battle roster snapshot
     --formiga-battle <DIR>   A session Desktop opened (how Desktop starts Battle)
     --seed <N>               The match seed (default: from the clock)
+    --arena <ID>             Which arena the visitors are played in: backyard (the default),
+                             woodland or millpond
     --visitors <N>           Which neighbouring colony visits, 0 to 255 (default 9)
     --snap <PNG>             Open, save a picture of the window after --at seconds (default 6)
                              and close
@@ -69,6 +73,7 @@ struct Parsed {
     at: f32,
     review: app::Review,
     render: Option<PathBuf>,
+    arena: Option<String>,
     turns: u32,
     into: Option<f32>,
     scale: u32,
@@ -83,6 +88,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
         at: 6.0,
         review: app::Review::Playing,
         render: None,
+        arena: None,
         turns: 0,
         into: None,
         scale: 3,
@@ -112,6 +118,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                 }
             }
             "--render-board" => parsed.render = Some(value()?.into()),
+            "--arena" => parsed.arena = Some(value()?),
             "--turns" => parsed.turns = value()?.parse().context("--turns takes a number")?,
             "--into" => parsed.into = Some(value()?.parse().context("--into takes seconds")?),
             "--scale" => parsed.scale = value()?.parse().context("--scale takes a number")?,
@@ -130,6 +137,18 @@ fn window(args: Vec<String>) -> Result<()> {
     });
     let (host, roster) = host::open(args.source)?;
     let mut table = table::Table::new(roster, sample::visitors(args.visitors), seed);
+    if let Some(id) = &args.arena {
+        table.arena = formiga_battle_core::Arena::by_id(id)
+            .with_context(|| format!("there is no arena called {id:?}"))?;
+        // A picture of an arena shows that arena, whichever cups the colony has won so far.
+        if args.render.is_some() || args.snap.is_some() {
+            for cup in &rewards::CUPS {
+                if !table.record.unlocked.iter().any(|u| u == cup.id) {
+                    table.record.unlocked.push(cup.id.to_owned());
+                }
+            }
+        }
+    }
     if let Some(path) = args.render {
         return render_board(&path, &mut table, args.turns, args.into, args.scale);
     }
@@ -217,13 +236,16 @@ fn render_board(
     let marks = table.marks(None, now);
     let m = table.m.as_ref().context("a match is on")?;
     let view = iso::View::new(m.arena.width, m.arena.height);
+    let garden = garden::Garden::new(&m.arena, &view);
     let canvas = scene::paint(
         &m.arena,
+        &garden,
         &frame,
         &mut table.looks,
         &marks,
         m.ruleset.capture_ticks,
         now,
+        table.reduce_motion,
         &view,
     );
     write_png(path, &canvas, scale)

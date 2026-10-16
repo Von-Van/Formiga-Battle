@@ -5,6 +5,10 @@
 //! rows (`y`) down to the left, so the left team starts along the upper-left edge and the right
 //! team along the lower-right one. Creatures are drawn upright over the grid, anchored by their
 //! feet at the middle of their tile.
+//!
+//! The board sits in a garden: a strip of it round every edge, deeper along the two far edges for
+//! the hedgerow and the tree, shallower along the two near ones so nothing tall stands in front of
+//! the play. The strip is scenery only; `tile_at` answers for the board alone.
 
 use formiga_battle_core::Tile;
 
@@ -14,9 +18,13 @@ const HALF_W: f32 = (TILE_W / 2) as f32;
 const HALF_H: f32 = (TILE_H / 2) as f32;
 /// How deep the ground is drawn at the board's near edges.
 pub const SLAB: i32 = 8;
-/// Room above the far tiles for a creature standing on them, and its pips.
-const HEADROOM: f32 = 50.0;
-const MARGIN: f32 = 14.0;
+/// Room above the garden's far corner for the tree's crown.
+const HEADROOM: f32 = 54.0;
+const MARGIN: f32 = 3.0;
+/// How far the garden runs past the board's two far edges, in tiles.
+pub const FAR_BORDER: f32 = 0.8;
+/// How far the garden runs past the board's two near edges, in tiles.
+pub const NEAR_BORDER: f32 = 0.4;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct View {
@@ -29,13 +37,18 @@ pub struct View {
 }
 
 impl View {
-    /// A board centred in a picture just big enough for it, every creature's head inside.
+    /// A board and its garden centred in a picture just big enough for them, every creature's
+    /// head and the tree's crown inside.
     pub fn new(width: u8, depth: u8) -> Self {
         let (w, d) = (f32::from(width), f32::from(depth));
-        let across = (w + d) * HALF_W + 2.0 * MARGIN;
-        let down = HEADROOM + (w + d) * HALF_H + SLAB as f32 + 2.0 * MARGIN;
+        let ring = 2.0 * (FAR_BORDER + NEAR_BORDER);
+        let across = (w + d + ring) * HALF_W + 2.0 * MARGIN;
+        let down = HEADROOM + (w + d + ring) * HALF_H + SLAB as f32 + 2.0 * MARGIN;
         let size = (across.ceil() as u32, down.ceil() as u32);
-        let origin = ((MARGIN + d * HALF_W).floor(), (MARGIN + HEADROOM).floor());
+        let origin = (
+            (MARGIN + (d + FAR_BORDER + NEAR_BORDER) * HALF_W).floor(),
+            (MARGIN + HEADROOM + 2.0 * FAR_BORDER * HALF_H).floor(),
+        );
         Self {
             width,
             depth,
@@ -106,7 +119,13 @@ mod tests {
     #[test]
     fn the_whole_board_fits_its_picture() {
         let view = View::new(9, 7);
-        for (x, y) in [(0.0, 0.0), (9.0, 0.0), (9.0, 7.0), (0.0, 7.0)] {
+        let (far, near) = (-FAR_BORDER, NEAR_BORDER);
+        for (x, y) in [
+            (far, far),
+            (9.0 + near, far),
+            (9.0 + near, 7.0 + near),
+            (far, 7.0 + near),
+        ] {
             let (sx, sy) = view.screen(x, y);
             assert!(sx >= 0.0 && sx <= view.size.0 as f32, "{sx}");
             assert!(sy >= 0.0 && sy + SLAB as f32 <= view.size.1 as f32, "{sy}");

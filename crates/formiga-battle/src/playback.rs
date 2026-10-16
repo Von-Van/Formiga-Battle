@@ -35,6 +35,9 @@ pub struct Figure {
     /// How much of it shows, from 0 to 1: a knocked-out creature fades as it flops.
     pub opacity: f32,
     pub holding: bool,
+    /// Knocked off balance this turn: it holds nothing and counts for nothing in the yard until
+    /// the turn is over.
+    pub off_balance: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +54,12 @@ pub enum Burst {
     Stars,
     /// The lever pulled.
     Spark,
+    /// Holders shoulder to shoulder turning a flank away together, drawn from one to the other.
+    Braced { partner: Tile },
+    /// A hold broken from two sides at once.
+    Broken,
+    /// A wary creature waiting a tick rather than walk in among the other team.
+    Hesitate,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -72,6 +81,8 @@ pub struct Frame {
     pub effects: Vec<Effect>,
     /// The tick being shown, 0 before the first.
     pub tick: u8,
+    /// Both teams have someone steady in the yard, so neither gains on the beacon.
+    pub paused: bool,
 }
 
 /// How long effects stay on the board.
@@ -93,6 +104,7 @@ impl Frame {
                     out: f.out,
                     opacity: if f.out { 0.0 } else { 1.0 },
                     holding: f.holding,
+                    off_balance: false,
                 }
             })
         });
@@ -103,6 +115,7 @@ impl Frame {
             swing_pending: board.swing_at.is_some(),
             effects: Vec::new(),
             tick: 0,
+            paused: false,
         }
     }
 
@@ -249,7 +262,8 @@ impl Playback {
                         set_pose(&mut frame, &mut since, *slot, Pose::Worry, *when);
                     }
                 }
-                EventKind::HungBack { slot, .. } => {
+                EventKind::HungBack { slot, at } => {
+                    effect(&mut frame, Burst::Hesitate, *at);
                     if age < 0.6 {
                         set_pose(&mut frame, &mut since, *slot, Pose::Worry, *when);
                     }
@@ -261,6 +275,7 @@ impl Playback {
                 EventKind::Interrupted { target, by } => {
                     let tile = frame.figure(*target).tile;
                     effect(&mut frame, Burst::Hit, tile);
+                    frame.figure_mut(*target).off_balance = true;
                     let short = age < 0.6;
                     set_pose(
                         &mut frame,
@@ -285,10 +300,18 @@ impl Playback {
                     }
                 }
                 EventKind::Countered {
-                    target, contesters, ..
+                    target,
+                    holders,
+                    contesters,
+                    ..
                 } => {
                     let tile = frame.figure(*target).tile;
                     effect(&mut frame, Burst::Shield, tile);
+                    // Shoulder to shoulder: neighbouring holders turned it away together.
+                    if let [first, second, ..] = holders[..] {
+                        let (from, partner) = (frame.figure(first).tile, frame.figure(second).tile);
+                        effect(&mut frame, Burst::Braced { partner }, from);
+                    }
                     let short = age < 0.6;
                     set_pose(&mut frame, &mut since, *target, Pose::Hold, *when);
                     for c in contesters {
@@ -308,9 +331,12 @@ impl Playback {
                     pushed_to,
                 } => {
                     let short = age < 0.6;
-                    effect(&mut frame, Burst::Hit, *from);
+                    // Its hold breaks: the shield flies apart where it stood, and it is off
+                    // balance for the rest of the turn.
+                    effect(&mut frame, Burst::Broken, *from);
                     let f = frame.figure_mut(*target);
                     f.holding = false;
+                    f.off_balance = true;
                     if let Some(to) = pushed_to {
                         // Shoved one tile, quickly.
                         let share = (age / 0.35).clamp(0.0, 1.0);
@@ -383,7 +409,9 @@ impl Playback {
                 }
                 EventKind::CaptureProgress { side, progress } => {
                     frame.capture[side.index()] = *progress;
+                    frame.paused = false;
                 }
+                EventKind::CaptureContested => frame.paused = true,
                 EventKind::Finished { .. } => {
                     if let Some(side) = self.winners {
                         for i in 0..TEAM_SIZE as u8 {
@@ -396,8 +424,7 @@ impl Playback {
                 }
                 EventKind::OrderFilled { .. }
                 | EventKind::TookOpportunity { .. }
-                | EventKind::LeverResting { .. }
-                | EventKind::CaptureContested => {}
+                | EventKind::LeverResting { .. } => {}
             }
         }
         for (figures, began) in frame.figures.iter_mut().zip(since) {
@@ -414,7 +441,7 @@ mod tests {
     use super::*;
     use formiga_battle_core::ai::Coach;
     use formiga_battle_core::tournament::drawn_creature;
-    use formiga_battle_core::{Arena, Match, Ruleset};
+    use formiga_battle_core::{Arena, Event, Match, Ruleset};
 
     fn turn() -> (Board, formiga_battle_core::TurnReport, Match) {
         let rosters = [
@@ -475,6 +502,66 @@ mod tests {
                 before.fighters[slot.side.index()][slot.index as usize].at
             );
         }
+    }
+
+    fn at(tick: u8, kind: EventKind) -> Event {
+        Event {
+            turn: 1,
+            tick,
+            kind,
+        }
+    }
+
+    #[test]
+    fn a_flanked_holder_stays_off_balance_until_the_turn_is_over() {
+        let (before, _, m) = turn();
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let target = Slot::new(Side::Left, 0);
+        let from = before.fighters[0][0].at;
+        let events = vec![
+            at(
+                0,
+                EventKind::Holding {
+                    slot: target,
+                    at: from,
+                },
+            ),
+            at(
+                1,
+                EventKind::Flanked {
+                    target,
+                    by: vec![Slot::new(Side::Right, 0), Slot::new(Side::Right, 1)],
+                    from,
+                    pushed_to: None,
+                },
+            ),
+        ];
+        let playback = Playback::new(&before, &m.arena.gates, &facing, &events, 3);
+        assert!(playback.at(0.1).figure(target).holding);
+        let end = playback.at(playback.duration());
+        assert!(end.figure(target).off_balance);
+        assert!(!end.figure(target).holding);
+    }
+
+    #[test]
+    fn the_beacon_pauses_while_both_hold_the_yard_and_resumes_when_someone_gains() {
+        let (before, _, m) = turn();
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let events = vec![
+            at(1, EventKind::CaptureContested),
+            at(
+                2,
+                EventKind::CaptureProgress {
+                    side: Side::Left,
+                    progress: 1,
+                },
+            ),
+        ];
+        let playback = Playback::new(&before, &m.arena.gates, &facing, &events, 3);
+        let tick = |n: f32| REVEAL_SECS + (n - 0.2) * TICK_SECS;
+        assert!(!playback.at(0.0).paused);
+        assert!(playback.at(tick(1.0)).paused);
+        assert!(!playback.at(tick(2.0)).paused);
     }
 
     #[test]

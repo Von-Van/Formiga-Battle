@@ -7,9 +7,12 @@ and the turn plays out at once. How each creature carries out its order comes fr
 Desktop, never from stats, so knowing your Formigas is the skill and rerolling them for a better
 trio is not.
 
-Battle opens on a window where you choose three of your companions and play the visitors, three
-companions from a neighbouring colony, in the Backyard: an isometric board in Formiga Home's
-style, the creatures drawn exactly as Desktop draws them. Each turn you give your orders on their
+Battle opens as the Handler's notebook, in the leather, paper and stitching of Formiga Home's,
+where you choose three of your companions and play the visitors, three companions from a
+neighbouring colony, in one of three arenas, each a little isometric place of its own: the
+Backyard (a garden of hedges, a brick wall and a potting shed), Woodland Glade (stumps, boulders
+and pines) and Millpond (a meadow with a footbridge, a jetty and a watermill). The creatures are
+drawn exactly as Desktop draws them. Each turn you give your orders on their
 cards and the board (or let the timer run out and they choose for themselves), lock in, and watch
 the turn play out tick by tick with a recap that says why each of them did what it did. The
 Handler's Notebook beside the board keeps what each of your companions has been seen to do, match
@@ -52,7 +55,8 @@ or a creature on the board; Enter locks in, right-click or Escape cancels.
 
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
 window (`--turns`, `--into`, `--scale`); `--snap <png> --review picking|orders|playing --at <s>`
-opens the window behind everything, pictures it and closes. Look at them after changing anything
+opens the window behind everything, pictures it and closes. Either takes `--arena
+backyard|woodland|millpond`. Look at them after changing anything
 visual.
 
 The gate, run locally (the repository is private, so nothing runs on GitHub):
@@ -87,7 +91,9 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
   contender read as a match profile), `table` (one sitting
   at the board without the window: picking, orders, locking, the turn being shown), `playback`
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
-  `formiga-art`'s tools at pixel scale), `look` (each creature's own frames), `app` (the egui
+  `formiga-art`'s tools at pixel scale, and the marks laid over it), `garden` (each arena as a
+  place: its ground, what stands on it and round it, and what moves there, dressed by the
+  arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `app` (the egui
   window), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop

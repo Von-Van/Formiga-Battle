@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Battle looks like Formiga's own: the window is the Handler's notebook in Home's leather,
+  paper and stitching, with Battle's name on a cloth patch, the board on the left page, the
+  orders and the notebook as tabs on the cover, and cards, buttons, a brass watch for the timer
+  and a row of lamps for each team's beacon in Home's and Hill's colours and stepped edges. The
+  Backyard is a garden: mown lawn, a paved yard round a brass beacon, hedges, a brick wall with
+  a picket gate, a hedgerow, a tree, a potting shed and bunting, with a robin, butterflies and
+  light in the leaves. Two new arenas, Woodland Glade and Millpond, are dressed as places of
+  their own. Marks on the board are corner brackets, footprints and pennants rather than filled
+  tiles, with a key beside the board; a hedge someone stands behind is seen through. The board
+  shows a hold broken by flanking, a creature off balance for the rest of the turn, holders
+  bracing together, a wary one hanging back, and the beacon paused while both teams hold the
+  yard. A slip names each turn as it plays out, a stamp comes down when the match ends, and
+  pages settle in as they change. Reduced motion holds everything still.
 - A cup for each arena: the Backyard Cup opens the Woodland Cup on Woodland Glade, and that opens
   the Millpond Cup on Millpond, each won by three wins there with its own trophy and medal. A
   friend match is played on the arena the Handler who opened the room picked.
