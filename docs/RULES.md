@@ -293,6 +293,20 @@ With both teams coached by `familiar` (`--coach familiar,familiar --pairings 150
 kinds score within 0.078 of each other, Wallflowers lowest; 52% of those matches are won by
 capture and 1% by knockout, in about 9.5 turns.
 
+On every arena, over 4,000 Exhibition-coached matches each (`--pairings 2000 --seed 7 --file
+arenas/<arena>.arena`), against the same arena with its event, switches and item spots taken out:
+
+| Arena | Left side | Spread between kinds | Won by capture | Without event and items: spread, capture |
+|---|---|---|---|---|
+| Backyard | 0.502 | 0.108 | 25% | 0.107, 14% |
+| Sandy Cove | 0.495 | 0.107 | 67% | 0.107, 57% |
+| Millpond | 0.497 | 0.142 | 60% | 0.147, 34% |
+| Woodland Glade | 0.507 | 0.152 (0.123 with seed 8) | 29% | 0.130 (0.114), 23% |
+
+Each event decides more matches at the beacon without moving the kinds apart, except in the
+glade, where found things leave Wallflowers about 0.02 lower than without them, close to what
+chance alone moves between seeds.
+
 Rules version 6 added Backyard's sprinkler and found things. Before it, under version 5, 13% of
 Exhibition matches were won at the beacon and the kinds were 0.098 apart; with familiar coaching,
 24% were won at the beacon. Most of the change is the sprinkler: with found things alone, 21% of
