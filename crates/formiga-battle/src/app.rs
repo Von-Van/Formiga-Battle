@@ -4384,7 +4384,7 @@ mod tests {
                 .is_some_and(|r| r.given.is_empty())
         );
         play_lesson(&mut h, |m| {
-            vec![formiga_battle_core::Directive::Take {
+            vec![formiga_battle_core::Directive::Press {
                 squares: vec![m.arena.zone_centre()],
             }]
         });
@@ -4397,12 +4397,12 @@ mod tests {
         assert!(h.app.table.earned.is_empty());
         assert_eq!(h.app.table.record, record);
         assert!(h.app.learned.contains(&Lesson::Beacon));
-        until(&mut h, "Next: Hold and contest");
-        h.click("Next: Hold and contest", 0);
+        until(&mut h, "Next: Hold, and face them");
+        h.click("Next: Hold, and face them", 0);
         h.frames(2);
         assert_eq!(
             h.app.table.lesson.as_ref().map(|r| r.lesson),
-            Some(Lesson::Composure)
+            Some(Lesson::Facing)
         );
     }
 

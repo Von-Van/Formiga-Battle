@@ -1,5 +1,5 @@
 //! Field Lessons: each lesson's intended plan does what it asks, on any seed, and giving no orders
-//! (or only half of what it asks) does not.
+//! (or only part of what it asks, or the wrong thing) does not.
 
 mod common;
 use common::*;
@@ -8,21 +8,26 @@ use formiga_battle_core::*;
 
 const SEEDS: std::ops::Range<u64> = 1..41;
 
-fn take(squares: &[(i8, i8)]) -> Directive {
-    Directive::Take {
-        squares: squares.iter().map(|(x, y)| Tile::new(*x, *y)).collect(),
+fn tiles(squares: &[(i8, i8)]) -> Vec<Tile> {
+    squares.iter().map(|(x, y)| Tile::new(*x, *y)).collect()
+}
+
+fn press(squares: &[(i8, i8)]) -> Directive {
+    Directive::Press {
+        squares: tiles(squares),
     }
 }
 
-fn defend(squares: &[(i8, i8)]) -> Directive {
-    Directive::Defend {
-        squares: squares.iter().map(|(x, y)| Tile::new(*x, *y)).collect(),
+fn hold(squares: &[(i8, i8)], facing: Facing) -> Directive {
+    Directive::Hold {
+        squares: tiles(squares),
+        facing,
     }
 }
 
-fn interact(x: i8, y: i8) -> Directive {
-    Directive::Interact {
-        at: Tile::new(x, y),
+fn trick(squares: &[(i8, i8)]) -> Directive {
+    Directive::Trick {
+        squares: tiles(squares),
     }
 }
 
@@ -56,19 +61,20 @@ fn learned(v: &Verdict) -> bool {
 
 /// The plan each lesson teaches.
 fn intended(lesson: Lesson) -> impl Fn(&Match) -> TeamPlan {
-    move |m: &Match| match lesson {
-        Lesson::Beacon => vec![take(&[(4, 3)])],
-        Lesson::Composure => vec![defend(&[(2, 3), (2, 5)])],
-        Lesson::Flank => vec![take(&[(4, 2)])],
-        Lesson::Orders => vec![take(&[(4, 4)]), defend(&[(7, 6)])],
-        Lesson::Weather => {
-            if m.fighter(Slot::new(YOU, 0)).carrying.is_some() {
-                vec![interact(4, 3)]
-            } else {
-                vec![defend(&[(4, 3)])]
-            }
-        }
-        Lesson::Personality => vec![take(&[(4, 3)]), take(&[(3, 3), (4, 2), (4, 4)])],
+    move |_: &Match| match lesson {
+        Lesson::Beacon => vec![press(&[(4, 3)])],
+        Lesson::Facing => vec![hold(&[(2, 3), (2, 5)], Facing::East)],
+        Lesson::Flank => vec![press(&[(4, 2)])],
+        Lesson::Trick => vec![trick(&[(4, 2)])],
+        Lesson::Orders => vec![press(&[(4, 4)]), hold(&[(7, 5)], Facing::North)],
+        Lesson::Weather => vec![
+            hold(&[(4, 3)], Facing::North),
+            Directive::UseItem {
+                by: 0,
+                at: Tile::new(4, 3),
+            },
+        ],
+        Lesson::Personality => vec![press(&[(4, 3)]), press(&[(3, 3), (4, 2), (4, 4)])],
     }
 }
 
@@ -103,18 +109,34 @@ fn no_lesson_is_learned_by_giving_no_orders() {
 }
 
 #[test]
-fn half_a_plan_is_not_enough_where_a_lesson_asks_for_two_things() {
-    for seed in SEEDS {
-        let (verdict, _) = play(Lesson::Orders, seed, rosters(), |_| vec![take(&[(4, 4)])]);
-        assert!(!learned(&verdict), "flank alone, seed {seed}: {verdict:?}");
-        let (verdict, _) = play(Lesson::Composure, seed, rosters(), |_| {
-            vec![defend(&[(2, 3)])]
-        });
-        assert!(!learned(&verdict), "one square, seed {seed}: {verdict:?}");
-        let (verdict, _) = play(Lesson::Weather, seed, rosters(), |_| {
-            vec![defend(&[(4, 3)])]
-        });
-        assert!(!learned(&verdict), "no umbrella, seed {seed}: {verdict:?}");
+fn half_a_plan_is_not_enough_where_a_lesson_asks_for_more() {
+    let wrong: [(Lesson, TeamPlan, &str); 5] = [
+        (Lesson::Orders, vec![press(&[(4, 4)])], "flank alone"),
+        (
+            Lesson::Facing,
+            vec![hold(&[(2, 3), (2, 5)], Facing::North)],
+            "facing away",
+        ),
+        (
+            Lesson::Facing,
+            vec![hold(&[(2, 3)], Facing::East)],
+            "one square",
+        ),
+        (Lesson::Trick, vec![press(&[(4, 2)])], "a press instead"),
+        (
+            Lesson::Weather,
+            vec![hold(&[(4, 3)], Facing::North)],
+            "no umbrella",
+        ),
+    ];
+    for (lesson, plan, what) in wrong {
+        for seed in SEEDS {
+            let (verdict, _) = play(lesson, seed, rosters(), |_| plan.clone());
+            assert!(
+                !learned(&verdict),
+                "{lesson:?}, {what}, seed {seed}: {verdict:?}"
+            );
+        }
     }
 }
 
@@ -143,7 +165,8 @@ fn a_lesson_begins_where_it_says() {
     let m = Lesson::Weather
         .stage(Ruleset::default(), 1, rosters())
         .unwrap();
-    assert_eq!(m.board.turn, 2);
+    assert_eq!(m.board.turn, 3);
+    assert!(m.board.event_at.is_some());
     assert_eq!(m.fighter(Slot::new(YOU, 0)).carrying, Some(Item::Leaf));
     for lesson in Lesson::ALL {
         let m = lesson.stage(Ruleset::default(), 1, rosters()).unwrap();

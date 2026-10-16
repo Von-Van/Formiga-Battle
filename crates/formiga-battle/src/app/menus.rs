@@ -564,7 +564,7 @@ impl BattleApp {
                     u,
                 )
                 .on_hover_text(
-                    "Short lessons on the Backyard: the beacon, holding and contesting, flanks, team orders, the sprinkler, and who your companions are. Nothing is kept.",
+                    "Short lessons on the Backyard: the beacon, holding and facing, flanks, tricks, team orders, the sprinkler and found things, and who your companions are. Nothing is kept.",
                 )
                 .clicked();
                 ui.add_space(u * 3.0);
