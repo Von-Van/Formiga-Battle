@@ -172,3 +172,151 @@ fn a_team_that_only_ever_holds_the_beacon_loses_to_one_that_walks_round_it() {
         s.left.score()
     );
 }
+
+#[test]
+fn a_tournament_says_how_its_matches_ended() {
+    let s = run(
+        &Arena::backyard(),
+        Ruleset::default(),
+        5,
+        60,
+        [Coach::Exhibition, Coach::Exhibition],
+    );
+    assert!(s.flanks > 0, "no flanks in {} matches", s.matches);
+    assert!(s.flanks_that_paid <= s.flanks);
+    // A match won at the beacon lit it; one never lit was decided some other way.
+    assert!(s.beacon_scoreless <= s.matches - s.by_capture);
+    // A comeback is a match someone won.
+    assert!(s.comebacks <= s.matches - s.draws);
+}
+
+#[test]
+fn a_match_won_at_the_cap_says_which_count_decided_it() {
+    use formiga_battle_core::recap::recap;
+    use formiga_battle_core::tournament::{drawn_creature, play};
+    let (mut by_beacon, mut by_composure) = (false, false);
+    for seed in 0..60 {
+        let rosters = [0, 3].map(|n| (n..n + 3).map(|i| drawn_creature(seed, i)).collect());
+        let (m, reports) = play(
+            &Arena::backyard(),
+            Ruleset::default(),
+            seed,
+            rosters,
+            [Coach::Exhibition, Coach::Exhibition],
+        );
+        let outcome = m.outcome().expect("played to the end");
+        if outcome.victory != Some(Victory::TurnCap) {
+            continue;
+        }
+        let last = recap(&m, &reports.last().expect("a turn").events);
+        let said = last.last().expect("the result is told");
+        let winner = outcome.winner.expect("a winner");
+        let (won, lost) = (m.cap_tally(winner), m.cap_tally(winner.other()));
+        if won.0 != lost.0 {
+            by_beacon = true;
+            assert!(
+                said.contains(&format!("beacon {} to {}", won.0, lost.0)),
+                "{said}"
+            );
+        } else {
+            by_composure |= won.1 != lost.1;
+            assert!(said.contains("level on the beacon"), "{said}");
+        }
+    }
+    assert!(by_beacon && by_composure, "both kinds of cap win came up");
+}
+
+#[test]
+fn each_order_is_told_once_with_what_came_of_it() {
+    use formiga_battle_core::recap::orders_told;
+    let mut m = Match::new(
+        Arena::backyard(),
+        Ruleset::default(),
+        4,
+        [0, 3].map(|n| {
+            (n..n + 3)
+                .map(|i| formiga_battle_core::tournament::drawn_creature(4, i))
+                .collect()
+        }),
+    )
+    .expect("a match");
+    let centre = m.arena.zone_centre();
+    let plan = vec![
+        Directive::Take {
+            squares: vec![centre],
+        },
+        Directive::Defend {
+            squares: vec![centre],
+        },
+    ];
+    let report = m.resolve_turn([plan, Vec::new()]);
+    let told = orders_told(&m, Side::Left, &report.events);
+    assert_eq!(
+        told.len(),
+        1,
+        "one square named twice is one line: {told:?}"
+    );
+    assert!(
+        told[0].starts_with("1 and 2. TAKE the middle of the yard"),
+        "{told:?}"
+    );
+    assert!(!told[0].contains('('), "no coordinates: {told:?}");
+}
+
+#[test]
+fn a_flank_in_the_zone_takes_the_ground_and_breaks_through() {
+    // As above: R0 holds the top arm, L0 comes at it from the middle of the cross, L1 from
+    // outside the yard on its left.
+    let mut m = board_on(
+        Arena::backyard(),
+        &[(L0, (4, 3)), (L1, (3, 2)), (R0, (4, 2))],
+    );
+    let report = m.resolve_orders(orders(&[
+        (L0, contest(R0)),
+        (L1, contest(R0)),
+        (R0, hold(4, 2)),
+    ]));
+    // L0, standing in the yard, holds where it stands; L1, outside it, does not.
+    assert!(m.fighter(L0).holding);
+    assert!(!m.fighter(L1).holding);
+    assert!(kinds(&report).contains(&&EventKind::BrokeThrough {
+        side: Side::Left,
+        target: R0,
+    }));
+    let first = report
+        .events
+        .iter()
+        .find_map(|e| match e.kind {
+            EventKind::CaptureProgress {
+                side: Side::Left,
+                progress,
+            } => Some(progress),
+            _ => None,
+        })
+        .expect("the beacon went up");
+    assert_eq!(
+        first, 2,
+        "a tick for the breakthrough and one for holding the yard alone"
+    );
+}
+
+#[test]
+fn a_flank_outside_the_zone_is_no_breakthrough() {
+    let mut m = board(&[(L0, (0, 2)), (L1, (2, 2)), (R0, (1, 2))]);
+    let report = m.resolve_orders(orders(&[
+        (L0, contest(R0)),
+        (L1, contest(R0)),
+        (R0, hold(1, 2)),
+    ]));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::Flanked { .. }))
+    );
+    assert!(
+        !kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::BrokeThrough { .. }))
+    );
+    assert!(!m.fighter(L0).holding && !m.fighter(L1).holding);
+}

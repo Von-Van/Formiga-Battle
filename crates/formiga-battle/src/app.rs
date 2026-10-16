@@ -384,6 +384,8 @@ impl BattleApp {
             }
             Some(Review::Orders) => {
                 app.begin();
+                // A few turns in, so the card says what came of last turn's orders.
+                app.table.play_ahead(3);
                 // One order as the coach would give it, a DEFEND of two of the yard's squares
                 // (one named twice), and TAKE in hand for the third.
                 app.table.coach_orders();
@@ -1053,10 +1055,16 @@ impl BattleApp {
                 ui.add_space(u * 4.0);
                 let turn =
                     m.board.turn + u8::from(self.table.shown.is_none() && m.outcome().is_none());
+                // The last turn says so, in brass: whatever the tally says after it decides.
+                let last = turn >= m.ruleset.turn_cap;
                 ui.label(label_job(
-                    &format!("Turn {} of {}", turn.max(1), m.ruleset.turn_cap),
+                    &if last {
+                        format!("Last turn, {} of {}", turn, m.ruleset.turn_cap)
+                    } else {
+                        format!("Turn {} of {}", turn.max(1), m.ruleset.turn_cap)
+                    },
                     chrome::LABEL,
-                    ink::COVER,
+                    if last { ink::BRASS_LIGHT } else { ink::COVER },
                 ));
                 ui.add_space(u * 4.0);
                 let shown = self.table.frame_capture(now);
@@ -1082,6 +1090,9 @@ impl BattleApp {
                         u,
                         now,
                     );
+                    if shown[side.index()] + 1 == m.ruleset.capture_ticks && m.outcome().is_none() {
+                        ui.label(label_job("One tick to go", chrome::LABEL, ink::BRASS_LIGHT));
+                    }
                     ui.add_space(u * 2.0);
                 }
                 if paused && (self.table.reduce_motion || (now * 2.0).sin() > -0.4) {
@@ -1333,7 +1344,21 @@ impl BattleApp {
         };
         let (lettering, caption) = self.overlays(&frame, ctx, scale, u, now);
         marks.lettering = lettering;
-        marks.trails = self.trails(now);
+        // While orders are given, who will probably go where: faint footprints and a word on
+        // the name tag. Played out, the turn's own.
+        let likely = self.table.likely();
+        if likely.is_empty() {
+            marks.trails = self.trails(now);
+        } else {
+            marks.trails_likely = true;
+            marks.trails = likely
+                .iter()
+                .map(|(slot, task, _)| {
+                    let to = (f32::from(task.at.x) + 0.5, f32::from(task.at.y) + 0.5);
+                    (frame.figure(*slot).at, to, task.directive)
+                })
+                .collect();
+        }
         marks.pokes = self.pokes.iter().map(|(t, at)| (*t, now - at)).collect();
         let m = self.table.m.as_ref().expect("a match is on");
         let garden = self
@@ -1444,14 +1469,41 @@ impl BattleApp {
             let look = &self.table.looks[slot.side.index()][slot.index as usize];
             let (hx, hy) = scene::head(&self.view, f, look);
             let at = rect.min + vec2(hx as f32, hy as f32 - 7.0) * scale;
+            let threatened = self.table.m.as_ref().is_some_and(|m| {
+                self.table.shown.is_none() && formiga_battle_core::ai::flank_threatened(m, slot)
+            });
             let state = if f.off_balance {
-                Some("off balance")
+                Some("off balance".to_owned())
+            } else if let Some((_, task, why)) = likely.iter().find(|(s, _, _)| *s == slot) {
+                Some(likely_words(&self.table, task, why))
+            } else if threatened {
+                Some("holding, could be flanked".to_owned())
             } else if f.holding {
-                Some("holding")
+                Some("holding".to_owned())
             } else {
                 None
             };
-            name_tag(&painter, at, &look.name, state, TEAM[slot.side.index()], u);
+            // While orders are given, the first thing the notebook has noted of one of the
+            // Handler's own, to plan round.
+            let note = (slot.side == self.table.you && !likely.is_empty())
+                .then(|| {
+                    let id = self.table.board_teams[slot.side.index()]
+                        .get(slot.index as usize)?
+                        .traveler
+                        .id
+                        .0;
+                    self.table.page(id)?.notes().into_iter().next()
+                })
+                .flatten();
+            name_tag(
+                &painter,
+                at,
+                &look.name,
+                state.as_deref(),
+                note.as_deref(),
+                TEAM[slot.side.index()],
+                u,
+            );
         }
         self.board_scale = scale;
         if self.table.shown.is_none()
@@ -1528,22 +1580,31 @@ impl BattleApp {
                 && !taken.iter().any(|t| t.intersects(r))
         };
 
-        // The line: one at a time, each given a moment of its own before the next.
+        // The line: one at a time, each given a moment of its own before the next. The lines
+        // that matter most are placed first; a lesser one takes whatever room is left near its
+        // moment. A line that would come too long after its moment is left to the card of the
+        // last two, so the board never falls behind the turn.
         let mut told: Vec<(&Callout, f32)> = Vec::new();
-        for (c, born) in &self.live {
-            if c.headline.is_none() || anchor(c).is_none() {
-                continue;
+        for rank in (1..=3).rev() {
+            for (c, born) in &self.live {
+                if c.rank != rank || c.headline.is_none() || anchor(c).is_none() {
+                    continue;
+                }
+                // The first moment from its own on that keeps clear of every line already
+                // placed.
+                let mut shown = *born;
+                while let Some((_, other)) = told
+                    .iter()
+                    .find(|(_, other)| (shown - other).abs() < HEADLINE_SECS)
+                {
+                    shown = other + HEADLINE_SECS;
+                }
+                if shown - born <= 1.0 {
+                    told.push((c, shown));
+                }
             }
-            let shown = told
-                .last()
-                .map_or(*born, |(_, last)| born.max(last + HEADLINE_SECS));
-            // A line that would come too long after its moment is left to the card of the last
-            // two, so the board never falls behind the turn.
-            if shown - born > 1.0 {
-                continue;
-            }
-            told.push((c, shown));
         }
+        told.sort_by(|a, b| a.1.total_cmp(&b.1));
         let mut caption = None;
         // Once the match is over, its stamp says so; no line over it.
         if self.finished_at.is_some() {
@@ -1934,31 +1995,53 @@ impl BattleApp {
         let painter = ui.painter().clone();
         let width = (page.width() * 0.3).clamp(220.0, 300.0);
         let inner = width - u * 14.0;
-        let lines: Vec<(std::sync::Arc<egui::Galley>, Option<Side>)> = if self.recent.is_empty() {
-            vec![(
-                painter.layout(
-                    "Nothing yet: the first turn is yours.".to_owned(),
-                    FontId::proportional(12.5),
-                    ink::MUTED,
-                    inner,
-                ),
-                None,
-            )]
-        } else {
-            self.recent
+        let lines: Vec<(std::sync::Arc<egui::Galley>, Option<Side>)> =
+            if self.recent.is_empty() && !self.table.told.is_empty() {
+                Vec::new()
+            } else if self.recent.is_empty() {
+                vec![(
+                    painter.layout(
+                        "Nothing yet: the first turn is yours.".to_owned(),
+                        FontId::proportional(12.5),
+                        ink::MUTED,
+                        inner,
+                    ),
+                    None,
+                )]
+            } else {
+                self.recent
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .map(|(k, (text, side))| {
+                        let colour = if k == 0 { ink::PAGE } else { ink::MUTED };
+                        (
+                            painter.layout(text.clone(), FontId::proportional(12.5), colour, inner),
+                            *side,
+                        )
+                    })
+                    .collect()
+            };
+        let title = painter.layout_job(label_job("Just now", 9.5, ink::FOREST));
+        // While orders are given, what came of each of last turn's, under the headlines.
+        let planning = self.table.shown.is_none() && self.table.outcome().is_none();
+        let orders_title = painter.layout_job(label_job("Your orders last turn", 9.0, ink::FOREST));
+        let told: Vec<std::sync::Arc<egui::Galley>> = if planning {
+            self.table
+                .told
                 .iter()
-                .rev()
-                .enumerate()
-                .map(|(k, (text, side))| {
-                    let colour = if k == 0 { ink::PAGE } else { ink::MUTED };
-                    (
-                        painter.layout(text.clone(), FontId::proportional(12.5), colour, inner),
-                        *side,
-                    )
+                .map(|line| {
+                    painter.layout(line.clone(), FontId::proportional(11.5), ink::PAGE, inner)
                 })
                 .collect()
+        } else {
+            Vec::new()
         };
-        let title = painter.layout_job(label_job("Just now", 9.5, ink::FOREST));
+        let told_height = if told.is_empty() {
+            0.0
+        } else {
+            orders_title.size().y + u * 5.0 + told.iter().map(|g| g.size().y + u * 1.5).sum::<f32>()
+        };
         let link_text = if self.account_open {
             "Close the whole match (L)"
         } else {
@@ -1966,7 +2049,7 @@ impl BattleApp {
         };
         let link = painter.layout_job(label_job(link_text, 9.0, ink::FOREST));
         let body: f32 = lines.iter().map(|(g, _)| g.size().y + u * 2.0).sum();
-        let height = u * 9.0 + title.size().y + body + link.size().y + u * 6.0;
+        let height = u * 9.0 + title.size().y + body + told_height + link.size().y + u * 6.0;
         let corner = pos2(page.max.x - u * 8.0 - width, page.min.y + u * 6.0);
         let rect = Rect::from_min_size(
             pos2((corner.x / u).round() * u, (corner.y / u).round() * u),
@@ -1993,6 +2076,23 @@ impl BattleApp {
             }
             painter.galley(pos2(rect.min.x + u * 9.0, y), galley, ink::PAGE);
             y += h + u * 2.0;
+        }
+        if !told.is_empty() {
+            y += u * 2.0;
+            painter.hline(
+                (rect.min.x + u * 5.0)..=(rect.max.x - u * 5.0),
+                y,
+                Stroke::new(u * 0.5, ink::LINE.gamma_multiply(0.35)),
+            );
+            y += u * 2.0;
+            let h = orders_title.size().y;
+            painter.galley(pos2(rect.min.x + u * 5.0, y), orders_title, ink::FOREST);
+            y += h + u * 3.0;
+            for galley in told {
+                let h = galley.size().y;
+                painter.galley(pos2(rect.min.x + u * 5.0, y), galley, ink::PAGE);
+                y += h + u * 1.5;
+            }
         }
         y += u;
         let link_rect =
@@ -2660,7 +2760,24 @@ impl BattleApp {
         };
         chrome::kicker(ui, "The match is over");
         ui.label(RichText::new(title).size(22.0).color(ink::FOREST).strong());
+        // At the cap, the counts that decided it, yours first.
+        let counts = self
+            .table
+            .m
+            .as_ref()
+            .filter(|_| outcome.victory == Some(Victory::TurnCap) || outcome.winner.is_none())
+            .filter(|m| m.board.turn >= m.ruleset.turn_cap)
+            .map(|m| {
+                let (a, b) = (m.cap_tally(you), m.cap_tally(you.other()));
+                format!(
+                    "Beacon {} to {} \u{b7} composure {} to {} \u{b7} standing {} to {}",
+                    a.0, b.0, a.1, b.1, a.2, b.2
+                )
+            });
         ui.label(RichText::new(why).size(13.0));
+        if let Some(counts) = counts {
+            ui.label(RichText::new(counts).size(12.5).color(ink::FOREST));
+        }
         if let Some(reason) = &self.table.ended_because {
             ui.label(RichText::new(reason).size(13.0).color(ink::MUTED));
         }
@@ -3206,6 +3323,49 @@ fn watch(ui: &mut egui::Ui, left: f32, of: f32, u: f32) {
     painter.circle_filled(c, u * 0.8, ink::LINE);
 }
 
+/// What one of the team will probably do with the plan as it stands, and why, in a few words
+/// for its name tag: "probably flanks, keen to go".
+fn likely_words(
+    table: &Table,
+    task: &formiga_battle_core::Task,
+    why: &formiga_battle_core::Why,
+) -> String {
+    use formiga_battle_core::{Role, Why};
+    let name = |s: &Slot| {
+        table
+            .m
+            .as_ref()
+            .map_or(String::new(), |m| m.profile(*s).name.clone())
+    };
+    let job = match task.role {
+        Role::Claim => "holds",
+        Role::Oust => "moves one off",
+        Role::Flank => "flanks",
+        Role::Pin => "waits beside",
+        Role::Guard => "guards",
+        Role::Intercept => "heads one off",
+        Role::Fetch => "fetches",
+        Role::Pull => "pulls it",
+        Role::Wait => "waits by it",
+        Role::Use => "uses what it has",
+        Role::Spare => "sees for itself",
+    };
+    let leaning = match why {
+        Why::Bold => Some("keen to go".to_owned()),
+        Why::Careful => Some("would rather hold".to_owned()),
+        Why::Friendly { ally } => Some(format!("to be by {}", name(ally))),
+        Why::Avoiding { ally } => Some(format!("away from {}", name(ally))),
+        Why::Curious => Some("curious".to_owned()),
+        Why::Whim => Some("on a whim".to_owned()),
+        Why::Alone => Some("alone".to_owned()),
+        Why::Nearest | Why::KeptAtIt => None,
+    };
+    match leaning {
+        Some(l) => format!("probably {job}, {l}"),
+        None => format!("probably {job}"),
+    }
+}
+
 /// A name tag over someone on the board: Home's hover tag, card on a hard shadow with a stepped
 /// edge, with a word for how they stand under the name.
 fn name_tag(
@@ -3213,17 +3373,31 @@ fn name_tag(
     at: egui::Pos2,
     name: &str,
     state: Option<&str>,
+    note: Option<&str>,
     team: formiga_art::paint::Ramp,
     u: f32,
 ) {
     let galley = painter.layout_no_wrap(name.to_owned(), FontId::proportional(13.0), ink::PAGE);
     let state = state.map(|s| painter.layout_job(label_job(s, 9.0, ink::MUTED)));
+    // A note from the notebook, in the notebook's own hand, wrapped narrow.
+    let note = note.map(|n| {
+        painter.layout(
+            format!("\u{201c}{n}\u{201d}"),
+            FontId::proportional(11.0),
+            ink::FOREST,
+            u * 70.0,
+        )
+    });
     let w = galley
         .size()
         .x
         .max(state.as_ref().map_or(0.0, |s| s.size().x))
+        .max(note.as_ref().map_or(0.0, |n| n.size().x))
         + u * 11.0;
-    let h = galley.size().y + state.as_ref().map_or(0.0, |s| s.size().y) + u * 4.0;
+    let h = galley.size().y
+        + state.as_ref().map_or(0.0, |s| s.size().y)
+        + note.as_ref().map_or(0.0, |n| n.size().y + u)
+        + u * 4.0;
     let rect = Rect::from_min_size(
         pos2(
             ((at.x - w / 2.0) / u).round() * u,
@@ -3255,8 +3429,14 @@ fn name_tag(
     let top = rect.min + vec2(u * 6.0, u * 2.0);
     let line = galley.size().y;
     painter.galley(top, galley, ink::PAGE);
+    let mut y = line;
     if let Some(state) = state {
-        painter.galley(top + vec2(0.0, line), state, ink::MUTED);
+        let h = state.size().y;
+        painter.galley(top + vec2(0.0, y), state, ink::MUTED);
+        y += h;
+    }
+    if let Some(note) = note {
+        painter.galley(top + vec2(0.0, y + u), note, ink::FOREST);
     }
 }
 

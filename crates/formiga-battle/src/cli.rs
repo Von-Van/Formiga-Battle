@@ -377,6 +377,15 @@ fn play_match(mut args: Args) -> Result<()> {
         for line in recap(&m, &report.events) {
             println!("  · {line}");
         }
+        for side in Side::BOTH {
+            println!(
+                "  {} orders came to:",
+                formiga_battle_core::recap::team_name(side)
+            );
+            for line in formiga_battle_core::recap::orders_told(&m, side, &report.events) {
+                println!("    {line}");
+            }
+        }
         if board {
             print!("{}", draw(&m));
         }
@@ -418,6 +427,16 @@ fn run_tournament(mut args: Args) -> Result<()> {
         s.average_turns(),
         f64::from(s.knockouts) / f64::from(s.matches.max(1)),
         f64::from(s.fallback_orders) / f64::from(s.matches.max(1))
+    );
+    println!(
+        "  beacon never lit {:.0}%; winner came from behind on the beacon {:.0}%",
+        pct(s.beacon_scoreless),
+        pct(s.comebacks)
+    );
+    println!(
+        "  {:.2} flanks a match, {:.0}% of them followed by beacon progress that turn",
+        f64::from(s.flanks) / f64::from(s.matches.max(1)),
+        100.0 * f64::from(s.flanks_that_paid) / f64::from(s.flanks.max(1))
     );
     println!("  left side scores {:.3} (0.5 is even)", s.left.score());
     println!();

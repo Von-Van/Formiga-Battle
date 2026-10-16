@@ -388,6 +388,16 @@ impl Page {
             2,
             "With time to spare, tucks itself out of reach",
         ));
+        notes.extend(moment_sign(
+            Sign::HungBack,
+            2,
+            "Hangs back a moment rather than walk in among the other team",
+        ));
+        notes.extend(moment_sign(
+            Sign::Flanked,
+            2,
+            "Good at coming at a holder from the other side with a friend",
+        ));
         if let Some((id, n)) = all
             .friends
             .iter()

@@ -3,6 +3,7 @@
 
 use crate::event::{Event, EventKind, Fill, Reason, Victory};
 use crate::game::Match;
+use crate::grid::Tile;
 use crate::muster::{Because, Role, Task, Why};
 use crate::order::{Directive, Order, Side, Slot, Target};
 use std::collections::BTreeSet;
@@ -516,6 +517,11 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                 "{} flopped over, dizzy, and sits out the rest of the match.",
                 name(slot)
             )),
+            EventKind::BrokeThrough { side, target } => Some(format!(
+                "{} broke through: with {}'s hold broken, their beacon jumped a tick.",
+                team_name(*side),
+                name(target)
+            )),
             EventKind::CaptureContested if !contested_told => {
                 contested_told = true;
                 Some("The beacon is contested.".to_owned())
@@ -532,7 +538,27 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                     format!("{} is the last team standing and wins!", team_name(side))
                 }
                 (Some(side), _) => {
-                    format!("Time's up: {} wins on the beacon tally.", team_name(side))
+                    // Says which of the cap's three counts decided it, and by how much.
+                    let (won, lost) = (m.cap_tally(side), m.cap_tally(side.other()));
+                    let winner = team_name(side);
+                    if won.0 != lost.0 {
+                        format!(
+                            "Time's up: {winner} wins, ahead on the beacon {} to {}.",
+                            won.0, lost.0
+                        )
+                    } else if won.1 != lost.1 {
+                        format!(
+                            "Time's up, level on the beacon: {winner} wins with more composure \
+                             left, {} to {}.",
+                            won.1, lost.1
+                        )
+                    } else {
+                        format!(
+                            "Time's up, level on the beacon and composure: {winner} wins with \
+                             more still standing, {} to {}.",
+                            won.2, lost.2
+                        )
+                    }
                 }
                 (None, _) => "It's a draw.".to_owned(),
             }),
@@ -555,4 +581,218 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
         lines.insert(at, line);
     }
     lines
+}
+
+/// Where a team order points, in words a player would use: the board shows no coordinates.
+fn place(m: &Match, squares: &[Tile]) -> String {
+    let yard = squares.iter().filter(|t| m.arena.in_zone(**t)).count();
+    match (squares, yard) {
+        ([t], 1) if *t == m.arena.zone_centre() => "the middle of the yard".to_owned(),
+        ([_], 1) => "a square of the yard".to_owned(),
+        ([_], _) => "a square outside the yard".to_owned(),
+        (ts, y) if y == ts.len() => format!("{} squares of the yard", ts.len()),
+        (ts, _) => format!("{} squares", ts.len()),
+    }
+}
+
+/// How a creature went its own way this turn, in a few words, if it did: the first time it hung
+/// back, went a way of its own, or took the job it did for who it is.
+fn own_way(m: &Match, slot: Slot, events: &[Event]) -> Option<String> {
+    let n = &m.profile(slot).name;
+    events.iter().find_map(|e| match &e.kind {
+        EventKind::HungBack { slot: s, .. } if *s == slot => Some(format!("{n} hung back")),
+        EventKind::Stepped {
+            slot: s, reason, ..
+        } if *s == slot => match reason {
+            Reason::AvoidedExposure | Reason::AvoidedContestedCentre => {
+                Some(format!("{n} went the long way round"))
+            }
+            Reason::KeptNearAlly { ally } => {
+                Some(format!("{n} kept close to {}", m.profile(*ally).name))
+            }
+            Reason::KeptApartFrom { ally } => {
+                Some(format!("{n} kept away from {}", m.profile(*ally).name))
+            }
+            Reason::SideRoute => Some(format!("{n} wandered along the edge")),
+            Reason::TookCover => Some(format!("{n} hugged the wall")),
+            Reason::OnImpulse => Some(format!("{n} changed its mind halfway")),
+            Reason::Bold => Some(format!("{n} marched straight past them")),
+            Reason::SkirtedWarning => Some(format!("{n} kept clear of what was coming")),
+            Reason::WentForItem => Some(format!("{n} went for something on the ground")),
+            Reason::HungBack => Some(format!("{n} hung back")),
+            _ => None,
+        },
+        EventKind::Assigned { slot: s, why, .. } if *s == slot => match why {
+            Why::Bold => Some(format!("{n} was keen to go")),
+            Why::Careful => Some(format!("{n} would rather stand its ground")),
+            Why::Friendly { ally } => {
+                Some(format!("{n} wanted to be by {}", m.profile(*ally).name))
+            }
+            Why::Avoiding { ally } => Some(format!("{n} kept away from {}", m.profile(*ally).name)),
+            Why::Curious => Some(format!("{n} was curious")),
+            Why::Whim => Some(format!("{n} went on a whim")),
+            _ => None,
+        },
+        _ => None,
+    })
+}
+
+/// What came of each of a team's orders this turn, one line each, in the order they were given:
+/// who took it on, what came of it, and whether any of them went their own way doing it. Call it
+/// after the turn has resolved, with that turn's events.
+pub fn orders_told(m: &Match, side: Side, events: &[Event]) -> Vec<String> {
+    let Some(record) = m.history.last() else {
+        return Vec::new();
+    };
+    let plan = &record.submitted[side.index()];
+    let names = |slots: &[Slot]| list(m, slots);
+    // Orders naming the same squares (or the same thing) are told once, under all their
+    // numbers: naming a square again only made it more pressing.
+    let about = |d: &Directive| match d {
+        Directive::Take { squares } | Directive::Defend { squares } => squares.clone(),
+        Directive::Interact { at } => vec![*at],
+    };
+    plan.iter()
+        .enumerate()
+        .filter(|(i, d)| !plan[..*i].iter().any(|e| about(e) == about(d)))
+        .map(|(_, d)| {
+            let given: Vec<usize> = (0..plan.len())
+                .filter(|j| about(&plan[*j]) == about(d))
+                .collect();
+            // Who took it on, first job or a later one, and as what.
+            let mut on: Vec<Slot> = Vec::new();
+            let mut flanking = false;
+            for e in events {
+                if let EventKind::Assigned { slot, task, .. }
+                | EventKind::Rethought { slot, task, .. } = &e.kind
+                    && slot.side == side
+                    && task
+                        .directive
+                        .is_some_and(|k| given.contains(&usize::from(k)))
+                {
+                    flanking |= task.role == Role::Flank;
+                    if !on.contains(slot) {
+                        on.push(*slot);
+                    }
+                }
+            }
+            let said = match d {
+                Directive::Take { squares } => format!("TAKE {}", place(m, squares)),
+                Directive::Defend { squares } => format!("DEFEND {}", place(m, squares)),
+                Directive::Interact { at } => {
+                    let found = events.iter().find_map(|e| match &e.kind {
+                        EventKind::PickedUp { item, at: t, .. } if t == at => Some(*item),
+                        _ => None,
+                    });
+                    let lying = m
+                        .board
+                        .ground
+                        .iter()
+                        .chain(m.board.glint.iter())
+                        .find(|(t, _)| t == at)
+                        .map(|(_, i)| *i);
+                    match found.or(lying) {
+                        Some(item) => format!("INTERACT with the {}", item.name()),
+                        None if m.arena.levers.contains(at) || m.arena.switches.contains(at) => {
+                            describe_directive(m, d)
+                        }
+                        None => "INTERACT".to_owned(),
+                    }
+                }
+            };
+            let n = given
+                .iter()
+                .map(|j| (j + 1).to_string())
+                .collect::<Vec<_>>()
+                .join(" and ");
+            if on.is_empty() {
+                return format!("{n}. {said}: nobody was free for it.");
+            }
+            let ours = |s: &Slot| on.contains(s);
+            let mut came: Vec<String> = Vec::new();
+            for e in events {
+                match &e.kind {
+                    EventKind::Flanked { target, by, .. } if by.iter().any(ours) => {
+                        let broke = events.iter().any(|b| {
+                            matches!(&b.kind, EventKind::BrokeThrough { side: s, target: t }
+                                if *s == side && t == target)
+                        });
+                        came.push(if broke {
+                            format!("flanked {} and broke through", m.profile(*target).name)
+                        } else {
+                            format!("flanked {}", m.profile(*target).name)
+                        });
+                    }
+                    EventKind::Countered {
+                        holders,
+                        contesters,
+                        ..
+                    } if contesters.iter().any(ours) => {
+                        came.push(format!("turned away by {}", names(holders)));
+                    }
+                    EventKind::Interrupted { target, by } if ours(target) => {
+                        came.push(format!("{} was caught on the way", m.profile(*target).name));
+                        let _ = by;
+                    }
+                    EventKind::Interrupted { target, by } if by.iter().any(ours) => {
+                        came.push(format!("caught {}", m.profile(*target).name));
+                    }
+                    EventKind::LeverPulled { slot, .. } | EventKind::SwitchTurned { slot, .. }
+                        if ours(slot) =>
+                    {
+                        came.push("set it off".to_owned());
+                    }
+                    EventKind::LeverDefended { slot, .. }
+                    | EventKind::SwitchDefended { slot, .. }
+                        if ours(slot) =>
+                    {
+                        came.push("shooed off".to_owned());
+                    }
+                    EventKind::PickedUp { slot, item, .. } if ours(slot) => {
+                        came.push(format!(
+                            "{} picked up the {}",
+                            m.profile(*slot).name,
+                            item.name()
+                        ));
+                    }
+                    EventKind::ItemUsed { slot, item, .. } if ours(slot) => {
+                        came.push(format!(
+                            "{} used the {}",
+                            m.profile(*slot).name,
+                            item.name()
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            if flanking && !came.iter().any(|c| c.starts_with("flanked")) {
+                came.push("getting into place to flank".to_owned());
+            }
+            if let Directive::Take { squares } | Directive::Defend { squares } = d {
+                let held = squares
+                    .iter()
+                    .filter(|t| {
+                        m.occupant(**t)
+                            .is_some_and(|o| o.side == side && m.fighter(o).holding)
+                    })
+                    .count();
+                let theirs = squares
+                    .iter()
+                    .any(|t| m.occupant(*t).is_some_and(|o| o.side != side));
+                came.push(match (held, squares.len()) {
+                    (0, _) if theirs => "they still have it".to_owned(),
+                    (0, _) => "not held yet".to_owned(),
+                    (h, n) if h == n => "held".to_owned(),
+                    (h, n) => format!("{h} of {n} held"),
+                });
+            }
+            came.dedup();
+            let mut line = format!("{n}. {said}, {}: {}.", names(&on), came.join(", "));
+            if let Some(aside) = on.iter().find_map(|s| own_way(m, *s, events)) {
+                line.pop();
+                line.push_str(&format!("; {aside}."));
+            }
+            line
+        })
+        .collect()
 }

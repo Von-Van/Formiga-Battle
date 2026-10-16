@@ -54,7 +54,7 @@ WINDOW:
                              aboard), where (choosing a place), picking or who (the team
                              choice), friend (a friend's room about to be opened), history,
                              settings, orders (a
-                             turn's orders half given, MOVE chosen), playing (the AI giving
+                             turn's orders half given, three turns in, TAKE chosen), playing (the AI giving
                              your orders too,
                              every turn locked at once; the default) or notebook (the sample
                              colony's notebook, as Desktop would send it, open) or room (a room

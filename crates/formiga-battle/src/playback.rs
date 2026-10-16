@@ -470,6 +470,7 @@ impl Playback {
                     frame.paused = false;
                 }
                 EventKind::CaptureContested => frame.paused = true,
+                EventKind::BrokeThrough { .. } => frame.paused = false,
                 EventKind::Finished { .. } => {
                     if let Some(side) = self.winners {
                         for i in 0..TEAM_SIZE as u8 {

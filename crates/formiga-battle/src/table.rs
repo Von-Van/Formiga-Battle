@@ -159,6 +159,8 @@ pub struct Table {
     pub shown: Option<Shown>,
     /// Every turn told, newest last.
     pub log: Vec<(u8, Vec<String>)>,
+    /// What came of each of the Handler's orders last turn, a line each.
+    pub told: Vec<String>,
     /// What Desktop keeps of Battle for this colony, with this sitting's matches applied.
     pub record: BattleRecord,
     /// The session Desktop opened, if it did: what this sitting earned is written into it after
@@ -223,6 +225,7 @@ impl Table {
             turn_began: 0.0,
             shown: None,
             log: Vec::new(),
+            told: Vec::new(),
             record,
             session: None,
             match_events: Vec::new(),
@@ -283,7 +286,7 @@ impl Table {
                 friend.cards[self.you.other().index()].as_ref(),
                 now,
             ),
-            None => rewards::ai_match(m, self.you, &self.record),
+            None => rewards::ai_match(m, self.you, &self.match_events, &self.record),
         };
         // A match with a friend that ended on the board counts once the relay has both windows'
         // boards after the last turn and they are the same. One that ended by someone leaving or
@@ -479,6 +482,7 @@ impl Table {
         self.shown = None;
         self.begin_orders(now);
         self.log.clear();
+        self.told.clear();
         self.match_events.clear();
         self.earned.clear();
         self.ended_because = None;
@@ -815,6 +819,7 @@ impl Table {
         names[self.you.other().index()] = &self.other_name;
         self.log
             .push((report.turn, recap_naming(m, &report.events, names)));
+        self.told = formiga_battle_core::recap::orders_told(m, self.you, &report.events);
         self.match_events.extend(report.events.iter().cloned());
         let other = self.other_short();
         let mut teams = ["", ""];
@@ -883,6 +888,31 @@ impl Table {
     /// The team's plan as given so far, in order.
     pub fn plan(&self) -> TeamPlan {
         self.orders.iter().flatten().cloned().collect()
+    }
+
+    /// Who of the Handler's team would probably take which job if the plan were locked as it
+    /// stands, and why: the team's own sharing out, from the board as it is, for this team only.
+    /// It says nothing of how each will walk, who will think again, or what the other team will
+    /// do, so it is a likelihood, never the turn itself. Empty unless orders are being given.
+    pub fn likely(&self) -> Vec<(Slot, formiga_battle_core::Task, formiga_battle_core::Why)> {
+        let Some(m) = &self.m else {
+            return Vec::new();
+        };
+        let plan = self.plan();
+        if plan.is_empty() || self.shown.is_some() || m.outcome().is_some() {
+            return Vec::new();
+        }
+        let (_, _, events) =
+            formiga_battle_core::muster::muster(m, self.you, &plan, m.board.turn + 1);
+        events
+            .into_iter()
+            .filter_map(|e| match e.kind {
+                formiga_battle_core::EventKind::Assigned {
+                    slot, task, why, ..
+                } => Some((slot, task, why)),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Whether this order could be carried out at all just now.
@@ -1139,6 +1169,19 @@ impl Table {
         self.show_turn(before, report, now);
     }
 
+    /// Plays `turns` turns with the AI coach giving the Handler's orders too, each shown through
+    /// at once: for review pictures of a match already under way.
+    pub fn play_ahead(&mut self, turns: u8) {
+        for _ in 0..turns {
+            self.coach_orders();
+            self.lock(0.0);
+            if let Some(shown) = &mut self.shown {
+                shown.started = -1.0e6;
+            }
+            self.frame(0.0);
+        }
+    }
+
     /// The Handler's orders, as the AI coach would give them: for review pictures.
     pub fn coach_orders(&mut self) {
         if let Some(m) = &self.m {
@@ -1352,6 +1395,21 @@ mod tests {
         assert_eq!(t.orders, [None, None, None]);
         assert_eq!(t.log.len(), 1);
         assert_eq!(t.m.as_ref().unwrap().board.turn, 1);
+    }
+
+    #[test]
+    fn while_orders_are_given_the_team_says_who_will_probably_go_where_and_nothing_of_theirs() {
+        let mut t = table();
+        assert!(t.likely().is_empty(), "no plan, nothing to say");
+        t.coach_orders();
+        let likely = t.likely();
+        assert!(!likely.is_empty());
+        assert!(likely.iter().all(|(slot, _, _)| slot.side == t.you));
+        // Locked, it is the turn's own business.
+        t.lock(0.0);
+        assert!(t.likely().is_empty());
+        // And what came of each order is told once the turn has been played.
+        assert!(!t.told.is_empty());
     }
 
     #[test]

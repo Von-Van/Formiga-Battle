@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## [0.67.9] - 2026-10-16
+
+Released with Formiga Desktop 0.67.9 and built on its shared crates, with Battle contract version 3,
+so it needs Desktop 0.67.9. Rules version 8 and relay protocol 3 are new: a friend match needs both
+Handlers on Battle 0.67.9, and an older Battle is told to update.
 
 - The Handler's things are painted as the notebook's other pictures are. A pennant is chosen
   from sample tiles of cloth (its cut, cloth, symbol and edge) and stirs on its cane in a tuft of
@@ -8,6 +12,35 @@
   and a pencilled one for each still to win; each trio is a team picture taped into the
   notebook, its three on a strip of lawn by their pennant with their name on a ribbon, faded once
   retired; and a match opens under a ribbon strung between the two sides' pennants.
+- Matches against the visitors write the Handler's Notebook too, as friend matches do: what each
+  of the three was seen to do, and its moments, listed with what the match earned. The notebook
+  also notes now when a companion tends to hang back or is good at flanking with a friend, and
+  while you give orders, pointing at one of yours shows the first thing it has noted of it. This
+  needs Desktop's Battle contract version 3 as it is on the desktop-battle-ai-notebook branch,
+  which Battle is pinned to until it merges.
+- Rules version 8: a flank in the yard takes the ground. When two of a team break a hold in the
+  yard, those of them standing in the yard start holding where they stand, and the beacon goes up
+  a tick for the breakthrough as well as for holding the yard alone. Before, about half of all
+  matches on Backyard, the Millpond and the glade ended without anyone ever lighting a tick of the
+  beacon, decided on composure or drawn; now about a quarter to a third do, more are won from
+  behind, and matches are no shorter. A team that only digs in loses more often than before.
+  Knowing your companions counts for a little less (59% for the coach who knows them on
+  Backyard, from 63%). Matches recorded under version 7 no longer replay, and friends need the
+  same version to play.
+- While you give orders, faint footprints show who of your three would probably take which job
+  with the plan as it stands, and pointing at one says what it would probably do and why
+  ("probably flanks, keen to go"). It is your own team's sharing out only: how each walks, who
+  thinks again and what the other team does stay unknown. A holder that two of theirs could
+  flank now says so on its tag.
+- As a turn plays, the lines that matter most come first: a knockout, a breakthrough or the
+  beacon lit is never crowded out by a lesser line. When one of your own goes its own way (the
+  long way round, beside a friend, along the edge, on a whim, hanging back), a word goes over it
+  and the line says why, once a turn, so a companion being itself is not mistaken for a slip or
+  the other team's doing.
+- The match screen says more of what a turn came to. While orders are given, the "Just now"
+  card lists what came of each of last turn's orders. The top strip says "Last turn" on the
+  last turn and "One tick to go" beside a beacon one tick from lighting. A match won when time
+  ran out shows the counts that decided it: beacon, composure and creatures standing.
 - Your Handler, your trios and their records. "Your Handler & history" at the station opens the
   Handler's own page first: sign your name, add a club if you like, and choose a pennant from
   three cuts, eight cloths, twelve symbols and three trims, painted at the notebook's pixel. Your
@@ -26,6 +59,15 @@
   club, standing and trio, and the notice of what a friend match shares lists them. Desktop
   keeps all of it with your colony (Battle contract version 3, Desktop save version 32), and a
   name signed on the Friend page becomes your Handler's.
+- After each turn, each team order can be told in one line: who took it on, what came of it
+  (held, flanked, turned away, caught on the way, getting into place to flank), and whether one of
+  them went its own way doing it. Squares are named as a player sees them ("the middle of the
+  yard"), not by number. `formiga-battle match` prints it; the match screen can show it.
+- A match won when time runs out says which count decided it and by how much: ahead on the
+  beacon, or level on it with more composure left, or with more still standing. It used to say
+  "on the beacon tally" whatever decided it.
+- `formiga-battle tournament` says how its matches ended: how many never lit the beacon, how
+  many were won from behind on the beacon, and how many flanks led to beacon progress that turn.
 - Rules version 7: team orders. Each turn a Handler gives the whole team up to three orders
   instead of one to each companion: TAKE some squares (walk onto an empty one, move theirs off
   one, two flanking a holder), DEFEND some squares (stand on them, guard beside them, head off
