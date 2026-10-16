@@ -110,6 +110,34 @@ fn turning_a_tap_brings_the_sprinkler_a_tick_later_and_then_the_tap_rests() {
 }
 
 #[test]
+fn a_tap_reached_after_the_sprinkler_came_by_itself_rests_for_the_rest_of_that_turn() {
+    // L0 waits two steps from the left tap until the sprinkler comes by itself, at turn 4's
+    // second tick, and only then goes for the tap. L1 and R0 each hold an arm of the yard.
+    let placed = [(L0, (1, 3)), (L1, (3, 3)), (R0, (5, 3))];
+    let mut m = board_on(Arena::backyard(), &placed);
+    let waiting = orders(&[(L0, hold(1, 3)), (L1, hold(3, 3)), (R0, hold(5, 3))]);
+    for _ in 0..3 {
+        m.resolve_orders(waiting);
+    }
+    assert_eq!(m.board.event_at, Some(4 * 3 + 2));
+    let report = m.resolve_orders(orders(&[
+        (L0, tap(1, 6)),
+        (L1, hold(3, 3)),
+        (R0, hold(5, 3)),
+    ]));
+    let landings = kinds(&report)
+        .iter()
+        .filter(|k| matches!(k, EventKind::SceneryLanded { .. }))
+        .count();
+    assert_eq!(landings, 1, "the sprinkler comes once in a turn");
+    assert!(
+        !kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::SwitchTurned { .. }))
+    );
+}
+
+#[test]
 fn holding_beside_a_tap_shoos_off_whoever_turns_it() {
     let mut m = board_on(Arena::backyard(), &[(L0, (1, 5)), (R0, (2, 6))]);
     let report = m.resolve_orders(orders(&[(L0, tap(1, 6)), (R0, hold(2, 6))]));

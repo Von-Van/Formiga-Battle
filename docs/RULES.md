@@ -2,7 +2,7 @@
 
 How a match of Formiga Battle resolves, as `formiga-battle-core` plays it. Every number here lives
 in `Ruleset` (`crates/formiga-battle-core/src/ruleset.rs`), travels with every recorded match, and
-is provisional until playtests settle it. `RULES_VERSION` is 8.
+is provisional until playtests settle it. `RULES_VERSION` is 9.
 
 ## A match
 
@@ -208,7 +208,7 @@ Props use the three orders and grant nothing permanent. Each is data in the aren
 | Beacon (`Z`) | HOLD in the zone | Capture progress | Progress shown to both teams | Stand in the zone unbroken to pause it; flank its holders to clear it |
 | Gate lever (`L`, gates `G`/`g`) | CONTEST from a tile touching the lever | Every gate swings `swing_ticks` later (at least 1), then the lever rests `cooldown_turns` whole turns | The pull, and the tick the gates will swing, are an event both teams see | HOLD on a tile touching the lever: a pull is turned away like a contest, one composure for each such holder. A gate cannot close on someone standing in it, or on a twig |
 | Map event (`event:` and its tiles) | Comes round by itself on `event_first` and every `event_every` turns after | Its effect on everyone standing on its tiles | Its tiles are marked a whole turn before, from the end of the turn before it comes; it lands on that turn's second tick | Stand elsewhere when it comes, or under a leaf umbrella |
-| Switch (`S`): a tap, a shell, a sluice, a tree | CONTEST from a tile touching it, or a pebble bell rung beside it | The map event lands a tick later; then every switch rests `switch_rest` whole turns | The turn, and the tiles, are an event both teams see | HOLD on a tile touching the switch, as at the lever. A switch does nothing while the event is already coming |
+| Switch (`S`): a tap, a shell, a sluice, a tree | CONTEST from a tile touching it, or a pebble bell rung beside it | The map event lands a tick later; then every switch rests `switch_rest` whole turns | The turn, and the tiles, are an event both teams see | HOLD on a tile touching the switch, as at the lever. A switch does nothing while the event is already coming, nor for the rest of a turn it came round by itself in |
 | Item spot (`*`) | Step onto what turns up there | See [Found things](#found-things) | It glints a whole turn before | Get there first, or knock it out of the carrier's paws |
 
 ## The map event
