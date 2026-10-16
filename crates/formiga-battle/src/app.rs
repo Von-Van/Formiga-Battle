@@ -1458,9 +1458,18 @@ impl BattleApp {
             let shown = told
                 .last()
                 .map_or(*born, |(_, last)| born.max(last + HEADLINE_SECS));
+            // A line that would come too long after its moment is left to the card of the last
+            // two, so the board never falls behind the turn.
+            if shown - born > 1.0 {
+                continue;
+            }
             told.push((c, shown));
         }
         let mut caption = None;
+        // Once the match is over, its stamp says so; no line over it.
+        if self.finished_at.is_some() {
+            told.clear();
+        }
         if let Some(k) = told.iter().rposition(|(_, shown)| *shown <= now) {
             let (c, shown) = told[k];
             let age = now - shown;
