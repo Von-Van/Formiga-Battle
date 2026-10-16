@@ -27,7 +27,9 @@ A code is six characters from `34679ACDEFGHJKMNPQRTUVWXY`, read generously (any 
 dashes ignored). A seat is 32 lowercase hex digits from a cryptographic random source.
 
 An **Entrant** is `{"protocol": 2, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3]}`.
-The relay checks `protocol == 2`, three contenders and at most three bonds, and trims `handler` to
+An entrant with any other numeric `protocol` is refused `version` before anything else about it is
+read, so an older Battle is told to update rather than that it was not understood. Otherwise the
+relay checks `protocol == 2`, three contenders and at most three bonds, and trims `handler` to
 at most 24 printable characters ("A Handler" if empty). A joiner's `rules_version` must equal the
 opener's. It does not look inside the contenders.
 

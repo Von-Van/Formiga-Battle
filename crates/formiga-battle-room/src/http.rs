@@ -15,7 +15,8 @@
 //! refusal comes with its status and `{"refused": …}`.
 
 use crate::relay::{
-    Answer, Entrant, MAX_BODY_BYTES, Millis, Refusal, Relay, Request, SEAT_HEADER, View, hex_u64,
+    Answer, Entrant, MAX_BODY_BYTES, Millis, RELAY_VERSION, Refusal, Relay, Request, SEAT_HEADER,
+    View, hex_u64,
 };
 use formiga_battle_core::Orders;
 use serde::{Deserialize, Serialize};
@@ -294,7 +295,7 @@ fn serve_one(stream: TcpStream, relay: &Mutex<Relay>, now: Millis) -> io::Result
                 .map_or(Answer::Refused(Refusal::Busy), |mut r| {
                     r.handle(request, now)
                 }),
-            None => Answer::Refused(Refusal::Malformed),
+            None => Answer::Refused(another_protocol(&body).unwrap_or(Refusal::Malformed)),
         }
     };
     let body = serde_json::to_vec(&answer).unwrap_or_default();
@@ -310,6 +311,22 @@ fn serve_one(stream: TcpStream, relay: &Mutex<Relay>, now: Millis) -> io::Result
 }
 
 /// The request a method and path name, with its body read.
+/// An entrant from a Battle that speaks another version of the relay: refused as a version, not
+/// as malformed, whatever else it holds, so an older Battle is told to update.
+fn another_protocol(body: &[u8]) -> Option<Refusal> {
+    #[derive(Deserialize)]
+    struct Spoken {
+        protocol: u32,
+        #[serde(default)]
+        rules_version: u32,
+    }
+    let spoken: Spoken = serde_json::from_slice(body).ok()?;
+    (spoken.protocol != RELAY_VERSION).then_some(Refusal::Version {
+        relay: RELAY_VERSION,
+        rules_version: spoken.rules_version,
+    })
+}
+
 fn route(method: &str, path: &str, seat: String, body: &[u8]) -> Option<Request> {
     let rest = path.strip_prefix("/api/battle")?;
     let parts: Vec<&str> = rest.trim_matches('/').split('/').collect();
