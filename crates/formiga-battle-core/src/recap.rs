@@ -64,7 +64,7 @@ fn words(m: &Match) -> Words {
             name: "pond",
             switch: "the sluice",
             turned: "opened",
-            lands: "rose over the jetty's sides",
+            lands: "rose over the banks by the jetty",
             hits: "washed off",
         },
         "tree" => Words {

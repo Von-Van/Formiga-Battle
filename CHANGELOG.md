@@ -12,8 +12,8 @@
   round and set off early from a switch of its own. Backyard's sprinkler sweeps the whole yard
   (turns 4, 8 and 12; a garden tap on each side). Sandy Cove's wave washes whoever stands on the
   sandbar's ends toward the middle of the beach (every third turn; a big shell on each side).
-  Millpond's water rises over the jetty's sides, washing off whoever is there and leaving the yard
-  a line for the rest of the turn (turns 5 and 10; a sluice on each bank). In Woodland Glade, a shaken
+  Millpond's water rises over the banks either side of the jetty for the rest of the turn, washing
+  off whoever waits there to come at the yard (turns 5 and 10; a sluice on each bank). In Woodland Glade, a shaken
   oak sheds acorns on whoever stands round it and drops a twig (a breeze shakes a pair every fourth
   turn; a contest shakes one). Nobody loses composure to any of them. Recorded matches from earlier
   builds no longer replay.
