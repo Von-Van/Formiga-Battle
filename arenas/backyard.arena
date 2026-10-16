@@ -1,15 +1,23 @@
 // Backyard: the first arena. The beacon's yard is a cross in the middle: its centre and four
 // arms. An arm has open ground on three sides, so a holder on it can be flanked and pushed out;
 // the centre can be flanked only from the arms. The far lane is cut in two by a gate in a short
-// wall; the lever on the near side swings it.
+// wall; the lever on the near side swings it. A sprinkler sweeps the whole yard every fourth
+// turn, and a garden tap on each side of the near edge sets it off early. Found things
+// turn up in the far corners and beside the near lane.
 id: backyard
 name: Backyard
 swing_ticks: 1
 cooldown_turns: 1
-. . . # G # . . .
+event: soak
+event_name: sprinkler
+event_tiles: 4,2 3,3 4,3 5,3 4,4
+event_first: 4
+event_every: 4
+switch_rest: 2
+* . . # G # . . *
 1 . . . . . . . 2
 . . # . Z . # . .
 1 . . Z Z Z . . 2
 . . # . Z . # . .
-1 . . . . . . . 2
-. . . . L . . . .
+1 . * . . . * . 2
+. S . . L . . S .

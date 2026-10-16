@@ -8,7 +8,7 @@ use formiga_battle_core::*;
 #[test]
 fn a_contest_next_to_a_mover_catches_it_before_it_can_step_away() {
     let mut m = board(&[(L0, (0, 2)), (R0, (1, 2))]);
-    let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(4, 2))]));
+    let report = m.resolve_orders(orders(&[(L0, contest(R0)), (R0, walk(4, 2))]));
     assert_eq!(composure(&m, R0), 2);
     assert_eq!(composure(&m, L0), 3);
     assert_eq!(
@@ -26,7 +26,7 @@ fn a_contest_next_to_a_mover_catches_it_before_it_can_step_away() {
 fn a_contester_walks_up_to_a_mover_and_interrupts_it_on_the_way() {
     // R0 walks toward L0's side; L0 walks out to meet it.
     let mut m = board(&[(L0, (0, 2)), (R0, (5, 2))]);
-    m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(0, 1))]));
+    m.resolve_orders(orders(&[(L0, contest(R0)), (R0, walk(0, 1))]));
     assert_eq!(composure(&m, R0), 2);
     assert!(m.fighter(R0).interrupted);
 }
@@ -34,7 +34,7 @@ fn a_contester_walks_up_to_a_mover_and_interrupts_it_on_the_way() {
 #[test]
 fn two_contesters_on_one_mover_cost_it_two() {
     let mut m = board(&[(L0, (0, 2)), (L1, (1, 1)), (R0, (1, 2))]);
-    m.resolve_turn(orders(&[
+    m.resolve_orders(orders(&[
         (L0, contest(R0)),
         (L1, contest(R0)),
         (R0, walk(4, 2)),
@@ -45,7 +45,7 @@ fn two_contesters_on_one_mover_cost_it_two() {
 #[test]
 fn three_contesters_on_one_mover_are_capped_at_two() {
     let mut m = board(&[(L0, (0, 2)), (L1, (1, 1)), (L2, (2, 2)), (R0, (1, 2))]);
-    m.resolve_turn(orders(&[
+    m.resolve_orders(orders(&[
         (L0, contest(R0)),
         (L1, contest(R0)),
         (L2, contest(R0)),
@@ -57,7 +57,7 @@ fn three_contesters_on_one_mover_are_capped_at_two() {
 #[test]
 fn a_holder_counters_a_lone_contester_and_is_unhurt() {
     let mut m = board(&[(L0, (0, 2)), (R0, (1, 2))]);
-    let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, hold(1, 2))]));
+    let report = m.resolve_orders(orders(&[(L0, contest(R0)), (R0, hold(1, 2))]));
     assert_eq!(composure(&m, L0), 2);
     assert_eq!(composure(&m, R0), 3);
     assert!(kinds(&report).contains(&&EventKind::Countered {
@@ -70,7 +70,7 @@ fn a_holder_counters_a_lone_contester_and_is_unhurt() {
 #[test]
 fn two_contesters_from_opposite_sides_break_a_hold_and_neither_is_turned_away() {
     let mut m = board(&[(L0, (0, 2)), (L1, (2, 2)), (R0, (1, 2))]);
-    let report = m.resolve_turn(orders(&[
+    let report = m.resolve_orders(orders(&[
         (L0, contest(R0)),
         (L1, contest(R0)),
         (R0, hold(1, 2)),
@@ -92,7 +92,7 @@ fn two_contesters_from_opposite_sides_break_a_hold_and_neither_is_turned_away() 
 fn two_contesters_against_two_holders_side_by_side_are_both_turned_away() {
     // R0 holds at (1,1); R1 holds at (0,0), next to both contesters.
     let mut m = board(&[(L0, (1, 0)), (L1, (0, 1)), (R0, (1, 1)), (R1, (0, 0))]);
-    m.resolve_turn(orders(&[
+    m.resolve_orders(orders(&[
         (L0, contest(R0)),
         (L1, contest(R0)),
         (R0, hold(1, 1)),
@@ -107,7 +107,7 @@ fn two_contesters_against_two_holders_side_by_side_are_both_turned_away() {
 #[test]
 fn two_creatures_contesting_each_other_only_scuffle() {
     let mut m = board(&[(L0, (0, 2)), (R0, (1, 2))]);
-    let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, contest(L0))]));
+    let report = m.resolve_orders(orders(&[(L0, contest(R0)), (R0, contest(L0))]));
     assert_eq!(composure(&m, L0), 3);
     assert_eq!(composure(&m, R0), 3);
     let scuffles = kinds(&report)
@@ -121,7 +121,7 @@ fn two_creatures_contesting_each_other_only_scuffle() {
 fn a_mover_walks_round_a_holder_and_neither_is_hurt() {
     let mut m = board(&[(L0, (0, 2)), (R0, (1, 2))]);
     m.ruleset.ticks_per_turn = 4;
-    m.resolve_turn(orders(&[(L0, walk(2, 2)), (R0, hold(1, 2))]));
+    m.resolve_orders(orders(&[(L0, walk(2, 2)), (R0, hold(1, 2))]));
     assert_eq!(at(&m, L0), (2, 2));
     assert_eq!(composure(&m, L0), 3);
     assert_eq!(composure(&m, R0), 3);
@@ -134,7 +134,7 @@ fn two_movers_wanting_one_tile_are_settled_by_a_fair_draw_and_nobody_is_hurt() {
         let mut m = board(&[(L0, (0, 2)), (R0, (2, 2))]);
         m.seed = seed;
         m.ruleset.ticks_per_turn = 1;
-        let report = m.resolve_turn(orders(&[(L0, walk(1, 2)), (R0, walk(1, 2))]));
+        let report = m.resolve_orders(orders(&[(L0, walk(1, 2)), (R0, walk(1, 2))]));
         assert_eq!(composure(&m, L0) + composure(&m, R0), 6);
         let bumped = kinds(&report)
             .iter()
@@ -160,8 +160,8 @@ fn two_creatures_meeting_in_a_narrow_way_do_not_bump_for_ever() {
     )
     .unwrap();
     let mut m = board_on(arena, &[(L0, (1, 1)), (R0, (3, 1))]);
-    m.resolve_turn(orders(&[(L0, walk(6, 1)), (R0, walk(0, 1))]));
-    let report = m.resolve_turn(orders(&[(L0, walk(6, 1)), (R0, walk(0, 1))]));
+    m.resolve_orders(orders(&[(L0, walk(6, 1)), (R0, walk(0, 1))]));
+    let report = m.resolve_orders(orders(&[(L0, walk(6, 1)), (R0, walk(0, 1))]));
     let bumps = kinds(&report)
         .iter()
         .filter(|k| matches!(k, EventKind::Bumped { .. }))
@@ -176,7 +176,7 @@ fn two_creatures_meeting_in_a_narrow_way_do_not_bump_for_ever() {
 fn two_movers_cannot_walk_through_each_other() {
     let mut m = board(&[(L0, (0, 2)), (R0, (1, 2))]);
     m.ruleset.ticks_per_turn = 1;
-    m.resolve_turn(orders(&[(L0, walk(1, 2)), (R0, walk(0, 2))]));
+    m.resolve_orders(orders(&[(L0, walk(1, 2)), (R0, walk(0, 2))]));
     assert_eq!(at(&m, L0), (0, 2));
     assert_eq!(at(&m, R0), (1, 2));
 }
@@ -185,7 +185,7 @@ fn two_movers_cannot_walk_through_each_other() {
 fn a_creature_steps_into_a_tile_its_teammate_is_leaving_the_same_tick() {
     let mut m = board(&[(L0, (0, 2)), (L1, (1, 2)), (R0, (6, 4))]);
     m.ruleset.ticks_per_turn = 1;
-    m.resolve_turn(orders(&[
+    m.resolve_orders(orders(&[
         (L0, walk(1, 2)),
         (L1, walk(2, 2)),
         (R0, hold(6, 4)),
@@ -197,7 +197,7 @@ fn a_creature_steps_into_a_tile_its_teammate_is_leaving_the_same_tick() {
 #[test]
 fn a_contest_is_settled_once_a_turn() {
     let mut m = board(&[(L0, (0, 2)), (R0, (1, 2))]);
-    m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(1, 2))]));
+    m.resolve_orders(orders(&[(L0, contest(R0)), (R0, walk(1, 2))]));
     assert_eq!(composure(&m, R0), 2, "one contest, one composure, all turn");
 }
 
@@ -206,7 +206,7 @@ fn a_creature_with_a_nervous_streak_stays_put_after_a_contest_that_landed() {
     let mut teams = rosters();
     teams[0][0] = with_tension(plain(1), formiga_core::Tension::BraveButNervous);
     let mut m = board_with(field(), teams, &[(L0, (0, 2)), (R0, (1, 2))]);
-    m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(4, 2))]));
+    m.resolve_orders(orders(&[(L0, contest(R0)), (R0, walk(4, 2))]));
     assert_eq!(composure(&m, R0), 2);
     assert_eq!(at(&m, L0), (0, 2));
 }
@@ -216,7 +216,7 @@ fn a_creature_with_a_nervous_streak_hops_back_when_its_contest_is_turned_away() 
     let mut teams = rosters();
     teams[0][0] = with_tension(plain(1), formiga_core::Tension::BraveButNervous);
     let mut m = board_with(field(), teams, &[(L0, (0, 2)), (R0, (1, 2))]);
-    let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, hold(1, 2))]));
+    let report = m.resolve_orders(orders(&[(L0, contest(R0)), (R0, hold(1, 2))]));
     assert_eq!(composure(&m, L0), 2);
     assert_ne!(at(&m, L0), (0, 2));
     assert!(report.events.iter().any(|e| matches!(
@@ -232,7 +232,7 @@ fn a_creature_with_a_nervous_streak_hops_back_when_its_contest_is_turned_away() 
 fn three_composure_lost_is_a_knockout_and_the_last_one_standing_wins() {
     let mut m = board(&[(L0, (0, 2)), (L1, (1, 1)), (R0, (1, 2))]);
     m.board.fighters[1][0].composure = 2;
-    let report = m.resolve_turn(orders(&[
+    let report = m.resolve_orders(orders(&[
         (L0, contest(R0)),
         (L1, contest(R0)),
         (R0, walk(4, 2)),
@@ -256,7 +256,7 @@ fn three_composure_lost_is_a_knockout_and_the_last_one_standing_wins() {
 #[test]
 fn an_order_aimed_at_a_teammate_is_treated_as_missing_and_filled() {
     let mut m = board(&[(L0, (0, 2)), (L1, (1, 1)), (R0, (6, 4))]);
-    let report = m.resolve_turn(orders(&[
+    let report = m.resolve_orders(orders(&[
         (L0, contest(L1)),
         (L1, hold(1, 1)),
         (R0, hold(6, 4)),

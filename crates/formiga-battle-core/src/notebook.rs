@@ -192,6 +192,9 @@ pub fn observe(m: &Match, side: crate::order::Side, events: &[Event]) -> Vec<See
                     Reason::FollowedUpToCover => Some(Sign::TuckedAway),
                     Reason::SteppedBack => Some(Sign::SteppedBack),
                     Reason::HungBack => Some(Sign::HungBack),
+                    // Kept out of harm's way, as it keeps out of reach.
+                    Reason::SkirtedWarning => Some(Sign::KeptOutOfReach),
+                    Reason::WentForItem => None,
                 };
                 if let Some(sign) = sign {
                     signs.push((*slot, sign));
@@ -416,11 +419,11 @@ mod tests {
         let mut m = Match::new(Arena::backyard(), Ruleset::default(), seed, rosters).unwrap();
         let mut events = Vec::new();
         while m.outcome().is_none() {
-            let orders = [
-                Coach::Exhibition.orders(&m, Side::Left),
-                Coach::Exhibition.orders(&m, Side::Right),
+            let plans = [
+                Coach::Exhibition.plan(&m, Side::Left),
+                Coach::Exhibition.plan(&m, Side::Right),
             ];
-            events.extend(m.resolve_turn(orders).events);
+            events.extend(m.resolve_turn(plans).events);
         }
         (m, events)
     }

@@ -1,17 +1,20 @@
 //! The line to the relay during a match with a friend, on a thread of its own so the window never
-//! waits on the network. The window asks it to send orders or a board; it answers with every
+//! waits on the network. The window asks it to send its plan or a board; it answers with every
 //! view of the room it gets, and asks the relay for one about once a second.
 
-use formiga_battle_core::Orders;
+use formiga_battle_core::TeamPlan;
 use formiga_battle_room::{AskError, Entrant, RelayClient, View};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 /// How often the room is looked at while nothing else is said.
 const POLL: Duration = Duration::from_millis(900);
+/// While the relay cannot be reached, each look waits twice as long as the last, up to this many
+/// doublings, so a relay that is down is not asked again and again.
+const MOST_DOUBLINGS: u32 = 3;
 
 pub enum Ask {
-    Orders { turn: u8, orders: Orders },
+    Orders { turn: u8, orders: TeamPlan },
     Board { turn: u8, hash: u64, finished: bool },
     Leave,
 }
@@ -90,7 +93,8 @@ fn run(
         let _ = client.leave(&code, &seat);
         return;
     }
-    let mut last_look = Instant::now() - POLL;
+    let mut last_look: Option<Instant> = None;
+    let mut unreachable = 0u32;
     loop {
         let ask = match asked.recv_timeout(Duration::from_millis(100)) {
             Ok(ask) => Some(ask),
@@ -111,12 +115,19 @@ fn run(
                 hash,
                 finished,
             }) => Some(client.board(&code, &seat, turn, hash, finished)),
-            None if last_look.elapsed() >= POLL => {
-                last_look = Instant::now();
+            None if last_look
+                .is_none_or(|at| at.elapsed() >= POLL * (1 << unreachable.min(MOST_DOUBLINGS))) =>
+            {
+                last_look = Some(Instant::now());
                 Some(client.look(&code, &seat))
             }
             None => None,
         };
+        match &answer {
+            Some(Err(AskError::Unreachable(_))) => unreachable += 1,
+            Some(_) => unreachable = 0,
+            None => {}
+        }
         let told = match answer {
             None => continue,
             Some(Ok(view)) => Told::View(Box::new(view)),

@@ -18,6 +18,8 @@ HEADLESS COMMANDS:
     tournament   Play many AI matches between random trios and report fairness
     replay       Replay a recorded match and check every turn
     arena        Draw an arena's tiles
+    sounds       Write every sound effect and some of each piece of music as WAV files into a
+                 folder (sounds <folder>), to listen to them without the window
     relay        For development: a local copy of the friend-match relay (--bind <addr:port>,
                  default 127.0.0.1:7878); point Battle at it with FORMIGA_BATTLE_RELAY
 
@@ -92,7 +94,15 @@ impl Args {
 }
 
 /// The commands this module answers.
-pub const COMMANDS: [&str; 6] = ["roster", "match", "tournament", "replay", "arena", "relay"];
+pub const COMMANDS: [&str; 7] = [
+    "roster",
+    "match",
+    "tournament",
+    "replay",
+    "arena",
+    "relay",
+    "sounds",
+];
 
 pub fn run(mut args: Vec<String>) -> Result<()> {
     let command = args.remove(0);
@@ -127,6 +137,16 @@ pub fn run(mut args: Vec<String>) -> Result<()> {
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(3600));
             }
+        }
+        "sounds" => {
+            let folder = args.0.first().cloned().context("sounds needs a folder")?;
+            args.0.remove(0);
+            args.done()?;
+            for line in crate::sound::render(&PathBuf::from(&folder))? {
+                println!("{line}");
+            }
+            println!("Wrote Battle's sounds to {folder}");
+            Ok(())
         }
         "arena" => {
             let arena = load_arena(args.value("--file")?)?;
@@ -318,16 +338,37 @@ fn play_match(mut args: Args) -> Result<()> {
         }
     }
     while m.outcome().is_none() {
-        let orders = [
-            coaches[0].orders(&m, Side::Left),
-            coaches[1].orders(&m, Side::Right),
+        let plans = [
+            coaches[0].plan(&m, Side::Left),
+            coaches[1].plan(&m, Side::Right),
         ];
-        let report = m.resolve_turn(orders);
+        let told: Vec<String> = Side::BOTH
+            .iter()
+            .map(|side| {
+                let orders: Vec<String> = plans[side.index()]
+                    .iter()
+                    .map(|d| formiga_battle_core::recap::describe_directive(&m, d))
+                    .collect();
+                format!(
+                    "  {} plan: {}",
+                    formiga_battle_core::recap::team_name(*side),
+                    if orders.is_empty() {
+                        "none".to_owned()
+                    } else {
+                        orders.join("; ")
+                    }
+                )
+            })
+            .collect();
+        let report = m.resolve_turn(plans);
         if json {
             println!("{}", serde_json::to_string(&report)?);
             continue;
         }
         println!("Turn {}", report.turn);
+        for line in told {
+            println!("{line}");
+        }
         for slot in Slot::all() {
             if let Some(order) = report.orders[slot.side.index()][slot.index as usize] {
                 println!("  {:<10} {}", m.profile(slot).name, describe(&m, &order));
@@ -417,7 +458,8 @@ fn replay(path: PathBuf) -> Result<()> {
 }
 
 /// The board as text: left team A B C, right team x y z, `#` obstacles, `=` a closed gate, `/`
-/// an open one, `L` the lever, `:` the zone.
+/// an open one, `L` the lever, `S` a tap, `:` the zone, `~` ground marked for something about to
+/// land, `*` something to pick up, `|` a twig.
 fn draw(m: &Match) -> String {
     let mut out = String::new();
     for y in 0..m.arena.height as i8 {
@@ -429,11 +471,15 @@ fn draw(m: &Match) -> String {
                     Side::Left => (b'A' + slot.index) as char,
                     Side::Right => (b'x' + slot.index) as char,
                 },
+                None if m.board.twigs.iter().any(|(t, _)| *t == tile) => '|',
+                None if m.board.ground.iter().any(|(t, _)| *t == tile) => '*',
                 None => match m.arena.terrain(tile) {
+                    arena::Terrain::Obstacle if m.arena.switches.contains(&tile) => 'S',
                     arena::Terrain::Obstacle => '#',
                     arena::Terrain::Lever => 'L',
                     arena::Terrain::Gate if m.walkable(tile) => '/',
                     arena::Terrain::Gate => '=',
+                    arena::Terrain::Open if formiga_battle_core::interpret::warned(m, tile) => '~',
                     arena::Terrain::Open if m.arena.in_zone(tile) => ':',
                     arena::Terrain::Open => '.',
                 },

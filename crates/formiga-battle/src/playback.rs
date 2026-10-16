@@ -8,7 +8,7 @@
 
 use crate::look::Pose;
 use formiga_battle_core::game::Board;
-use formiga_battle_core::{Event, EventKind, Side, Slot, TEAM_SIZE, Tile};
+use formiga_battle_core::{Event, EventKind, Item, Side, Slot, TEAM_SIZE, Tile};
 
 /// How long one tick takes to show, in seconds.
 pub const TICK_SECS: f32 = 0.9;
@@ -38,6 +38,12 @@ pub struct Figure {
     /// Knocked off balance this turn: it holds nothing and counts for nothing in the yard until
     /// the turn is over.
     pub off_balance: bool,
+    /// What it carries, if anything.
+    pub carrying: Option<Item>,
+    /// A leaf umbrella is open over it.
+    pub sheltered: bool,
+    /// The sprinkler soaked it this turn.
+    pub soaked: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,6 +66,14 @@ pub enum Burst {
     Broken,
     /// A wary creature waiting a tick rather than walk in among the other team.
     Hesitate,
+    /// The sprinkler's spray landing on a tile.
+    Splash,
+    /// A dandelion puff's gust landing on a tile.
+    Gust,
+    /// Something found turning up, or picked up.
+    Twinkle,
+    /// A pebble bell ringing.
+    Ring,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -83,6 +97,26 @@ pub struct Frame {
     pub tick: u8,
     /// Both teams have someone steady in the yard, so neither gains on the beacon.
     pub paused: bool,
+    /// Things lying on the ground.
+    pub ground: Vec<(Tile, Item)>,
+    /// Spots glinting with something about to turn up.
+    pub glint: Vec<Tile>,
+    /// Twigs wedged upright.
+    pub twigs: Vec<Tile>,
+    /// The map event is warned and has not landed yet.
+    pub sprinkler_coming: bool,
+    /// A tap can be turned.
+    pub tap_ready: bool,
+    /// Tiles a puff is about to blow across.
+    pub gusty: Vec<Tile>,
+    /// Where the map event will land, while it is coming.
+    pub event_tiles: Vec<Tile>,
+    /// Ground gone under.
+    pub closed: Vec<Tile>,
+    /// Twigs floating as rafts.
+    pub rafts: Vec<Tile>,
+    /// Sticky ground.
+    pub honey: Vec<Tile>,
 }
 
 /// How long effects stay on the board.
@@ -105,6 +139,9 @@ impl Frame {
                     opacity: if f.out { 0.0 } else { 1.0 },
                     holding: f.holding,
                     off_balance: false,
+                    carrying: f.carrying,
+                    sheltered: f.shelter_until > 0,
+                    soaked: false,
                 }
             })
         });
@@ -116,6 +153,22 @@ impl Frame {
             effects: Vec::new(),
             tick: 0,
             paused: false,
+            ground: board.ground.clone(),
+            glint: board.glint.iter().map(|(t, _)| *t).collect(),
+            twigs: board.twigs.iter().map(|(t, _)| *t).collect(),
+            sprinkler_coming: board.event_at.is_some(),
+            tap_ready: board.event_at.is_none()
+                && board.turn.saturating_add(1) >= board.switch_ready_turn,
+            event_tiles: board.event_tiles.clone(),
+            closed: board.closed.iter().map(|(t, _)| *t).collect(),
+            rafts: board.rafts.iter().map(|(t, _)| *t).collect(),
+            honey: board.honey.iter().map(|(t, _)| *t).collect(),
+            gusty: board
+                .pending
+                .iter()
+                .filter(|p| p.item == Item::Puff)
+                .flat_map(|p| formiga_battle_core::items::puff_tiles(p.from, p.target))
+                .collect(),
         }
     }
 
@@ -200,6 +253,11 @@ impl Playback {
             ticks: played,
             winners,
         }
+    }
+
+    /// Each event and when it happens, in seconds from the start: what the announcer reads.
+    pub fn moments(&self) -> &[(f32, Event)] {
+        &self.timed
     }
 
     /// How long the whole turn takes to show.
@@ -422,9 +480,138 @@ impl Playback {
                         }
                     }
                 }
+                // Where the map event and found things move or topple anyone; how they look and
+                // sound is the match screen's to draw.
+                EventKind::SceneryLanded {
+                    hit,
+                    tiles,
+                    effect: what,
+                    moved,
+                    ..
+                } => {
+                    frame.sprinkler_coming = false;
+                    frame.event_tiles.clear();
+                    for tile in tiles {
+                        effect(&mut frame, Burst::Splash, *tile);
+                    }
+                    if *what == formiga_battle_core::Effect::Close {
+                        frame.ground.retain(|(t, _)| !tiles.contains(t));
+                        frame.closed.extend(tiles.iter().copied());
+                    }
+                    for b in moved {
+                        if let Some(to) = b.to {
+                            let f = frame.figure_mut(b.slot);
+                            let share = (age / 0.35).clamp(0.0, 1.0);
+                            let (fx, fy) = (f32::from(b.from.x) + 0.5, f32::from(b.from.y) + 0.5);
+                            let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
+                            f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
+                            f.tile = to;
+                        }
+                    }
+                    for slot in hit {
+                        let f = frame.figure_mut(*slot);
+                        f.holding = false;
+                        f.off_balance = true;
+                        f.soaked = true;
+                        set_pose(&mut frame, &mut since, *slot, Pose::Wobble, *when);
+                    }
+                }
+                EventKind::Puffed { blown, twigs, .. } => {
+                    frame.gusty.clear();
+                    frame.twigs.retain(|t| !twigs.contains(t));
+                    for b in blown {
+                        effect(&mut frame, Burst::Gust, b.from);
+                        let f = frame.figure_mut(b.slot);
+                        f.holding = false;
+                        f.off_balance = true;
+                        if let Some(to) = b.to {
+                            let share = (age / 0.35).clamp(0.0, 1.0);
+                            let (fx, fy) = (f32::from(b.from.x) + 0.5, f32::from(b.from.y) + 0.5);
+                            let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
+                            f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
+                            f.tile = to;
+                        }
+                        set_pose(&mut frame, &mut since, b.slot, Pose::Wobble, *when);
+                    }
+                }
+                EventKind::SceneryWarned { tiles, .. } => {
+                    frame.sprinkler_coming = true;
+                    frame.event_tiles = tiles.clone();
+                }
+                EventKind::GroundReopened { tiles } => frame.closed.retain(|t| !tiles.contains(t)),
+                EventKind::RaftFloated { at, .. } => frame.rafts.push(*at),
+                EventKind::RaftSank { at } => frame.rafts.retain(|t| t != at),
+                EventKind::Rung { at, .. } => effect(&mut frame, Burst::Ring, *at),
+                EventKind::HoneySpilled { tiles, .. } => {
+                    frame.gusty.retain(|t| !tiles.contains(t));
+                    frame.honey.extend(tiles.iter().copied());
+                }
+                EventKind::HoneyDried { tiles } => frame.honey.retain(|t| !tiles.contains(t)),
+                EventKind::Stuck { slot, .. } => {
+                    set_pose(&mut frame, &mut since, *slot, Pose::Wobble, *when);
+                }
+                EventKind::Hopped { slot, from, to } => {
+                    // Up and over, quickly.
+                    let share = (age / 0.4).clamp(0.0, 1.0);
+                    let f = frame.figure_mut(*slot);
+                    let (fx, fy) = (f32::from(from.x) + 0.5, f32::from(from.y) + 0.5);
+                    let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
+                    f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
+                    f.tile = *to;
+                    effect(&mut frame, Burst::Twinkle, *from);
+                }
+                EventKind::SwitchTurned { .. } => {
+                    frame.tap_ready = false;
+                    frame.sprinkler_coming = true;
+                }
+                EventKind::ItemsGlint { spots, .. } => frame.glint = spots.clone(),
+                EventKind::ItemAppeared { at, item } => {
+                    frame.glint.retain(|t| t != at);
+                    frame.ground.push((*at, *item));
+                    effect(&mut frame, Burst::Twinkle, *at);
+                }
+                EventKind::PickedUp { slot, item, at } => {
+                    frame.ground.retain(|(t, _)| t != at);
+                    frame.figure_mut(*slot).carrying = Some(*item);
+                    effect(&mut frame, Burst::Twinkle, *at);
+                }
+                EventKind::Dropped { slot, item, at } => {
+                    frame.figure_mut(*slot).carrying = None;
+                    if let Some(at) = at {
+                        frame.ground.push((*at, *item));
+                    }
+                }
+                EventKind::ItemUsed {
+                    slot, item, tiles, ..
+                } => {
+                    frame.figure_mut(*slot).carrying = None;
+                    set_pose(&mut frame, &mut since, *slot, Pose::Reach, *when);
+                    if matches!(item, Item::Puff | Item::Honey) {
+                        frame.gusty = tiles.clone();
+                    }
+                }
+                EventKind::TwigWedged { at, .. } => frame.twigs.push(*at),
+                EventKind::TwigFell { at } => frame.twigs.retain(|t| t != at),
+                EventKind::Sheltering { slots, .. } => {
+                    for slot in slots {
+                        frame.figure_mut(*slot).sheltered = true;
+                    }
+                }
+                EventKind::ShelterFolded { slot } => frame.figure_mut(*slot).sheltered = false,
+                EventKind::Sheltered { target, .. } => {
+                    let tile = frame.figure(*target).tile;
+                    effect(&mut frame, Burst::Shield, tile);
+                }
                 EventKind::OrderFilled { .. }
+                | EventKind::Assigned { .. }
+                | EventKind::Rethought { .. }
+                | EventKind::OrderDropped { .. }
                 | EventKind::TookOpportunity { .. }
-                | EventKind::LeverResting { .. } => {}
+                | EventKind::LeverResting { .. }
+                | EventKind::SwitchDefended { .. }
+                | EventKind::SwitchResting { .. }
+                | EventKind::GateWedged { .. }
+                | EventKind::ItemFizzled { .. } => {}
             }
         }
         for (figures, began) in frame.figures.iter_mut().zip(since) {
@@ -450,11 +637,11 @@ mod tests {
         ];
         let mut m = Match::new(Arena::backyard(), Ruleset::default(), 2, rosters).unwrap();
         let before = m.board.clone();
-        let orders = [
-            Coach::Exhibition.orders(&m, Side::Left),
-            Coach::Exhibition.orders(&m, Side::Right),
+        let plans = [
+            Coach::Exhibition.plan(&m, Side::Left),
+            Coach::Exhibition.plan(&m, Side::Right),
         ];
-        let report = m.resolve_turn(orders);
+        let report = m.resolve_turn(plans);
         (before, report, m)
     }
 

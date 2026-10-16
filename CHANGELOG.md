@@ -2,6 +2,95 @@
 
 ## Unreleased
 
+- Rules version 7: team orders. Each turn a Handler gives the whole team up to three orders
+  instead of one to each companion: TAKE some squares (walk onto an empty one, move theirs off
+  one, two flanking a holder), DEFEND some squares (stand on them, guard beside them, head off
+  whoever comes), or INTERACT with something (fetch a found thing, pull the lever or set off a
+  switch, go after what one of theirs carries, or have one of yours use what it carries). Naming
+  a square in two orders makes it more pressing and brings a second companion to stand guard.
+  The team shares the plan out by itself: what the plan needs first, then who is nearest and
+  what each is already doing, and last, by no more than about two steps' walk, who each one is.
+  A bold one would rather be the one to meet the other team, a wary one the one to stand and
+  hold, a sociable one the one beside a friend, a curious one the one to fetch what lies in the
+  grass. Alone where two were needed to flank, a reckless one goes at the holder anyway and a
+  wary one waits beside it; and partway through a turn, a companion whose job came to nothing
+  (what it went for was taken, its target dug in or was knocked out, a teammate got there first,
+  the ground was marked for the map event) thinks again from the same plan, once. The account
+  says each team's plan, who took on what and why. Personality pulls half as hard on the way a
+  companion walks as it did, so that again about one in three goes its own way each turn: with
+  team orders they walk further and more often, and at the old pull nearly half did, which left
+  the kinds that lean hardest well behind against the thinking coaches. Friend matches speak relay
+  protocol 3, and recorded matches from earlier builds no longer replay.
+- Friend matches are more careful with the relay: Battle follows no redirects and never leaves
+  HTTPS, takes a room's code and seat only in the shapes a relay gives them, cleans the other
+  Handler's name and any reason for an ending before showing or keeping them, and waits longer
+  between looks while the relay cannot be reached. The notice of what a friend match shares now
+  names everything sent for each companion and when the relay deletes a room. The local relay
+  for development asks for JSON and refuses bodies nested too deep, as the site's does.
+- Rules version 6: every arena has a map event, warned on the board the turn before it comes
+  round and set off early from a switch of its own. Backyard's sprinkler sweeps the whole yard
+  (turns 4, 8 and 12; a garden tap on each side). Sandy Cove's wave washes whoever stands on the
+  sandbar's ends toward the middle of the beach (every third turn; a big shell on each side).
+  Millpond's water rises over the banks either side of the jetty for the rest of the turn, washing
+  off whoever waits there to come at the yard (turns 5 and 10; a sluice on each bank). In Woodland Glade, a shaken
+  oak sheds acorns on whoever stands round it and drops a twig (a breeze shakes a pair every fourth
+  turn; a contest shakes one). Nobody loses composure to any of them. Recorded matches from earlier
+  builds no longer replay.
+- Found things: a dandelion puff, a twig, a leaf umbrella, a pebble bell, a honey drop or, rarely,
+  a springy seed glints on two mirrored spots and turns up the turn after. Whoever steps onto one
+  picks it up and can USE it once: a puff bowls over whoever stands across its way, a twig blocks a
+  tile for two turns (keeps an open gate from closing, and floats as a raft in the millpond), a
+  leaf umbrella keeps a teammate dry and bounces contests off, a bell spoils the other team's
+  contests nearby (and sets the map event off, rung by a switch), honey stops whoever steps in,
+  and a seed hops its user two tiles. Cautious companions keep off ground about to be hit;
+  curious, playful ones go out of their way for what lies in the grass.
+- Battle opens at the Battleground, the first spread of the Handler's notebook. On its left page
+  the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
+  it, a face at each window, and a coach more for every three past six. On its right, two railway
+  tickets: Out in the World, to play a friend online, and Close to Home, to play the visiting team
+  offline, painted at the notebook's own pixel with a globe and a cottage on their stubs. Above them,
+  a little scene taped onto the page: two of your companions facing each other across the beacon
+  under bunting, now and then cheering, with the page's title on a ribbon. A click hurries the train in; with reduced motion it is already in. After a match, Back
+  to the station brings it in again.
+- History & settings, beneath the two tickets: every match the colony has played with who went
+  and how it ended, beside the Open Circuit points and each cup's progress; and reduced motion and
+  sound for the sitting, with keys to remember.
+- Every button, card and switch answers a touch the same way: it lifts when pointed at, sinks when
+  pressed and springs back, with a brass sparkle for the way on and a shake for the way back. Cards
+  drop onto each page as it turns, a chosen companion hops, and the next place in the team breathes
+  until it is filled. None of it moves under reduced motion.
+- Getting ready is the Handler's notebook, its pages turned as Desktop's journal turns them: where
+  to play, with the place pictured large and each cup's progress; who goes, every companion on a
+  card with temperament, habits and notebook note, beside a lineup of the three chosen; and, for a
+  friend, the room. Tabs along the top turn back to any page, and the way back to the station is
+  beside them.
+- The friend's room is its own page: sign the name your friend sees on a line, then open a room or
+  join one side by side. An open room's code is shown on a ticket with a button to copy it, and a
+  mistyped code says what a code is made of.
+- A turn is told over the board as it plays: a line over the head of whoever it happened to, a
+  word in Formiga's own pixel lettering where it happened (POW!, CLANG!, WHAM!, BOOM!, MISS!), the
+  composure it cost floating up as a number, and a sound for each. The last two lines stay on a
+  card in the board's corner, and the whole match, in full, opens from there (L).
+- A match begins with READY? and GO!, each turn's orders with a slip in the Handler's colour, and
+  it ends with HOORAY!, SO CLOSE! or A TIE! big on the board, and confetti for a win.
+- The team's orders are three coloured tokens on the notes page: pick TAKE, DEFEND or INTERACT (or
+  T, D, I) and click the board, or drag across it to name more squares; a click takes or interacts,
+  a right click defends. Each order's squares are washed in its colour (gold, sky, plum) under a
+  flag, a shield or a sparkle, side by side where two orders name one square, and a card by the
+  pointer says what a click will do. As a turn is revealed, footprints run from each of the team to
+  the job it took on; where a companion's leanings chose its job it says so over its head
+  (CHARGE!, STEADY!, PALS!, OOH!), and a change of plan mid-turn is told with why.
+- The right page keeps the orders and a glance at the arena: how to win, the orders and the
+  board's marks, one at a time, the detail on hover.
+- Sound: cheerful placeholder effects and music, all made in code, with music and sound volumes
+  and a mute behind the speaker on the leather. `formiga-battle sounds <folder>` writes them all
+  as WAV files to listen to.
+- Rules version 5: a creature's personality pulls four times as hard on the way it walks, so
+  each turn about one of a team's three goes its own way rather than the plain way: sometimes
+  none, sometimes two (about one team-turn in four before). Fewer matches are won at the beacon
+  (13%, from 21%), and the kinds score further apart under the Exhibition coach. Recorded matches
+  from earlier builds no longer replay.
+
 ## [0.67.8] - 2026-10-15
 
 The first Battle to download: an app for macOS and an installer for Windows, released with Formiga

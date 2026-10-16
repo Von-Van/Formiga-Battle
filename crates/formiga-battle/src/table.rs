@@ -2,22 +2,23 @@
 //! and faces, the orders the Handler has given so far, and the turn being shown. The window only
 //! asks this what to show and tells it what was clicked, so tests drive the same code.
 
+use crate::announce::Callout;
 use crate::friend::{Ask, Line, Told};
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
 use crate::rewards;
-use crate::scene::{Choice, Marks};
+use crate::scene::{Choice, Marks, PlanKind, PlanMark};
 use formiga_battle_contract::{BattleRecord, BattleResult};
 use formiga_battle_contract::{BattleSnapshot, Contender};
 use formiga_battle_core::Event;
-use formiga_battle_core::ai::{self, Coach};
-use formiga_battle_core::interpret::distances;
+use formiga_battle_core::ai::Coach;
+use formiga_battle_core::muster::checked;
 use formiga_battle_core::notebook::Page;
 use formiga_battle_core::recap::recap_naming;
 use formiga_battle_core::rng::{self, Purpose};
 use formiga_battle_core::{
-    Arena, Match, Order, Orders, Outcome, Profile, Ruleset, Side, Slot, TEAM_SIZE, Target, Tile,
-    TurnReport,
+    Arena, Directive, Match, Outcome, PLAN_SIZE, Profile, Ruleset, Side, Slot, TEAM_SIZE, TeamPlan,
+    Tile, TurnReport, order::MAX_SQUARES,
 };
 use formiga_battle_room::roster::{check_team, room_match};
 use formiga_battle_room::{Build, Entrant, View, relay_base};
@@ -27,6 +28,20 @@ use std::path::PathBuf;
 pub struct Session {
     pub directory: PathBuf,
     pub result: BattleResult,
+}
+
+/// The longest a reason from the relay for a match ending is shown.
+const REASON_CHARS: usize = 160;
+
+/// A Handler's name as the relay passed it on, cleaned again on arrival, as the relay cleaned it
+/// on its way in: it is shown in the window and kept in the history Desktop is sent.
+fn handler_name(raw: &str) -> String {
+    let name = formiga_expansion_rulebook::sanitize_text(raw, 24);
+    if name.is_empty() {
+        "A Handler".to_owned()
+    } else {
+        name
+    }
 }
 
 /// A match with a friend, through the relay.
@@ -57,35 +72,58 @@ impl Friend {
     }
 }
 
+/// The three kinds of team order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Verb {
-    Move,
-    Hold,
-    Contest,
+    Take,
+    Defend,
+    Interact,
 }
 
 impl Verb {
-    pub const ALL: [Self; 3] = [Self::Move, Self::Hold, Self::Contest];
+    pub const ALL: [Self; 3] = [Self::Take, Self::Defend, Self::Interact];
 
     pub const fn word(self) -> &'static str {
         match self {
-            Self::Move => "MOVE",
-            Self::Hold => "HOLD",
-            Self::Contest => "CONTEST",
+            Self::Take => "TAKE",
+            Self::Defend => "DEFEND",
+            Self::Interact => "INTERACT",
         }
     }
 
     pub const fn hint(self) -> &'static str {
         match self {
-            Self::Move => "Reach a tile. Walks round anyone holding; open to a contest.",
-            Self::Hold => "Defend a tile. Turns a contest away; holds the beacon.",
-            Self::Contest => "Disrupt someone not holding, or pull the lever.",
+            Self::Take => {
+                "Squares for the team to get and hold: walk onto an empty one, move theirs off one."
+            }
+            Self::Defend => "Squares for the team to keep: stand on them and keep theirs off.",
+            Self::Interact => {
+                "Something for the team to go and get: a found thing, the lever, the switch, or what one of theirs carries. On one of yours carrying something, it uses it."
+            }
+        }
+    }
+
+    fn of(d: &Directive) -> Self {
+        match d {
+            Directive::Take { .. } => Self::Take,
+            Directive::Defend { .. } => Self::Defend,
+            Directive::Interact { .. } => Self::Interact,
         }
     }
 }
 
+/// What a click on the board does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Aim {
+    /// Sets the chosen order to this.
+    Give(Directive),
+    Nothing,
+}
+
 pub struct Shown {
     pub playback: Playback,
+    /// What is announced over the board as it plays, in order.
+    pub callouts: Vec<Callout>,
     pub report: TurnReport,
     /// When it began showing, on the window's clock.
     pub started: f32,
@@ -108,8 +146,9 @@ pub struct Table {
     pub teams: [Vec<usize>; 2],
     pub looks: [Vec<Look>; 2],
     pub facing: [[bool; TEAM_SIZE]; 2],
-    /// The Handler's orders so far this turn.
-    pub orders: Orders,
+    /// The Handler's orders so far this turn: three places, each empty or one team order.
+    pub orders: [Option<Directive>; PLAN_SIZE],
+    /// Which of the three orders a click on the board gives.
     pub selected: Option<u8>,
     pub verb: Option<Verb>,
     /// When the current turn's orders began, on the window's clock.
@@ -175,7 +214,7 @@ impl Table {
             teams: [Vec::new(), Vec::new()],
             looks: [Vec::new(), Vec::new()],
             facing: [[true; TEAM_SIZE], [false; TEAM_SIZE]],
-            orders: [None; TEAM_SIZE],
+            orders: [None, None, None],
             selected: None,
             verb: None,
             turn_began: 0.0,
@@ -540,7 +579,7 @@ impl Table {
                 self.leave_room();
                 return false;
             };
-            let handlers = [a.handler.clone(), b.handler.clone()];
+            let handlers = [handler_name(&a.handler), handler_name(&b.handler)];
             match room_match(
                 arena,
                 view.ruleset,
@@ -589,13 +628,13 @@ impl Table {
             .locked
             .iter()
             .find(|l| l.turn == m.board.turn + 1)
-            .copied();
+            .cloned();
         let ending = view.ending.clone();
-        if let Some(locked) = next
+        if let Some(locked) = &next
             && m.outcome().is_none()
         {
             let before = m.board.clone();
-            let report = m.resolve_turn(locked.submitted);
+            let report = m.resolve_turn(locked.submitted.clone());
             friend.line.ask(Ask::Board {
                 turn: report.turn,
                 hash: report.hash,
@@ -610,7 +649,10 @@ impl Table {
             && let Some(side) = ending.forfeited
         {
             m.forfeit(side);
-            self.ended_because = Some(ending.reason);
+            self.ended_because = Some(formiga_expansion_rulebook::sanitize_text(
+                &ending.reason,
+                REASON_CHARS,
+            ));
             self.finish_match();
         }
     }
@@ -688,8 +730,18 @@ impl Table {
         self.log
             .push((report.turn, recap_naming(m, &report.events, names)));
         self.match_events.extend(report.events.iter().cloned());
+        let other = self.other_short();
+        let mut teams = ["", ""];
+        teams[self.you.index()] = "you";
+        teams[self.you.other().index()] = if self.friend.is_some() {
+            &other
+        } else {
+            "the visitors"
+        };
+        let callouts = crate::announce::callouts(m, &playback, &report.events, teams, self.you);
         let over = m.outcome().is_some();
         self.shown = Some(Shown {
+            callouts,
             playback,
             report,
             started: now,
@@ -702,13 +754,10 @@ impl Table {
     }
 
     fn begin_orders(&mut self, now: f32) {
-        self.orders = [None; TEAM_SIZE];
+        self.orders = [None, None, None];
         self.verb = None;
         self.turn_began = now;
-        self.selected = self
-            .m
-            .as_ref()
-            .and_then(|m| m.team(self.you).next().map(|s| s.index));
+        self.selected = Some(0);
     }
 
     pub fn outcome(&self) -> Option<Outcome> {
@@ -731,13 +780,9 @@ impl Table {
         }
     }
 
-    /// Chooses a creature of the Handler's to give an order to.
+    /// Chooses which of the three orders a click on the board gives.
     pub fn select(&mut self, index: u8) {
-        if self
-            .m
-            .as_ref()
-            .is_some_and(|m| m.standing(Slot::new(self.you, index)))
-        {
+        if usize::from(index) < PLAN_SIZE {
             self.selected = Some(index);
             self.verb = None;
         }
@@ -749,99 +794,213 @@ impl Table {
         }
     }
 
-    /// The tiles the chosen order could be aimed at, as the board marks them.
-    pub fn choices(&self) -> Vec<(Tile, Choice)> {
-        let (Some(m), Some(index), Some(verb)) = (&self.m, self.selected, self.verb) else {
-            return Vec::new();
-        };
-        let slot = Slot::new(self.you, index);
-        match verb {
-            Verb::Move | Verb::Hold => {
-                let from = m.fighter(slot).at;
-                let dist = distances(m, slot, &[from], false);
-                let w = m.arena.width as usize;
-                let choice = if verb == Verb::Move {
-                    Choice::Walk
-                } else {
-                    Choice::Hold
-                };
-                m.arena
-                    .tiles()
-                    .filter(|t| m.walkable(*t))
-                    .filter(|t| {
-                        dist[t.y as usize * w + t.x as usize]
-                            .is_some_and(|d| d <= m.ruleset.ticks_per_turn)
-                    })
-                    .map(|t| (t, choice))
-                    .collect()
-            }
-            Verb::Contest => m
-                .team(self.you.other())
-                .map(|e| (m.fighter(e).at, Choice::Contest))
-                .chain(m.arena.levers.iter().map(|l| (*l, Choice::Contest)))
-                .collect(),
-        }
+    /// The team's plan as given so far, in order.
+    pub fn plan(&self) -> TeamPlan {
+        self.orders.iter().flatten().cloned().collect()
     }
 
-    /// A click on a tile, while giving orders: aims the chosen order there, or chooses whoever of
-    /// the Handler's stands there. True if it changed anything.
-    pub fn click(&mut self, tile: Tile) -> bool {
-        let Some(m) = &self.m else {
-            return false;
-        };
-        let own = m.occupant(tile).filter(|s| s.side == self.you);
+    /// Whether this order could be carried out at all just now.
+    fn fits(&self, d: &Directive) -> bool {
+        self.m
+            .as_ref()
+            .is_some_and(|m| checked(m, self.you, &vec![d.clone()]).0.len() == 1)
+    }
+
+    /// The squares the plan names, each with its order's colour and kind, a square named by more
+    /// than one order stacked.
+    pub fn plan_marks(&self) -> Vec<PlanMark> {
+        let mut out: Vec<PlanMark> = Vec::new();
+        for (i, d) in self.orders.iter().enumerate() {
+            let Some(d) = d else {
+                continue;
+            };
+            let kind = match d {
+                Directive::Take { .. } => PlanKind::Take,
+                Directive::Defend { .. } => PlanKind::Defend,
+                Directive::Interact { .. } => PlanKind::Interact,
+            };
+            for t in d.squares() {
+                let stack = out.iter().filter(|m| m.tile == *t).count() as u8;
+                out.push(PlanMark {
+                    tile: *t,
+                    order: i as u8,
+                    kind,
+                    stack,
+                    chosen: self.selected == Some(i as u8) && self.verb.is_some(),
+                });
+            }
+        }
+        out
+    }
+
+    /// Adds a square to the TAKE or DEFEND being given, as the pointer is dragged across the
+    /// board; never takes one out. True if it changed anything.
+    pub fn add_square(&mut self, tile: Tile) -> bool {
         let (Some(index), Some(verb)) = (self.selected, self.verb) else {
-            if let Some(s) = own {
-                self.select(s.index);
-                return true;
-            }
             return false;
         };
-        let slot = Slot::new(self.you, index);
-        let order = match verb {
-            Verb::Move => Order::Move { to: tile },
-            Verb::Hold => Order::Hold { at: tile },
-            Verb::Contest => {
-                if let Some(enemy) = m.occupant(tile).filter(|s| s.side != self.you) {
-                    Order::Contest {
-                        target: Target::Creature { slot: enemy },
-                    }
-                } else if m.arena.levers.contains(&tile) {
-                    Order::Contest {
-                        target: Target::Lever { at: tile },
-                    }
-                } else {
-                    if let Some(s) = own {
-                        self.select(s.index);
-                        return true;
-                    }
-                    return false;
-                }
-            }
-        };
-        if !m.valid(slot, &order) {
+        if !matches!(verb, Verb::Take | Verb::Defend) {
             return false;
         }
-        self.orders[index as usize] = Some(order);
-        self.verb = None;
-        // On to the next creature still without an order.
-        self.selected = m
-            .team(self.you)
-            .map(|s| s.index)
-            .find(|i| self.orders[*i as usize].is_none())
-            .or(Some(index));
+        let mut squares = match &self.orders[usize::from(index)] {
+            Some(d) if Verb::of(d) == verb => d.squares().to_vec(),
+            _ => Vec::new(),
+        };
+        if squares.contains(&tile) || squares.len() >= MAX_SQUARES {
+            return false;
+        }
+        squares.push(tile);
+        let order = match verb {
+            Verb::Take => Directive::Take { squares },
+            _ => Directive::Defend { squares },
+        };
+        if !self.fits(&order) {
+            return false;
+        }
+        self.orders[usize::from(index)] = Some(order);
         true
     }
 
+    /// Picks an order to give: into the chosen place in the plan if it is empty or already of
+    /// this kind, otherwise into the first empty one. False if all three are given.
+    pub fn take_token(&mut self, verb: Verb) -> bool {
+        let fits_here = |i: u8| {
+            self.orders[usize::from(i)]
+                .as_ref()
+                .is_none_or(|d| Verb::of(d) == verb)
+        };
+        let place = self
+            .selected
+            .filter(|i| fits_here(*i) && self.verb.is_some_and(|v| v == verb))
+            .or_else(|| (0..PLAN_SIZE as u8).find(|i| self.orders[usize::from(*i)].is_none()));
+        match place {
+            Some(i) => {
+                self.selected = Some(i);
+                self.verb = Some(verb);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// What the board marks: with INTERACT picked, everything there is to interact with.
+    pub fn choices(&self) -> Vec<(Tile, Choice)> {
+        let Some(m) = &self.m else {
+            return Vec::new();
+        };
+        let mut marks: Vec<(Tile, Choice)> = Vec::new();
+        if self.verb == Some(Verb::Interact) {
+            let named: Vec<Tile> = self
+                .orders
+                .iter()
+                .flatten()
+                .flat_map(|d| d.squares().to_vec())
+                .collect();
+            for t in m.arena.tiles() {
+                if !named.contains(&t) && self.fits(&Directive::Interact { at: t }) {
+                    marks.push((t, Choice::Use));
+                }
+            }
+        }
+        marks
+    }
+
+    /// What a click on `tile` would do while giving orders: a plain click (`hold` false) or a
+    /// right click (`hold` true). With TAKE or DEFEND picked, it adds the square to the chosen
+    /// order, or takes it out again; with INTERACT picked, it sets the chosen order to that. With
+    /// none picked, a plain click interacts with whatever is there to interact with and otherwise
+    /// takes the square, and a right click defends it.
+    pub fn aim(&self, tile: Tile, hold: bool) -> Aim {
+        let Some(m) = &self.m else {
+            return Aim::Nothing;
+        };
+        if self.shown.is_some() || m.outcome().is_some() {
+            return Aim::Nothing;
+        }
+        let Some(index) = self.selected else {
+            return Aim::Nothing;
+        };
+        let current = self.orders[usize::from(index)].clone();
+        let squares = |verb: Verb| -> Vec<Tile> {
+            match &current {
+                Some(d) if Verb::of(d) == verb => {
+                    let mut squares = d.squares().to_vec();
+                    match squares.iter().position(|t| *t == tile) {
+                        Some(i) if squares.len() > 1 => {
+                            squares.remove(i);
+                        }
+                        Some(_) => {}
+                        None => squares.push(tile),
+                    }
+                    squares
+                }
+                _ => vec![tile],
+            }
+        };
+        let interact = Directive::Interact { at: tile };
+        let order = match (self.verb, hold) {
+            (Some(Verb::Take), _) => Directive::Take {
+                squares: squares(Verb::Take),
+            },
+            (Some(Verb::Defend), _) => Directive::Defend {
+                squares: squares(Verb::Defend),
+            },
+            (Some(Verb::Interact), _) => interact,
+            (None, true) => Directive::Defend {
+                squares: vec![tile],
+            },
+            (None, false) if self.fits(&interact) => interact,
+            (None, false) => Directive::Take {
+                squares: vec![tile],
+            },
+        };
+        if Some(&order) == current.as_ref() || !self.fits(&order) {
+            return Aim::Nothing;
+        }
+        Aim::Give(order)
+    }
+
+    /// A click on a tile while giving orders, as `aim` says. A TAKE or DEFEND being built stays
+    /// chosen for more squares; anything else moves on to the next order still empty.
+    pub fn press(&mut self, tile: Tile, hold: bool) -> Aim {
+        let aim = self.aim(tile, hold);
+        if let Aim::Give(order) = &aim {
+            let index = self
+                .selected
+                .expect("an order is aimed at the chosen place");
+            self.orders[usize::from(index)] = Some(order.clone());
+            if !matches!(self.verb, Some(Verb::Take | Verb::Defend)) {
+                self.verb = None;
+                self.selected = (0..PLAN_SIZE as u8)
+                    .find(|i| self.orders[usize::from(*i)].is_none())
+                    .or(Some(index));
+            }
+        }
+        aim
+    }
+
+    /// A plain click on a tile. True if it changed anything.
+    #[cfg(test)]
+    pub fn click(&mut self, tile: Tile) -> bool {
+        self.press(tile, false) != Aim::Nothing
+    }
+
     pub fn clear_order(&mut self, index: u8) {
-        self.orders[index as usize] = None;
+        if let Some(order) = self.orders.get_mut(usize::from(index)) {
+            *order = None;
+        }
     }
 
     /// What the board shows over itself just now.
     pub fn marks(&self, hover: Option<Tile>, now: f32) -> Marks {
         let mut marks = Marks {
-            selected: self.selected.map(|i| Slot::new(self.you, i)),
+            selected: None,
             choices: self.choices(),
+            plan: if self.shown.is_none() {
+                self.plan_marks()
+            } else {
+                Vec::new()
+            },
             hover,
             orders: Vec::new(),
             ..Marks::default()
@@ -858,13 +1017,7 @@ impl Table {
                 }
             }
             Some(_) => marks.selected = None,
-            None => {
-                for (i, order) in self.orders.iter().enumerate() {
-                    if let Some(order) = order {
-                        marks.orders.push((Slot::new(self.you, i as u8), *order));
-                    }
-                }
-            }
+            None => {}
         }
         marks
     }
@@ -872,6 +1025,7 @@ impl Table {
     /// Locks the Handler's orders: against the AI, resolves the turn and starts showing it;
     /// against a friend, sends them to the room, which resolves the turn when both are in.
     pub fn lock(&mut self, now: f32) {
+        let ours = self.plan();
         let Some(m) = &mut self.m else {
             return;
         };
@@ -883,25 +1037,27 @@ impl Table {
             if !friend.seated || friend.sent(turn) {
                 return;
             }
-            friend.line.ask(Ask::Orders {
-                turn,
-                orders: self.orders,
-            });
+            friend.line.ask(Ask::Orders { turn, orders: ours });
             friend.sent_turn = Some(turn);
             self.selected = None;
             self.verb = None;
             return;
         }
-        let away = Coach::Exhibition.orders(m, self.you.other());
+        let away = Coach::Exhibition.plan(m, self.you.other());
+        let plans = match self.you {
+            Side::Left => [ours, away],
+            Side::Right => [away, ours],
+        };
         let before = m.board.clone();
-        let report = m.resolve_turn([self.orders, away]);
+        let report = m.resolve_turn(plans);
         self.show_turn(before, report, now);
     }
 
     /// The Handler's orders, as the AI coach would give them: for review pictures.
     pub fn coach_orders(&mut self) {
         if let Some(m) = &self.m {
-            self.orders = Coach::Exhibition.orders(m, self.you);
+            let plan = Coach::Exhibition.plan(m, self.you);
+            self.orders = [0, 1, 2].map(|i| plan.get(i).cloned());
         }
     }
 
@@ -944,17 +1100,17 @@ impl Table {
                 .as_ref()
                 .is_none_or(|s| now - s.started >= s.playback.duration())
     }
-
-    /// What the fallback would choose for a creature still without an order.
-    pub fn fallback(&self, index: u8) -> Option<Order> {
-        self.m
-            .as_ref()
-            .map(|m| ai::fallback(m, Slot::new(self.you, index)))
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_handler_name_from_the_relay_is_cleaned_before_it_is_shown_or_kept() {
+        assert_eq!(handler_name("  Sam\u{202e}\u{0007}  "), "Sam");
+        assert_eq!(handler_name("\u{200b}"), "A Handler");
+        assert_eq!(handler_name(&"x".repeat(80)).chars().count(), 24);
+    }
+
     use super::*;
     use formiga_battle_contract::sample;
 
@@ -964,34 +1120,137 @@ mod tests {
         t
     }
 
+    fn yard(t: &Table) -> Tile {
+        t.m.as_ref().unwrap().arena.zone_centre()
+    }
+
     #[test]
-    fn a_handler_aims_an_order_by_choosing_a_creature_a_verb_and_a_tile() {
+    fn a_handler_builds_a_team_order_square_by_square() {
         let mut t = table();
         assert_eq!(t.selected, Some(0));
-        t.choose_verb(Verb::Hold);
-        let (tile, _) = t.choices()[0];
-        assert!(t.click(tile));
-        assert_eq!(t.orders[0], Some(Order::Hold { at: tile }));
+        t.choose_verb(Verb::Take);
+        let centre = yard(&t);
+        let next = Tile::new(centre.x - 1, centre.y);
+        assert!(t.click(centre));
+        assert!(t.click(next));
         assert_eq!(
-            t.selected,
-            Some(1),
-            "on to the next creature without an order"
+            t.orders[0],
+            Some(Directive::Take {
+                squares: vec![centre, next]
+            })
+        );
+        assert_eq!(t.selected, Some(0), "a TAKE stays chosen for more squares");
+        assert!(t.click(next), "a square clicked again comes out");
+        assert_eq!(
+            t.orders[0],
+            Some(Directive::Take {
+                squares: vec![centre]
+            })
+        );
+        assert!(
+            t.plan_marks()
+                .iter()
+                .any(|m| m.tile == centre && m.kind == PlanKind::Take && m.order == 0)
         );
     }
 
     #[test]
-    fn a_contest_can_only_be_aimed_at_the_other_team_or_the_lever() {
+    fn dragging_adds_squares_to_the_order_in_hand_and_never_takes_one_out() {
         let mut t = table();
-        t.choose_verb(Verb::Contest);
-        let m = t.m.as_ref().unwrap();
-        let teammate = m.fighter(Slot::new(Side::Left, 1)).at;
-        let enemy = m.fighter(Slot::new(Side::Right, 0)).at;
-        assert!(t.click(teammate), "clicking a teammate chooses it instead");
-        assert_eq!(t.selected, Some(1));
-        assert_eq!(t.orders[0], None);
-        t.choose_verb(Verb::Contest);
-        assert!(t.click(enemy));
-        assert!(matches!(t.orders[1], Some(Order::Contest { .. })));
+        let zone = t.arena.zone.clone();
+        assert!(t.take_token(Verb::Defend));
+        assert!(t.add_square(zone[0]));
+        assert!(t.add_square(zone[1]));
+        assert!(!t.add_square(zone[1]), "a square already named stays");
+        assert_eq!(
+            t.orders[0],
+            Some(Directive::Defend {
+                squares: vec![zone[0], zone[1]]
+            })
+        );
+    }
+
+    #[test]
+    fn a_square_named_by_two_orders_is_marked_twice_stacked() {
+        let mut t = table();
+        let centre = yard(&t);
+        t.take_token(Verb::Take);
+        t.press(centre, false);
+        t.verb = None;
+        t.take_token(Verb::Defend);
+        t.press(centre, false);
+        let marks: Vec<_> = t
+            .plan_marks()
+            .into_iter()
+            .filter(|m| m.tile == centre)
+            .collect();
+        assert_eq!(marks.len(), 2);
+        assert_eq!(marks[1].stack, 1);
+        assert_ne!(marks[0].order, marks[1].order);
+    }
+
+    #[test]
+    fn with_all_three_orders_given_no_more_can_be_picked() {
+        let mut t = table();
+        let zone = t.arena.zone.clone();
+        for (i, tile) in zone.iter().take(3).enumerate() {
+            assert!(t.take_token(Verb::Defend), "order {i}");
+            t.press(*tile, false);
+            t.verb = None;
+        }
+        t.selected = None;
+        assert!(!t.take_token(Verb::Take));
+    }
+
+    #[test]
+    fn with_no_order_picked_a_click_takes_a_square_and_a_right_click_defends_it() {
+        let mut t = table();
+        let centre = yard(&t);
+        assert_eq!(
+            t.press(centre, false),
+            Aim::Give(Directive::Take {
+                squares: vec![centre]
+            })
+        );
+        assert_eq!(t.selected, Some(1), "on to the next order still empty");
+        assert_eq!(
+            t.press(centre, true),
+            Aim::Give(Directive::Defend {
+                squares: vec![centre]
+            })
+        );
+        assert_eq!(t.selected, Some(2));
+        assert_eq!(t.plan().len(), 2);
+    }
+
+    #[test]
+    fn interact_needs_something_there_to_interact_with() {
+        let mut t = table();
+        t.choose_verb(Verb::Interact);
+        let centre = yard(&t);
+        assert_eq!(t.aim(centre, false), Aim::Nothing);
+        let lever = t.m.as_ref().unwrap().arena.levers[0];
+        assert_eq!(
+            t.aim(lever, false),
+            Aim::Give(Directive::Interact { at: lever })
+        );
+    }
+
+    #[test]
+    fn a_cleared_order_comes_out_of_the_plan() {
+        let mut t = table();
+        let centre = yard(&t);
+        t.press(centre, false);
+        t.clear_order(0);
+        assert!(t.plan().is_empty());
+    }
+
+    #[test]
+    fn nothing_can_be_aimed_while_a_turn_plays_out() {
+        let mut t = table();
+        let centre = yard(&t);
+        t.lock(0.0);
+        assert_eq!(t.aim(centre, false), Aim::Nothing);
     }
 
     #[test]
@@ -1004,7 +1263,7 @@ mod tests {
         assert!(t.shown.is_some());
         t.frame(1.0 + length + 0.1);
         assert!(t.shown.is_none());
-        assert_eq!(t.orders, [None; TEAM_SIZE]);
+        assert_eq!(t.orders, [None, None, None]);
         assert_eq!(t.log.len(), 1);
         assert_eq!(t.m.as_ref().unwrap().board.turn, 1);
     }
@@ -1071,15 +1330,30 @@ mod tests {
 
     #[test]
     fn two_tables_play_a_whole_match_through_a_relay() {
-        let relay =
-            formiga_battle_room::serve_relay("127.0.0.1:0", formiga_battle_room::Limits::default())
-                .unwrap();
+        // A relay named in FORMIGA_BATTLE_RELAY, such as the site's, or one of our own.
+        let named = std::env::var(formiga_battle_room::RELAY_ENV)
+            .ok()
+            .filter(|v| !v.trim().is_empty());
+        let local = match named {
+            Some(_) => None,
+            None => Some(
+                formiga_battle_room::serve_relay(
+                    "127.0.0.1:0",
+                    formiga_battle_room::Limits::default(),
+                )
+                .unwrap(),
+            ),
+        };
+        let base = named.unwrap_or_else(|| local.as_ref().unwrap().base());
         let mut host = Table::new(sample::snapshot(), sample::visitors(9), 1);
         let mut guest = Table::new(sample::visitors(11), sample::visitors(9), 2);
-        host.relay = relay.base();
-        guest.relay = relay.base();
+        host.relay = base.clone();
+        guest.relay = base;
         host.open_room("Jake", None);
         let mut now = 0.0;
+        // Opening a room first fingerprints this program, which takes a while in a debug build
+        // with the other tests busy, so the wait is by the wall clock rather than by the table's.
+        let opened = std::time::Instant::now();
         let code = loop {
             host.poll(now);
             if let Some(code) = host.friend.as_ref().and_then(|f| f.code.clone()) {
@@ -1087,16 +1361,27 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
             now += 0.005;
-            assert!(now < 5.0, "the room opens: {:?}", host.notice);
+            assert!(
+                opened.elapsed().as_secs() < 60,
+                "the room opens: {:?}",
+                host.notice
+            );
         };
         guest.open_room("Friend", Some(&code.to_lowercase()));
+        // Joining fingerprints the program too, so this wait is also by the wall clock.
+        let joined = std::time::Instant::now();
         let mut began = [false, false];
         while !(began[0] && began[1]) {
             began[0] |= host.poll(now);
             began[1] |= guest.poll(now);
             std::thread::sleep(std::time::Duration::from_millis(20));
             now += 0.02;
-            assert!(now < 20.0, "both see the match begin");
+            assert!(
+                joined.elapsed().as_secs() < 60,
+                "both see the match begin: {:?} {:?}",
+                host.notice,
+                guest.notice
+            );
         }
         assert_eq!(host.you, Side::Left);
         assert_eq!(guest.you, Side::Right);
@@ -1142,7 +1427,9 @@ mod tests {
                 t.earned
             );
         }
-        relay.stop();
+        if let Some(relay) = local {
+            relay.stop();
+        }
     }
 
     #[test]

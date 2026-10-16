@@ -114,7 +114,7 @@ pub struct Sprite {
 
 impl Sprite {
     /// The painted part of a whole-board canvas, cut out.
-    fn cut(full: &Canvas) -> Self {
+    pub(crate) fn cut(full: &Canvas) -> Self {
         let Some((x0, y0, x1, y1)) = full.alpha_bounds() else {
             return Self {
                 pic: Canvas::new(1, 1),
@@ -222,8 +222,10 @@ impl Garden {
         if matches!(dressing, Dressing::Woodland | Dressing::Cove) {
             woodland::fire_ring(&mut ground, view, arena.zone_centre());
         }
-        // Shadows, before anything that casts them.
-        for tile in arena.tiles() {
+        // Shadows, before anything that casts them. A tap casts its own as it is drawn.
+        // A switch is drawn as it stands, ready or resting, with whoever stands round it.
+        let drawn_apart = |t: &Tile| arena.switches.contains(t);
+        for tile in arena.tiles().filter(|t| !drawn_apart(t)) {
             let height = match (dressing, arena.terrain(tile)) {
                 (Dressing::Millpond, _) => continue,
                 (Dressing::Garden, Terrain::Obstacle) => HEDGE_HEIGHT,
@@ -277,7 +279,7 @@ impl Garden {
 
         let mut pieces = HashMap::new();
         let mut gates = HashMap::new();
-        for tile in arena.tiles() {
+        for tile in arena.tiles().filter(|t| !drawn_apart(t)) {
             match (dressing, arena.terrain(tile)) {
                 (Dressing::Garden, Terrain::Obstacle) => {
                     let beside_gate = arena.gates.iter().any(|g| {
@@ -617,13 +619,21 @@ fn cast(canvas: &mut Canvas, view: &View, r: (f32, f32, f32, f32), height: f32) 
         if fade > 0.6 && paint::chance(px, py, 5, 128) {
             return;
         }
-        paint::put(
+        shade(
             canvas,
             px,
             py,
             paint::faded(SHADOW, (60.0 * (1.0 - fade * 0.5)) as u8),
         );
     });
+}
+
+/// A shadow's pixel, laid only on ground already painted: a shadow falling past the edge of the
+/// place has nothing to fall on, and would otherwise show as a grey smudge in the air.
+fn shade(canvas: &mut Canvas, px: i32, py: i32, color: Rgba) {
+    if canvas.get(px, py).a > 0 {
+        paint::put(canvas, px, py, color);
+    }
 }
 
 /// The garden's cross-section along its two near edges, and its shadow on the page: topsoil,
@@ -1418,8 +1428,10 @@ fn back(
 ) -> (Vec<(i32, i32)>, Vec<Perch>) {
     let f = FAR_BORDER;
     let mut layer = Canvas::new(canvas.width(), canvas.height());
-    // The tree's shade, dappled, on the grass.
-    let (tx, ty) = view.pixel(-0.45, -0.45);
+    // The tree stands in the crook of the far corner, where the two hedgerows meet, and its
+    // shade falls dappled on the grass.
+    let crook = -f + 0.12 + 0.55;
+    let (tx, ty) = view.pixel(crook, crook);
     dappled(canvas, (tx + 14, ty + 6), 26, 10);
     // Stepping stones out through the gap behind a far gate.
     for &g in gaps {
@@ -1430,12 +1442,13 @@ fn back(
             paint::ellipse(canvas, sx - 1, sy - 1, 4, 2, STONE.light);
         }
     }
-    let leaves = oak(&mut layer, (tx, ty + 2), &OAK_CROWN, 41);
 
     // The hedgerow along both far edges.
-    let thick = 0.55;
-    let mut runs = vec![(Face::Left, -f + 0.25, d - 1.4)];
-    let mut from = -f + 0.3;
+    let thick = crook - (-f + 0.12);
+    // The left run takes the whole corner and the right one starts where it ends, so neither is
+    // painted over the other at the join.
+    let mut runs = vec![(Face::Left, -f + 0.12, d - 1.4)];
+    let mut from = crook;
     let mut sorted: Vec<f32> = gaps.to_vec();
     sorted.sort_by(f32::total_cmp);
     for g in sorted {
@@ -1506,6 +1519,9 @@ fn back(
         }
     }
 
+    // Over the hedgerows, so its crown covers the corner where they join.
+    let leaves = oak(&mut layer, (tx, ty + 2), &CORNER_CROWN, 41);
+
     // The potting shed.
     let shed = (w - 2.0, -f + 0.05, w + NEAR_BORDER - 0.15, -0.2);
     cast(canvas, view, shed, SHED_WALL);
@@ -1529,6 +1545,22 @@ const OAK_CROWN: [(i32, i32, i32); 9] = [
     (8, -57, 11),
 ];
 
+/// The Backyard's tree, its crown hanging low either side over the hedgerows' tops so the corner
+/// where they join is hidden in its leaves.
+const CORNER_CROWN: [(i32, i32, i32); 11] = [
+    (-15, -34, 13),
+    (14, -35, 13),
+    (0, -45, 15),
+    (-6, -27, 11),
+    (9, -26, 11),
+    (-20, -44, 10),
+    (18, -46, 10),
+    (-9, -55, 11),
+    (8, -57, 11),
+    (-19, -22, 8),
+    (18, -21, 8),
+];
+
 /// A tree's shade on the ground, dappled where light comes through its leaves.
 fn dappled(canvas: &mut Canvas, (cx, cy): (i32, i32), rx: i32, ry: i32) {
     for dy in -ry..=ry {
@@ -1538,7 +1570,7 @@ fn dappled(canvas: &mut Canvas, (cx, cy): (i32, i32), rx: i32, ry: i32) {
             }
             let (px, py) = (cx + dx, cy + dy);
             if patches(px, py, (6, 4), 19) > 0.42 {
-                paint::put(canvas, px, py, rgba(0x24452b, 48));
+                shade(canvas, px, py, rgba(0x24452b, 48));
             }
         }
     }
@@ -1874,8 +1906,11 @@ mod tests {
             let dressing = Dressing::of(&arena);
             for tile in arena.tiles() {
                 match arena.terrain(tile) {
-                    // By the pond, what stands in the way is water, drawn into the ground.
-                    Terrain::Obstacle if dressing != Dressing::Millpond => {
+                    // By the pond, what stands in the way is water, drawn into the ground; a tap
+                    // is drawn as it stands, ready or resting.
+                    Terrain::Obstacle
+                        if dressing != Dressing::Millpond && !arena.switches.contains(&tile) =>
+                    {
                         assert!(garden.pieces.contains_key(&tile), "{} {tile:?}", arena.id);
                     }
                     Terrain::Gate => {

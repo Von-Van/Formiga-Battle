@@ -1,4 +1,9 @@
-//! The three universal orders. They say what a Handler intends; the creature works out how.
+//! What a Handler says, and what each creature ends up doing about it.
+//!
+//! A Handler gives the whole team a plan: up to three orders a turn, each TAKE some squares,
+//! DEFEND some squares or INTERACT with something on the board. Nobody is told who goes where;
+//! the team shares the plan out among itself (`muster`). What each creature then does is one of
+//! MOVE, HOLD, CONTEST and USE, and those say what it intends; it works out how.
 
 use crate::grid::Tile;
 use serde::{Deserialize, Serialize};
@@ -59,7 +64,7 @@ impl Slot {
 pub enum Target {
     /// A creature on the other team.
     Creature { slot: Slot },
-    /// A lever, from a tile next to it.
+    /// A lever, or a switch that sets off the arena's map event, from a tile next to it.
     Lever { at: Tile },
 }
 
@@ -74,6 +79,10 @@ pub enum Order {
     /// Disrupt a creature of the other team, or pull a lever. Interrupts someone moving; loses
     /// to someone holding.
     Contest { target: Target },
+    /// Use what it is carrying on a tile: walks until it is in reach, and the item's effect lands
+    /// on that tile a tick later. Only for a creature carrying something; the item belongs to
+    /// the board, never to the creature, and is gone once used.
+    Use { at: Tile },
 }
 
 impl Order {
@@ -82,10 +91,53 @@ impl Order {
             Self::Move { .. } => "MOVE",
             Self::Hold { .. } => "HOLD",
             Self::Contest { .. } => "CONTEST",
+            Self::Use { .. } => "USE",
         }
     }
 }
 
-/// One team's orders for a turn, by roster place. `None` is an order not given before the timer
-/// ran out; the fallback fills it.
+/// One team's creatures' orders for a turn, by roster place, once its plan has been shared out.
+/// `None` is an order nobody worked out; the fallback fills it.
 pub type Orders = [Option<Order>; crate::arena::TEAM_SIZE];
+
+/// The most orders a Handler gives a team in one turn.
+pub const PLAN_SIZE: usize = 3;
+
+/// The most squares one TAKE or DEFEND names.
+pub const MAX_SQUARES: usize = 5;
+
+/// One of a team's orders for the turn. Naming a square in more than one order makes it more
+/// pressing, and brings more of the team to it.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "order", rename_all = "snake_case")]
+pub enum Directive {
+    /// Get these squares and hold them: walk onto an empty one, move one of theirs off it.
+    Take { squares: Vec<Tile> },
+    /// Keep these squares: stand on them, and keep the other team off them.
+    Defend { squares: Vec<Tile> },
+    /// Go and get something: a found thing on the ground or glinting, the lever, the tap, or one
+    /// of theirs carrying something. One of ours carrying something uses it.
+    Interact { at: Tile },
+}
+
+impl Directive {
+    pub const fn verb(&self) -> &'static str {
+        match self {
+            Self::Take { .. } => "TAKE",
+            Self::Defend { .. } => "DEFEND",
+            Self::Interact { .. } => "INTERACT",
+        }
+    }
+
+    /// The squares it names.
+    pub fn squares(&self) -> &[Tile] {
+        match self {
+            Self::Take { squares } | Self::Defend { squares } => squares,
+            Self::Interact { at } => std::slice::from_ref(at),
+        }
+    }
+}
+
+/// A team's orders for a turn, in the order the Handler gave them. Empty is no orders given
+/// before the timer ran out: every creature falls back on its own.
+pub type TeamPlan = Vec<Directive>;

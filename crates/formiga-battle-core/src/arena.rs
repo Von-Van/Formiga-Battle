@@ -20,6 +20,13 @@
 //! | `g` | A gate that starts open |
 //! | `L` | A lever: nobody stands on it; a CONTEST from next door swings every gate |
 //! | `1`, `2` | Where the left and right teams start, in reading order; open ground |
+//! | `S` | A switch (a garden tap): nobody stands on it; a CONTEST from next door sets off the map event early |
+//! | `*` | An item spot: open ground where found things turn up, always one of a mirrored pair |
+//!
+//! An arena may have one map event, set by `event:` and the settings after it: what it is called,
+//! which tiles it lands on (or `around`, the tiles round whichever switch set it off), and which
+//! turns it comes round on by itself. A switch needs an event to set off. `water: yes` says the
+//! arena's obstacles are water, where a twig floats.
 //!
 //! Gameplay lives only in these tiles. Whatever is drawn over them later is decoration and never
 //! decides where anyone can walk.
@@ -49,6 +56,52 @@ pub enum Terrain {
     Obstacle,
     Gate,
     Lever,
+}
+
+/// What a map event does to anyone standing on its tiles when it lands. Every effect is one Battle
+/// already has a picture for, and none costs composure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Effect {
+    /// Off balance: it stops for the rest of the turn, stops holding, and does not count in the
+    /// zone, the same as being boxed in by a flank.
+    Soak,
+    /// Pushed one tile toward the middle row of the board, onto open ground off the event's tiles,
+    /// and off balance; off balance where it stands if there is nowhere to go.
+    Wash,
+    /// The tiles go under: nobody can stand on them for the rest of the turn. Anyone on
+    /// them is washed off first.
+    Close,
+}
+
+/// An arena's map event, as its file sets it: the sprinkler sweeping Backyard's yard, a wave over
+/// the Cove's sandbar, the millpond rising round the jetty, a tree shaken in the glade.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Scenery {
+    pub effect: Effect,
+    /// What it is called, for the recap: "sprinkler", "wave".
+    pub name: String,
+    /// The tiles it lands on, the same ones every time, so a Handler can learn them. Empty when
+    /// it lands round the switch that set it off.
+    pub tiles: Vec<Tile>,
+    /// It lands on the open tiles touching a switch, rather than on `tiles`: by
+    /// itself on a mirrored pair of switches drawn at random.
+    #[serde(default)]
+    pub around: bool,
+    /// The first turn it comes round on by itself, warned a whole turn before. Never the first
+    /// turn, which has no turn before it to be warned in.
+    pub first: u8,
+    /// Turns between its coming round by itself; 0 for never.
+    pub every: u8,
+    /// Whole turns a switch rests after setting it off.
+    pub rest: u8,
+}
+
+impl Scenery {
+    /// Whether it comes round by itself in this turn.
+    pub fn due(&self, turn: u8) -> bool {
+        self.every > 0 && turn >= self.first && (turn - self.first).is_multiple_of(self.every)
+    }
 }
 
 /// What a lever does, as the arena file sets it: how long the gates take to swing once it is
@@ -88,6 +141,18 @@ pub struct Arena {
     pub lever: LeverSpec,
     /// Where each team starts: left, then right.
     pub starts: [[Tile; TEAM_SIZE]; 2],
+    /// The arena's map event, if it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scenery: Option<Scenery>,
+    /// Switches that set the map event off early. Each stands on an obstacle tile.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub switches: Vec<Tile>,
+    /// Where found things turn up, in reading order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub item_spots: Vec<Tile>,
+    /// The obstacles are water: a twig thrown in floats there as a raft.
+    #[serde(default)]
+    pub water: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -106,6 +171,10 @@ pub enum ArenaError {
     Unpaired,
     #[error("the arena needs an id and a name")]
     Unnamed,
+    #[error("the map event needs an effect and tiles of open ground, and a switch needs an event")]
+    Scenery,
+    #[error("every item spot needs its mirror image to be an item spot too")]
+    ItemSpots,
 }
 
 impl Arena {
@@ -114,6 +183,12 @@ impl Arena {
         let mut id = String::new();
         let mut name = String::new();
         let mut lever = LeverSpec::default();
+        let mut effect: Option<Effect> = None;
+        let mut event_tiles: Vec<Tile> = Vec::new();
+        let mut around = false;
+        let mut event_name = String::new();
+        let mut water = false;
+        let (mut first, mut every, mut rest) = (2u8, 0u8, 2u8);
         let mut rows: Vec<Vec<char>> = Vec::new();
         for (index, raw) in text.lines().enumerate() {
             let line = index + 1;
@@ -133,6 +208,30 @@ impl Arena {
                     "name" => name = value.to_owned(),
                     "swing_ticks" => lever.swing_ticks = number()?.max(1),
                     "cooldown_turns" => lever.cooldown_turns = number()?,
+                    "event" => {
+                        effect = Some(match value {
+                            "soak" => Effect::Soak,
+                            "wash" => Effect::Wash,
+                            "close" => Effect::Close,
+                            _ => return Err(fail("unknown event")),
+                        })
+                    }
+                    "event_name" => event_name = value.to_owned(),
+                    "water" => water = value == "yes",
+                    "event_tiles" if value == "around" => around = true,
+                    "event_tiles" => {
+                        event_tiles = value
+                            .split_whitespace()
+                            .map(|pair| {
+                                let (x, y) = pair.split_once(',')?;
+                                Some(Tile::new(x.parse().ok()?, y.parse().ok()?))
+                            })
+                            .collect::<Option<_>>()
+                            .ok_or_else(|| fail("expected tiles as x,y"))?
+                    }
+                    "event_first" => first = number()?.max(2),
+                    "event_every" => every = number()?,
+                    "switch_rest" => rest = number()?,
                     _ => return Err(fail("unknown setting")),
                 }
                 continue;
@@ -142,7 +241,7 @@ impl Arena {
                 .map(|cell| {
                     let mut chars = cell.chars();
                     match (chars.next(), chars.next()) {
-                        (Some(symbol), None) if ".#ZGgL12".contains(symbol) => Ok(symbol),
+                        (Some(symbol), None) if ".#ZGgL12S*".contains(symbol) => Ok(symbol),
                         _ => Err(fail("unknown tile symbol")),
                     }
                 })
@@ -175,6 +274,10 @@ impl Arena {
             levers: Vec::new(),
             lever,
             starts: [[Tile::new(0, 0); TEAM_SIZE]; 2],
+            scenery: None,
+            switches: Vec::new(),
+            item_spots: Vec::new(),
+            water,
         };
         let mut starts: [Vec<Tile>; 2] = [Vec::new(), Vec::new()];
         for (y, row) in rows.iter().enumerate() {
@@ -190,6 +293,14 @@ impl Arena {
                     'L' => {
                         arena.levers.push(tile);
                         Terrain::Lever
+                    }
+                    'S' => {
+                        arena.switches.push(tile);
+                        Terrain::Obstacle
+                    }
+                    '*' => {
+                        arena.item_spots.push(tile);
+                        Terrain::Open
                     }
                     'Z' => {
                         arena.zone.push(tile);
@@ -219,6 +330,45 @@ impl Arena {
         }
         if arena.gates.is_empty() != arena.levers.is_empty() {
             return Err(ArenaError::Unpaired);
+        }
+        match effect {
+            Some(effect) => {
+                let placed = if around {
+                    !arena.switches.is_empty() && event_tiles.is_empty()
+                } else {
+                    !event_tiles.is_empty()
+                };
+                if !placed
+                    || event_tiles
+                        .iter()
+                        .any(|t| arena.terrain(*t) != Terrain::Open)
+                {
+                    return Err(ArenaError::Scenery);
+                }
+                if event_name.is_empty() {
+                    event_name = "sprinkler".to_owned();
+                }
+                arena.scenery = Some(Scenery {
+                    effect,
+                    name: event_name,
+                    tiles: event_tiles,
+                    around,
+                    first,
+                    every,
+                    rest,
+                });
+            }
+            None if !arena.switches.is_empty() || !event_tiles.is_empty() => {
+                return Err(ArenaError::Scenery);
+            }
+            None => {}
+        }
+        if arena
+            .item_spots
+            .iter()
+            .any(|t| !arena.item_spots.contains(&arena.mirror(*t)))
+        {
+            return Err(ArenaError::ItemSpots);
         }
         Ok(arena)
     }
@@ -259,6 +409,73 @@ impl Arena {
 
     pub fn in_zone(&self, tile: Tile) -> bool {
         self.zone.contains(&tile)
+    }
+
+    /// The same place seen from the other side of the board.
+    pub fn mirror(&self, t: Tile) -> Tile {
+        Tile::new(self.width as i8 - 1 - t.x, t.y)
+    }
+
+    /// The item spots in mirrored pairs, each pair in reading order; a spot on the middle column
+    /// is a pair of one.
+    pub fn item_pairs(&self) -> Vec<Vec<Tile>> {
+        let mut pairs: Vec<Vec<Tile>> = Vec::new();
+        for spot in &self.item_spots {
+            if pairs.iter().any(|p| p.contains(spot)) {
+                continue;
+            }
+            let twin = self.mirror(*spot);
+            pairs.push(if twin == *spot {
+                vec![*spot]
+            } else {
+                vec![*spot, twin]
+            });
+        }
+        pairs
+    }
+
+    /// Whether the map event can land on this tile: one of its tiles, or open ground round one of
+    /// its switches.
+    pub fn in_scenery(&self, tile: Tile) -> bool {
+        self.scenery.as_ref().is_some_and(|s| {
+            if s.around {
+                self.terrain(tile) == Terrain::Open && self.switches.iter().any(|w| w.touches(tile))
+            } else {
+                s.tiles.contains(&tile)
+            }
+        })
+    }
+
+    /// Where the map event lands when these switches set it off: its own tiles, or the open
+    /// ground touching each switch, in reading order.
+    pub fn scenery_tiles(&self, switches: &[Tile]) -> Vec<Tile> {
+        match &self.scenery {
+            Some(s) if s.around => self
+                .tiles()
+                .filter(|t| {
+                    self.terrain(*t) == Terrain::Open && switches.iter().any(|w| w.touches(*t))
+                })
+                .collect(),
+            Some(s) => s.tiles.clone(),
+            None => Vec::new(),
+        }
+    }
+
+    /// The switches in mirrored pairs, each pair in reading order.
+    pub fn switch_pairs(&self) -> Vec<Vec<Tile>> {
+        let mut pairs: Vec<Vec<Tile>> = Vec::new();
+        for switch in &self.switches {
+            if pairs.iter().any(|p| p.contains(switch)) {
+                continue;
+            }
+            let twin = self.mirror(*switch);
+            pairs.push(if twin == *switch {
+                vec![*switch]
+            } else {
+                vec![*switch, twin]
+            });
+        }
+        pairs
     }
 
     /// How far a tile is across the board from `side`'s own edge: the column, counted from the
@@ -332,6 +549,24 @@ mod tests {
                     "{}",
                     arena.id
                 );
+                assert_eq!(
+                    arena.in_scenery(tile),
+                    arena.in_scenery(mirror(tile)),
+                    "{}",
+                    arena.id
+                );
+                assert_eq!(
+                    arena.switches.contains(&tile),
+                    arena.switches.contains(&mirror(tile)),
+                    "{}",
+                    arena.id
+                );
+                assert_eq!(
+                    arena.item_spots.contains(&tile),
+                    arena.item_spots.contains(&mirror(tile)),
+                    "{}",
+                    arena.id
+                );
             }
         }
         assert!(Arena::by_id("nowhere").is_none());
@@ -357,6 +592,26 @@ mod tests {
             Arena::parse(text),
             Err(ArenaError::Line { line: 4, .. })
         ));
+    }
+
+    #[test]
+    fn backyard_has_a_sprinkler_over_the_whole_yard_with_a_tap_on_each_side() {
+        let arena = Arena::backyard();
+        let sprinkler = arena.scenery.clone().expect("Backyard has its sprinkler");
+        assert_eq!(sprinkler.effect, Effect::Soak);
+        assert_eq!(sprinkler.tiles.len(), arena.zone.len());
+        assert!(sprinkler.tiles.iter().all(|t| arena.in_zone(*t)));
+        assert_eq!(arena.switches.len(), 2);
+        assert!(sprinkler.due(4) && sprinkler.due(8) && !sprinkler.due(5));
+        assert_eq!(arena.item_pairs().len(), 2);
+    }
+
+    #[test]
+    fn a_switch_without_an_event_and_a_spot_without_its_mirror_are_refused() {
+        let text = "id: x\nname: X\n1 1 1 Z S\n2 2 2 . .\n";
+        assert_eq!(Arena::parse(text), Err(ArenaError::Scenery));
+        let text = "id: x\nname: X\n1 1 1 Z *\n2 2 2 . .\n";
+        assert_eq!(Arena::parse(text), Err(ArenaError::ItemSpots));
     }
 
     #[test]

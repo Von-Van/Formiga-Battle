@@ -2,12 +2,21 @@
 // wide and five long, so whoever holds it can be come at from either side. Sea-worn rocks stand
 // either side of the bar between the starts, rather than in front of them, and the bar's two
 // ends run out into the rocks.
+// Every third turn a wave rolls over both ends of the sandbar and the sand beside them, washing
+// whoever stands there toward the middle of the beach; a big shell on each side of the near
+// edge, blown, calls the next wave in early.
 id: cove
 name: Sandy Cove
+event: wash
+event_name: wave
+event_tiles: 3,1 4,1 5,1 3,5 4,5 5,5
+event_first: 3
+event_every: 3
+switch_rest: 2
 . . . . # . . . .
+1 . . . Z . . . 2
+. * # . Z . # * .
 1 . . . Z . . . 2
 . . # . Z . # . .
 1 . . . Z . . . 2
-. . # . Z . # . .
-1 . . . Z . . . 2
-. . . . # . . . .
+. S . * # * . S .

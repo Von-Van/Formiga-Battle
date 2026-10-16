@@ -13,6 +13,10 @@ pub enum Purpose {
     Pairing = 4,
     Coach = 5,
     Roster = 6,
+    /// Which found thing turns up, and on which pair of spots.
+    Find = 7,
+    /// A creature's whim when its team shares out the plan.
+    Muster = 8,
 }
 
 /// SplitMix64's finaliser: a good mix of 64 bits.
