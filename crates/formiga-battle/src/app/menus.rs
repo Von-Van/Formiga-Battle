@@ -14,6 +14,7 @@ use crate::garden::Garden;
 use crate::iso::View;
 use crate::look::Look;
 use crate::station::{Heard, Station};
+use crate::ticket::Destination;
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
 use formiga_battle_contract::Contender;
 use formiga_battle_core::TEAM_SIZE;
@@ -395,21 +396,19 @@ impl BattleApp {
         let mut chosen = None;
         let mut notes = false;
         let ready = stopped && !leaving;
-        for (i, (outing, title, small, band, icon, hint)) in [
+        for (i, (outing, title, small, to, hint)) in [
             (
                 Outing::World,
                 "Out in the World",
                 "Online",
-                ink::FOREST,
-                chrome::GLOBE,
+                Destination::World,
                 "Play a friend: open a room and give them its code, or join theirs.",
             ),
             (
                 Outing::Home,
                 "Close to Home",
                 "Offline",
-                Color32::from_rgb(0x7a, 0x2c, 0x33),
-                chrome::HOUSE,
+                Destination::Home,
                 "Play the visiting team on this computer. Wins fill each place's cup.",
             ),
         ]
@@ -419,14 +418,13 @@ impl BattleApp {
             let (rect, _) = ui.allocate_exact_size(vec2(width, h), Sense::hover());
             if ready {
                 let picked = crate::feel::dropping(ui, since, i, u, |ui| {
-                    chrome::ticket(
+                    crate::ticket::ticket(
                         ui,
                         rect,
                         Id::new(("destination", i)),
                         title,
                         small,
-                        band,
-                        icon,
+                        to,
                         u,
                     )
                     .on_hover_text(hint)
@@ -1019,7 +1017,7 @@ impl BattleApp {
                         let galley = ui.painter().layout_job(label_job(&code, 34.0, ink::FOREST));
                         let size = galley.size() + vec2(u * 24.0, u * 14.0);
                         let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-                        ticket(ui.painter(), rect, u);
+                        code_stub(ui.painter(), rect, u);
                         ui.painter().galley(
                             rect.center() - galley.size() / 2.0,
                             galley,
@@ -1295,7 +1293,7 @@ fn empty_slot(ui: &mut egui::Ui, slot: usize, breath: f32, u: f32) {
 }
 
 /// A ticket stub for a room's code: card with a notch bitten out of each end.
-fn ticket(painter: &egui::Painter, rect: Rect, u: f32) {
+fn code_stub(painter: &egui::Painter, rect: Rect, u: f32) {
     chrome::card(
         painter,
         rect,

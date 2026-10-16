@@ -19,6 +19,7 @@ mod scene;
 mod sound;
 mod station;
 mod table;
+mod ticket;
 
 use anyhow::{Context, Result, bail};
 use formiga_art::Canvas;

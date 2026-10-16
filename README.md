@@ -114,7 +114,8 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   `formiga-art`'s tools at pixel scale, and the marks laid over it), `garden` (each arena as a
   place: its ground, what stands on it and round it, and what moves there, dressed by the
   arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the Battle Grounds the
-  train brings the companions to), `feel` (how every control answers a touch), `app` (the egui window; `app/menus` the station and the
+  train brings the companions to), `feel` (how every control answers a touch), `ticket` (the station's two choices, painted as
+  railway tickets), `app` (the egui window; `app/menus` the station and the
   notebook's pages of getting ready, `app/handler` its history and settings), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
