@@ -449,7 +449,7 @@ impl Playback {
                         frame.gates_open[i] = *open;
                     }
                 }
-                EventKind::GateJammed { gate, .. } => {
+                EventKind::GateJammed { gate, .. } | EventKind::GateWedged { gate } => {
                     frame.swing_pending = false;
                     effect(&mut frame, Burst::Bump, *gate);
                 }
@@ -611,7 +611,6 @@ impl Playback {
                 | EventKind::LeverResting { .. }
                 | EventKind::SwitchDefended { .. }
                 | EventKind::SwitchResting { .. }
-                | EventKind::GateWedged { .. }
                 | EventKind::ItemFizzled { .. } => {}
             }
         }
@@ -750,6 +749,18 @@ mod tests {
         assert!(!playback.at(0.0).paused);
         assert!(playback.at(tick(1.0)).paused);
         assert!(!playback.at(tick(2.0)).paused);
+    }
+
+    #[test]
+    fn a_gate_wedged_by_a_twig_is_no_longer_waiting_to_swing() {
+        let (mut before, _, m) = turn();
+        before.swing_at = Some(4);
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let gate = m.arena.gates[0];
+        let events = vec![at(1, EventKind::GateWedged { gate })];
+        let playback = Playback::new(&before, &m.arena.gates, &facing, &events, 3);
+        assert!(playback.at(0.0).swing_pending);
+        assert!(!playback.at(playback.duration()).swing_pending);
     }
 
     #[test]
