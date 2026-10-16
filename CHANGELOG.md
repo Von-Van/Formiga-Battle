@@ -2,11 +2,6 @@
 
 ## Unreleased
 
-- Rules version 5: a creature's personality pulls four times as hard on the way it walks, so
-  each turn about one of a team's three goes its own way rather than the plain way: sometimes
-  none, sometimes two (about one team-turn in four before). Fewer matches are won at the beacon
-  (13%, from 21%), and the kinds score further apart under the Exhibition coach. Recorded matches
-  from earlier builds no longer replay.
 - Battle opens at the Battle Grounds, the first spread of the Handler's notebook. On its left page
   the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
   it, a face at each window, and a coach more for every three past six. On its right, two railway
@@ -28,6 +23,25 @@
 - The friend's room is its own page: sign the name your friend sees on a line, then open a room or
   join one side by side. An open room's code is shown on a ticket with a button to copy it, and a
   mistyped code says what a code is made of.
+- A turn is told over the board as it plays: a line over the head of whoever it happened to, a
+  word in Formiga's own pixel lettering where it happened (POW!, CLANG!, WHAM!, BOOM!, MISS!), the
+  composure it cost floating up as a number, and a sound for each. The last two lines stay on a
+  card in the board's corner, and the whole match, in full, opens from there (L).
+- A match begins with READY? and GO!, each turn's orders with a slip in the Handler's colour, and
+  a win ends in confetti.
+- A click on the board does what the tile suggests: the ground to MOVE, one of theirs or the lever
+  to CONTEST, the chosen one itself to HOLD where it stands; a right click holds there. A card by
+  the pointer says what a click will do, and an arrow bobs over whoever is chosen.
+- The right page keeps the orders and a glance at the arena: how to win, the orders and the
+  board's marks, one at a time, the detail on hover.
+- Sound: cheerful placeholder effects and music, all made in code, with music and sound volumes
+  and a mute behind the speaker on the leather. `formiga-battle sounds <folder>` writes them all
+  as WAV files to listen to.
+- Rules version 5: a creature's personality pulls four times as hard on the way it walks, so
+  each turn about one of a team's three goes its own way rather than the plain way: sometimes
+  none, sometimes two (about one team-turn in four before). Fewer matches are won at the beacon
+  (13%, from 21%), and the kinds score further apart under the Exhibition coach. Recorded matches
+  from earlier builds no longer replay.
 
 ## [0.67.8] - 2026-10-15
 

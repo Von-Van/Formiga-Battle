@@ -17,6 +17,8 @@ pub struct Callout {
     pub at: f32,
     /// Where on the floor it happened, in tiles, for the word.
     pub place: Option<(f32, f32)>,
+    /// Whoever it happened to, if anyone: its word and line go over its head.
+    pub about: Option<Slot>,
     /// The cartoon word, if it gets one.
     pub word: Option<&'static str>,
     /// The headline, if it gets one.
@@ -43,6 +45,7 @@ impl Callout {
         Self {
             at,
             place: None,
+            about: None,
             word: None,
             headline: None,
             good_for: None,
@@ -89,8 +92,18 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
         (x / n, y / n)
     };
     let centre = |t: formiga_battle_core::Tile| (f32::from(t.x) + 0.5, f32::from(t.y) + 0.5);
+    let middle = |tiles: &[formiga_battle_core::Tile]| -> Option<(f32, f32)> {
+        let n = tiles.len() as f32;
+        (n > 0.0).then(|| {
+            let (x, y) = tiles.iter().fold((0.0, 0.0), |(x, y), t| {
+                (x + f32::from(t.x) + 0.5, y + f32::from(t.y) + 0.5)
+            });
+            (x / n, y / n)
+        })
+    };
     let mut out = Vec::new();
     let mut contested_told = false;
+    let mut appeared_told = false;
     let mut progress_told = [false; 2];
     for (k, (when, event)) in playback.moments().iter().enumerate() {
         let turn = event.turn;
@@ -98,18 +111,21 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
         let at = |slot: Slot| playback.at(*when).figure(slot).at;
         match &event.kind {
             EventKind::Stepped { .. } => c.cue = Some(Cue::Step),
-            EventKind::Bumped { wanted, .. } => {
+            EventKind::Bumped { slot, wanted } => {
                 c.place = Some(centre(*wanted));
+                c.about = Some(*slot);
                 c.word = Some(pick(&BUMP, turn, k));
                 c.cue = Some(Cue::Boink);
             }
-            EventKind::HungBack { at: tile, .. } => {
+            EventKind::HungBack { slot, at: tile } => {
                 c.place = Some(centre(*tile));
+                c.about = Some(*slot);
                 c.word = Some("HMM?");
                 c.cue = Some(Cue::Hmm);
             }
             EventKind::Interrupted { target, by } => {
                 c.place = Some(at(*target));
+                c.about = Some(*target);
                 c.word = Some(pick(&HIT, turn, k));
                 c.headline = Some(format!("{} caught {} on the move!", list(by), name(target)));
                 c.good_for = by.first().map(|s| s.side);
@@ -121,6 +137,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
                 contesters,
             } => {
                 c.place = Some(at(*target));
+                c.about = Some(*target);
                 c.word = Some(pick(&TURNED, turn, k));
                 c.headline = Some(if holders.len() > 1 {
                     format!("{} held firm together!", list(holders))
@@ -147,6 +164,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
             }
             EventKind::KnockedOut { slot } => {
                 c.place = Some(at(*slot));
+                c.about = Some(*slot);
                 c.word = Some(pick(&OUT, turn, k));
                 c.headline = Some(format!("{} is dizzy and sits out!", name(slot)));
                 c.good_for = Some(slot.side.other());
@@ -157,6 +175,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
                 contester, target, ..
             } => {
                 c.place = Some(at(*target));
+                c.about = Some(*target);
                 c.word = Some(pick(&WHIFF, turn, k));
                 c.headline = Some(format!(
                     "{} missed: {} was busy with a contest of its own!",
@@ -167,6 +186,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
             }
             EventKind::TookOpportunity { slot, took, .. } => {
                 c.place = Some(at(*slot));
+                c.about = Some(*slot);
                 c.headline = Some(format!("{} went for {} instead!", name(slot), name(took)));
                 c.good_for = Some(slot.side);
             }
@@ -245,34 +265,167 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
             },
             EventKind::Composure { slot, lost, .. } if *lost > 0 => {
                 c.place = Some(at(*slot));
+                c.about = Some(*slot);
                 c.word = Some(DAMAGE[usize::from(*lost).min(DAMAGE.len()) - 1]);
                 c.style = Style::Damage;
+            }
+            EventKind::SceneryWarned { tiles, .. } => {
+                c.place = Some(middle(tiles).unwrap_or(beacon));
+                c.word = Some("DRIP...");
+                c.headline = Some("The sprinkler is about to come round!".to_owned());
+                c.cue = Some(Cue::Gurgle);
+            }
+            EventKind::SwitchTurned { slot, switch } => {
+                c.place = Some(centre(*switch));
+                c.word = Some("SQUEAK!");
+                c.headline = Some(format!("{} turned the tap!", name(slot)));
+                c.good_for = Some(slot.side);
+                c.cue = Some(Cue::Gurgle);
+            }
+            EventKind::SwitchDefended {
+                switch, holders, ..
+            } => {
+                c.place = Some(centre(*switch));
+                c.word = Some("SHOO!");
+                c.headline = Some(format!("{} guarded the tap!", list(holders)));
+                c.good_for = holders.first().map(|s| s.side);
+                c.cue = Some(Cue::Shoo);
+            }
+            EventKind::SwitchResting { switch, .. } => {
+                c.place = Some(centre(*switch));
+                c.headline = Some("The tap is still resting.".to_owned());
+                c.cue = Some(Cue::Hmm);
+            }
+            EventKind::SceneryLanded {
+                tiles,
+                hit,
+                sheltered,
+                ..
+            } => {
+                c.place = Some(middle(tiles).unwrap_or(beacon));
+                c.word = Some("SPLOOSH!");
+                c.style = Style::Big;
+                c.headline = Some(match (hit.is_empty(), sheltered.is_empty()) {
+                    (false, true) => format!("The sprinkler soaked {}!", list(hit)),
+                    (false, false) => format!(
+                        "The sprinkler soaked {}; {} stayed dry under the leaf!",
+                        list(hit),
+                        list(sheltered)
+                    ),
+                    (true, false) => format!("{} stayed dry under the leaf!", list(sheltered)),
+                    (true, true) => "The sprinkler soaked the yard!".to_owned(),
+                });
+                c.cue = Some(Cue::Splash);
+            }
+            EventKind::ItemsGlint { spots, item, .. } => {
+                c.place = spots.first().map(|t| centre(*t));
+                c.word = Some("TING!");
+                c.headline = Some(format!("Something glints: a {} next turn!", item.name()));
+                c.cue = Some(Cue::Glint);
+            }
+            EventKind::ItemAppeared { at: tile, item } => {
+                c.place = Some(centre(*tile));
+                c.word = Some("POP!");
+                if !appeared_told {
+                    appeared_told = true;
+                    c.headline = Some(format!("A {} turned up!", item.name()));
+                }
+                c.cue = Some(Cue::Glint);
+            }
+            EventKind::PickedUp {
+                slot,
+                item,
+                at: tile,
+            } => {
+                c.place = Some(centre(*tile));
+                c.about = Some(*slot);
+                c.word = Some("GOT IT!");
+                c.headline = Some(format!("{} picked up the {}!", name(slot), item.name()));
+                c.good_for = Some(slot.side);
+                c.cue = Some(Cue::Pickup);
+            }
+            EventKind::Dropped { slot, item, .. } => {
+                c.place = Some(at(*slot));
+                c.about = Some(*slot);
+                c.word = Some("PLOP");
+                c.headline = Some(format!("{} dropped the {}!", name(slot), item.name()));
+                c.good_for = Some(slot.side.other());
+                c.cue = Some(Cue::Plop);
+            }
+            EventKind::ItemUsed { slot, item, .. } => {
+                c.place = Some(at(*slot));
+                c.about = Some(*slot);
+                c.headline = Some(format!("{} used the {}!", name(slot), item.name()));
+                c.good_for = Some(slot.side);
+            }
+            EventKind::Puffed {
+                by, blown, braced, ..
+            } => {
+                let moved: Vec<Slot> = blown.iter().map(|b| b.slot).collect();
+                c.place = blown
+                    .first()
+                    .map(|b| centre(b.from))
+                    .or_else(|| Some(at(*by)));
+                c.word = Some("WHOOSH!");
+                c.headline = Some(match (moved.is_empty(), braced.is_empty()) {
+                    (false, _) => format!("{}'s puff blew {} away!", name(by), list(&moved)),
+                    (true, false) => format!("{} braced together against the puff!", list(braced)),
+                    (true, true) => format!("{}'s puff blew across the yard!", name(by)),
+                });
+                c.good_for = Some(by.side);
+                c.cue = Some(Cue::Poof);
+            }
+            EventKind::TwigWedged { by, at: tile, .. } => {
+                c.place = Some(centre(*tile));
+                c.word = Some("WEDGE!");
+                c.headline = Some(format!("{} wedged a twig in the way!", name(by)));
+                c.good_for = Some(by.side);
+                c.cue = Some(Cue::Snap);
+            }
+            EventKind::TwigFell { at: tile } => {
+                c.place = Some(centre(*tile));
+                c.word = Some("PLOP");
+                c.cue = Some(Cue::Plop);
+            }
+            EventKind::GateWedged { gate } => {
+                c.place = Some(centre(*gate));
+                c.word = Some("STUCK!");
+                c.headline = Some("A twig keeps the gate from closing!".to_owned());
+                c.cue = Some(Cue::Clunk);
+            }
+            EventKind::Sheltering { by, slots, .. } => {
+                c.place = Some(at(*by));
+                c.about = Some(*by);
+                c.word = Some("FWIP!");
+                c.headline = Some(if slots.iter().any(|s| s != by) {
+                    format!("{} opened a leaf over {}!", name(by), list(slots))
+                } else {
+                    format!("{} opened a leaf umbrella!", name(by))
+                });
+                c.good_for = Some(by.side);
+                c.cue = Some(Cue::Fwip);
+            }
+            EventKind::Sheltered { target, by } => {
+                c.place = Some(at(*target));
+                c.about = Some(*target);
+                c.word = Some("BOING");
+                c.headline = Some(format!("{} bounced off {}'s leaf!", list(by), name(target)));
+                c.good_for = Some(target.side);
+                c.cue = Some(Cue::Boink);
+            }
+            EventKind::ItemFizzled { slot, item, .. } => {
+                c.place = Some(at(*slot));
+                c.about = Some(*slot);
+                c.word = Some("FIZZLE");
+                c.headline = Some(format!("{}'s {} came to nothing.", name(slot), item.name()));
+                c.cue = Some(Cue::Fizzle);
             }
             // Orders filled come before the first tick, and are told in the full account.
             EventKind::OrderFilled { .. }
             | EventKind::Holding { .. }
             | EventKind::Composure { .. }
-            | EventKind::CaptureContested => {}
-            // The map event and found things: their words and sounds are the match screen's to
-            // add.
-            EventKind::SceneryWarned { .. }
-            | EventKind::SwitchTurned { .. }
-            | EventKind::SwitchDefended { .. }
-            | EventKind::SwitchResting { .. }
-            | EventKind::SceneryLanded { .. }
-            | EventKind::ItemsGlint { .. }
-            | EventKind::ItemAppeared { .. }
-            | EventKind::PickedUp { .. }
-            | EventKind::Dropped { .. }
-            | EventKind::ItemUsed { .. }
-            | EventKind::Puffed { .. }
-            | EventKind::TwigWedged { .. }
-            | EventKind::TwigFell { .. }
-            | EventKind::GateWedged { .. }
-            | EventKind::Sheltering { .. }
-            | EventKind::Sheltered { .. }
             | EventKind::ShelterFolded { .. }
-            | EventKind::ItemFizzled { .. } => {}
+            | EventKind::CaptureContested => {}
         }
         // A headline is shown over whoever it is about; one about the beacon, over the beacon.
         if c.headline.is_some() && c.place.is_none() {

@@ -63,16 +63,19 @@ pub enum Verb {
     Move,
     Hold,
     Contest,
+    /// Use what it carries; only for one carrying something.
+    Use,
 }
 
 impl Verb {
-    pub const ALL: [Self; 3] = [Self::Move, Self::Hold, Self::Contest];
+    pub const ALL: [Self; 4] = [Self::Move, Self::Hold, Self::Contest, Self::Use];
 
     pub const fn word(self) -> &'static str {
         match self {
             Self::Move => "MOVE",
             Self::Hold => "HOLD",
             Self::Contest => "CONTEST",
+            Self::Use => "USE",
         }
     }
 
@@ -80,7 +83,10 @@ impl Verb {
         match self {
             Self::Move => "Reach a tile. Walks round anyone holding; open to a contest.",
             Self::Hold => "Defend a tile. Turns a contest away; holds the beacon.",
-            Self::Contest => "Disrupt someone not holding, or pull the lever.",
+            Self::Contest => "Disrupt someone not holding, or pull the lever or turn the tap.",
+            Self::Use => {
+                "Use what it carries: a puff blows them along, a twig blocks a tile, a leaf keeps a friend dry."
+            }
         }
     }
 }
@@ -767,9 +773,18 @@ impl Table {
     }
 
     pub fn choose_verb(&mut self, verb: Verb) {
+        if verb == Verb::Use && self.carrying().is_none() {
+            return;
+        }
         if self.selected.is_some() {
             self.verb = Some(verb);
         }
+    }
+
+    /// What the chosen one carries, if anything.
+    pub fn carrying(&self) -> Option<formiga_battle_core::Item> {
+        let (m, index) = (self.m.as_ref()?, self.selected?);
+        m.fighter(Slot::new(self.you, index)).carrying
     }
 
     /// The tiles the chosen order could be aimed at, as the board marks them. With someone chosen
@@ -798,11 +813,26 @@ impl Table {
             m.team(self.you.other())
                 .map(|e| (m.fighter(e).at, Choice::Contest))
                 .chain(m.arena.levers.iter().map(|l| (*l, Choice::Contest)))
+                .chain(m.arena.switches.iter().map(|t| (*t, Choice::Contest)))
         };
         match self.verb {
             Some(Verb::Move) => reach(Choice::Walk),
             Some(Verb::Hold) => reach(Choice::Hold),
             Some(Verb::Contest) => contests().collect(),
+            Some(Verb::Use) => {
+                // Anywhere it could reach this turn and still be within the item's reach of.
+                let Some(item) = m.fighter(slot).carrying else {
+                    return Vec::new();
+                };
+                let from = m.fighter(slot).at;
+                let far = m.ruleset.ticks_per_turn + item.reach();
+                m.arena
+                    .tiles()
+                    .filter(|t| from.distance(*t) <= far)
+                    .filter(|t| m.valid(slot, &Order::Use { at: *t }))
+                    .map(|t| (t, Choice::Use))
+                    .collect()
+            }
             None => {
                 let mut all = reach(Choice::Walk);
                 all.retain(|(t, _)| m.occupant(*t).is_none_or(|s| s.side == self.you));
@@ -844,7 +874,8 @@ impl Table {
                 Some(Order::Contest {
                     target: Target::Creature { slot: enemy },
                 })
-            } else if m.arena.levers.contains(&tile) {
+            } else if m.arena.levers.contains(&tile) || m.arena.switches.contains(&tile) {
+                // A tap is turned as a lever is pulled.
                 Some(Order::Contest {
                     target: Target::Lever { at: tile },
                 })
@@ -856,6 +887,7 @@ impl Table {
             (Some(Verb::Move), _) => Some(Order::Move { to: tile }),
             (Some(Verb::Hold), _) | (None, true) => Some(Order::Hold { at: tile }),
             (Some(Verb::Contest), _) => contest(),
+            (Some(Verb::Use), _) => Some(Order::Use { at: tile }),
             (None, false) => contest().or(Some(if m.fighter(slot).at == tile {
                 Order::Hold { at: tile }
             } else {

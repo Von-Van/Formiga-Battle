@@ -56,6 +56,9 @@ fn glyph(letter: char) -> &'static [&'static str] {
         'P' => &[
             "####.", "#...#", "#...#", "####.", "#....", "#....", "#....",
         ],
+        'Q' => &[
+            ".###.", "#...#", "#...#", "#...#", "#.#.#", "#..#.", ".##.#",
+        ],
         'R' => &[
             "####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#",
         ],
@@ -252,7 +255,7 @@ mod tests {
 
     #[test]
     fn every_letter_is_as_tall_as_the_rest_and_square_in_its_rows() {
-        for letter in "ABCDEFGHIKLMNOPRSTUVWY!?-.123".chars() {
+        for letter in "ABCDEFGHIKLMNOPQRSTUVWYZ!?-.123".chars() {
             let rows = glyph(letter);
             assert_eq!(rows.len(), HEIGHT as usize, "{letter:?}");
             assert!(rows.iter().all(|r| r.len() == rows[0].len()), "{letter:?}");

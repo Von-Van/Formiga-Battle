@@ -263,6 +263,16 @@ enum Glyph {
     Watch,
 }
 
+/// The line over the board this frame, laid out in board pixels.
+struct Caption {
+    text: String,
+    good_for: Option<Side>,
+    alpha: f32,
+    rect: Rect,
+    /// Where it points down to.
+    tip: egui::Pos2,
+}
+
 /// The least time a headline is shown before the next takes its place.
 const HEADLINE_SECS: f32 = 0.8;
 
@@ -846,6 +856,7 @@ impl BattleApp {
             (egui::Key::M, Verb::Move),
             (egui::Key::H, Verb::Hold),
             (egui::Key::C, Verb::Contest),
+            (egui::Key::U, Verb::Use),
         ] {
             if pressed(key) && self.table.selected.is_some() {
                 self.table.choose_verb(verb);
@@ -1214,6 +1225,9 @@ impl BattleApp {
                         .name
                         .clone())
                 ),
+                (Some(_), Some(Verb::Use)) => {
+                    "Click where to use it. Right-click or Escape cancels.".to_owned()
+                }
                 (None, _) => "Click one of yours on the board to give it an order.".to_owned(),
             },
         };
@@ -1240,7 +1254,19 @@ impl BattleApp {
         };
         self.paused = frame.paused;
         let mut marks = self.table.marks(self.hover, now);
-        marks.lettering = self.lettering(now);
+        // The board's scale is known before it is painted: it is drawn as large as the page
+        // allows, by whole screen pixels.
+        let scale = {
+            let ppp = ctx.pixels_per_point();
+            let (w, h) = (self.view.size.0 as f32, self.view.size.1 as f32);
+            ((area.width() * ppp) / w)
+                .min((area.height() * ppp) / h)
+                .floor()
+                .max(1.0)
+                / ppp
+        };
+        let (lettering, caption) = self.overlays(&frame, ctx, scale, u, now);
+        marks.lettering = lettering;
         marks.pokes = self.pokes.iter().map(|(t, at)| (*t, now - at)).collect();
         let m = self.table.m.as_ref().expect("a match is on");
         let garden = self
@@ -1366,7 +1392,9 @@ impl BattleApp {
                 rect.min + vec2(hx as f32, hy as f32 - 7.0) * scale - vec2(0.0, u * 22.0 + bob * u);
             pointer_arrow(&painter, tip, color(TEAM[slot.side.index()].light), u);
         }
-        self.headlines(&painter, rect, scale, now, u);
+        if let Some(caption) = &caption {
+            self.caption(&painter, rect, scale, caption, u);
+        }
         self.confetti(&painter, rect, now, u);
         self.result_stamp(&painter, rect, now, u);
         if let (Some(pointer), Some((plain, right))) = (response.hover_pos(), aims) {
@@ -1374,22 +1402,120 @@ impl BattleApp {
         }
     }
 
-    /// The cartoon words to paint into the board this frame, in Formiga's pixel art: each moment's
-    /// word over whoever it happened to, rising a little and fading; composure lost as a number;
-    /// and "READY?" then "GO!" as a match begins. Each pops in a size larger for a moment, by
-    /// whole board pixels, so it stays crisp. No more than three words at once.
-    fn lettering(&self, now: f32) -> Vec<(Canvas, i32, i32, u8)> {
+    /// Lays out this frame's words and line over the board, in board pixels, so none covers a
+    /// face or another: the line over the head of whoever it is about, each cartoon word above
+    /// whoever it happened to (or beside them, if that is taken), composure lost beside the head,
+    /// and "READY?" then "GO!" as a match begins. The words are Formiga pixel art for the board
+    /// to paint (`lettering`); the line is drawn on the notebook's own card after it.
+    fn overlays(
+        &self,
+        frame: &crate::playback::Frame,
+        ctx: &egui::Context,
+        scale: f32,
+        u: f32,
+        now: f32,
+    ) -> (Vec<scene::Lettered>, Option<Caption>) {
+        use crate::lettering::{Paint, word};
         let reduce = self.table.reduce_motion;
         let (w, h) = (self.view.size.0 as f32, self.view.size.1 as f32);
-        let mut out = Vec::new();
-        let mut place = |word: Canvas, cx: f32, cy: f32, alpha: f32| {
-            let x = (cx - word.width() as f32 / 2.0).round() as i32;
-            let y = (cy - word.height() as f32 / 2.0).round() as i32;
-            out.push((word, x, y, (alpha.clamp(0.0, 1.0) * 255.0) as u8));
+        // Every face on the board, with the pips over it: kept clear.
+        let heads: Vec<(Slot, f32, f32)> = Slot::all()
+            .filter(|s| !frame.figure(*s).out)
+            .map(|s| {
+                let look = &self.table.looks[s.side.index()][s.index as usize];
+                let (hx, hy) = scene::head(&self.view, frame.figure(s), look);
+                (s, hx as f32, hy as f32)
+            })
+            .collect();
+        let mut taken: Vec<Rect> = heads
+            .iter()
+            .map(|(_, x, y)| Rect::from_min_max(pos2(x - 14.0, y - 10.0), pos2(x + 14.0, y + 24.0)))
+            .collect();
+        let anchor = |c: &Callout| -> Option<(f32, f32, Option<Rect>)> {
+            if let Some(slot) = c.about
+                && let Some((_, x, y)) = heads.iter().find(|(s, _, _)| *s == slot)
+            {
+                let own = Rect::from_min_max(pos2(x - 14.0, y - 10.0), pos2(x + 14.0, y + 24.0));
+                return Some((*x, y - 10.0, Some(own)));
+            }
+            let (x, y) = c.place?;
+            let (sx, sy) = self.view.screen(x, y);
+            Some((sx, sy - 26.0, None))
         };
+        let clear = |r: Rect, taken: &[Rect]| {
+            r.min.x >= 1.0
+                && r.max.x <= w - 1.0
+                && r.min.y >= 1.0
+                && !taken.iter().any(|t| t.intersects(r))
+        };
+
+        // The line: one at a time, each given a moment of its own before the next.
+        let mut told: Vec<(&Callout, f32)> = Vec::new();
+        for (c, born) in &self.live {
+            if c.headline.is_none() || anchor(c).is_none() {
+                continue;
+            }
+            let shown = told
+                .last()
+                .map_or(*born, |(_, last)| born.max(last + HEADLINE_SECS));
+            // A line that would come too long after its moment is left to the card of the last
+            // two, so the board never falls behind the turn.
+            if shown - born > 1.0 {
+                continue;
+            }
+            told.push((c, shown));
+        }
+        let mut caption = None;
+        // Once the match is over, its stamp says so; no line over it.
+        if self.finished_at.is_some() {
+            told.clear();
+        }
+        if let Some(k) = told.iter().rposition(|(_, shown)| *shown <= now) {
+            let (c, shown) = told[k];
+            let age = now - shown;
+            let fade_in = if reduce { 1.0 } else { (age / 0.15).min(1.0) };
+            let alpha = fade_in * ((2.2 - age) / 0.4).clamp(0.0, 1.0);
+            if let (Some(text), Some((ax, ay, _)), true) = (&c.headline, anchor(c), alpha > 0.0) {
+                let size = ctx
+                    .fonts_mut(|f| {
+                        f.layout_no_wrap(text.clone(), FontId::proportional(13.0), ink::PAGE)
+                    })
+                    .size();
+                let size = (size + vec2(u * 16.0, u * 6.0)) / scale;
+                let x = (ax - size.x / 2.0).clamp(2.0, (w - size.x - 2.0).max(2.0));
+                // Room under it for its own word, which goes just over the head.
+                let room = c.word.map_or(0.0, |text| {
+                    let big = i32::from(c.style == Style::Big) + 1;
+                    word(text, big, Paint::CREAM).height() as f32 + 4.0
+                });
+                let mut r = Rect::from_min_size(pos2(x, ay - 4.0 - room - size.y), size);
+                // Up, clear of anyone else's face.
+                for _ in 0..12 {
+                    if clear(r, &taken) || r.min.y < 4.0 {
+                        break;
+                    }
+                    r = r.translate(vec2(0.0, -4.0));
+                }
+                taken.push(r);
+                caption = Some(Caption {
+                    text: text.clone(),
+                    good_for: c.good_for,
+                    alpha,
+                    rect: r,
+                    tip: pos2(ax.clamp(r.min.x + 4.0, r.max.x - 4.0), ay),
+                });
+            }
+        }
+
+        // The words, newest first, each in the first clear spot round whoever it is about.
+        let mut out = Vec::new();
         let mut words = 0;
+        let mut shown_damage = false;
         for (k, (c, born)) in self.live.iter().enumerate().rev() {
-            let (Some(text), Some((x, y))) = (c.word, c.place) else {
+            let Some(text) = c.word else {
+                continue;
+            };
+            let Some((ax, ay, _)) = anchor(c) else {
                 continue;
             };
             let age = now - born;
@@ -1409,46 +1535,132 @@ impl BattleApp {
             }
             let alpha = 1.0 - ((age - life * 0.65) / (life * 0.35)).clamp(0.0, 1.0);
             let popping = !reduce && age < 0.1;
-            let (sx, sy) = self.view.screen(x, y);
-            if c.style == Style::Damage {
-                // Beside whoever lost it, floating up.
-                let rise = if reduce { 0.0 } else { age * 18.0 };
-                let word = crate::lettering::word(text, 1, crate::lettering::Paint::HURT);
-                place(word, sx + 14.0, sy - 22.0 - rise, alpha);
-                continue;
-            }
-            let big = c.style == Style::Big;
-            let colours = match c.good_for {
-                _ if big => crate::lettering::Paint::GOLD,
-                Some(side) => crate::lettering::Paint::team(TEAM[side.index()]),
-                None => crate::lettering::Paint::CREAM,
+            let (picture, rise) = match c.style {
+                Style::Damage => (
+                    word(text, 1, Paint::HURT),
+                    if reduce { 0.0 } else { age * 14.0 },
+                ),
+                style => {
+                    let colours = match c.good_for {
+                        _ if style == Style::Big => Paint::GOLD,
+                        Some(side) => Paint::team(TEAM[side.index()]),
+                        None => Paint::CREAM,
+                    };
+                    let scale = if style == Style::Big { 2 } else { 1 } + i32::from(popping);
+                    (
+                        word(text, scale, colours),
+                        if reduce { 0.0 } else { age * 8.0 },
+                    )
+                }
             };
-            let scale = if big { 2 } else { 1 } + i32::from(popping);
-            let rise = if reduce { 0.0 } else { age * 10.0 };
-            // Above the head of whoever is there, a little to one side.
-            let lean = if k % 2 == 0 { 5.0 } else { -5.0 };
-            let word = crate::lettering::word(text, scale, colours);
-            place(word, sx + lean, sy - 42.0 - rise, alpha);
+            let (pw, ph) = (picture.width() as f32, picture.height() as f32);
+            let above = pos2(ax - pw / 2.0, ay - ph - 2.0);
+            let left = pos2(ax - 16.0 - pw, ay + 4.0);
+            let right = pos2(ax + 16.0, ay + 4.0);
+            let higher = pos2(ax - pw / 2.0, ay - ph * 2.0 - 4.0);
+            let above_left = pos2(ax - pw - 4.0, ay - ph - 2.0);
+            let above_right = pos2(ax + 4.0, ay - ph - 2.0);
+            let lean = if k % 2 == 0 {
+                [right, left]
+            } else {
+                [left, right]
+            };
+            let tries = if c.style == Style::Damage {
+                [lean[0], lean[1], above, above_right, above_left, higher]
+            } else {
+                [above, above_right, above_left, lean[0], lean[1], higher]
+            };
+            let found = tries
+                .into_iter()
+                .map(|p| Rect::from_min_size(p, vec2(pw, ph)))
+                .find(|r| clear(*r, &taken));
+            // An older word with nowhere clear to go makes way; the newest word, and the newest
+            // number, always show.
+            let newest = if c.style == Style::Damage {
+                !shown_damage
+            } else {
+                words == 1
+            };
+            shown_damage |= c.style == Style::Damage;
+            let Some(spot) =
+                found.or_else(|| newest.then(|| Rect::from_min_size(tries[0], vec2(pw, ph))))
+            else {
+                continue;
+            };
+            taken.push(spot);
+            out.push((
+                picture,
+                spot.min.x.round() as i32,
+                (spot.min.y - rise).round() as i32,
+                (alpha.clamp(0.0, 1.0) * 255.0) as u8,
+            ));
         }
+
         if let Some((at, _)) = self.ready {
             let age = now - at;
             if age <= READY_SECS {
                 let (text, since, colours) = if age < GO_AT {
-                    ("READY?", age, crate::lettering::Paint::CREAM)
+                    ("READY?", age, Paint::CREAM)
                 } else {
-                    ("GO!", age - GO_AT, crate::lettering::Paint::GOLD)
+                    ("GO!", age - GO_AT, Paint::GOLD)
                 };
-                let scale = 3 + i32::from(!reduce && since < 0.1);
+                let size = 3 + i32::from(!reduce && since < 0.1);
                 let alpha = if age < GO_AT {
                     1.0
                 } else {
                     1.0 - ((age - READY_SECS + 0.25) / 0.25).clamp(0.0, 1.0)
                 };
-                let word = crate::lettering::word(text, scale, colours);
-                place(word, w / 2.0, h * 0.42, alpha);
+                let picture = word(text, size, colours);
+                let x = (w - picture.width() as f32) / 2.0;
+                let y = h * 0.42 - picture.height() as f32 / 2.0;
+                out.push((
+                    picture,
+                    x.round() as i32,
+                    y.round() as i32,
+                    (alpha * 255.0) as u8,
+                ));
             }
         }
-        out
+        (out, caption)
+    }
+
+    /// The line over the board, on a little card pointing down at whoever it is about.
+    fn caption(&self, painter: &egui::Painter, board: Rect, scale: f32, caption: &Caption, u: f32) {
+        let rect = Rect::from_min_max(
+            board.min + caption.rect.min.to_vec2() * scale,
+            board.min + caption.rect.max.to_vec2() * scale,
+        );
+        let rect = Rect::from_min_size(
+            pos2((rect.min.x / u).round() * u, (rect.min.y / u).round() * u),
+            rect.size(),
+        );
+        let tip = board.min + caption.tip.to_vec2() * scale;
+        let mut painter = painter.clone();
+        painter.set_opacity(caption.alpha);
+        chrome::card(&painter, rect, u, ink::CARD, ink::LINE);
+        tick(&painter, rect, caption.good_for, u);
+        let px = tip.x.clamp(rect.min.x + u * 4.0, rect.max.x - u * 4.0);
+        if tip.y > rect.max.y + u * 2.0 {
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    pos2(px - u * 2.5, rect.max.y - u),
+                    pos2(px + u * 2.5, rect.max.y - u),
+                    pos2(px, rect.max.y + u * 2.5),
+                ],
+                ink::LINE,
+                Stroke::NONE,
+            ));
+        }
+        let galley =
+            painter.layout_no_wrap(caption.text.clone(), FontId::proportional(13.0), ink::PAGE);
+        painter.galley(
+            pos2(
+                rect.min.x + u * 9.0,
+                rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            ink::PAGE,
+        );
     }
 
     /// Confetti over the board when the Handler's team wins: a short shower, the same every time.
@@ -1516,7 +1728,7 @@ impl BattleApp {
                 "choose {}",
                 m.profile(Slot::new(self.table.you, i)).name
             )),
-            Aim::Give(order) => Some(speak(m, &order)),
+            Aim::Give(order) => Some(speak(m, &order, self.table.carrying())),
             Aim::Nothing => None,
         };
         let mut lines = Vec::new();
@@ -1583,92 +1795,6 @@ impl BattleApp {
         }
         if self.table.shown.is_none() && self.table.outcome().is_none() {
             controls(&painter, page, u);
-        }
-    }
-
-    /// The turn's headlines as it plays, each on a little slip over the head of whoever it
-    /// happened to (or over the beacon), with a point down to them. A headline fades as the next
-    /// one comes, so only the newest stays.
-    fn headlines(&self, painter: &egui::Painter, board: Rect, scale: f32, now: f32, u: f32) {
-        let reduce = self.table.reduce_motion;
-        // Each headline gets a moment of its own: one that comes on the heels of another waits
-        // for it, so two in the same tick are both read.
-        let mut told: Vec<(&Callout, f32)> = Vec::new();
-        for (c, born) in &self.live {
-            if c.headline.is_none() || c.place.is_none() {
-                continue;
-            }
-            let shown = told
-                .last()
-                .map_or(*born, |(_, last)| born.max(last + HEADLINE_SECS));
-            told.push((c, shown));
-        }
-        // Only the newest, and the one before it while it fades out.
-        let current = told.iter().rposition(|(_, shown)| *shown <= now);
-        let Some(current) = current else {
-            return;
-        };
-        for k in current.saturating_sub(1)..=current {
-            let (c, shown) = told[k];
-            let age = now - shown;
-            let next = told
-                .get(k + 1)
-                .map(|(_, b)| now - b)
-                .filter(|since| *since >= 0.0);
-            let alpha = match next {
-                // Fading as the next one comes in.
-                Some(since) => 1.0 - (since / 0.2).clamp(0.0, 1.0),
-                None => {
-                    let fade_in = if reduce { 1.0 } else { (age / 0.15).min(1.0) };
-                    fade_in * ((2.2 - age) / 0.4).clamp(0.0, 1.0)
-                }
-            };
-            if alpha <= 0.0 {
-                continue;
-            }
-            let (Some(headline), Some((x, y))) = (&c.headline, c.place) else {
-                continue;
-            };
-            let galley =
-                painter.layout_no_wrap(headline.clone(), FontId::proportional(13.0), ink::PAGE);
-            let size = galley.size() + vec2(u * 16.0, u * 6.0);
-            let (sx, sy) = self.view.screen(x, y);
-            let rise = if reduce {
-                0.0
-            } else {
-                (1.0 - (age / 0.2).min(1.0)) * 4.0 * u
-            };
-            let tip = board.min + vec2(sx, sy - 56.0) * scale + vec2(0.0, rise);
-            let left = (tip.x - size.x / 2.0).clamp(
-                board.min.x + u * 2.0,
-                (board.max.x - size.x - u * 2.0).max(board.min.x),
-            );
-            let top = (tip.y - u * 3.0 - size.y).max(board.min.y + u * 2.0);
-            let rect =
-                Rect::from_min_size(pos2((left / u).round() * u, (top / u).round() * u), size);
-            let mut painter = painter.clone();
-            painter.set_opacity(alpha);
-            chrome::card(&painter, rect, u, ink::CARD, ink::LINE);
-            tick(&painter, rect, c.good_for, u);
-            // A little point down towards whoever it is about.
-            let px = tip.x.clamp(rect.min.x + u * 4.0, rect.max.x - u * 4.0);
-            painter.add(egui::Shape::convex_polygon(
-                vec![
-                    pos2(px - u * 2.5, rect.max.y - u),
-                    pos2(px + u * 2.5, rect.max.y - u),
-                    pos2(px, rect.max.y + u * 2.5),
-                ],
-                ink::LINE,
-                Stroke::NONE,
-            ));
-            painter.galley(
-                pos2(
-                    rect.min.x + u * 9.0,
-                    rect.center().y - galley.size().y / 2.0,
-                ),
-                galley,
-                ink::PAGE,
-            );
         }
     }
 
@@ -2025,13 +2151,18 @@ impl BattleApp {
             let texture = self.portrait(ctx, &contender);
             let chosen = giving && self.table.selected == Some(i);
             let order = self.table.orders[i as usize];
+            let carried = self
+                .table
+                .m
+                .as_ref()
+                .and_then(|m| m.fighter(Slot::new(you, i)).carrying);
             let order_text = match (standing[i as usize], order) {
                 (false, _) => "Sitting out, dizzy".to_owned(),
-                (true, Some(order)) => speak(self.table.m.as_ref().expect("on"), &order),
+                (true, Some(order)) => speak(self.table.m.as_ref().expect("on"), &order, carried),
                 (true, None) => match self.table.fallback(i) {
                     Some(f) => format!(
                         "No order: will {}",
-                        speak(self.table.m.as_ref().expect("on"), &f)
+                        speak(self.table.m.as_ref().expect("on"), &f, carried)
                     ),
                     None => "No order".to_owned(),
                 },
@@ -2060,6 +2191,14 @@ impl BattleApp {
                             });
                             let colour = if has_order { ink::PAGE } else { ink::MUTED };
                             ui.label(RichText::new(&order_text).size(12.5).color(colour));
+                            if let Some(item) = carried {
+                                ui.label(
+                                    RichText::new(format!("Carrying the {}", item.name()))
+                                        .size(11.5)
+                                        .italics()
+                                        .color(ink::FOREST),
+                                );
+                            }
                             let mut picked = None;
                             let mut cleared = false;
                             if giving && up {
@@ -2067,6 +2206,9 @@ impl BattleApp {
                                 ui.horizontal(|ui| {
                                     ui.spacing_mut().item_spacing.x = u * 2.0;
                                     for v in Verb::ALL {
+                                        if v == Verb::Use && carried.is_none() {
+                                            continue;
+                                        }
                                         let on = chosen && verb == Some(v);
                                         if chrome::button(
                                             ui,
@@ -2233,6 +2375,12 @@ impl BattleApp {
                     "CONTEST".to_owned(),
                     "bump theirs, or pull the lever".to_owned(),
                     Verb::Contest.hint().to_owned(),
+                ),
+                (
+                    Glyph::Stars,
+                    "USE".to_owned(),
+                    "what it found on the ground".to_owned(),
+                    Verb::Use.hint().to_owned(),
                 ),
             ],
             Guide::Marks => scene::Key::ALL
@@ -2572,7 +2720,9 @@ fn tally(m: &Match) -> Tally {
 }
 
 /// An order in the Handler's words: where, by what is there, never by coordinates.
-pub fn speak(m: &Match, order: &Order) -> String {
+/// An order in the Handler's words: where, by what is there, never by coordinates. `carrying`
+/// is what the one given it carries, for a USE.
+pub fn speak(m: &Match, order: &Order, carrying: Option<formiga_battle_core::Item>) -> String {
     let place = |tile: Tile| -> (&'static str, &'static str) {
         let arena = &m.arena;
         if arena.in_zone(tile) {
@@ -2592,7 +2742,14 @@ pub fn speak(m: &Match, order: &Order) -> String {
     match order {
         Order::Move { to } => format!("MOVE {}", place(*to).0),
         Order::Hold { at } => format!("HOLD {}", place(*at).1),
-        Order::Contest { .. } | Order::Use { .. } => describe(m, order),
+        Order::Contest {
+            target: formiga_battle_core::Target::Lever { at },
+        } if m.arena.switches.contains(at) => "CONTEST: turn the tap".to_owned(),
+        Order::Contest { .. } => describe(m, order),
+        Order::Use { at } => match carrying {
+            Some(item) => format!("USE the {} {}", item.name(), place(*at).1),
+            None => format!("USE what it carries {}", place(*at).1),
+        },
     }
 }
 

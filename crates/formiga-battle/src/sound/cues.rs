@@ -82,6 +82,26 @@ pub enum Cue {
     /// The beacon lit.
     Fwoosh,
 
+    // The map's own events, and things found on the ground.
+    /// The pipes gurgling: the sprinkler is coming, or a tap was turned.
+    Gurgle,
+    /// The sprinkler going off: a sploosh and a patter of drops.
+    Splash,
+    /// Something glinting, or turning up, on the ground.
+    Glint,
+    /// Something picked up: a bright little pluck up.
+    Pickup,
+    /// Something dropped, or a twig falling over: a soft plop.
+    Plop,
+    /// A dandelion puff blown: a soft, airy poof.
+    Poof,
+    /// A twig wedged into the ground: a woody knock.
+    Snap,
+    /// A leaf umbrella opening: a quick fwip.
+    Fwip,
+    /// Something used that came to nothing: a deflating sputter.
+    Fizzle,
+
     // The end of a match.
     /// A win.
     Fanfare,
@@ -92,7 +112,7 @@ pub enum Cue {
 }
 
 impl Cue {
-    pub const ALL: [Cue; 35] = [
+    pub const ALL: [Cue; 44] = [
         Cue::Hover,
         Cue::Click,
         Cue::Confirm,
@@ -125,6 +145,15 @@ impl Cue {
         Cue::Glow,
         Cue::Contested,
         Cue::Fwoosh,
+        Cue::Gurgle,
+        Cue::Splash,
+        Cue::Glint,
+        Cue::Pickup,
+        Cue::Plop,
+        Cue::Poof,
+        Cue::Snap,
+        Cue::Fwip,
+        Cue::Fizzle,
         Cue::Fanfare,
         Cue::Womp,
         Cue::Shrug,
@@ -165,6 +194,15 @@ impl Cue {
             Cue::Glow => "glow",
             Cue::Contested => "contested",
             Cue::Fwoosh => "fwoosh",
+            Cue::Gurgle => "gurgle",
+            Cue::Splash => "splash",
+            Cue::Glint => "glint",
+            Cue::Pickup => "pickup",
+            Cue::Plop => "plop",
+            Cue::Poof => "poof",
+            Cue::Snap => "snap",
+            Cue::Fwip => "fwip",
+            Cue::Fizzle => "fizzle",
             Cue::Fanfare => "fanfare",
             Cue::Womp => "womp",
             Cue::Shrug => "shrug",
@@ -186,7 +224,7 @@ impl Cue {
             Cue::Hover => 0.04,
             Cue::Click | Cue::Tick => 0.05,
             Cue::Pow | Cue::Clang | Cue::Boink => 0.08,
-            Cue::Glow | Cue::Hmm => 0.15,
+            Cue::Glow | Cue::Hmm | Cue::Glint | Cue::Plop => 0.15,
             _ => 0.0,
         }
     }
@@ -286,6 +324,36 @@ impl Cue {
             ),
             Cue::Contested => horn(rate, &[(0.0, 0.14, 69.0), (0.19, 0.3, 65.0)], 1800.0, 0.6),
             Cue::Fwoosh => fwoosh(rate, seed),
+            Cue::Gurgle => gurgle(rate, seed),
+            Cue::Splash => splash(rate, seed),
+            Cue::Glint => struck(
+                rate,
+                CHIME,
+                &[(0.0, n(96.0) * vary, 0.6), (0.07, n(100.0) * vary, 0.5)],
+                0.7,
+            )
+            .louder(0.7),
+            Cue::Pickup => struck(
+                rate,
+                BAR,
+                &[
+                    (0.0, n(79.0), 0.7),
+                    (0.05, n(83.0), 0.75),
+                    (0.1, n(86.0), 0.8),
+                    (0.15, n(91.0), 0.9),
+                ],
+                0.6,
+            ),
+            Cue::Plop => glide(rate, 420.0 * vary, 160.0 * vary, 0.06, 0.07, 0.2),
+            Cue::Poof => whoosh(rate, seed, 0.4, 1800.0),
+            Cue::Snap => struck(
+                rate,
+                BLOCK,
+                &[(0.0, 520.0 * vary, 1.0), (0.05, 700.0 * vary, 0.6)],
+                0.25,
+            ),
+            Cue::Fwip => fwip(rate, seed),
+            Cue::Fizzle => fizzle(rate, seed),
             Cue::Fanfare => fanfare(rate),
             Cue::Womp => womp(rate),
             Cue::Shrug => struck(rate, BAR, &[(0.0, n(76.0), 0.9), (0.18, n(72.0), 0.8)], 0.7),
@@ -691,6 +759,71 @@ fn whoosh(rate: f32, seed: u32, seconds: f32, top: f32) -> Voice {
         let share = (t / seconds).clamp(0.0, 1.0);
         let hz = 500.0 + (top - 500.0) * sine(share * 0.5);
         air.band(hz, 1.4) * swell(t, seconds * 0.3, seconds * 0.6, seconds * 0.4) * 1.1
+    })
+}
+
+/// The pipes gurgling: bubbles of water through a narrow pipe, rising and popping.
+fn gurgle(rate: f32, seed: u32) -> Voice {
+    let mut pick = Noise::new(seed);
+    let bubbles: Vec<(f32, f32)> = (0..9)
+        .map(|k| {
+            (
+                k as f32 * 0.06 + pick.unit() * 0.03,
+                260.0 + pick.unit() * 340.0,
+            )
+        })
+        .collect();
+    let mut phases = vec![Phase::default(); bubbles.len()];
+    Voice::new(rate, 0.75, move |t| {
+        let mut out = 0.0;
+        for (phase, &(at, hz)) in phases.iter_mut().zip(&bubbles) {
+            let since = t - at;
+            if (0.0..0.09).contains(&since) {
+                // Each bubble rises in pitch as it pops.
+                let rising = hz * (1.0 + since * 9.0);
+                out += sine(phase.tick(rising, rate)) * strike(since, 0.004, 0.03);
+            }
+        }
+        out * 0.6
+    })
+}
+
+/// The sprinkler: a sploosh of water, then a patter of drops coming down.
+fn splash(rate: f32, seed: u32) -> Voice {
+    let mut water = Hiss::new(seed, rate);
+    let mut drops = Hiss::new(seed ^ 0x51, rate);
+    let mut pick = Noise::new(seed ^ 0x2a);
+    let patter: Vec<f32> = (0..16)
+        .map(|k| 0.2 + k as f32 * 0.045 + pick.unit() * 0.03)
+        .collect();
+    Voice::new(rate, 1.2, move |t| {
+        let hz = 600.0 + 2400.0 * (1.0 - ease(t / 0.4));
+        let body = water.band(hz, 0.7) * strike(t, 0.01, 0.22) * 1.6;
+        let tap: f32 = patter.iter().map(|at| strike(t - at, 0.001, 0.012)).sum();
+        body + drops.band(4200.0, 2.0) * tap.min(1.0) * 0.7
+    })
+}
+
+/// A leaf umbrella opening: a quick upward flick of air and a soft pluck.
+fn fwip(rate: f32, seed: u32) -> Voice {
+    let mut air = whoosh(rate, seed, 0.14, 5000.0);
+    let mut leaf = Struck::new(BAR, &[(0.08, n(84.0), 0.6)]);
+    Voice::new(rate, 0.5, move |t| {
+        air.next().unwrap_or(0.0) + leaf.run(t, rate) * 0.4
+    })
+}
+
+/// Something that came to nothing: a sputter running down, like air out of a balloon.
+fn fizzle(rate: f32, seed: u32) -> Voice {
+    let mut phase = Phase::default();
+    let mut rasp = Hiss::new(seed, rate);
+    Voice::new(rate, 0.6, move |t| {
+        let hz = 520.0 - 360.0 * ease(t / 0.5);
+        let flutter = 0.5 + 0.5 * sine(t * 34.0);
+        (triangle(phase.tick(hz, rate)) * 0.6 + rasp.band(hz * 3.0, 3.0) * 0.4)
+            * flutter
+            * swell(t, 0.02, 0.45, 0.1)
+            * 0.6
     })
 }
 
