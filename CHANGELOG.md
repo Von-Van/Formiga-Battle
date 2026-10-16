@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.67.12] - 2026-10-16
+
+Built on Formiga Desktop 0.67.11, with Battle contract version 4: each match played as a trio says
+which three played. A Formiga Desktop 0.67.10 still reads its results, leaving out only who played.
+Rules version 9 and relay protocol 3 are unchanged. A friend match needs both Handlers on Battle
+0.67.12 and Formiga Desktop 0.67.11.
+
+- A trio whose members change during one Battle session keeps every lineup that played as it,
+  not only the three it had when Battle opened.
+
 ## [0.67.11] - 2026-10-16
 
 Built on Formiga Desktop 0.67.10, as Battle 0.67.10 was. Rules version 9 is new and relay
