@@ -9,16 +9,20 @@ use eframe::egui::{self, Id, RichText};
 use formiga_battle_contract::{MatchSummary, Mode};
 
 /// The keys Battle answers to, for the settings page.
-const KEYS: [(&str, &str); 6] = [
+const KEYS: [(&str, &str); 7] = [
     (
         "Space, Enter or a click",
         "hurries the train in at the station",
     ),
-    ("1, 2, 3", "chooses a companion's card in a match"),
-    ("M, H, C", "MOVE, HOLD or CONTEST"),
+    (
+        "T, D, I",
+        "picks up a Take, Defend or Interact order in a match",
+    ),
+    ("1, 2, 3", "chooses one of your three on the board"),
     ("Enter", "locks in your orders"),
-    ("Escape or right-click", "cancels an order being given"),
-    ("Escape", "turns the notebook back a page"),
+    ("L", "opens the whole match, turn by turn"),
+    ("Escape", "puts an order back, or closes the whole match"),
+    ("Escape, in the notebook", "turns back a page"),
 ];
 
 impl BattleApp {

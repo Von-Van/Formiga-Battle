@@ -57,8 +57,9 @@ train pulls in with your companions aboard on its left page, and on its right yo
 choose Out in the World (a friend, online) or Close to Home (the visitors, offline). The notebook
 then turns to where to play, who goes and, for a friend, the room.
 
-In a match: choose a card (or 1, 2, 3), then MOVE, HOLD or CONTEST (or M, H, C), then a tile
-or a creature on the board; Enter locks in, right-click or Escape cancels.
+In a match: give the team up to three orders a turn, each a Take, Defend or Interact (or T, D,
+I) put on a square of the board; Enter locks in, Escape puts an order back, and L opens the whole
+match turn by turn.
 
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
 window (`--turns`, `--into`, `--scale`); `--snap <png> --review station|where|who|friend|orders|playing --at <s>`
