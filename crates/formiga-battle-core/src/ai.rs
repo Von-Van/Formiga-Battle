@@ -37,7 +37,8 @@ pub fn fallback(m: &Match, slot: Slot) -> Order {
 }
 
 /// The free zone tile this creature can reach soonest, the zone's middle first among equals,
-/// passing over any already `taken` by a teammate's order.
+/// passing over any already `taken` by a teammate's order, and over any marked for the map event
+/// while another will do.
 pub fn nearest_free_zone_tile(m: &Match, slot: Slot, taken: &[Tile]) -> Option<Tile> {
     let dist = walks(m, slot);
     let w = m.arena.width as usize;
@@ -48,7 +49,15 @@ pub fn nearest_free_zone_tile(m: &Match, slot: Slot, taken: &[Tile]) -> Option<T
         .copied()
         .filter(|t| m.occupant(*t).is_none_or(|o| o == slot) && !taken.contains(t))
         .filter_map(|t| dist[t.y as usize * w + t.x as usize].map(|d| (t, d)))
-        .min_by_key(|(t, d)| (*d, t.distance(centre), t.y, m.arena.across(slot.side, *t)))
+        .min_by_key(|(t, d)| {
+            (
+                crate::interpret::warned(m, *t),
+                *d,
+                t.distance(centre),
+                t.y,
+                m.arena.across(slot.side, *t),
+            )
+        })
         .map(|(t, _)| t)
 }
 
@@ -201,7 +210,10 @@ fn exhibition(m: &Match, side: Side) -> Orders {
     let holding_in_zone = free
         .iter()
         .copied()
-        .filter(|s| m.fighter(*s).holding && m.arena.in_zone(m.fighter(*s).at))
+        .filter(|s| {
+            let at = m.fighter(*s).at;
+            m.fighter(*s).holding && m.arena.in_zone(at) && !crate::interpret::warned(m, at)
+        })
         .min_by_key(|s| (m.fighter(*s).at.distance(centre), *s));
     let (anchor, anchor_tile) = match holding_in_zone {
         Some(s) => (s, m.fighter(s).at),

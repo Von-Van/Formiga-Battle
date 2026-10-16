@@ -31,10 +31,10 @@ fn landed(report: &TurnReport) -> Option<(Vec<Slot>, Vec<Slot>)> {
 }
 
 #[test]
-fn the_sprinkler_is_warned_a_whole_turn_ahead_and_soaks_holders_on_the_yards_arms() {
-    // L0 holds an arm, R0 the middle, which the sprinkler never sweeps.
-    let mut m = board_on(Arena::backyard(), &[(L0, (3, 3)), (R0, (4, 3))]);
-    let given = orders(&[(L0, hold(3, 3)), (R0, hold(4, 3))]);
+fn the_sprinkler_is_warned_a_whole_turn_ahead_and_soaks_whoever_is_in_the_yard() {
+    // L0 holds an arm of the yard, R0 stands just outside it.
+    let mut m = board_on(Arena::backyard(), &[(L0, (3, 3)), (R0, (6, 3))]);
+    let given = orders(&[(L0, hold(3, 3)), (R0, hold(6, 3))]);
     for _ in 0..2 {
         m.resolve_turn(given);
     }
@@ -49,7 +49,7 @@ fn the_sprinkler_is_warned_a_whole_turn_ahead_and_soaks_holders_on_the_yards_arm
     });
     assert_eq!(warned, Some((3, 4, 2)));
     assert!(interpret::warned(&m, Tile::new(3, 3)));
-    assert!(!interpret::warned(&m, Tile::new(4, 3)));
+    assert!(!interpret::warned(&m, Tile::new(6, 3)));
     let fourth = m.resolve_turn(given);
     assert_eq!(landed(&fourth), Some((vec![L0], vec![])));
     assert!(!m.fighter(L0).holding);
