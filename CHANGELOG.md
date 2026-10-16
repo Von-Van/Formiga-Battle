@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## [0.67.9] - 2026-10-16
+
+Released with Formiga Desktop 0.67.9 and built on its shared crates, with Battle contract version 3,
+so it needs Desktop 0.67.9. Rules version 8 and relay protocol 3 are new: a friend match needs both
+Handlers on Battle 0.67.9, and an older Battle is told to update.
 
 - The Handler's things are painted as the notebook's other pictures are. A pennant is chosen
   from sample tiles of cloth (its cut, cloth, symbol and edge) and stirs on its cane in a tuft of

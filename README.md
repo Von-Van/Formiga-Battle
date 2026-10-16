@@ -45,7 +45,7 @@ with "Play Formiga Battle…"; Battle's side of that hand-off is `--formiga-batt
    a disk image or a zip. On Windows 10 or 11 there is a per-user installer, which puts Battle
    where Formiga Desktop looks for it, or a portable zip, which runs without installing but which
    Desktop does not look for.
-2. In Formiga Desktop (0.67.8 or later), choose "Play Formiga Battle…" from the tray. Battle opens
+2. In Formiga Desktop (0.67.9 or later), choose "Play Formiga Battle…" from the tray. Battle opens
    with your companions. Opened by itself, it plays with a sample colony and keeps nothing.
 3. To play a friend, both of you need the same Battle, opened by the same Desktop.
 
@@ -141,7 +141,7 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
-by one release tag (`v0.67.8`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
+by one release tag (`v0.67.9`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
 authoritative for the colony; Battle never writes a colony file.
 
 ## License

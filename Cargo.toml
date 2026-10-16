@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.67.8"
+version = "0.67.9"
 edition = "2024"
 rust-version = "1.97"
 authors = ["Formiga contributors"]
@@ -16,14 +16,12 @@ publish = false
 
 [workspace.dependencies]
 # Formiga Desktop's shared crates, all from the same Desktop release so their types agree.
-# Move them to a new release's tag together. Until 0.67.9 is tagged they come from the Desktop
-# main commit that keeps the Handler card (contract v3, save v32); the release replaces each
-# `rev = "…"` with `tag = "v0.67.9"` by hand before running scripts/set-version.sh.
-formiga-art = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "112cf08c58bf0b8418c801188cdc5305cbcea577" }
-formiga-battle-contract = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "112cf08c58bf0b8418c801188cdc5305cbcea577" }
-formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "112cf08c58bf0b8418c801188cdc5305cbcea577" }
-formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "112cf08c58bf0b8418c801188cdc5305cbcea577" }
-formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "112cf08c58bf0b8418c801188cdc5305cbcea577" }
+# Move them to a new release's tag together.
+formiga-art = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
+formiga-battle-contract = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
+formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
+formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
+formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.67.9" }
 
 formiga-battle-core = { path = "crates/formiga-battle-core" }
 formiga-battle-room = { path = "crates/formiga-battle-room" }
