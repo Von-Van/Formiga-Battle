@@ -1941,7 +1941,17 @@ impl BattleApp {
                                             .color(ink::MUTED),
                                     );
                                 }
+                                // The turn still playing out is told once it has been seen.
+                                let playing = self
+                                    .table
+                                    .shown
+                                    .as_ref()
+                                    .filter(|_| self.finished_at.is_none())
+                                    .map(|shown| shown.report.turn);
                                 for (turn, lines) in &self.table.log {
+                                    if Some(*turn) == playing {
+                                        continue;
+                                    }
                                     ui.add_space(u);
                                     ui.label(label_job(
                                         &format!("Turn {turn}"),
@@ -2203,8 +2213,10 @@ impl BattleApp {
                             let mut cleared = false;
                             if giving && up {
                                 ui.add_space(u);
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = u * 2.0;
+                                let row = egui::Layout::left_to_right(egui::Align::TOP)
+                                    .with_main_wrap(true);
+                                ui.with_layout(row, |ui| {
+                                    ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
                                     for v in Verb::ALL {
                                         if v == Verb::Use && carried.is_none() {
                                             continue;
@@ -2388,25 +2400,32 @@ impl BattleApp {
                 .map(|k| (key(*k), k.words().to_owned(), String::new(), String::new()))
                 .collect(),
         };
-        for (glyph, label, gloss, hover) in rows {
-            let response = ui
-                .horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = u * 3.0;
-                    self.glyph(ui, ctx, glyph, u);
-                    ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        ui.label(RichText::new(&label).size(13.0).strong().color(ink::PAGE));
-                        if !gloss.is_empty() {
-                            ui.label(RichText::new(&gloss).size(11.5).color(ink::MUTED));
-                        }
-                    });
-                })
-                .response;
-            if !hover.is_empty() {
-                response.on_hover_text(hover);
-            }
-            ui.add_space(u * 1.5);
-        }
+        // Scrolls when the window is too short for it all.
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for (glyph, label, gloss, hover) in rows {
+                    let response = ui
+                        .horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = u * 3.0;
+                            self.glyph(ui, ctx, glyph, u);
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                ui.label(
+                                    RichText::new(&label).size(13.0).strong().color(ink::PAGE),
+                                );
+                                if !gloss.is_empty() {
+                                    ui.label(RichText::new(&gloss).size(11.5).color(ink::MUTED));
+                                }
+                            });
+                        })
+                        .response;
+                    if !hover.is_empty() {
+                        response.on_hover_text(hover);
+                    }
+                    ui.add_space(u * 1.5);
+                }
+            });
     }
 
     /// A row's picture in the field guide: one of the board's marks, stars, or a little watch.
