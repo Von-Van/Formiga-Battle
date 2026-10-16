@@ -32,9 +32,10 @@ fn landed(report: &TurnReport) -> Option<(Vec<Slot>, Vec<Slot>)> {
 
 #[test]
 fn the_sprinkler_is_warned_a_whole_turn_ahead_and_soaks_whoever_is_in_the_yard() {
-    // L0 holds an arm of the yard, R0 stands just outside it.
-    let mut m = board_on(Arena::backyard(), &[(L0, (3, 3)), (R0, (6, 3))]);
-    let given = orders(&[(L0, hold(3, 3)), (R0, hold(6, 3))]);
+    // Each team holds an arm of the yard, keeping it contested; L1 waits just outside.
+    let placed = [(L0, (3, 3)), (L1, (6, 1)), (R0, (5, 3))];
+    let mut m = board_on(Arena::backyard(), &placed);
+    let given = orders(&[(L0, hold(3, 3)), (L1, hold(6, 1)), (R0, hold(5, 3))]);
     for _ in 0..2 {
         m.resolve_turn(given);
     }
@@ -49,11 +50,11 @@ fn the_sprinkler_is_warned_a_whole_turn_ahead_and_soaks_whoever_is_in_the_yard()
     });
     assert_eq!(warned, Some((3, 4, 2)));
     assert!(interpret::warned(&m, Tile::new(3, 3)));
-    assert!(!interpret::warned(&m, Tile::new(6, 3)));
+    assert!(!interpret::warned(&m, Tile::new(6, 1)));
     let fourth = m.resolve_turn(given);
-    assert_eq!(landed(&fourth), Some((vec![L0], vec![])));
-    assert!(!m.fighter(L0).holding);
-    assert!(m.fighter(R0).holding);
+    assert_eq!(landed(&fourth), Some((vec![L0, R0], vec![])));
+    assert!(!m.fighter(L0).holding && !m.fighter(R0).holding);
+    assert!(m.fighter(L1).holding);
     assert_eq!(composure(&m, L0), 3, "the sprinkler costs nobody composure");
 }
 
