@@ -256,6 +256,7 @@ pub fn friend_match(
                 trio: trio.map(|t| TrioPlayed {
                     id: t.id.clone(),
                     won,
+                    members: t.members.clone(),
                 }),
                 ..Rewards::default()
             },
@@ -357,6 +358,7 @@ pub fn ai_match(m: &Match, you: Side, events: &[Event], record: &BattleRecord) -
     rewards.trio = trio.map(|t| TrioPlayed {
         id: t.id.clone(),
         won: winner.map(|w| w == you),
+        members: t.members.clone(),
     });
     Earned {
         result: MatchResult {
