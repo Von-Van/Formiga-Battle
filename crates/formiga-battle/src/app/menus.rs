@@ -6,8 +6,8 @@
 //! it.
 
 use super::{
-    BattleApp, Kind, Outing, SHARED, Stage, Step, card, dashed_rule, locked_behind, portrait_mat,
-    rosette, shrunk, sticky, texture,
+    BattleApp, Kind, Outing, SHARED, Stage, Step, card, dashed_rule, locked_behind, padlock,
+    portrait_mat, rosette, shrunk, sticky, texture,
 };
 use crate::chrome::{self, ink, label_job};
 use crate::feel::Feedback;
@@ -809,7 +809,23 @@ impl BattleApp {
         let open = self.arena_open(&arena.id);
         let cup = crate::rewards::cup_for(&arena.id);
         ui.vertical_centered(|ui| {
-            ui.label(label_job(&arena.name, 14.0, ink::FOREST));
+            // The place's name on a garden sign planted under its picture.
+            let w = 112;
+            let sign = self.painted(ui.ctx(), format!("sign-{w}"), |_| {
+                crate::keepsake::signboard(w)
+            });
+            let rect = super::registry::place(ui, &sign, 1.0, u).0;
+            let (bx, by, bw, bh) = crate::keepsake::sign_board(w);
+            super::registry::letter(
+                ui.painter(),
+                Rect::from_min_size(
+                    rect.min + vec2(bx as f32, by as f32) * u,
+                    vec2(bw as f32, bh as f32) * u,
+                ),
+                &arena.name,
+                Color32::from_rgb(0x3f, 0x2a, 0x18),
+                0.6,
+            );
             ui.label(
                 RichText::new(crate::garden::Dressing::of(&arena).blurb())
                     .size(13.0)
@@ -824,7 +840,8 @@ impl BattleApp {
                 ui.horizontal(|ui| {
                     // Centred by hand: a row of rosettes and a few words.
                     let words = if open {
-                        format!("{} · {wins} of {} wins", cup.name, crate::rewards::CUP_WINS)
+                        // The rosettes count the wins.
+                        cup.name.to_owned()
                     } else if self.outing == Outing::Home {
                         format!("Win the {} to open it", locked_behind(&arena.id))
                     } else {
@@ -836,7 +853,9 @@ impl BattleApp {
                     let galley = ui.painter().layout_job(label_job(&words, 9.0, ink::MUTED));
                     let width = galley.size().x
                         + if open {
-                            f32::from(crate::rewards::CUP_WINS) * (u * 10.0 + u) + u * 4.0
+                            f32::from(crate::rewards::CUP_WINS)
+                                * (crate::keepsake::ROSETTE_W as f32 * u + u)
+                                + u * 4.0
                         } else {
                             0.0
                         };
@@ -844,7 +863,7 @@ impl BattleApp {
                     ui.spacing_mut().item_spacing.x = u;
                     if open {
                         for k in 0..crate::rewards::CUP_WINS {
-                            rosette(ui, k < wins, u);
+                            rosette(ui, crate::rewards::cup_index(cup.id), k < wins, u);
                         }
                         ui.add_space(u * 3.0);
                     }
@@ -916,11 +935,19 @@ impl BattleApp {
                                 ui.horizontal(|ui| {
                                     ui.spacing_mut().item_spacing.x = u;
                                     if unlocked {
+                                        let at = cup.map_or(0, |c| crate::rewards::cup_index(c.id));
                                         for k in 0..crate::rewards::CUP_WINS {
-                                            rosette(ui, k < wins, u);
+                                            rosette(ui, at, k < wins, u);
                                         }
                                     } else if home {
-                                        ui.label(label_job("Locked", 9.0, ink::MUTED));
+                                        padlock(
+                                            ui,
+                                            &format!(
+                                                "Win the {} to play here",
+                                                locked_behind(&arena.id)
+                                            ),
+                                            u,
+                                        );
                                     } else {
                                         ui.label(label_job("Open for friends", 9.0, ink::MUTED));
                                     }

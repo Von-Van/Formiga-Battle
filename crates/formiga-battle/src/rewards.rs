@@ -282,6 +282,40 @@ fn notebook_additions(m: &Match, you: Side, events: &[Event], won: bool) -> Vec<
 /// How the result card begins a line about a new notebook moment.
 const NOTEBOOK_LINE: &str = "In the notebook, ";
 
+/// A cup's place in [`CUPS`], by its id: the first for one not known.
+pub fn cup_index(id: &str) -> usize {
+    CUPS.iter().position(|c| c.id == id).unwrap_or(0)
+}
+
+/// Which keepsake a line of the result card goes beside, and its words without what the keepsake
+/// already says ("In the notebook, " beside a notebook page). The lines are made here, so the
+/// card's pictures follow how they are worded.
+pub fn keepsake_of(line: &str) -> (crate::keepsake::Keepsake, &str) {
+    use crate::keepsake::Keepsake;
+    let cup = |name: &str| CUPS.iter().position(|c| name.contains(c.name)).unwrap_or(0);
+    if let Some(rest) = line.strip_prefix(NOTEBOOK_LINE) {
+        (Keepsake::Notebook, rest)
+    } else if line.starts_with('+') && line.ends_with("Open Circuit points") {
+        (Keepsake::Points, line)
+    } else if line.starts_with("A friend match played for ") {
+        (Keepsake::Played, line)
+    } else if line.starts_with("A journal entry") {
+        (Keepsake::Journal, line)
+    } else if line.starts_with("Unlocked the ") {
+        (Keepsake::Unlocked, line)
+    } else if line.starts_with("Won the ") {
+        (Keepsake::Trophy(cup(line)), line)
+    } else if line.ends_with(&format!(" of {CUP_WINS} wins"))
+        && CUPS.iter().any(|c| line.starts_with(c.name))
+    {
+        (Keepsake::Cup(cup(line)), line)
+    } else if line.contains(": ") && (line.contains(" played") || line.contains(" won")) {
+        (Keepsake::Trio, line)
+    } else {
+        (Keepsake::Note, line)
+    }
+}
+
 /// The first version of Battle's contract whose Desktop keeps what a match against the visitors
 /// showed in the notebook. An older Desktop (0.67.8) refuses a session's whole result if one of
 /// its matches against the visitors carries any.
@@ -503,6 +537,65 @@ mod tests {
         assert!(record.unlocked.iter().any(|u| u == WOODLAND_CUP));
         assert_eq!(record.circuit_points, 0, "the AI never gives points");
         assert!(!record.notebook.is_empty(), "but the notebook fills in");
+    }
+
+    #[test]
+    fn every_line_of_what_a_match_earned_goes_beside_its_own_keepsake() {
+        use crate::keepsake::Keepsake;
+        let mut record = BattleRecord::default();
+        let mut seen = Vec::new();
+        for seed in 0..40 {
+            let (m, events) = played(seed);
+            let earned = ai_match(&m, Side::Left, &events, &record);
+            for line in &earned.lines {
+                let (keepsake, words) = keepsake_of(line);
+                assert_ne!(keepsake, Keepsake::Note, "{line:?} has a keepsake");
+                assert!(!words.is_empty() && !words.starts_with(NOTEBOOK_LINE));
+                seen.push(std::mem::discriminant(&keepsake));
+            }
+            record.apply(&earned.result);
+        }
+        let (m, events) = played(3);
+        let friend = friend_match(
+            &m,
+            Side::Left,
+            &events,
+            &BattleRecord::default(),
+            "Sam",
+            None,
+            OffsetDateTime::UNIX_EPOCH,
+        );
+        for line in &friend.lines {
+            let (keepsake, _) = keepsake_of(line);
+            assert_ne!(keepsake, Keepsake::Note, "{line:?} has a keepsake");
+            seen.push(std::mem::discriminant(&keepsake));
+        }
+        for k in [
+            Keepsake::Points,
+            Keepsake::Played,
+            Keepsake::Cup(0),
+            Keepsake::Trophy(0),
+            Keepsake::Unlocked,
+            Keepsake::Journal,
+            Keepsake::Notebook,
+        ] {
+            assert!(
+                seen.contains(&std::mem::discriminant(&k)),
+                "{k:?} is earned"
+            );
+        }
+        assert_eq!(keepsake_of("Woodland Cup: 2 of 3 wins").0, Keepsake::Cup(1));
+        assert_eq!(
+            keepsake_of("The Thistle Three: 2 played, 1 won").0,
+            Keepsake::Trio
+        );
+        assert_eq!(
+            keepsake_of(
+                "Your board and your friend's came out differently, so this match earned nothing."
+            )
+            .0,
+            Keepsake::Note
+        );
     }
 
     #[test]
