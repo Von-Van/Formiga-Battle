@@ -7,7 +7,7 @@ use formiga_battle_core::{Directive, Match, RULES_VERSION, Side, TEAM_SIZE, Team
 use formiga_battle_room::relay::{Answer, Limits, Refusal, Request, Stage};
 use formiga_battle_room::roster::{bonds_among, room_match};
 use formiga_battle_room::{
-    Build, Entrant, RELAY_VERSION, Relay, RelayClient, Released, View, serve_relay,
+    Build, Card, Entrant, RELAY_VERSION, Relay, RelayClient, Released, View, serve_relay,
 };
 
 fn entrant(seed: u8, handler: &str) -> Entrant {
@@ -29,6 +29,7 @@ fn entrant(seed: u8, handler: &str) -> Entrant {
         bonds: bonds_among(&roster, &team),
         team,
         arena: "backyard".to_owned(),
+        card: None,
     }
 }
 
@@ -651,6 +652,50 @@ fn a_body_too_big_to_read_is_answered_with_a_refusal_rather_than_a_reset() {
     stream.read_to_string(&mut answer).unwrap();
     assert!(answer.starts_with("HTTP/1.1 400"), "{answer}");
     relay.stop();
+}
+
+#[test]
+fn a_handlers_card_reaches_their_friend_cleaned_and_an_entrant_without_one_still_plays() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let pennant = |symbol: &str| formiga_battle_contract::Pennant {
+        shape: "swallowtail".to_owned(),
+        field: "forest".to_owned(),
+        symbol: symbol.to_owned(),
+        trim: "stitched".to_owned(),
+    };
+    let mut opener = entrant(0, "Jake");
+    opener.card = Some(Card {
+        club: Some("  Hedge\u{202E} End   Club ".to_owned()),
+        pennant: Some(pennant("acorn")),
+        standing: Some("x".repeat(200)),
+        trio: Some("The Thistle Three".to_owned()),
+        trio_pennant: Some(pennant("Not An Id!")),
+    });
+    let (code, host) = seated(relay.handle(Request::Open { entrant: opener }, 0));
+    // A joiner from before cards, as the site's relay passes it on: no card at all.
+    let mut joiner = serde_json::to_value(entrant(9, "Friend")).unwrap();
+    assert!(joiner.get("card").is_none());
+    joiner["card"] = serde_json::json!({ "club": "\u{200b}", "pennant": null });
+    let joiner: Entrant = serde_json::from_value(joiner).unwrap();
+    relay.handle(
+        Request::Join {
+            code: code.clone(),
+            entrant: joiner,
+        },
+        10,
+    );
+    let v = viewed(relay.handle(Request::Look { code, seat: host }, 20));
+    let [a, b] = v.entrants.expect("both are in");
+    let card = a.card.expect("the opener's card");
+    assert_eq!(card.club.as_deref(), Some("Hedge End Club"));
+    assert_eq!(card.pennant, Some(pennant("acorn")));
+    assert_eq!(card.standing.map(|s| s.chars().count()), Some(48));
+    assert_eq!(card.trio.as_deref(), Some("The Thistle Three"));
+    assert_eq!(
+        card.trio_pennant, None,
+        "a pennant of other shapes is left out"
+    );
+    assert_eq!(b.card, None, "a card with nothing on it is no card");
 }
 
 #[test]

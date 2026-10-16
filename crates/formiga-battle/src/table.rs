@@ -21,7 +21,7 @@ use formiga_battle_core::{
     Tile, TurnReport, order::MAX_SQUARES,
 };
 use formiga_battle_room::roster::{check_team, room_match};
-use formiga_battle_room::{Build, Entrant, View, relay_base};
+use formiga_battle_room::{Build, Card, Entrant, View, relay_base};
 use std::path::PathBuf;
 
 /// The session Desktop opened, and the answer being written into it.
@@ -53,6 +53,9 @@ pub struct Friend {
     pub seated: bool,
     /// Both Handlers' names, left then right.
     pub handlers: [String; 2],
+    /// What each Handler shows of themselves besides their name, left then right, cleaned again
+    /// on arrival.
+    pub cards: [Option<Card>; 2],
     /// The newest view of the room.
     pub view: Option<View>,
     /// The turn this Handler's orders have gone to the relay for.
@@ -277,6 +280,7 @@ impl Table {
                 &self.match_events,
                 &self.record,
                 &friend.handlers[self.you.other().index()],
+                friend.cards[self.you.other().index()].as_ref(),
                 now,
             ),
             None => rewards::ai_match(m, self.you, &self.record),
@@ -316,14 +320,84 @@ impl Table {
     fn keep(&mut self, earned: rewards::Earned) {
         self.record.apply(&earned.result);
         self.earned = earned.lines;
+        if let Some(trio) = earned
+            .result
+            .rewards
+            .trio
+            .as_ref()
+            .and_then(|played| self.record.trios.iter().find(|t| t.id == played.id))
+        {
+            self.earned.push(format!(
+                "{}: {}",
+                trio.name,
+                crate::identity::record_words(trio)
+            ));
+        }
         if let Some(session) = &mut self.session {
             session.result.matches.push(earned.result);
-            if let Err(error) = session.result.write(&session.directory) {
-                self.notice = Some(format!(
-                    "What this match earned could not be kept for Desktop: {error}"
-                ));
-            }
         }
+        self.write_session("What this match earned");
+    }
+
+    /// Writes the session's answer for Desktop again, whole, with the Handler card and trios as
+    /// they stand. A rehearsal keeps nothing.
+    fn write_session(&mut self, what: &str) {
+        let Some(session) = &mut self.session else {
+            return;
+        };
+        let registry = crate::identity::registry(&self.record);
+        session.result.registry = (!registry.is_empty()).then_some(registry);
+        if let Err(error) = session.result.write(&session.directory) {
+            self.notice = Some(format!("{what} could not be kept for Desktop: {error}"));
+        }
+    }
+
+    /// The Handler card is now this.
+    pub fn set_handler(&mut self, card: formiga_battle_contract::HandlerCard) {
+        self.register(formiga_battle_contract::Registry {
+            handler: Some(card),
+            trios: Vec::new(),
+        });
+    }
+
+    /// A trio named, renamed, given a pennant, retired or given new members: kept here at once,
+    /// and for Desktop when Battle closes.
+    pub fn set_trio(&mut self, card: formiga_battle_contract::TrioCard) {
+        self.register(formiga_battle_contract::Registry {
+            handler: None,
+            trios: vec![card],
+        });
+    }
+
+    fn register(&mut self, registry: formiga_battle_contract::Registry) {
+        if !registry.holds() {
+            self.notice = Some("That is not something your notebook can keep.".to_owned());
+            return;
+        }
+        self.record
+            .register(&registry, time::OffsetDateTime::now_utc());
+        self.write_session("Your Handler card and trios");
+    }
+
+    /// What a friend is shown of this Handler besides their name: their club, pennant and
+    /// standing, and the trio the three picked are, if they are one.
+    pub fn shared_card(&self) -> Option<Card> {
+        let ids: Vec<u64> = self
+            .picked
+            .iter()
+            .filter_map(|&i| self.home.get(i))
+            .map(|(c, _)| c.traveler.id.0)
+            .collect();
+        let trio = crate::identity::trio_of(&self.record, &ids);
+        let handler = self.record.handler.as_ref();
+        Card {
+            club: handler.and_then(|h| h.club.clone()),
+            pennant: handler.map(|h| h.pennant.clone()),
+            standing: Some(crate::identity::Standing::of(&self.record).line()),
+            trio: trio.map(|t| t.name.clone()),
+            trio_pennant: trio.and_then(|t| t.pennant.clone()),
+        }
+        .cleaned()
     }
 
     pub fn toggle_pick(&mut self, index: usize) {
@@ -436,6 +510,12 @@ impl Table {
             return;
         }
         let (team, bonds) = self.picked_team();
+        // The name signed here is the Handler's from now on.
+        if let Some(card) = crate::identity::card_with_name(&self.record, handler)
+            && self.record.handler.as_ref() != Some(&card)
+        {
+            self.set_handler(card);
+        }
         let entrant = Entrant {
             protocol: formiga_battle_room::RELAY_VERSION,
             rules_version: formiga_battle_core::RULES_VERSION,
@@ -444,12 +524,14 @@ impl Table {
             team,
             bonds,
             arena: self.arena.id.clone(),
+            card: self.shared_card(),
         };
         self.friend = Some(Friend {
             line: Line::start(self.relay.clone(), entrant, code.map(str::to_owned)),
             code: None,
             seated: false,
             handlers: [String::new(), String::new()],
+            cards: [None, None],
             view: None,
             sent_turn: None,
             opponent_ready: false,
@@ -590,6 +672,10 @@ impl Table {
                 Ok(m) => {
                     friend.seated = true;
                     friend.handlers = handlers.clone();
+                    friend.cards = [
+                        a.card.as_ref().and_then(Card::cleaned),
+                        b.card.as_ref().and_then(Card::cleaned),
+                    ];
                     let teams = [a.team.clone(), b.team.clone()];
                     let you = view.you;
                     friend.view = Some(view);

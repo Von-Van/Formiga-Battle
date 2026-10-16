@@ -4,10 +4,12 @@
 //! Nothing else earns anything. Every reward is handed to Desktop, which keeps it.
 
 use formiga_battle_contract::{
-    BattleRecord, MatchResult, MatchSummary, Mode, NotebookAddition, NotebookPage, Rewards, Showing,
+    BattleRecord, MatchResult, MatchSummary, Mode, NotebookAddition, NotebookPage, Rewards,
+    Showing, TrioPlayed,
 };
 use formiga_battle_core::notebook::{self, Page, Sign, observe};
 use formiga_battle_core::{Event, Match, Side, Victory};
+use formiga_battle_room::Card;
 use time::OffsetDateTime;
 
 /// The cup AI matches in the Backyard count toward.
@@ -97,6 +99,31 @@ fn names(m: &Match, side: Side) -> String {
     }
 }
 
+/// The three as a journal names them: by name, with their trio's name after if they are one and
+/// the line still fits what Desktop keeps.
+fn team_words(m: &Match, side: Side, trio: Option<&formiga_battle_contract::Trio>) -> String {
+    let names = names(m, side);
+    match trio {
+        Some(trio) if names.chars().count() + trio.name.chars().count() < 64 => {
+            format!("{names} ({})", trio.name)
+        }
+        _ => names,
+    }
+}
+
+/// The trio a side's three are, if the Handler named them as one.
+fn trio_for<'a>(
+    m: &Match,
+    side: Side,
+    record: &'a BattleRecord,
+) -> Option<&'a formiga_battle_contract::Trio> {
+    let ids: Vec<u64> = m.rosters[side.index()]
+        .iter()
+        .map(|p| p.creature_id)
+        .collect();
+    crate::identity::trio_of(record, &ids)
+}
+
 fn ended_by(m: &Match) -> &'static str {
     match m.outcome().and_then(|o| o.victory) {
         Some(Victory::Capture) => "capture",
@@ -170,10 +197,12 @@ pub fn friend_match(
     events: &[Event],
     record: &BattleRecord,
     opponent: &str,
+    theirs: Option<&Card>,
     now: OffsetDateTime,
 ) -> Earned {
     let outcome = m.outcome();
     let won = outcome.and_then(|o| o.winner).map(|w| w == you);
+    let trio = trio_for(m, you, record);
     let today = now.date();
     let played_today = record
         .history
@@ -235,6 +264,14 @@ pub fn friend_match(
                     team,
                     opponent: Some(formiga_expansion_rulebook::sanitize_text(opponent, 24))
                         .filter(|o| !o.is_empty()),
+                    trio: trio.map(|t| t.id.clone()),
+                    opponent_trio: theirs.and_then(|c| c.trio.clone()),
+                    opponent_pennant: theirs
+                        .and_then(|c| c.trio_pennant.clone().or(c.pennant.clone())),
+                }),
+                trio: trio.map(|t| TrioPlayed {
+                    id: t.id.clone(),
+                    won,
                 }),
                 ..Rewards::default()
             },
@@ -246,8 +283,10 @@ pub fn friend_match(
 /// What a match against the AI earns. A win counts toward the cup played on the match's arena,
 /// if that cup is open; the third wins it, with its trophy and medal, and opens the next.
 pub fn ai_match(m: &Match, you: Side, record: &BattleRecord) -> Earned {
-    let won = m.outcome().and_then(|o| o.winner) == Some(you);
-    let team = names(m, you);
+    let winner = m.outcome().and_then(|o| o.winner);
+    let won = winner == Some(you);
+    let trio = trio_for(m, you, record);
+    let team = team_words(m, you, trio);
     let cup = cup_for(&m.arena.id).filter(|c| is_open(c, record));
     let place = cup.map_or("Backyard", |c| c.name.trim_end_matches(" Cup"));
     let mut rewards = Rewards::default();
@@ -300,6 +339,10 @@ pub fn ai_match(m: &Match, you: Side, record: &BattleRecord) -> Earned {
         )),
     }
     lines.push("A journal entry for your colony".to_owned());
+    rewards.trio = trio.map(|t| TrioPlayed {
+        id: t.id.clone(),
+        won: winner.map(|w| w == you),
+    });
     Earned {
         result: MatchResult {
             id: match_id(),
@@ -354,6 +397,7 @@ mod tests {
             &events,
             &BattleRecord::default(),
             "Sam",
+            None,
             OffsetDateTime::UNIX_EPOCH,
         );
         let r = &earned.result.rewards;
@@ -381,6 +425,7 @@ mod tests {
                 &events,
                 &record,
                 "Sam",
+                None,
                 OffsetDateTime::UNIX_EPOCH,
             );
             record.apply(&earned.result);
@@ -391,6 +436,7 @@ mod tests {
             &events,
             &record,
             "Sam",
+            None,
             OffsetDateTime::UNIX_EPOCH,
         );
         assert_eq!(earned.result.rewards.circuit_points, TOKEN_POINTS);
@@ -415,6 +461,62 @@ mod tests {
         assert!(record.unlocked.iter().any(|u| u == WOODLAND_CUP));
         assert_eq!(record.circuit_points, 0, "the AI never gives points");
         assert!(record.notebook.is_empty(), "nor notebook entries");
+    }
+
+    /// A record in which the left team of `m` is a trio, named before it played.
+    fn with_trio(m: &Match) -> BattleRecord {
+        let ids: Vec<u64> = m.rosters[0].iter().map(|p| p.creature_id).collect();
+        let mut record = BattleRecord::default();
+        let card = crate::identity::named("The Thistle Three", &ids).unwrap();
+        record.register(
+            &formiga_battle_contract::Registry {
+                handler: None,
+                trios: vec![card],
+            },
+            OffsetDateTime::UNIX_EPOCH,
+        );
+        record
+    }
+
+    #[test]
+    fn a_match_played_as_a_trio_counts_for_it_against_friends_and_visitors_apart() {
+        let (m, events) = played(3);
+        let mut record = with_trio(&m);
+        let theirs = Card {
+            trio: Some("The Puddle Jumpers".to_owned()),
+            pennant: Some(crate::identity::first_pennant()),
+            ..Card::default()
+        };
+        let friend = friend_match(
+            &m,
+            Side::Left,
+            &events,
+            &record,
+            "Sam",
+            Some(&theirs),
+            OffsetDateTime::UNIX_EPOCH,
+        );
+        let summary = friend.result.rewards.history.clone().unwrap();
+        assert_eq!(summary.trio.as_ref(), Some(&record.trios[0].id));
+        assert_eq!(summary.opponent_trio.as_deref(), Some("The Puddle Jumpers"));
+        assert_eq!(summary.opponent_pennant, theirs.pennant);
+        checks_out(friend.result.clone());
+        record.apply(&friend.result);
+        let visitors = ai_match(&won_on("backyard", 3), Side::Left, &record);
+        assert!(
+            visitors.result.rewards.journal[0].contains("(The Thistle Three)"),
+            "{:?}",
+            visitors.result.rewards.journal
+        );
+        checks_out(visitors.result.clone());
+        record.apply(&visitors.result);
+        let trio = &record.trios[0];
+        assert_eq!((trio.friends.played, trio.visitors.played), (1, 1));
+        assert_eq!(trio.visitors.won, 1);
+        assert_eq!(trio.cups[0].cup, BACKYARD_CUP);
+        // Three who are not a trio play exactly as before, crediting nobody.
+        let plain = ai_match(&won_on("backyard", 4), Side::Left, &BattleRecord::default());
+        assert!(plain.result.rewards.trio.is_none());
     }
 
     /// A match won by the left team on an arena, standing in for one played there.
