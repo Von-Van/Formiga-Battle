@@ -1175,8 +1175,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-art"
-version = "0.67.7"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=claude%2Fbattle-0.67.8#85c826faeef3dfe1afc8567bfae15a93f096a21d"
+version = "0.67.8"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.8#9ac0a12c368d9103ce0d808f99a0443d6b873401"
 dependencies = [
  "epaint",
  "formiga-core",
@@ -1189,7 +1189,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle"
-version = "0.67.7"
+version = "0.67.8"
 dependencies = [
  "anyhow",
  "eframe",
@@ -1209,7 +1209,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-contract"
-version = "0.67.7"
+version = "0.67.8"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.8#9ac0a12c368d9103ce0d808f99a0443d6b873401"
 dependencies = [
  "formiga-core",
  "formiga-expansion-rulebook",
@@ -1222,7 +1223,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-core"
-version = "0.67.7"
+version = "0.67.8"
 dependencies = [
  "formiga-core",
  "serde",
@@ -1232,7 +1233,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-room"
-version = "0.67.7"
+version = "0.67.8"
 dependencies = [
  "formiga-battle-contract",
  "formiga-battle-core",
@@ -1250,8 +1251,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-core"
-version = "0.67.7"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=claude%2Fbattle-0.67.8#85c826faeef3dfe1afc8567bfae15a93f096a21d"
+version = "0.67.8"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.8#9ac0a12c368d9103ce0d808f99a0443d6b873401"
 dependencies = [
  "getrandom 0.4.3",
  "rand",
@@ -1266,8 +1267,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-expansion-rulebook"
-version = "0.67.7"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=claude%2Fbattle-0.67.8#85c826faeef3dfe1afc8567bfae15a93f096a21d"
+version = "0.67.8"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.8#9ac0a12c368d9103ce0d808f99a0443d6b873401"
 dependencies = [
  "getrandom 0.4.3",
  "serde",
@@ -1278,8 +1279,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-travel"
-version = "0.67.7"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=claude%2Fbattle-0.67.8#85c826faeef3dfe1afc8567bfae15a93f096a21d"
+version = "0.67.8"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.8#9ac0a12c368d9103ce0d808f99a0443d6b873401"
 dependencies = [
  "formiga-art",
  "formiga-core",

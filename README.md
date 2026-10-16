@@ -95,9 +95,8 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
 - **`formiga-battle-contract`**: what Desktop hands Battle, a read-only roster built from
   Desktop's own trip projection (`formiga-travel`) plus the learned leanings a trip leaves at
   home, and Battle's acknowledgement, read and written through `formiga-expansion-rulebook` like
-  every companion app's documents. It is Desktop's: this is a copy of it as Desktop has adopted
-  it, kept here byte for byte until a Desktop release carries it, when Battle takes it by tag
-  like the other Desktop crates.
+  every companion app's documents. It is Desktop's, taken from Desktop's release tag like its
+  other shared crates.
 - **`formiga-battle-room`**: playing a friend. `relay` (the relay as a state machine: rooms,
   seats, deadlines, forfeits; the reference the site's relay follows), `http` (the client Battle
   uses, and a local relay), `code` (invite codes) and `roster` (a team of Desktop's companions
@@ -113,5 +112,5 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   window), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
-by one release tag (`v0.67.7`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
+by one release tag (`v0.67.8`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
 authoritative for the colony; Battle never writes a colony file.

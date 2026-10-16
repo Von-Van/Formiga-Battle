@@ -3,4 +3,3 @@
 
 # The contract fixtures are byte-exact, as in Desktop: they must check out exactly as written,
 # never with CRLF line endings.
-crates/formiga-battle-contract/tests/fixtures/** -text
