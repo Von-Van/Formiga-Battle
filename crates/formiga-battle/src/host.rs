@@ -68,21 +68,38 @@ pub fn open(source: Source) -> Result<(Host, BattleSnapshot)> {
             },
             BattleSnapshot::read(&path)?,
         )),
-        Source::Session(directory) => match open_session(&directory, env!("CARGO_PKG_VERSION"))? {
-            Opened::Roster(snapshot) => {
-                let bytes = std::fs::read(directory.join(formiga_battle_contract::SNAPSHOT_FILE))?;
-                let snapshot_sha256 = formiga_expansion_rulebook::sha256_hex(&bytes);
-                Ok((
-                    Host::Visit {
-                        directory,
-                        snapshot_sha256,
-                    },
-                    *snapshot,
-                ))
+        Source::Session(directory) => {
+            // The snapshot is read for its digest on either side of Desktop's own reading of it,
+            // so the digest every answer names is of the very roster that was read.
+            let file = directory.join(formiga_battle_contract::SNAPSHOT_FILE);
+            let before =
+                std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?;
+            let opened = open_session(&directory, env!("CARGO_PKG_VERSION"))?;
+            let after =
+                std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?;
+            if before != after {
+                bail!("the session's roster changed while Battle was reading it");
             }
-            Opened::Refused(refusal, error) => {
-                bail!("turned the session away ({refusal:?}): {error}")
-            }
-        },
+            open_visit(directory, opened, &after)
+        }
+    }
+}
+
+/// A session Desktop opened, as read: the visit, or why it was turned away.
+fn open_visit(directory: PathBuf, opened: Opened, bytes: &[u8]) -> Result<(Host, BattleSnapshot)> {
+    match opened {
+        Opened::Roster(snapshot) => {
+            let snapshot_sha256 = formiga_expansion_rulebook::sha256_hex(bytes);
+            Ok((
+                Host::Visit {
+                    directory,
+                    snapshot_sha256,
+                },
+                *snapshot,
+            ))
+        }
+        Opened::Refused(refusal, error) => {
+            bail!("turned the session away ({refusal:?}): {error}")
+        }
     }
 }

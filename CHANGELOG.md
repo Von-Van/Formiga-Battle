@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Friend matches are more careful with the relay: Battle follows no redirects and never leaves
+  HTTPS, takes a room's code and seat only in the shapes a relay gives them, cleans the other
+  Handler's name and any reason for an ending before showing or keeping them, and waits longer
+  between looks while the relay cannot be reached. The notice of what a friend match shares now
+  names everything sent for each companion and when the relay deletes a room. The local relay
+  for development asks for JSON and refuses bodies nested too deep, as the site's does.
 - Rules version 6: Backyard has a sprinkler. It sweeps the whole yard on turns 4, 8 and 12, its
   tiles washed blue and ringed with droplets the turn before, and a garden tap on each side of the
   near edge sets it off a tick early. Whoever it soaks is off balance for the rest of the turn and
