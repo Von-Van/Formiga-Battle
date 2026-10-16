@@ -51,7 +51,7 @@ cargo run --release -p formiga-battle -- arena                           # draws
 cargo run --release -p formiga-battle -- relay                           # a local relay, for development
 ```
 
-Battle opens at the Battle Grounds, the first spread of the Handler's notebook: the colony's
+Battle opens at the Battleground, the first spread of the Handler's notebook: the colony's
 train pulls in with your companions aboard on its left page, and on its right you
 choose Out in the World (a friend, online) or Close to Home (the visitors, offline). The notebook
 then turns to where to play, who goes and, for a friend, the room.
@@ -113,7 +113,7 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
   `formiga-art`'s tools at pixel scale, and the marks laid over it), `garden` (each arena as a
   place: its ground, what stands on it and round it, and what moves there, dressed by the
-  arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the Battle Grounds the
+  arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the Battleground the
   train brings the companions to), `feel` (how every control answers a touch), `ticket` (the station's two choices, painted as
   railway tickets), `app` (the egui window; `app/menus` the station and the
   notebook's pages of getting ready, `app/handler` its history and settings), `rewards` (what a finished match earns) and `cli` (the headless commands).
