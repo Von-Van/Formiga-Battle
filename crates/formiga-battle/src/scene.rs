@@ -190,22 +190,27 @@ pub fn paint(
                     }
                 }
             }
-            Item::Tap(tile) => match dressing {
-                garden::Dressing::Cove => {
-                    found::shell(&mut canvas, view, tile, frame.tap_ready, now, still);
+            // A map's switch and a wedged twig stand up off the ground, so like a hedge they are
+            // seen through wherever they would hide someone behind them.
+            Item::Tap(tile) => {
+                let mut full = Canvas::new(canvas.width(), canvas.height());
+                let (ready, c) = (frame.tap_ready, &mut full);
+                match dressing {
+                    garden::Dressing::Cove => found::shell(c, view, tile, ready, now, still),
+                    garden::Dressing::Millpond => found::sluice(c, view, tile, ready, now, still),
+                    garden::Dressing::Woodland => found::tree(c, view, tile, ready, now, still),
+                    _ => found::tap(c, view, tile, ready, now, still),
                 }
-                garden::Dressing::Millpond => {
-                    found::sluice(&mut canvas, view, tile, frame.tap_ready, now, still);
-                }
-                garden::Dressing::Woodland => {
-                    found::tree(&mut canvas, view, tile, frame.tap_ready, now, still);
-                }
-                _ => found::tap(&mut canvas, view, tile, frame.tap_ready, now, still),
-            },
+                see_through(&mut canvas, &Sprite::cut(&full), depth, &bodies);
+            }
             Item::Found(tile, thing) => {
                 found::on_ground(&mut canvas, view, tile, thing, now, still);
             }
-            Item::Twig(tile) => found::wedged(&mut canvas, view, tile),
+            Item::Twig(tile) => {
+                let mut full = Canvas::new(canvas.width(), canvas.height());
+                found::wedged(&mut full, view, tile);
+                see_through(&mut canvas, &Sprite::cut(&full), depth, &bodies);
+            }
         }
     }
     // Composure and the off-balance swirl over everyone, so a neighbour standing in front never
