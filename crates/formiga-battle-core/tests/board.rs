@@ -9,10 +9,10 @@ use formiga_battle_core::*;
 fn holding_the_beacon_alone_for_three_ticks_wins_by_capture() {
     // Two steps from the zone: it holds for the last two ticks of the first turn.
     let mut m = board(&[(L0, (4, 0)), (R0, (0, 4))]);
-    m.resolve_turn(orders(&[(L0, hold(6, 0)), (R0, hold(0, 4))]));
+    m.resolve_orders(orders(&[(L0, hold(6, 0)), (R0, hold(0, 4))]));
     assert_eq!(m.board.capture, [2, 0]);
     assert_eq!(m.outcome(), None);
-    m.resolve_turn(orders(&[(L0, hold(6, 0)), (R0, hold(0, 4))]));
+    m.resolve_orders(orders(&[(L0, hold(6, 0)), (R0, hold(0, 4))]));
     assert_eq!(
         m.outcome(),
         Some(Outcome {
@@ -27,7 +27,7 @@ fn holding_the_beacon_alone_for_three_ticks_wins_by_capture() {
 fn anyone_of_the_other_team_in_the_zone_pauses_the_beacon() {
     let arena = Arena::backyard();
     let mut m = board_on(arena, &[(L0, (4, 3)), (R0, (5, 3))]);
-    let report = m.resolve_turn(orders(&[(L0, hold(4, 3)), (R0, walk(5, 3))]));
+    let report = m.resolve_orders(orders(&[(L0, hold(4, 3)), (R0, walk(5, 3))]));
     assert_eq!(m.board.capture, [0, 0]);
     assert!(kinds(&report).contains(&&EventKind::CaptureContested));
 }
@@ -38,13 +38,13 @@ fn two_holding_against_one_in_the_zone_do_not_gain_unless_counted_by_majority() 
     let given = orders(&[(L0, hold(4, 3)), (L1, hold(4, 2)), (R0, hold(5, 3))]);
     // Anyone of the other team in the zone, unbroken, pauses it.
     let mut m = board_on(Arena::backyard(), &placed);
-    m.resolve_turn(given);
+    m.resolve_orders(given);
     assert_eq!(m.board.capture, [0, 0]);
 
     // Counted the older way, outnumbering them is enough.
     let mut m = board_on(Arena::backyard(), &placed);
     m.ruleset.capture_rule = CaptureRule::Majority;
-    m.resolve_turn(given);
+    m.resolve_orders(given);
     assert_eq!(m.board.capture, [3, 0]);
 }
 
@@ -55,7 +55,7 @@ fn someone_knocked_off_balance_in_the_zone_no_longer_pauses_it() {
         Arena::backyard(),
         &[(L0, (4, 3)), (L1, (5, 2)), (L2, (5, 4)), (R0, (5, 3))],
     );
-    let report = m.resolve_turn(orders(&[
+    let report = m.resolve_orders(orders(&[
         (L0, hold(4, 3)),
         (L1, contest(R0)),
         (L2, contest(R0)),
@@ -74,7 +74,7 @@ fn someone_knocked_off_balance_in_the_zone_no_longer_pauses_it() {
 fn walking_through_the_zone_is_not_holding_it() {
     let arena = Arena::backyard();
     let mut m = board_on(arena, &[(L0, (4, 3)), (R0, (8, 1))]);
-    m.resolve_turn(orders(&[(L0, walk(4, 3)), (R0, hold(8, 1))]));
+    m.resolve_orders(orders(&[(L0, walk(4, 3)), (R0, hold(8, 1))]));
     assert_eq!(m.board.capture, [0, 0]);
 }
 
@@ -85,7 +85,7 @@ fn a_pulled_lever_swings_the_gate_the_tick_after_and_everyone_saw_it_coming() {
     let lever = arena.levers[0];
     let mut m = board_on(arena, &[(L0, (3, 6)), (R0, (8, 1))]);
     assert!(!m.walkable(gate));
-    let report = m.resolve_turn(orders(&[
+    let report = m.resolve_orders(orders(&[
         (
             L0,
             Order::Contest {
@@ -115,7 +115,7 @@ fn a_pulled_lever_swings_the_gate_the_tick_after_and_everyone_saw_it_coming() {
     ));
     assert!(m.walkable(gate));
     // It rests for a whole turn after.
-    let report = m.resolve_turn(orders(&[
+    let report = m.resolve_orders(orders(&[
         (
             L0,
             Order::Contest {
@@ -136,7 +136,7 @@ fn someone_holding_beside_the_lever_turns_a_pull_away() {
     let arena = Arena::backyard();
     let lever = arena.levers[0];
     let mut m = board_on(arena, &[(L0, (3, 6)), (R0, (5, 6))]);
-    let report = m.resolve_turn(orders(&[
+    let report = m.resolve_orders(orders(&[
         (
             L0,
             Order::Contest {
@@ -161,7 +161,7 @@ fn a_gate_cannot_close_on_someone_standing_in_it() {
     let gate = arena.gates[0];
     let mut m = board_on(arena, &[(L0, (3, 6)), (R0, (gate.x, gate.y))]);
     m.board.gates_open = vec![true];
-    let report = m.resolve_turn(orders(&[
+    let report = m.resolve_orders(orders(&[
         (
             L0,
             Order::Contest {
@@ -181,7 +181,7 @@ fn a_gate_cannot_close_on_someone_standing_in_it() {
 #[test]
 fn missing_orders_are_filled_for_both_teams_by_the_same_fallback() {
     let mut m = Match::new(Arena::backyard(), Ruleset::default(), 3, rosters()).unwrap();
-    let report = m.resolve_turn([[None; TEAM_SIZE]; 2]);
+    let report = m.resolve_orders([[None; TEAM_SIZE]; 2]);
     let filled = report
         .events
         .iter()
@@ -243,7 +243,7 @@ fn walk_past_a_holder(profile: Profile) -> (Match, TurnReport) {
         vec![plain(4), plain(5), plain(6)],
     ];
     let mut m = board_with(field(), teams, &[(L0, (0, 2)), (R0, (2, 1))]);
-    let report = m.resolve_turn(orders(&[(L0, walk(3, 2)), (R0, hold(2, 1))]));
+    let report = m.resolve_orders(orders(&[(L0, walk(3, 2)), (R0, hold(2, 1))]));
     (m, report)
 }
 
@@ -295,7 +295,7 @@ fn with_no_detour_budget_even_the_most_cautious_creature_walks_the_quickest_way(
     m.ruleset.detour_budget = 0;
     // A tick more than the walk, for the one it hangs back.
     m.ruleset.ticks_per_turn = 4;
-    m.resolve_turn(orders(&[(L0, walk(3, 2)), (R0, hold(2, 1))]));
+    m.resolve_orders(orders(&[(L0, walk(3, 2)), (R0, hold(2, 1))]));
     assert_eq!(at(&m, L0), (3, 2));
 }
 
@@ -314,7 +314,7 @@ fn a_wary_creature_hangs_back_one_tick_a_turn_before_walking_in_among_the_other_
     ];
     let mut m = board_with(field(), teams, &[(L0, (1, 2)), (R0, (3, 2))]);
     m.ruleset.detour_budget = 0;
-    let report = m.resolve_turn(orders(&[(L0, walk(2, 2)), (R0, hold(3, 2))]));
+    let report = m.resolve_orders(orders(&[(L0, walk(2, 2)), (R0, hold(3, 2))]));
     let hung = report
         .events
         .iter()
@@ -332,7 +332,7 @@ fn a_wary_creature_sent_to_hold_goes_straight_to_its_post() {
     ];
     let mut m = board_with(field(), teams, &[(L0, (1, 2)), (R0, (3, 2))]);
     m.ruleset.detour_budget = 0;
-    let report = m.resolve_turn(orders(&[(L0, hold(2, 2)), (R0, hold(3, 2))]));
+    let report = m.resolve_orders(orders(&[(L0, hold(2, 2)), (R0, hold(3, 2))]));
     assert!(
         !report
             .events
@@ -352,7 +352,7 @@ fn a_wary_creature_sent_to_contest_goes_without_hanging_back() {
     // Kept to the plain way, as the others are: a creature this wary would otherwise keep to
     // the walls on its way.
     m.ruleset.detour_budget = 0;
-    let report = m.resolve_turn(orders(&[(L0, contest(R0)), (R0, walk(3, 2))]));
+    let report = m.resolve_orders(orders(&[(L0, contest(R0)), (R0, walk(3, 2))]));
     assert!(
         !report
             .events
@@ -365,7 +365,7 @@ fn a_wary_creature_sent_to_contest_goes_without_hanging_back() {
 #[test]
 fn a_creature_that_is_not_wary_never_hangs_back() {
     let mut m = board(&[(L0, (1, 2)), (R0, (3, 2))]);
-    let report = m.resolve_turn(orders(&[(L0, hold(2, 3)), (R0, hold(3, 2))]));
+    let report = m.resolve_orders(orders(&[(L0, hold(2, 3)), (R0, hold(3, 2))]));
     assert!(
         !report
             .events

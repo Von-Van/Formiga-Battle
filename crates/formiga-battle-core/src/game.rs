@@ -1,6 +1,7 @@
 //! A match: the board, and how one turn of simultaneous orders resolves on it.
 //!
-//! Both teams' orders are locked together, then the turn plays out in a few ticks. Every tick
+//! Both teams' plans are locked together and each team shares its own out among its creatures
+//! (`muster`), then the turn plays out in a few ticks. Every tick
 //! works from one shared picture of the board: everyone decides their step from where everyone
 //! stood, every step happens at once, and then every contest is settled from where everyone
 //! ended up. Nobody moves first.
@@ -9,7 +10,8 @@
 //!
 //! 1. A gate whose swing was telegraphed last tick swings. Then whatever was marked to land this
 //!    tick lands: things found on the board turn up, items used last tick take effect, the map
-//!    event comes (`scenery`).
+//!    event comes (`scenery`). Anyone whose job has just come to nothing thinks again, once a
+//!    turn, from its team's plan (`muster`).
 //! 2. Contests already next to their target are settled, all from the same picture (see
 //!    `engage`), so someone walking away from a contester next to it is caught before it steps.
 //! 3. Each creature still carrying out its order picks one step (`interpret`).
@@ -29,7 +31,8 @@ use crate::arena::{Arena, TEAM_SIZE, Terrain};
 use crate::event::{Event, EventKind, Fill, Outcome, Victory};
 use crate::grid::Tile;
 use crate::items::Item;
-use crate::order::{Order, Orders, Side, Slot, Target};
+use crate::muster::Task;
+use crate::order::{Order, Orders, Side, Slot, Target, TeamPlan};
 use crate::profile::{Behavior, Profile};
 use crate::rng::{self, Purpose};
 use crate::ruleset::{CaptureRule, RULES_VERSION, Ruleset};
@@ -78,10 +81,21 @@ pub struct Fighter {
     /// none.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub shelter_until: u16,
+    /// The job it took on from its team's plan this turn, or last turn until the next is shared
+    /// out; `None` for a creature given an order of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<Task>,
+    /// It has thought again this turn; it does not twice.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub rethought: bool,
 }
 
 fn is_zero(n: &u16) -> bool {
     *n == 0
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl Fighter {
@@ -102,6 +116,8 @@ impl Fighter {
             turned_away: false,
             carrying: None,
             shelter_until: 0,
+            task: None,
+            rethought: false,
         }
     }
 
@@ -158,11 +174,13 @@ pub struct Board {
     pub pending: Vec<Pending>,
 }
 
-/// One turn as it was played: what each team sent (with `None` for an order not given in time),
-/// and the board's hash after it.
+/// One turn as it was played: each team's plan as it was sent (empty for none in time), or each
+/// creature's order for a turn set up order by order, and the board's hash after it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TurnRecord {
-    pub submitted: [Orders; 2],
+    pub submitted: [TeamPlan; 2],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orders: Option<[Orders; 2]>,
     pub hash: u64,
 }
 
@@ -170,7 +188,8 @@ pub struct TurnRecord {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TurnReport {
     pub turn: u8,
-    /// The orders carried out, the fallback's included; `None` for a creature already out.
+    /// Each creature's order as its team shared out the plan, the fallback's included; `None`
+    /// for a creature already out. One that thought again partway through says so in the events.
     pub orders: [Orders; 2],
     pub events: Vec<Event>,
     pub hash: u64,
@@ -193,6 +212,8 @@ pub struct Match {
     behaviors: [[Behavior; TEAM_SIZE]; 2],
     pub board: Board,
     pub history: Vec<TurnRecord>,
+    /// Each team's plan for the turn being resolved, to think again from.
+    pub(crate) plans: [TeamPlan; 2],
 }
 
 impl Match {
@@ -241,6 +262,7 @@ impl Match {
             behaviors,
             board,
             history: Vec::new(),
+            plans: [Vec::new(), Vec::new()],
         })
     }
 
@@ -366,9 +388,20 @@ impl Match {
         }
     }
 
-    /// Locks both teams' orders, fills any that are missing or cannot be carried out with the
-    /// fallback (the same for both teams), and plays the turn out.
-    pub fn resolve_turn(&mut self, submitted: [Orders; 2]) -> TurnReport {
+    /// Locks both teams' plans, has each team share its own out among its creatures, fills any
+    /// order still missing with the fallback (the same for both teams), and plays the turn out.
+    pub fn resolve_turn(&mut self, plans: [TeamPlan; 2]) -> TurnReport {
+        self.resolve(plans, None)
+    }
+
+    /// Plays a turn out from each creature's order, given one by one rather than shared out from
+    /// a plan: how the tests set up one rule at a time. Orders missing or that cannot be carried
+    /// out are filled by the fallback.
+    pub fn resolve_orders(&mut self, submitted: [Orders; 2]) -> TurnReport {
+        self.resolve([Vec::new(), Vec::new()], Some(submitted))
+    }
+
+    fn resolve(&mut self, plans: [TeamPlan; 2], given: Option<[Orders; 2]>) -> TurnReport {
         let mut events = Vec::new();
         if self.board.outcome.is_some() {
             return TurnReport {
@@ -380,6 +413,19 @@ impl Match {
         }
         self.board.turn += 1;
         let turn = self.board.turn;
+        // Both teams share out their plans from the board as it stood when the timer ran out.
+        let mut submitted: [Orders; 2] = given.unwrap_or([[None; TEAM_SIZE]; 2]);
+        let mut tasks: [[Option<Task>; TEAM_SIZE]; 2] = [[None; TEAM_SIZE]; 2];
+        if given.is_none() {
+            for side in Side::BOTH {
+                let (orders, assigned, said) =
+                    crate::muster::muster(self, side, &plans[side.index()], turn);
+                submitted[side.index()] = orders;
+                tasks[side.index()] = assigned;
+                events.extend(said);
+            }
+        }
+        self.plans = plans.clone();
         // Every fallback order is chosen from the board as it stood when the timer ran out.
         let mut orders: [Orders; 2] = [[None; TEAM_SIZE]; 2];
         for slot in Slot::all() {
@@ -409,8 +455,11 @@ impl Match {
         let detours = self.ruleset.detour_budget;
         for slot in Slot::all() {
             let order = orders[slot.side.index()][slot.index as usize];
+            let task = tasks[slot.side.index()][slot.index as usize];
             let f = self.fighter_mut(slot);
             f.order = order;
+            f.task = task;
+            f.rethought = false;
             f.spent = false;
             f.interrupted = false;
             f.arrived = false;
@@ -448,7 +497,11 @@ impl Match {
             });
         }
         let hash = self.hash();
-        self.history.push(TurnRecord { submitted, hash });
+        self.history.push(TurnRecord {
+            submitted: plans,
+            orders: given,
+            hash,
+        });
         TurnReport {
             turn,
             orders,
@@ -481,8 +534,10 @@ impl Match {
             }
         }
 
-        // Then whatever was marked to land this tick.
+        // Then whatever was marked to land this tick, and anyone whose job came to nothing
+        // thinks again.
         self.land(turn, tick, now, events);
+        self.rethink(turn, tick, events);
 
         // 2. Contests already in reach catch their target before anyone steps.
         let mut lost = [[0u8; TEAM_SIZE]; 2];

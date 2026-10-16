@@ -1,4 +1,4 @@
-//! A whole match as data: the rules, the arena, the seed, both rosters and every turn's orders as
+//! A whole match as data: the rules, the arena, the seed, both rosters and every turn's plans as
 //! they were sent, with the board's hash after each turn. Replaying it runs the same match again
 //! and stops at the first turn whose board differs, which is how a desync is found.
 
@@ -68,7 +68,10 @@ impl MatchRecord {
         )?;
         let mut reports = Vec::with_capacity(self.turns.len());
         for record in &self.turns {
-            let report = m.resolve_turn(record.submitted);
+            let report = match record.orders {
+                Some(orders) => m.resolve_orders(orders),
+                None => m.resolve_turn(record.submitted.clone()),
+            };
             if report.hash != record.hash {
                 return Err(ReplayError::Desync {
                     turn: report.turn,
