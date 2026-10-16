@@ -20,9 +20,11 @@ out tick by tick with a recap that says who took on what and why each of them di
 Handler's Notebook beside the board keeps what each of your companions has been seen to do, match
 after match, so you can learn how they carry out an order. To play a friend, one of you opens a
 room and reads out its code, and the other joins with it; the relay on the Formiga site passes
-the plans on and keeps nothing once the match is over ([docs/FRIENDS.md](docs/FRIENDS.md)). The same match also runs headless from the command line. Desktop
-opens Battle from its tray on a Desktop branch not yet released; Battle's side of that hand-off is
-`--formiga-battle <dir>`.
+the plans on and keeps nothing once the match is over ([docs/FRIENDS.md](docs/FRIENDS.md)). The
+same match also runs headless from the command line. Formiga Desktop opens Battle from its tray
+with "Play Formiga Battle…"; Battle's side of that hand-off is `--formiga-battle <dir>`.
+
+![A match in the Backyard: three companions holding the yard round the beacon against the visitors, with the orders and what happened on the right-hand page](docs/images/backyard.png)
 
 - [docs/RULES.md](docs/RULES.md): how a match resolves, every provisional number, and the
   fairness tournament's results.
@@ -34,6 +36,23 @@ opens Battle from its tray on a Desktop branch not yet released; Battle's side o
   what is shared and kept.
 - [docs/RELAY.md](docs/RELAY.md): the relay's contract, request by request, for the one on the
   Formiga site.
+
+## Getting it
+
+1. Download Battle from [formigaworld.com](https://www.formigaworld.com), which links to the files
+   on [Formiga-World-Releases](https://github.com/Von-Van/Formiga-World-Releases/releases), where
+   Battle's releases are tagged `battle-vX.Y.Z`. On macOS 14 or later there is a universal app, as
+   a disk image or a zip. On Windows 10 or 11 there is a per-user installer, which puts Battle
+   where Formiga Desktop looks for it, or a portable zip, which runs without installing but which
+   Desktop does not look for.
+2. In Formiga Desktop (0.67.8 or later), choose "Play Formiga Battle…" from the tray. Battle opens
+   with your companions. Opened by itself, it plays with a sample colony and keeps nothing.
+3. To play a friend, both of you need the same Battle, opened by the same Desktop.
+
+The downloads are not signed yet. On macOS, open the app the first time with Control-click → Open;
+on Windows, SmartScreen may ask before it runs. To build it yourself, install
+[rustup](https://rustup.rs) and use the commands below; [CONTRIBUTING.md](CONTRIBUTING.md) has
+the rest.
 
 ## Commands
 
@@ -124,3 +143,8 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
 by one release tag (`v0.67.8`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
 authoritative for the colony; Battle never writes a colony file.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Formiga is a personal project and does not take outside pull requests,
+but forks are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) says how to make one your own.

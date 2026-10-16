@@ -8,7 +8,7 @@ match once, by its id. A rehearsal, with no Desktop behind it, keeps nothing at 
 | Against | Earns |
 |---|---|
 | A friend | Open Circuit points, a line in the match history, notebook entries for the three who played, and a friend match played for each of them |
-| The visitors (the AI) | Backyard Cup progress, then the cup and the Woodland Cup unlock; a journal entry; keepsakes for Home to show |
+| The visitors (the AI) | Progress toward the cup of the arena played on, and once it is won the cup, its trophy and medal and the next cup's unlock; a journal entry; keepsakes for Home to show |
 
 Nothing else earns anything, and nothing earned changes how a match is played.
 
