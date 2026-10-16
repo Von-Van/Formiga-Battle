@@ -16,12 +16,14 @@ publish = false
 
 [workspace.dependencies]
 # Formiga Desktop's shared crates, all from the same Desktop release so their types agree.
-# Move them to a new release's tag together.
-formiga-art = { git = "https://github.com/Von-Van/Formiga-Desktop", branch = "desktop-battle-handler" }
-formiga-battle-contract = { git = "https://github.com/Von-Van/Formiga-Desktop", branch = "desktop-battle-handler" }
-formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", branch = "desktop-battle-handler" }
-formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", branch = "desktop-battle-handler" }
-formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", branch = "desktop-battle-handler" }
+# Move them to a new release's tag together. Until 0.67.9 is tagged they come from the Desktop
+# main commit that keeps the Handler card (contract v3, save v32); the release replaces each
+# `rev = "…"` with `tag = "v0.67.9"` by hand before running scripts/set-version.sh.
+formiga-art = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "e4274478940fb48847de8794a49cbe86f91a2496" }
+formiga-battle-contract = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "e4274478940fb48847de8794a49cbe86f91a2496" }
+formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "e4274478940fb48847de8794a49cbe86f91a2496" }
+formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "e4274478940fb48847de8794a49cbe86f91a2496" }
+formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "e4274478940fb48847de8794a49cbe86f91a2496" }
 
 formiga-battle-core = { path = "crates/formiga-battle-core" }
 formiga-battle-room = { path = "crates/formiga-battle-room" }

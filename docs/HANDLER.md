@@ -55,7 +55,7 @@ kept apart from friend matches; a trio's members may be swapped, with one contin
 
 ## Phase 1 for 0.67.9: the foundation
 
-Built on `battle-handler-identity`, with Desktop's `desktop-battle-handler` (contract version 3,
+Built on `battle-handler-identity`, with Desktop's Handler change (Formiga-Desktop#48: contract version 3,
 save version 32) and the site relay's protocol 3 card. One difference from the table: the trio
 pennant is the Handler's pennant in a colour of the trio's own, not a separate design.
 
