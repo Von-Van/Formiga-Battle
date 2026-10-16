@@ -138,7 +138,7 @@ pub fn paint(width: i32, height: i32, to: Destination, lit: bool) -> Canvas {
         Destination::Home => cottage(
             &mut canvas,
             middle,
-            ((stub - 8) / 26).min(h / 24).clamp(1, 3),
+            ((stub - 4) / 24).min(h / 24).clamp(1, 3),
         ),
     }
     // The perforation: a row of holes to tear along, each with a shade under it.
@@ -362,7 +362,13 @@ pub fn ticket(
             admit,
             ink::MUTED,
         );
-        let big = painter.layout_job(label_job(title, 18.0, colour));
+        // As large as the card has room for, up to its usual size.
+        let mut letters = 18.0;
+        let mut big = painter.layout_job(label_job(title, letters, colour));
+        while big.size().x > body.width() - unit * 14.0 && letters > 10.0 {
+            letters -= 0.5;
+            big = painter.layout_job(label_job(title, letters, colour));
+        }
         let little = painter.layout_job(label_job(small, chrome::LABEL, ink::STAMP));
         let stamp_size = little.size() + egui::vec2(unit * 8.0, unit * 4.0);
         let gap = unit * 4.0;

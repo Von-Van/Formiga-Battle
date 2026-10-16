@@ -101,6 +101,18 @@ pub enum Cue {
     Fwip,
     /// Something used that came to nothing: a deflating sputter.
     Fizzle,
+    /// A wave rolling in and washing over: a low rush of surf.
+    Wave,
+    /// The big shell blown: a low, hollow toot.
+    Toot,
+    /// An oak shaken: a rustle of leaves.
+    Rustle,
+    /// Acorns coming down: a clatter of little wooden knocks.
+    Acorns,
+    /// The pebble bell rung.
+    Ding,
+    /// Honey: a sticky squelch.
+    Squelch,
 
     // The end of a match.
     /// A win.
@@ -112,7 +124,7 @@ pub enum Cue {
 }
 
 impl Cue {
-    pub const ALL: [Cue; 44] = [
+    pub const ALL: [Cue; 50] = [
         Cue::Hover,
         Cue::Click,
         Cue::Confirm,
@@ -154,6 +166,12 @@ impl Cue {
         Cue::Snap,
         Cue::Fwip,
         Cue::Fizzle,
+        Cue::Wave,
+        Cue::Toot,
+        Cue::Rustle,
+        Cue::Acorns,
+        Cue::Ding,
+        Cue::Squelch,
         Cue::Fanfare,
         Cue::Womp,
         Cue::Shrug,
@@ -203,6 +221,12 @@ impl Cue {
             Cue::Snap => "snap",
             Cue::Fwip => "fwip",
             Cue::Fizzle => "fizzle",
+            Cue::Wave => "wave",
+            Cue::Toot => "toot",
+            Cue::Rustle => "rustle",
+            Cue::Acorns => "acorns",
+            Cue::Ding => "ding",
+            Cue::Squelch => "squelch",
             Cue::Fanfare => "fanfare",
             Cue::Womp => "womp",
             Cue::Shrug => "shrug",
@@ -354,6 +378,25 @@ impl Cue {
             ),
             Cue::Fwip => fwip(rate, seed),
             Cue::Fizzle => fizzle(rate, seed),
+            Cue::Wave => surf(rate, seed),
+            Cue::Toot => horn(rate, &[(0.0, 0.5, 50.0), (0.0, 0.5, 57.0)], 900.0, 0.55),
+            Cue::Rustle => rustle(rate, seed),
+            Cue::Acorns => struck(
+                rate,
+                BLOCK,
+                &[
+                    (0.0, 760.0 * vary, 1.0),
+                    (0.07, 900.0 * vary, 0.8),
+                    (0.12, 680.0 * vary, 0.9),
+                    (0.2, 820.0 * vary, 0.7),
+                    (0.26, 720.0 * vary, 0.6),
+                ],
+                0.45,
+            ),
+            Cue::Ding => {
+                struck(rate, super::synth::METAL, &[(0.0, 1320.0 * vary, 1.0)], 1.0).louder(0.6)
+            }
+            Cue::Squelch => squelch(rate, seed),
             Cue::Fanfare => fanfare(rate),
             Cue::Womp => womp(rate),
             Cue::Shrug => struck(rate, BAR, &[(0.0, n(76.0), 0.9), (0.18, n(72.0), 0.8)], 0.7),
@@ -810,6 +853,42 @@ fn fwip(rate: f32, seed: u32) -> Voice {
     let mut leaf = Struck::new(BAR, &[(0.08, n(84.0), 0.6)]);
     Voice::new(rate, 0.5, move |t| {
         air.next().unwrap_or(0.0) + leaf.run(t, rate) * 0.4
+    })
+}
+
+/// Surf: a low rush of noise that swells and draws back, with a fizz of foam on top.
+fn surf(rate: f32, seed: u32) -> Voice {
+    let mut body = Hiss::new(seed, rate);
+    let mut foam = Hiss::new(seed ^ 0x3c, rate);
+    Voice::new(rate, 1.4, move |t| {
+        let rush =
+            body.low(300.0 + 900.0 * swell(t, 0.4, 0.5, 0.6)) * swell(t, 0.35, 0.55, 0.7) * 1.6;
+        let fizz = foam.band(5500.0, 1.0) * swell(t - 0.3, 0.2, 0.4, 0.6) * 0.35;
+        rush + fizz
+    })
+}
+
+/// Leaves rustling as a branch is shaken: quick bursts of high, bright noise.
+fn rustle(rate: f32, seed: u32) -> Voice {
+    let mut leaves = Hiss::new(seed, rate);
+    let mut pick = Noise::new(seed ^ 0x19);
+    let shakes: Vec<f32> = (0..8)
+        .map(|k| k as f32 * 0.07 + pick.unit() * 0.03)
+        .collect();
+    Voice::new(rate, 0.75, move |t| {
+        let amount: f32 = shakes.iter().map(|at| strike(t - at, 0.01, 0.05)).sum();
+        leaves.band(3600.0 + 1200.0 * sine(t * 7.0), 0.9) * amount.min(1.2) * 0.9
+    })
+}
+
+/// Honey: a low, wet squelch sliding down.
+fn squelch(rate: f32, seed: u32) -> Voice {
+    let mut phase = Phase::default();
+    let mut wet = Hiss::new(seed, rate);
+    Voice::new(rate, 0.35, move |t| {
+        let hz = 220.0 - 120.0 * ease(t / 0.25);
+        let body = triangle(phase.tick(hz * (1.0 + 0.3 * sine(t * 40.0)), rate));
+        (body * 0.6 + wet.band(hz * 4.0, 2.0) * 0.5) * swell(t, 0.02, 0.2, 0.1) * 0.7
     })
 }
 

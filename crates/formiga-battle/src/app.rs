@@ -45,9 +45,9 @@ const TABS: [&str; 2] = ["Orders", "Notebook"];
 
 /// What a friend match sends, said in full before the first is opened.
 const SHARED: [&str; 5] = [
-    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here; your three companions' names, looks and temperaments, and how they get on; your orders each turn; a check number for the board after each turn; and which versions of Battle and Formiga Desktop you have, with a fingerprint of your copy of Battle (the same for everyone with that copy), so only matching, unaltered copies play each other.",
+    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here; for each of your three companions, its name, the number Formiga Desktop knows it by, when it was born, its parent's number if it is a little one, its look, size and what it wears, how it moves, its temperament, the habits it has picked up and the leanings it has learned, and how the three get on; your orders each turn; a check number for the board after each turn; and which versions of Battle and Formiga Desktop you have, with a fingerprint of your copy of Battle (the same for everyone with that copy), so only matching, unaltered copies play each other.",
     "Nothing else from your colony is sent. There is no account, no email, no device or computer ID.",
-    "The relay keeps your room only while it is open. It deletes it when the match ends, or after five minutes with nobody in it, and never keeps a copy. Your seat's key is kept only in scrambled form.",
+    "The relay keeps your room only while it is in use, and never keeps a copy. It deletes it two minutes after the match ends, fifteen minutes after it opens if your friend never joins, five minutes after neither Battle has checked in, and two hours after it opens in any case. Your seat's key is kept only in scrambled form.",
     "Like any website, formigaworld.com's host may keep its usual short-lived request logs (when a request came, and from what internet address). The relay itself logs nothing about your room.",
     "What the match earns is written to your colony on this computer when Battle closes.",
 ];
@@ -199,6 +199,9 @@ pub struct BattleApp {
     /// The Battleground, once there is a page to size it to; and its picture this frame.
     station: Option<crate::station::Station>,
     station_picture: Option<(i64, egui::TextureHandle)>,
+    /// The picture at the head of the station's page, and its picture this frame.
+    masthead: Option<crate::masthead::Masthead>,
+    masthead_picture: Option<(i64, egui::TextureHandle)>,
     /// The friend's room was asked for by its code, not opened.
     joining: bool,
     /// What was felt away from the window's context, told with the rest at the next frame.
@@ -318,6 +321,8 @@ impl BattleApp {
             turn: None,
             station: None,
             station_picture: None,
+            masthead: None,
+            masthead_picture: None,
             joining: false,
             felt: Vec::new(),
             preview: None,
@@ -1596,6 +1601,32 @@ impl BattleApp {
             ));
         }
 
+        // The end of a match, said big in the middle of the board under the stamp: a cheer, a
+        // sigh, or a shrug.
+        if let (Some(at), Some(outcome)) = (self.finished_at, self.table.outcome()) {
+            let age = now - at;
+            if age <= 2.4 {
+                let (text, colours) = match outcome.winner {
+                    Some(side) if side == self.table.you => ("HOORAY!", Paint::GOLD),
+                    Some(_) => ("SO CLOSE!", Paint::CREAM),
+                    None => ("A TIE!", Paint::CREAM),
+                };
+                let since = age - 0.35;
+                if since >= 0.0 {
+                    let size = 3 + i32::from(!reduce && since < 0.1);
+                    let alpha = 1.0 - ((age - 2.0) / 0.4).clamp(0.0, 1.0);
+                    let picture = word(text, size, colours);
+                    let x = (w - picture.width() as f32) / 2.0;
+                    let y = h * 0.58 - picture.height() as f32 / 2.0;
+                    out.push((
+                        picture,
+                        x.round() as i32,
+                        y.round() as i32,
+                        (alpha * 255.0) as u8,
+                    ));
+                }
+            }
+        }
         if let Some((at, _)) = self.ready {
             let age = now - at;
             if age <= READY_SECS {
@@ -1941,7 +1972,17 @@ impl BattleApp {
                                             .color(ink::MUTED),
                                     );
                                 }
+                                // The turn still playing out is told once it has been seen.
+                                let playing = self
+                                    .table
+                                    .shown
+                                    .as_ref()
+                                    .filter(|_| self.finished_at.is_none())
+                                    .map(|shown| shown.report.turn);
                                 for (turn, lines) in &self.table.log {
+                                    if Some(*turn) == playing {
+                                        continue;
+                                    }
                                     ui.add_space(u);
                                     ui.label(label_job(
                                         &format!("Turn {turn}"),
@@ -2203,8 +2244,10 @@ impl BattleApp {
                             let mut cleared = false;
                             if giving && up {
                                 ui.add_space(u);
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = u * 2.0;
+                                let row = egui::Layout::left_to_right(egui::Align::TOP)
+                                    .with_main_wrap(true);
+                                ui.with_layout(row, |ui| {
+                                    ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
                                     for v in Verb::ALL {
                                         if v == Verb::Use && carried.is_none() {
                                             continue;
@@ -2388,25 +2431,32 @@ impl BattleApp {
                 .map(|k| (key(*k), k.words().to_owned(), String::new(), String::new()))
                 .collect(),
         };
-        for (glyph, label, gloss, hover) in rows {
-            let response = ui
-                .horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = u * 3.0;
-                    self.glyph(ui, ctx, glyph, u);
-                    ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        ui.label(RichText::new(&label).size(13.0).strong().color(ink::PAGE));
-                        if !gloss.is_empty() {
-                            ui.label(RichText::new(&gloss).size(11.5).color(ink::MUTED));
-                        }
-                    });
-                })
-                .response;
-            if !hover.is_empty() {
-                response.on_hover_text(hover);
-            }
-            ui.add_space(u * 1.5);
-        }
+        // Scrolls when the window is too short for it all.
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for (glyph, label, gloss, hover) in rows {
+                    let response = ui
+                        .horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = u * 3.0;
+                            self.glyph(ui, ctx, glyph, u);
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                ui.label(
+                                    RichText::new(&label).size(13.0).strong().color(ink::PAGE),
+                                );
+                                if !gloss.is_empty() {
+                                    ui.label(RichText::new(&gloss).size(11.5).color(ink::MUTED));
+                                }
+                            });
+                        })
+                        .response;
+                    if !hover.is_empty() {
+                        response.on_hover_text(hover);
+                    }
+                    ui.add_space(u * 1.5);
+                }
+            });
     }
 
     /// A row's picture in the field guide: one of the board's marks, stars, or a little watch.

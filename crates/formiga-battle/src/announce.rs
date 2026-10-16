@@ -64,6 +64,89 @@ const OUT: [&str; 3] = ["BOOM!", "KER-FLOP!", "BWOMP!"];
 const WHIFF: [&str; 2] = ["MISS!", "WHIFF!"];
 const BUMP: [&str; 2] = ["BOINK", "BOING"];
 
+/// How an arena's map event is told: the sprinkler, the wave, the pond, the oak.
+struct Map {
+    /// The event, as a line names it.
+    event: &'static str,
+    warning: &'static str,
+    warn_word: &'static str,
+    warn_cue: Cue,
+    /// Its switch, and what turning it is said as.
+    switch: &'static str,
+    turned: &'static str,
+    switch_word: &'static str,
+    switch_cue: Cue,
+    land_word: &'static str,
+    land_cue: Cue,
+    /// What it did to whoever it caught, and the line when it caught nobody.
+    did: &'static str,
+    missed: &'static str,
+}
+
+impl Map {
+    fn of(m: &Match) -> Self {
+        let name = m.arena.scenery.as_ref().map_or("", |s| s.name.as_str());
+        match name {
+            "wave" => Self {
+                event: "wave",
+                warning: "A wave is rolling in!",
+                warn_word: "SWASH...",
+                warn_cue: Cue::Wave,
+                switch: "big shell",
+                turned: "blew the big shell",
+                switch_word: "TOOT!",
+                switch_cue: Cue::Toot,
+                land_word: "KER-SPLASH!",
+                land_cue: Cue::Wave,
+                did: "washed along",
+                missed: "The wave washed over the sand!",
+            },
+            "pond" => Self {
+                event: "water",
+                warning: "The water is rising!",
+                warn_word: "GLUG...",
+                warn_cue: Cue::Gurgle,
+                switch: "sluice",
+                turned: "opened the sluice",
+                switch_word: "CLUNK!",
+                switch_cue: Cue::Clunk,
+                land_word: "SPLASH!",
+                land_cue: Cue::Splash,
+                did: "washed off",
+                missed: "The water rose over the jetty!",
+            },
+            "tree" => Self {
+                event: "oak",
+                warning: "An oak is about to shake!",
+                warn_word: "RUSTLE...",
+                warn_cue: Cue::Rustle,
+                switch: "oak",
+                turned: "shook the oak",
+                switch_word: "SHAKE!",
+                switch_cue: Cue::Rustle,
+                land_word: "CLONK!",
+                land_cue: Cue::Acorns,
+                did: "dropped acorns on",
+                missed: "Acorns rained down round the oak!",
+            },
+            _ => Self {
+                event: "sprinkler",
+                warning: "The sprinkler is about to come round!",
+                warn_word: "DRIP...",
+                warn_cue: Cue::Gurgle,
+                switch: "tap",
+                turned: "turned the tap",
+                switch_word: "SQUEAK!",
+                switch_cue: Cue::Gurgle,
+                land_word: "SPLOOSH!",
+                land_cue: Cue::Splash,
+                did: "soaked",
+                missed: "The sprinkler soaked the yard!",
+            },
+        }
+    }
+}
+
 /// Composure lost, as it is shown.
 const DAMAGE: [&str; 3] = ["-1", "-2", "-3"];
 
@@ -104,6 +187,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
     let mut out = Vec::new();
     let mut contested_told = false;
     let mut appeared_told = false;
+    let map = Map::of(m);
     let mut progress_told = [false; 2];
     for (k, (when, event)) in playback.moments().iter().enumerate() {
         let turn = event.turn;
@@ -271,51 +355,113 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
             }
             EventKind::SceneryWarned { tiles, .. } => {
                 c.place = Some(middle(tiles).unwrap_or(beacon));
-                c.word = Some("DRIP...");
-                c.headline = Some("The sprinkler is about to come round!".to_owned());
-                c.cue = Some(Cue::Gurgle);
+                c.word = Some(map.warn_word);
+                c.headline = Some(map.warning.to_owned());
+                c.cue = Some(map.warn_cue);
             }
             EventKind::SwitchTurned { slot, switch } => {
                 c.place = Some(centre(*switch));
-                c.word = Some("SQUEAK!");
-                c.headline = Some(format!("{} turned the tap!", name(slot)));
+                c.word = Some(map.switch_word);
+                c.headline = Some(format!("{} {}!", name(slot), map.turned));
                 c.good_for = Some(slot.side);
-                c.cue = Some(Cue::Gurgle);
+                c.cue = Some(map.switch_cue);
             }
             EventKind::SwitchDefended {
                 switch, holders, ..
             } => {
                 c.place = Some(centre(*switch));
                 c.word = Some("SHOO!");
-                c.headline = Some(format!("{} guarded the tap!", list(holders)));
+                c.headline = Some(format!("{} guarded the {}!", list(holders), map.switch));
                 c.good_for = holders.first().map(|s| s.side);
                 c.cue = Some(Cue::Shoo);
             }
             EventKind::SwitchResting { switch, .. } => {
                 c.place = Some(centre(*switch));
-                c.headline = Some("The tap is still resting.".to_owned());
+                c.headline = Some(format!("The {} is still resting.", map.switch));
                 c.cue = Some(Cue::Hmm);
             }
             EventKind::SceneryLanded {
                 tiles,
                 hit,
                 sheltered,
+                moved,
                 ..
             } => {
                 c.place = Some(middle(tiles).unwrap_or(beacon));
-                c.word = Some("SPLOOSH!");
+                c.word = Some(map.land_word);
                 c.style = Style::Big;
-                c.headline = Some(match (hit.is_empty(), sheltered.is_empty()) {
-                    (false, true) => format!("The sprinkler soaked {}!", list(hit)),
+                let moved: Vec<Slot> = moved.iter().map(|b| b.slot).collect();
+                let caught: Vec<Slot> = if moved.is_empty() { hit.clone() } else { moved };
+                let what = map.event;
+                c.headline = Some(match (caught.is_empty(), sheltered.is_empty()) {
+                    (false, true) => format!("The {what} {} {}!", map.did, list(&caught)),
                     (false, false) => format!(
-                        "The sprinkler soaked {}; {} stayed dry under the leaf!",
-                        list(hit),
+                        "The {what} {} {}; {} stayed dry under the leaf!",
+                        map.did,
+                        list(&caught),
                         list(sheltered)
                     ),
                     (true, false) => format!("{} stayed dry under the leaf!", list(sheltered)),
-                    (true, true) => "The sprinkler soaked the yard!".to_owned(),
+                    (true, true) => map.missed.to_owned(),
                 });
-                c.cue = Some(Cue::Splash);
+                c.cue = Some(map.land_cue);
+            }
+            EventKind::GroundReopened { tiles } => {
+                c.place = middle(tiles);
+                c.word = Some("GLUG");
+                c.headline = Some("The water went down again.".to_owned());
+                c.cue = Some(Cue::Plop);
+            }
+            EventKind::RaftFloated { by, at: tile, .. } => {
+                c.place = Some(centre(*tile));
+                c.word = Some("BOB!");
+                c.headline = Some(format!("{}'s twig floats: a raft!", name(by)));
+                c.good_for = Some(by.side);
+                c.cue = Some(Cue::Plop);
+            }
+            EventKind::RaftSank { at: tile } => {
+                c.place = Some(centre(*tile));
+                c.word = Some("GLUB");
+                c.cue = Some(Cue::Plop);
+            }
+            EventKind::Rung { by, hushed, .. } => {
+                c.place = Some(at(*by));
+                c.about = Some(*by);
+                c.word = Some("DING!");
+                c.headline = Some(if hushed.is_empty() {
+                    format!("{} rang the pebble bell!", name(by))
+                } else {
+                    format!(
+                        "{} rang the bell; {} lost their nerve!",
+                        name(by),
+                        list(hushed)
+                    )
+                });
+                c.good_for = Some(by.side);
+                c.cue = Some(Cue::Ding);
+            }
+            EventKind::HoneySpilled { by, tiles, .. } => {
+                c.place = middle(tiles);
+                c.word = Some("SPLAT!");
+                c.headline = Some(format!("{} spilled honey!", name(by)));
+                c.good_for = Some(by.side);
+                c.cue = Some(Cue::Squelch);
+            }
+            EventKind::Stuck { slot, .. } => {
+                c.place = Some(at(*slot));
+                c.about = Some(*slot);
+                c.word = Some("STUCK!");
+                c.headline = Some(format!("{} is stuck in the honey!", name(slot)));
+                c.good_for = Some(slot.side.other());
+                c.cue = Some(Cue::Squelch);
+            }
+            EventKind::Hopped { slot, to, .. } => {
+                c.place = Some(centre(*to));
+                c.about = Some(*slot);
+                c.word = Some("BOING!");
+                c.headline = Some(format!("{} hopped on a springy seed!", name(slot)));
+                c.good_for = Some(slot.side);
+                c.cue = Some(Cue::Boink);
             }
             EventKind::ItemsGlint { spots, item, .. } => {
                 c.place = spots.first().map(|t| centre(*t));
@@ -426,16 +572,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
             | EventKind::Composure { .. }
             | EventKind::ShelterFolded { .. }
             | EventKind::CaptureContested => {}
-            // Rafts, the bell, honey, the seed and the pond going down: their words and sounds
-            // are the match screen's to add.
-            EventKind::GroundReopened { .. }
-            | EventKind::RaftFloated { .. }
-            | EventKind::RaftSank { .. }
-            | EventKind::Rung { .. }
-            | EventKind::HoneySpilled { .. }
-            | EventKind::HoneyDried { .. }
-            | EventKind::Stuck { .. }
-            | EventKind::Hopped { .. } => {}
+            EventKind::HoneyDried { .. } => {}
         }
         // A headline is shown over whoever it is about; one about the beacon, over the beacon.
         if c.headline.is_some() && c.place.is_none() {

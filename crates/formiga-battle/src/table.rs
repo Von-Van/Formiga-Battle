@@ -30,6 +30,20 @@ pub struct Session {
     pub result: BattleResult,
 }
 
+/// The longest a reason from the relay for a match ending is shown.
+const REASON_CHARS: usize = 160;
+
+/// A Handler's name as the relay passed it on, cleaned again on arrival, as the relay cleaned it
+/// on its way in: it is shown in the window and kept in the history Desktop is sent.
+fn handler_name(raw: &str) -> String {
+    let name = formiga_expansion_rulebook::sanitize_text(raw, 24);
+    if name.is_empty() {
+        "A Handler".to_owned()
+    } else {
+        name
+    }
+}
+
 /// A match with a friend, through the relay.
 pub struct Friend {
     pub line: Line,
@@ -85,7 +99,7 @@ impl Verb {
             Self::Hold => "Defend a tile. Turns a contest away; holds the beacon.",
             Self::Contest => "Disrupt someone not holding, or pull the lever or turn the tap.",
             Self::Use => {
-                "Use what it carries: a puff blows them along, a twig blocks a tile, a leaf keeps a friend dry."
+                "Use what it found: a puff blows them along, a twig blocks a tile, a leaf keeps a friend dry, a bell spoils their contests, honey stops them, a seed hops two tiles."
             }
         }
     }
@@ -559,7 +573,7 @@ impl Table {
                 self.leave_room();
                 return false;
             };
-            let handlers = [a.handler.clone(), b.handler.clone()];
+            let handlers = [handler_name(&a.handler), handler_name(&b.handler)];
             match room_match(
                 arena,
                 view.ruleset,
@@ -629,7 +643,10 @@ impl Table {
             && let Some(side) = ending.forfeited
         {
             m.forfeit(side);
-            self.ended_because = Some(ending.reason);
+            self.ended_because = Some(formiga_expansion_rulebook::sanitize_text(
+                &ending.reason,
+                REASON_CHARS,
+            ));
             self.finish_match();
         }
     }
@@ -1054,6 +1071,13 @@ impl Table {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_handler_name_from_the_relay_is_cleaned_before_it_is_shown_or_kept() {
+        assert_eq!(handler_name("  Sam\u{202e}\u{0007}  "), "Sam");
+        assert_eq!(handler_name("\u{200b}"), "A Handler");
+        assert_eq!(handler_name(&"x".repeat(80)).chars().count(), 24);
+    }
+
     use super::*;
     use formiga_battle_contract::sample;
 
@@ -1239,13 +1263,20 @@ mod tests {
             );
         };
         guest.open_room("Friend", Some(&code.to_lowercase()));
+        // Joining fingerprints the program too, so this wait is also by the wall clock.
+        let joined = std::time::Instant::now();
         let mut began = [false, false];
         while !(began[0] && began[1]) {
             began[0] |= host.poll(now);
             began[1] |= guest.poll(now);
             std::thread::sleep(std::time::Duration::from_millis(20));
             now += 0.02;
-            assert!(now < 20.0, "both see the match begin");
+            assert!(
+                joined.elapsed().as_secs() < 60,
+                "both see the match begin: {:?} {:?}",
+                host.notice,
+                guest.notice
+            );
         }
         assert_eq!(host.you, Side::Left);
         assert_eq!(guest.you, Side::Right);
