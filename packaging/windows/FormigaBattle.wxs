@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Formiga Battle for one user, where Formiga Desktop looks for it: the registry key and values
+     are the ones formiga-battle-contract's discovery module names. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="Formiga Battle"
+      Manufacturer="Formiga"
+      Version="$(BattleVersion)"
+      UpgradeCode="5552E418-04BF-4787-9EB1-0175B9EB027B"
+      Scope="perUser">
+    <MajorUpgrade DowngradeErrorMessage="A newer Formiga Battle is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="BattleIcon" SourceFile="$(BattleIcon)" />
+    <Property Id="ARPPRODUCTICON" Value="BattleIcon" />
+    <Property Id="ARPCOMMENTS" Value="Friendly three-a-side matches for your Formiga companions." />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="Formiga Battle">
+        <Component Id="BattleApplication" Guid="F46754D4-07EC-4B0C-96CF-FDA35C468CB2">
+          <File Id="BattleExecutable" Source="$(BattleExe)" Name="Formiga Battle.exe" KeyPath="yes" />
+          <RegistryValue
+              Root="HKCU"
+              Key="Software\Formiga\Battle"
+              Name="Path"
+              Type="string"
+              Value="[INSTALLFOLDER]Formiga Battle.exe" />
+          <RegistryValue
+              Root="HKCU"
+              Key="Software\Formiga\Battle"
+              Name="Version"
+              Type="string"
+              Value="$(BattleVersion)" />
+          <RegistryValue
+              Root="HKCU"
+              Key="Software\Formiga\Battle"
+              Name="BattleVersion"
+              Type="integer"
+              Value="$(BattleFormatVersion)" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Formiga">
+        <Component Id="BattleShortcut" Guid="AE6E0C82-A1C3-4F9B-A1E6-8447B9D60987">
+          <Shortcut
+              Id="BattleStartMenuShortcut"
+              Name="Formiga Battle"
+              Target="[INSTALLFOLDER]Formiga Battle.exe"
+              WorkingDirectory="INSTALLFOLDER"
+              Icon="BattleIcon" />
+          <RemoveFolder Id="RemoveBattleProgramsFolder" On="uninstall" />
+          <RegistryValue
+              Root="HKCU"
+              Key="Software\Formiga\Battle"
+              Name="StartMenuShortcut"
+              Type="integer"
+              Value="1"
+              KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="Formiga Battle" Level="1">
+      <ComponentRef Id="BattleApplication" />
+      <ComponentRef Id="BattleShortcut" />
+    </Feature>
+  </Package>
+</Wix>

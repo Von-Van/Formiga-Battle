@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## [0.67.8] - 2026-10-15
+
+The first Battle to download: an app for macOS and an installer for Windows, released with Formiga
+Desktop 0.67.8 and built on its shared crates. A friend match needs both Handlers on Battle 0.67.8.
+
+- Battle comes as an app to download for macOS and Windows, with an icon of its own: the
+  Backyard's beacon between the two teams' pennants. Installed in Applications, or with the
+  Windows installer, Formiga Desktop finds it on its own.
 - Built on Formiga Desktop 0.67.8, which keeps every cup's trophy and medal (the Woodland,
   Millpond and Sandy Cove Cups' as well as the Backyard Cup's) and offers them to Formiga Home,
   and reads its colonies (save version 31) for `--from-save`. A rehearsal from a colony file says

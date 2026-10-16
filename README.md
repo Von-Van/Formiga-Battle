@@ -69,6 +69,21 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 The developer toolkit in Desktop runs Battle's tests against a Desktop checkout's own crates:
 `devtools/formiga validate --expansions --step battle`.
 
+## Releasing
+
+Battle is released with Formiga Desktop, under the same version. Its repository runs no Actions:
+Formiga-World-Releases builds it from its tag `vX.Y.Z` and keeps the downloads, and the website
+offers them from there. A release needs its `## [X.Y.Z] - date` section in `CHANGELOG.md`, and
+`scripts/set-version.sh X.Y.Z vX.Y.Z` to move the version and Desktop's tag together
+(`scripts/set-version.sh --check` says whether every place agrees).
+
+`scripts/package-macos.sh` builds the universal app, its zip and DMG into `dist/`, and
+`scripts/package-windows.ps1` the Windows zip and per-user installer. Both name Battle the way
+`formiga-battle-contract`'s `discovery` module says Desktop looks for it: the bundle id and
+`FormigaBattleVersion` on macOS, the `Software\Formiga\Battle` registry values on Windows, with
+the battle version and the icon asked of the program itself (`--battle-version`, `--icon <dir>`).
+Each prints its program's SHA-256 last: that is how the site's friend-match relay knows a release.
+
 ## Crates
 
 - **`formiga-battle-core`**: the rules, with no drawing, clock or network. `arena` (boards as
@@ -98,5 +113,5 @@ The developer toolkit in Desktop runs Battle's tests against a Desktop checkout'
   window), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
-by one release tag (`v0.67.6`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
+by one release tag (`v0.67.7`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
 authoritative for the colony; Battle never writes a colony file.
