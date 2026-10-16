@@ -1,4 +1,4 @@
-//! Getting ready, before a match: the Battle Grounds, where the train brings the companions in, and the
+//! Getting ready, before a match: the Battleground, where the train brings the companions in, and the
 //! notebook's pages after it, turned one by one as Desktop's journal turns its pages. Where to
 //! play, then who goes and, for a friend, the room: open one and pass on its code, or join theirs.
 //! Each page is a spread: what it is about on the left, and on the ruled right page what is
@@ -13,6 +13,7 @@ use crate::feel::Feedback;
 use crate::garden::Garden;
 use crate::iso::View;
 use crate::look::Look;
+use crate::masthead::Masthead;
 use crate::station::{Heard, Station};
 use crate::ticket::Destination;
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
@@ -22,10 +23,12 @@ use formiga_battle_core::TEAM_SIZE;
 /// How tall the station is drawn, in its own pixels, whatever the window: each of them as many
 /// screen pixels as fit.
 const STATION_ROWS: f32 = 216.0;
+/// How often the picture at the head of the station's page is repainted.
+const MASTHEAD_FRAMES_PER_SECOND: f32 = 12.0;
 /// How often the station is repainted while anything moves at it.
 const STATION_FRAMES_PER_SECOND: f32 = 30.0;
 /// The station's name, lettered on its board.
-const GROUNDS: &str = "The Battle Grounds";
+const BATTLEGROUND: &str = "The Battleground";
 
 /// How long after a page starts turning its cards start dropping onto it: once the leaf is
 /// mostly over.
@@ -268,7 +271,7 @@ impl BattleApp {
         }
     }
 
-    /// The station's left page: the Battle Grounds as a big picture pasted onto it, the train
+    /// The station's left page: the Battleground as a big picture pasted onto it, the train
     /// coming in with the companions at its windows. A click on it hurries the train in.
     pub(super) fn station_left(
         &mut self,
@@ -361,15 +364,93 @@ impl BattleApp {
         let board = Rect::from_min_max(at(sx, sy), at(sx + sw, sy + sh));
         let maroon = Color32::from_rgb(0x7a, 0x2c, 0x33);
         let mut letters = (board.height() * 0.42).clamp(8.0, 18.0);
-        let mut lettering = painter.layout_job(label_job(GROUNDS, letters, maroon));
+        let mut lettering = painter.layout_job(label_job(BATTLEGROUND, letters, maroon));
         while lettering.size().x > board.width() * 0.88 && letters > 7.0 {
             letters -= 0.5;
-            lettering = painter.layout_job(label_job(GROUNDS, letters, maroon));
+            lettering = painter.layout_job(label_job(BATTLEGROUND, letters, maroon));
         }
         painter.galley(
             board.center() - lettering.size() / 2.0 + vec2(0.0, u * 0.5),
             lettering,
             maroon,
+        );
+    }
+
+    /// The picture at the head of the station's page, with the page's title on its ribbon.
+    fn masthead(&mut self, ui: &mut egui::Ui, u: f32, now: f32) {
+        let ctx = ui.ctx().clone();
+        let width = ui.available_width();
+        let (w, h) = (
+            (width / u).floor() as i32,
+            ((width * 0.42 / u) as i32).clamp(76, 118),
+        );
+        let reduce = self.table.reduce_motion;
+        let home = &self.table.home;
+        let masthead = self.masthead.get_or_insert_with(|| {
+            let look = |i: usize| home.get(i).and_then(|(c, _)| Look::of(c, reduce).ok());
+            Masthead::new([look(0), look(1)], reduce)
+        });
+        let tick = if reduce {
+            0
+        } else {
+            (now * MASTHEAD_FRAMES_PER_SECOND) as i64
+        };
+        let key = tick * 1_000_000 + i64::from(w) * 1000 + i64::from(h);
+        if self
+            .masthead_picture
+            .as_ref()
+            .is_none_or(|(k, _)| *k != key)
+        {
+            let picture = masthead.paint(w, h, now);
+            let image = egui::ColorImage::from_rgba_unmultiplied(
+                [picture.width() as usize, picture.height() as usize],
+                &picture.rgba_bytes(),
+            );
+            match &mut self.masthead_picture {
+                Some((k, t)) => {
+                    t.set(image, egui::TextureOptions::NEAREST);
+                    *k = key;
+                }
+                None => {
+                    let t = ctx.load_texture("masthead", image, egui::TextureOptions::NEAREST);
+                    self.masthead_picture = Some((key, t));
+                }
+            }
+        }
+        let (rect, _) = ui.allocate_exact_size(vec2(w as f32, h as f32) * u, Sense::hover());
+        let ppp = ctx.pixels_per_point();
+        let rect = Rect::from_min_size(
+            pos2(
+                (rect.min.x * ppp).round() / ppp,
+                (rect.min.y * ppp).round() / ppp,
+            ),
+            rect.size(),
+        );
+        if let Some((_, picture)) = &self.masthead_picture {
+            ui.painter().image(
+                picture.id(),
+                rect,
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+        }
+        // The page's title, lettered on the ribbon.
+        let (rx, ry, rw, rh) = Masthead::ribbon(w, h);
+        let ribbon = Rect::from_min_size(
+            rect.min + vec2(rx as f32, ry as f32) * u,
+            vec2(rw as f32, rh as f32) * u,
+        );
+        let painter = ui.painter();
+        let mut size = (ribbon.height() * 0.5).clamp(9.0, 15.0);
+        let mut title = painter.layout_job(label_job(BATTLEGROUND, size, ink::COVER));
+        while title.size().x > ribbon.width() * 0.86 && size > 8.0 {
+            size -= 0.5;
+            title = painter.layout_job(label_job(BATTLEGROUND, size, ink::COVER));
+        }
+        painter.galley(
+            ribbon.center() - title.size() / 2.0 + vec2(0.0, u * 0.5),
+            title,
+            ink::COVER,
         );
     }
 
@@ -389,8 +470,12 @@ impl BattleApp {
         } else {
             "Your companions are coming in on the train. Click the picture to hurry it along."
         };
-        chrome::page_heading(ui, "Formiga Battle · the station", GROUNDS, observation);
-        ui.add_space(u * 8.0);
+        self.masthead(ui, u, now);
+        ui.add_space(u * 2.0);
+        ui.vertical_centered(|ui| {
+            ui.label(RichText::new(observation).size(13.5).color(ink::MUTED));
+        });
+        ui.add_space(u * 6.0);
         let width = ui.available_width();
         let h = 96.0;
         let mut chosen = None;

@@ -1,4 +1,4 @@
-//! The window. It opens at the Battle Grounds (`station`), where the train comes in with the Handler's
+//! The window. It opens at the Battleground (`station`), where the train comes in with the Handler's
 //! companions aboard and the Handler chooses where they are off to: out in the world to a friend,
 //! or close to home against the visitors. Then the Handler's notebook (`chrome`) opens, its pages
 //! turned one by one as Desktop's journal turns them (`menus`): where to play, who goes and, for a
@@ -54,7 +54,7 @@ const SHARED: [&str; 5] = [
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
-    /// At the Battle Grounds, the notebook's first spread: the train in with everyone aboard.
+    /// At the Battleground, the notebook's first spread: the train in with everyone aboard.
     Station,
     /// The notebook open on getting ready: where, who, and the friend's room.
     Journal,
@@ -113,7 +113,7 @@ impl Step {
 /// What a review picture shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Review {
-    /// The Battle Grounds, the train coming in or in.
+    /// The Battleground, the train coming in or in.
     Station,
     /// Choosing where to play the visitors.
     Where,
@@ -196,9 +196,12 @@ pub struct BattleApp {
     step: Step,
     /// A page being turned.
     turn: Option<chrome::PageTurn>,
-    /// The Battle Grounds, once there is a page to size them to; and their picture this frame.
+    /// The Battleground, once there is a page to size it to; and its picture this frame.
     station: Option<crate::station::Station>,
     station_picture: Option<(i64, egui::TextureHandle)>,
+    /// The picture at the head of the station's page, and its picture this frame.
+    masthead: Option<crate::masthead::Masthead>,
+    masthead_picture: Option<(i64, egui::TextureHandle)>,
     /// The friend's room was asked for by its code, not opened.
     joining: bool,
     /// What was felt away from the window's context, told with the rest at the next frame.
@@ -318,6 +321,8 @@ impl BattleApp {
             turn: None,
             station: None,
             station_picture: None,
+            masthead: None,
+            masthead_picture: None,
             joining: false,
             felt: Vec::new(),
             preview: None,
@@ -966,7 +971,7 @@ impl BattleApp {
         if self.stage == Stage::Station {
             ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.label(label_job("The Battle Grounds", chrome::LABEL, ink::COVER));
+                    ui.label(label_job("The Battleground", chrome::LABEL, ink::COVER));
                 });
             });
             return;
@@ -1941,7 +1946,17 @@ impl BattleApp {
                                             .color(ink::MUTED),
                                     );
                                 }
+                                // The turn still playing out is told once it has been seen.
+                                let playing = self
+                                    .table
+                                    .shown
+                                    .as_ref()
+                                    .filter(|_| self.finished_at.is_none())
+                                    .map(|shown| shown.report.turn);
                                 for (turn, lines) in &self.table.log {
+                                    if Some(*turn) == playing {
+                                        continue;
+                                    }
                                     ui.add_space(u);
                                     ui.label(label_job(
                                         &format!("Turn {turn}"),
@@ -2203,8 +2218,10 @@ impl BattleApp {
                             let mut cleared = false;
                             if giving && up {
                                 ui.add_space(u);
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = u * 2.0;
+                                let row = egui::Layout::left_to_right(egui::Align::TOP)
+                                    .with_main_wrap(true);
+                                ui.with_layout(row, |ui| {
+                                    ui.spacing_mut().item_spacing = vec2(u * 2.0, u * 2.0);
                                     for v in Verb::ALL {
                                         if v == Verb::Use && carried.is_none() {
                                             continue;
@@ -2388,25 +2405,32 @@ impl BattleApp {
                 .map(|k| (key(*k), k.words().to_owned(), String::new(), String::new()))
                 .collect(),
         };
-        for (glyph, label, gloss, hover) in rows {
-            let response = ui
-                .horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = u * 3.0;
-                    self.glyph(ui, ctx, glyph, u);
-                    ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        ui.label(RichText::new(&label).size(13.0).strong().color(ink::PAGE));
-                        if !gloss.is_empty() {
-                            ui.label(RichText::new(&gloss).size(11.5).color(ink::MUTED));
-                        }
-                    });
-                })
-                .response;
-            if !hover.is_empty() {
-                response.on_hover_text(hover);
-            }
-            ui.add_space(u * 1.5);
-        }
+        // Scrolls when the window is too short for it all.
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for (glyph, label, gloss, hover) in rows {
+                    let response = ui
+                        .horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = u * 3.0;
+                            self.glyph(ui, ctx, glyph, u);
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                ui.label(
+                                    RichText::new(&label).size(13.0).strong().color(ink::PAGE),
+                                );
+                                if !gloss.is_empty() {
+                                    ui.label(RichText::new(&gloss).size(11.5).color(ink::MUTED));
+                                }
+                            });
+                        })
+                        .response;
+                    if !hover.is_empty() {
+                        response.on_hover_text(hover);
+                    }
+                    ui.add_space(u * 1.5);
+                }
+            });
     }
 
     /// A row's picture in the field guide: one of the board's marks, stars, or a little watch.

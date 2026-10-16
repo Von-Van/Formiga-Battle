@@ -2,11 +2,24 @@
 
 ## Unreleased
 
-- Battle opens at the Battle Grounds, the first spread of the Handler's notebook. On its left page
+- Rules version 6: Backyard has a sprinkler. It sweeps the whole yard on turns 4, 8 and 12, its
+  tiles washed blue and ringed with droplets the turn before, and a garden tap on each side of the
+  near edge sets it off a tick early. Whoever it soaks is off balance for the rest of the turn and
+  lets go of what it carries; nobody loses composure. A quarter of matches are now won at the
+  beacon. Recorded matches from earlier builds no longer replay.
+- Found things: a dandelion puff, a twig or a leaf umbrella glints on two mirrored spots and turns
+  up the turn after. Whoever steps onto one picks it up and can USE it once: a puff bowls over
+  whoever stands across its way, a twig blocks a tile for two turns (and keeps an open gate from
+  closing), and a leaf umbrella keeps a teammate dry and bounces contests off. Cautious companions
+  keep off ground about to be soaked; curious, playful ones go out of their way for what lies in
+  the grass.
+- Battle opens at the Battleground, the first spread of the Handler's notebook. On its left page
   the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
   it, a face at each window, and a coach more for every three past six. On its right, two railway
   tickets: Out in the World, to play a friend online, and Close to Home, to play the visiting team
-  offline. A click hurries the train in; with reduced motion it is already in. After a match, Back
+  offline, painted at the notebook's own pixel with a globe and a cottage on their stubs. Above them,
+  a little scene taped onto the page: two of your companions facing each other across the beacon
+  under bunting, now and then cheering, with the page's title on a ribbon. A click hurries the train in; with reduced motion it is already in. After a match, Back
   to the station brings it in again.
 - History & settings, beneath the two tickets: every match the colony has played with who went
   and how it ended, beside the Open Circuit points and each cup's progress; and reduced motion and

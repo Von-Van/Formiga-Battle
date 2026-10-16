@@ -6,6 +6,7 @@ mod app;
 mod chrome;
 mod cli;
 mod feel;
+mod found;
 mod friend;
 mod garden;
 mod host;
@@ -13,6 +14,7 @@ mod icon;
 mod iso;
 mod lettering;
 mod look;
+mod masthead;
 mod playback;
 mod rewards;
 mod scene;
@@ -45,7 +47,7 @@ WINDOW:
     --snap <PNG>             Open, save a picture of the window after --at seconds (default 6)
                              and close
     --at <SECONDS>           With --snap
-    --review <STAGE>         With --snap: station (the train in at the Battle Grounds, everyone
+    --review <STAGE>         With --snap: station (the train in at the Battleground, everyone
                              aboard), where (choosing a place), picking or who (the team
                              choice), friend (a friend's room about to be opened), history,
                              settings, orders (a
@@ -60,6 +62,8 @@ WINDOW:
                              (default 0), at --scale (default 3), --into seconds into the
                              turn after (default: still)
     --turns <N>, --into <SECONDS>, --scale <N>
+    --window <W>x<H>         The window's size in points (default 1280x780), for a picture of
+                             how Battle looks in a smaller or larger window
 ";
 
 fn main() -> Result<()> {
@@ -105,6 +109,8 @@ struct Parsed {
     turns: u32,
     into: Option<f32>,
     scale: u32,
+    /// The window's size, in points, for a review picture at a size of its own.
+    window: Option<(f32, f32)>,
 }
 
 fn parse(args: Vec<String>) -> Result<Parsed> {
@@ -120,6 +126,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
         turns: 0,
         into: None,
         scale: 3,
+        window: None,
     };
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
@@ -156,6 +163,14 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
             "--turns" => parsed.turns = value()?.parse().context("--turns takes a number")?,
             "--into" => parsed.into = Some(value()?.parse().context("--into takes seconds")?),
             "--scale" => parsed.scale = value()?.parse().context("--scale takes a number")?,
+            "--window" => {
+                let size = value()?;
+                let (w, h) = size
+                    .split_once('x')
+                    .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
+                    .context("--window takes a size such as 1024x640")?;
+                parsed.window = Some((w, h));
+            }
             other => bail!("unknown option {other:?}; see --help"),
         }
     }
@@ -209,7 +224,7 @@ fn window(args: Vec<String>) -> Result<()> {
     let reviewing = review.is_some();
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title("Formiga Battle")
-        .with_inner_size([1280.0, 780.0])
+        .with_inner_size(args.window.map_or([1280.0, 780.0], |(w, h)| [w, h]))
         .with_min_inner_size([1024.0, 640.0])
         .with_icon(icon::window());
     if reviewing {

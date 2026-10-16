@@ -7,6 +7,7 @@
 //! filled one, in cream or gold, so the lawn still shows through and the board never turns into
 //! a grid of overlays.
 
+use crate::found;
 use crate::garden::{self, Garden, Sprite};
 use crate::iso::View;
 use crate::look::{Look, Pose};
@@ -76,17 +77,36 @@ pub fn paint(
     beacon(&mut canvas, arena, frame, capture_ticks, now, still, view);
     garden.behind(&mut canvas, view, now, still);
     floor_marks(&mut canvas, frame, marks, view, now, still);
+    if frame.sprinkler_coming {
+        for tile in arena.scenery.iter().flat_map(|s| s.tiles.iter()) {
+            found::warned(&mut canvas, view, *tile, now, still);
+        }
+    }
+    for tile in &frame.gusty {
+        found::gusty(&mut canvas, view, *tile, now, still);
+    }
 
     // Everyone and everything standing, back to front by how far down the board it is.
     let mut standing: Vec<(i32, i32, Item)> = Vec::new();
     for tile in arena.tiles() {
         let depth = i32::from(tile.x) + i32::from(tile.y);
         match arena.terrain(tile) {
+            Terrain::Obstacle if arena.switches.contains(&tile) => {
+                standing.push((depth, 0, Item::Tap(tile)))
+            }
             Terrain::Obstacle => standing.push((depth, 0, Item::Piece(tile))),
             Terrain::Gate => standing.push((depth, 0, Item::Gate(tile))),
             Terrain::Lever => standing.push((depth, 0, Item::Lever(tile))),
             Terrain::Open => {}
         }
+    }
+    for (tile, thing) in &frame.ground {
+        let depth = i32::from(tile.x) + i32::from(tile.y);
+        standing.push((depth, 0, Item::Found(*tile, *thing)));
+    }
+    for tile in &frame.twigs {
+        let depth = i32::from(tile.x) + i32::from(tile.y);
+        standing.push((depth, 0, Item::Twig(*tile)));
     }
     // Each creature's picture as it will be drawn, for seeing pieces through only where they would
     // hide its shape, and its shadow and rings, painted on the ground under everyone so they never
@@ -147,7 +167,29 @@ pub fn paint(
                 let (x, y) = placed(view, f, look, now, still);
                 let sprite = look.frame(f.pose, f.posed_for, f.facing_right);
                 paint::blit_faded(&mut canvas, sprite, x, y, (f.opacity * 255.0).round() as u8);
+                if f.opacity > 0.0 && !f.out {
+                    let top = head_point(x, y);
+                    // What it carries, held up at its side; a leaf umbrella open over its head.
+                    if let Some(thing) = f.carrying {
+                        let side = if f.facing_right { 14 } else { -14 };
+                        found::icon(&mut canvas, (top.0 + side, top.1 + 32), thing, false);
+                    }
+                    if f.sheltered {
+                        found::umbrella(&mut canvas, top);
+                    }
+                    if f.soaked {
+                        let feet = view.pixel(f.at.0, f.at.1);
+                        found::dripping(&mut canvas, top, feet, now, still);
+                    }
+                }
             }
+            Item::Tap(tile) => {
+                found::tap(&mut canvas, view, tile, frame.tap_ready, now, still);
+            }
+            Item::Found(tile, thing) => {
+                found::on_ground(&mut canvas, view, tile, thing, now, still);
+            }
+            Item::Twig(tile) => found::wedged(&mut canvas, view, tile),
         }
     }
     // Composure and the off-balance swirl over everyone, so a neighbour standing in front never
@@ -161,6 +203,9 @@ pub fn paint(
                 tags(&mut canvas, view, slot, f, look, now, still);
             }
         }
+    }
+    for tile in &frame.glint {
+        found::glint(&mut canvas, view, *tile, now, still);
     }
     order_marks(&mut canvas, frame, marks, view, now, still);
     for effect in &frame.effects {
@@ -182,12 +227,22 @@ enum Item {
     Gate(Tile),
     Lever(Tile),
     Creature(Slot),
+    Tap(Tile),
+    /// Something found, lying on its tile.
+    Found(Tile, formiga_battle_core::Item),
+    /// A twig wedged upright.
+    Twig(Tile),
 }
 
 impl Item {
     fn key(&self) -> (i32, i32) {
         match self {
-            Self::Piece(t) | Self::Gate(t) | Self::Lever(t) => (i32::from(t.y), 0),
+            Self::Piece(t)
+            | Self::Gate(t)
+            | Self::Lever(t)
+            | Self::Tap(t)
+            | Self::Found(t, _)
+            | Self::Twig(t) => (i32::from(t.y), 0),
             Self::Creature(s) => (s.side.index() as i32, i32::from(s.index)),
         }
     }
@@ -708,6 +763,13 @@ fn burst(canvas: &mut Canvas, view: &View, effect: &crate::playback::Effect, now
     let age = effect.age;
     let fade = ((1.0 - age / 0.7).clamp(0.0, 1.0) * 255.0) as u8;
     match effect.burst {
+        Burst::Splash => found::splash(canvas, view, effect.tile, age, fade),
+        Burst::Gust => found::gust(canvas, view, effect.tile, age, fade),
+        Burst::Twinkle => {
+            let lift = (age * 14.0) as i32;
+            star(canvas, (cx - 4, cy - 10 - lift), rgba(0xfbe6a2, fade));
+            star(canvas, (cx + 5, cy - 6 - lift / 2), rgba(0xffffff, fade));
+        }
         Burst::Hit => {
             // A cartoon "pow": a burst of rays round a cream star.
             let r = 4.0 + age * 14.0;
