@@ -60,7 +60,7 @@ opens the window behind everything, pictures it and closes. Either takes `--aren
 backyard|woodland|millpond|cove`. Look at them after changing anything
 visual.
 
-The gate, run locally (the repository is private, so nothing runs on GitHub):
+The gate, run locally (Battle has no GitHub Actions, so nothing runs on GitHub):
 
 ```bash
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
