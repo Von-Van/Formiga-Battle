@@ -159,6 +159,8 @@ pub struct Table {
     pub shown: Option<Shown>,
     /// Every turn told, newest last.
     pub log: Vec<(u8, Vec<String>)>,
+    /// What came of each of the Handler's orders last turn, a line each.
+    pub told: Vec<String>,
     /// What Desktop keeps of Battle for this colony, with this sitting's matches applied.
     pub record: BattleRecord,
     /// The session Desktop opened, if it did: what this sitting earned is written into it after
@@ -223,6 +225,7 @@ impl Table {
             turn_began: 0.0,
             shown: None,
             log: Vec::new(),
+            told: Vec::new(),
             record,
             session: None,
             match_events: Vec::new(),
@@ -479,6 +482,7 @@ impl Table {
         self.shown = None;
         self.begin_orders(now);
         self.log.clear();
+        self.told.clear();
         self.match_events.clear();
         self.earned.clear();
         self.ended_because = None;
@@ -815,6 +819,7 @@ impl Table {
         names[self.you.other().index()] = &self.other_name;
         self.log
             .push((report.turn, recap_naming(m, &report.events, names)));
+        self.told = formiga_battle_core::recap::orders_told(m, self.you, &report.events);
         self.match_events.extend(report.events.iter().cloned());
         let other = self.other_short();
         let mut teams = ["", ""];
@@ -1137,6 +1142,19 @@ impl Table {
         let before = m.board.clone();
         let report = m.resolve_turn(plans);
         self.show_turn(before, report, now);
+    }
+
+    /// Plays `turns` turns with the AI coach giving the Handler's orders too, each shown through
+    /// at once: for review pictures of a match already under way.
+    pub fn play_ahead(&mut self, turns: u8) {
+        for _ in 0..turns {
+            self.coach_orders();
+            self.lock(0.0);
+            if let Some(shown) = &mut self.shown {
+                shown.started = -1.0e6;
+            }
+            self.frame(0.0);
+        }
     }
 
     /// The Handler's orders, as the AI coach would give them: for review pictures.

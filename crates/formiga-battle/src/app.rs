@@ -376,6 +376,8 @@ impl BattleApp {
             }
             Some(Review::Orders) => {
                 app.begin();
+                // A few turns in, so the card says what came of last turn's orders.
+                app.table.play_ahead(3);
                 // One order as the coach would give it, a DEFEND of two of the yard's squares
                 // (one named twice), and TAKE in hand for the third.
                 app.table.coach_orders();
@@ -1037,10 +1039,16 @@ impl BattleApp {
                 ui.add_space(u * 4.0);
                 let turn =
                     m.board.turn + u8::from(self.table.shown.is_none() && m.outcome().is_none());
+                // The last turn says so, in brass: whatever the tally says after it decides.
+                let last = turn >= m.ruleset.turn_cap;
                 ui.label(label_job(
-                    &format!("Turn {} of {}", turn.max(1), m.ruleset.turn_cap),
+                    &if last {
+                        format!("Last turn, {} of {}", turn, m.ruleset.turn_cap)
+                    } else {
+                        format!("Turn {} of {}", turn.max(1), m.ruleset.turn_cap)
+                    },
                     chrome::LABEL,
-                    ink::COVER,
+                    if last { ink::BRASS_LIGHT } else { ink::COVER },
                 ));
                 ui.add_space(u * 4.0);
                 let shown = self.table.frame_capture(now);
@@ -1066,6 +1074,9 @@ impl BattleApp {
                         u,
                         now,
                     );
+                    if shown[side.index()] + 1 == m.ruleset.capture_ticks && m.outcome().is_none() {
+                        ui.label(label_job("One tick to go", chrome::LABEL, ink::BRASS_LIGHT));
+                    }
                     ui.add_space(u * 2.0);
                 }
                 if paused && (self.table.reduce_motion || (now * 2.0).sin() > -0.4) {
@@ -1918,31 +1929,53 @@ impl BattleApp {
         let painter = ui.painter().clone();
         let width = (page.width() * 0.3).clamp(220.0, 300.0);
         let inner = width - u * 14.0;
-        let lines: Vec<(std::sync::Arc<egui::Galley>, Option<Side>)> = if self.recent.is_empty() {
-            vec![(
-                painter.layout(
-                    "Nothing yet: the first turn is yours.".to_owned(),
-                    FontId::proportional(12.5),
-                    ink::MUTED,
-                    inner,
-                ),
-                None,
-            )]
-        } else {
-            self.recent
+        let lines: Vec<(std::sync::Arc<egui::Galley>, Option<Side>)> =
+            if self.recent.is_empty() && !self.table.told.is_empty() {
+                Vec::new()
+            } else if self.recent.is_empty() {
+                vec![(
+                    painter.layout(
+                        "Nothing yet: the first turn is yours.".to_owned(),
+                        FontId::proportional(12.5),
+                        ink::MUTED,
+                        inner,
+                    ),
+                    None,
+                )]
+            } else {
+                self.recent
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .map(|(k, (text, side))| {
+                        let colour = if k == 0 { ink::PAGE } else { ink::MUTED };
+                        (
+                            painter.layout(text.clone(), FontId::proportional(12.5), colour, inner),
+                            *side,
+                        )
+                    })
+                    .collect()
+            };
+        let title = painter.layout_job(label_job("Just now", 9.5, ink::FOREST));
+        // While orders are given, what came of each of last turn's, under the headlines.
+        let planning = self.table.shown.is_none() && self.table.outcome().is_none();
+        let orders_title = painter.layout_job(label_job("Your orders last turn", 9.0, ink::FOREST));
+        let told: Vec<std::sync::Arc<egui::Galley>> = if planning {
+            self.table
+                .told
                 .iter()
-                .rev()
-                .enumerate()
-                .map(|(k, (text, side))| {
-                    let colour = if k == 0 { ink::PAGE } else { ink::MUTED };
-                    (
-                        painter.layout(text.clone(), FontId::proportional(12.5), colour, inner),
-                        *side,
-                    )
+                .map(|line| {
+                    painter.layout(line.clone(), FontId::proportional(11.5), ink::PAGE, inner)
                 })
                 .collect()
+        } else {
+            Vec::new()
         };
-        let title = painter.layout_job(label_job("Just now", 9.5, ink::FOREST));
+        let told_height = if told.is_empty() {
+            0.0
+        } else {
+            orders_title.size().y + u * 5.0 + told.iter().map(|g| g.size().y + u * 1.5).sum::<f32>()
+        };
         let link_text = if self.account_open {
             "Close the whole match (L)"
         } else {
@@ -1950,7 +1983,7 @@ impl BattleApp {
         };
         let link = painter.layout_job(label_job(link_text, 9.0, ink::FOREST));
         let body: f32 = lines.iter().map(|(g, _)| g.size().y + u * 2.0).sum();
-        let height = u * 9.0 + title.size().y + body + link.size().y + u * 6.0;
+        let height = u * 9.0 + title.size().y + body + told_height + link.size().y + u * 6.0;
         let corner = pos2(page.max.x - u * 8.0 - width, page.min.y + u * 6.0);
         let rect = Rect::from_min_size(
             pos2((corner.x / u).round() * u, (corner.y / u).round() * u),
@@ -1977,6 +2010,23 @@ impl BattleApp {
             }
             painter.galley(pos2(rect.min.x + u * 9.0, y), galley, ink::PAGE);
             y += h + u * 2.0;
+        }
+        if !told.is_empty() {
+            y += u * 2.0;
+            painter.hline(
+                (rect.min.x + u * 5.0)..=(rect.max.x - u * 5.0),
+                y,
+                Stroke::new(u * 0.5, ink::LINE.gamma_multiply(0.35)),
+            );
+            y += u * 2.0;
+            let h = orders_title.size().y;
+            painter.galley(pos2(rect.min.x + u * 5.0, y), orders_title, ink::FOREST);
+            y += h + u * 3.0;
+            for galley in told {
+                let h = galley.size().y;
+                painter.galley(pos2(rect.min.x + u * 5.0, y), galley, ink::PAGE);
+                y += h + u * 1.5;
+            }
         }
         y += u;
         let link_rect =
@@ -2644,7 +2694,24 @@ impl BattleApp {
         };
         chrome::kicker(ui, "The match is over");
         ui.label(RichText::new(title).size(22.0).color(ink::FOREST).strong());
+        // At the cap, the counts that decided it, yours first.
+        let counts = self
+            .table
+            .m
+            .as_ref()
+            .filter(|_| outcome.victory == Some(Victory::TurnCap) || outcome.winner.is_none())
+            .filter(|m| m.board.turn >= m.ruleset.turn_cap)
+            .map(|m| {
+                let (a, b) = (m.cap_tally(you), m.cap_tally(you.other()));
+                format!(
+                    "Beacon {} to {} \u{b7} composure {} to {} \u{b7} standing {} to {}",
+                    a.0, b.0, a.1, b.1, a.2, b.2
+                )
+            });
         ui.label(RichText::new(why).size(13.0));
+        if let Some(counts) = counts {
+            ui.label(RichText::new(counts).size(12.5).color(ink::FOREST));
+        }
         if let Some(reason) = &self.table.ended_because {
             ui.label(RichText::new(reason).size(13.0).color(ink::MUTED));
         }

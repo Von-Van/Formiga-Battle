@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The match screen says more of what a turn came to. While orders are given, the "Just now"
+  card lists what came of each of last turn's orders. The top strip says "Last turn" on the
+  last turn and "One tick to go" beside a beacon one tick from lighting. A match won when time
+  ran out shows the counts that decided it: beacon, composure and creatures standing.
 - Your Handler, your trios and their records. "Your Handler & history" at the station opens the
   Handler's own page first: sign your name, add a club if you like, and choose a pennant from
   three cuts, eight cloths, twelve symbols and three trims, painted at the notebook's pixel. Your
