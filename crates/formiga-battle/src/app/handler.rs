@@ -165,20 +165,7 @@ impl BattleApp {
                 false,
                 u,
                 |ui| {
-                    ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(label_job("Reduce motion", chrome::LABEL + 1.0, ink::FOREST));
-                        ui.label(
-                            RichText::new(
-                                "The train is already in, pages change without turning, and nothing hops or springs. It starts as Formiga Desktop has it.",
-                            )
-                            .size(12.5),
-                        );
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        chrome::switch(ui, &mut reduce, u);
-                    });
-                });
+                    switch_row(ui, "Reduce motion", MOTION, &mut reduce, u);
                 },
             );
         });
@@ -195,22 +182,9 @@ impl BattleApp {
         let mut levels = self.sound.levels();
         crate::feel::dropping(ui, since, 1, u, |ui| {
             card(ui, Id::new("settings-sound"), false, true, false, u, |ui| {
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(label_job("Sound", chrome::LABEL + 1.0, ink::FOREST));
-                        ui.label(
-                            RichText::new(
-                                "Music and sounds, or none at all: the same as the speaker on the cover.",
-                            )
-                            .size(12.5),
-                        );
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let mut on = !levels.muted;
-                        chrome::switch(ui, &mut on, u);
-                        levels.muted = !on;
-                    });
-                });
+                let mut on = !levels.muted;
+                switch_row(ui, "Sound", SOUND, &mut on, u);
+                levels.muted = !on;
                 ui.add_space(u * 3.0);
                 let width = (ui.available_width() - 110.0).max(120.0);
                 let muted = levels.muted;
@@ -257,6 +231,25 @@ impl BattleApp {
                 .color(ink::MUTED),
         );
     }
+}
+
+const MOTION: &str = "The train is already in, pages change without turning, and nothing hops or \
+     springs. It starts as Formiga Desktop has it.";
+const SOUND: &str = "Music and sounds, or none at all: the same as the speaker on the cover.";
+
+/// A setting that is on or off: its name and what it does, with its switch at the right. The
+/// switch takes its room first, so the words wrap beside it rather than run under it.
+fn switch_row(ui: &mut egui::Ui, name: &str, does: &str, on: &mut bool, u: f32) {
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            chrome::switch(ui, on, u);
+            ui.add_space(u * 6.0);
+            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.label(label_job(name, chrome::LABEL + 1.0, ink::FOREST));
+                ui.label(RichText::new(does).size(12.5));
+            });
+        });
+    });
 }
 
 /// A match's result as a rubber stamp: won in green, lost in red, drawn in grey.

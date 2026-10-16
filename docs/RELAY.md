@@ -11,8 +11,15 @@ its shape and size, and keeps time.
 ## Requests
 
 Base: `https://www.formigaworld.com/api/battle`. Every body and answer is JSON, at most 64 KiB in
-and 256 KiB out. Every answer carries `Cache-Control: no-store`. The seat travels only in the
-`X-Formiga-Seat` header, never in a URL.
+and 256 KiB out, and a body nests its arrays and objects at most 64 deep. Every `POST` says
+`Content-Type: application/json`, so a web page cannot open rooms through its visitors' browsers.
+Every answer carries `Cache-Control: no-store`. The seat travels only in the `X-Formiga-Seat`
+header, never in a URL.
+
+Battle follows no redirects, so the seat's header never goes anywhere but the relay, and never
+leaves HTTPS for plain HTTP. It takes a room's code only if it is a code (six of the code's
+letters and digits) and a seat only if it is 32 hexadecimal digits, and cleans the other
+Handler's name, and any reason given for a match ending, before showing or keeping them.
 
 | Request | Body | Answer |
 |---|---|---|
@@ -66,7 +73,8 @@ digits, because JavaScript numbers lose anything past 53 bits.
 
 | Status | Body | When |
 |---|---|---|
-| 400 | `{"refused": "malformed"}` | The body is not the shape above, or too large |
+| 400 | `{"refused": "malformed"}` | The body is not the shape above, too large or nested too deep |
+| 415 | `{"refused": "malformed"}` | A `POST` whose body is not said to be JSON |
 | 404 | `{"refused": "no_such_room"}` | No room under that code, or a seat that is not one of its two (the same answer, so a seat cannot be guessed at) |
 | 409 | `{"refused": "version", "relay": 3, "rules_version": n}` | Another protocol, or a joiner playing by other rules than the opener (`n` is the opener's) |
 | 409 | `{"refused": "mismatch", "battle": "…", "desktop": "…" or null}` | A joiner with another Battle or Desktop than the opener's (these are the opener's) |

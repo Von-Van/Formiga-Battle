@@ -30,6 +30,20 @@ pub struct Session {
     pub result: BattleResult,
 }
 
+/// The longest a reason from the relay for a match ending is shown.
+const REASON_CHARS: usize = 160;
+
+/// A Handler's name as the relay passed it on, cleaned again on arrival, as the relay cleaned it
+/// on its way in: it is shown in the window and kept in the history Desktop is sent.
+fn handler_name(raw: &str) -> String {
+    let name = formiga_expansion_rulebook::sanitize_text(raw, 24);
+    if name.is_empty() {
+        "A Handler".to_owned()
+    } else {
+        name
+    }
+}
+
 /// A match with a friend, through the relay.
 pub struct Friend {
     pub line: Line,
@@ -565,7 +579,7 @@ impl Table {
                 self.leave_room();
                 return false;
             };
-            let handlers = [a.handler.clone(), b.handler.clone()];
+            let handlers = [handler_name(&a.handler), handler_name(&b.handler)];
             match room_match(
                 arena,
                 view.ruleset,
@@ -635,7 +649,10 @@ impl Table {
             && let Some(side) = ending.forfeited
         {
             m.forfeit(side);
-            self.ended_because = Some(ending.reason);
+            self.ended_because = Some(formiga_expansion_rulebook::sanitize_text(
+                &ending.reason,
+                REASON_CHARS,
+            ));
             self.finish_match();
         }
     }
@@ -1011,6 +1028,13 @@ impl Table {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_handler_name_from_the_relay_is_cleaned_before_it_is_shown_or_kept() {
+        assert_eq!(handler_name("  Sam\u{202e}\u{0007}  "), "Sam");
+        assert_eq!(handler_name("\u{200b}"), "A Handler");
+        assert_eq!(handler_name(&"x".repeat(80)).chars().count(), 24);
+    }
+
     use super::*;
     use formiga_battle_contract::sample;
 

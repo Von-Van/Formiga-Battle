@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Rules version 7: team orders. Each turn a Handler gives the whole team up to three orders
+  instead of one to each companion: TAKE some squares (walk onto an empty one, move theirs off
+  one, two flanking a holder), DEFEND some squares (stand on them, guard beside them, head off
+  whoever comes), or INTERACT with something (fetch a found thing, pull the lever or set off a
+  switch, go after what one of theirs carries, or have one of yours use what it carries). Naming
+  a square in two orders makes it more pressing and brings a second companion to stand guard.
+  The team shares the plan out by itself: what the plan needs first, then who is nearest and
+  what each is already doing, and last, by no more than about two steps' walk, who each one is.
+  A bold one would rather be the one to meet the other team, a wary one the one to stand and
+  hold, a sociable one the one beside a friend, a curious one the one to fetch what lies in the
+  grass. Alone where two were needed to flank, a reckless one goes at the holder anyway and a
+  wary one waits beside it; and partway through a turn, a companion whose job came to nothing
+  (what it went for was taken, its target dug in or was knocked out, a teammate got there first,
+  the ground was marked for the map event) thinks again from the same plan, once. The account
+  says each team's plan, who took on what and why. Friend matches speak relay protocol 3, and
+  recorded matches from earlier builds no longer replay.
+- Friend matches are more careful with the relay: Battle follows no redirects and never leaves
+  HTTPS, takes a room's code and seat only in the shapes a relay gives them, cleans the other
+  Handler's name and any reason for an ending before showing or keeping them, and waits longer
+  between looks while the relay cannot be reached. The notice of what a friend match shares now
+  names everything sent for each companion and when the relay deletes a room. The local relay
+  for development asks for JSON and refuses bodies nested too deep, as the site's does.
 - Rules version 6: every arena has a map event, warned on the board the turn before it comes
   round and set off early from a switch of its own. Backyard's sprinkler sweeps the whole yard
   (turns 4, 8 and 12; a garden tap on each side). Sandy Cove's wave washes whoever stands on the
