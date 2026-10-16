@@ -1267,7 +1267,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle"
-version = "0.67.12"
+version = "0.67.13"
 dependencies = [
  "anyhow",
  "eframe",
@@ -1302,7 +1302,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-core"
-version = "0.67.12"
+version = "0.67.13"
 dependencies = [
  "formiga-core",
  "serde",
@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-room"
-version = "0.67.12"
+version = "0.67.13"
 dependencies = [
  "formiga-battle-contract",
  "formiga-battle-core",
