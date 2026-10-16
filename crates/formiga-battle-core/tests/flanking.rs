@@ -225,3 +225,40 @@ fn a_match_won_at_the_cap_says_which_count_decided_it() {
     }
     assert!(by_beacon && by_composure, "both kinds of cap win came up");
 }
+
+#[test]
+fn each_order_is_told_once_with_what_came_of_it() {
+    use formiga_battle_core::recap::orders_told;
+    let mut m = Match::new(
+        Arena::backyard(),
+        Ruleset::default(),
+        4,
+        [0, 3].map(|n| {
+            (n..n + 3)
+                .map(|i| formiga_battle_core::tournament::drawn_creature(4, i))
+                .collect()
+        }),
+    )
+    .expect("a match");
+    let centre = m.arena.zone_centre();
+    let plan = vec![
+        Directive::Take {
+            squares: vec![centre],
+        },
+        Directive::Defend {
+            squares: vec![centre],
+        },
+    ];
+    let report = m.resolve_turn([plan, Vec::new()]);
+    let told = orders_told(&m, Side::Left, &report.events);
+    assert_eq!(
+        told.len(),
+        1,
+        "one square named twice is one line: {told:?}"
+    );
+    assert!(
+        told[0].starts_with("1 and 2. TAKE the middle of the yard"),
+        "{told:?}"
+    );
+    assert!(!told[0].contains('('), "no coordinates: {told:?}");
+}

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- After each turn, each team order can be told in one line: who took it on, what came of it
+  (held, flanked, turned away, caught on the way, getting into place to flank), and whether one of
+  them went its own way doing it. Squares are named as a player sees them ("the middle of the
+  yard"), not by number. `formiga-battle match` prints it; the match screen can show it.
 - A match won when time runs out says which count decided it and by how much: ahead on the
   beacon, or level on it with more composure left, or with more still standing. It used to say
   "on the beacon tally" whatever decided it.

@@ -377,6 +377,15 @@ fn play_match(mut args: Args) -> Result<()> {
         for line in recap(&m, &report.events) {
             println!("  · {line}");
         }
+        for side in Side::BOTH {
+            println!(
+                "  {} orders came to:",
+                formiga_battle_core::recap::team_name(side)
+            );
+            for line in formiga_battle_core::recap::orders_told(&m, side, &report.events) {
+                println!("    {line}");
+            }
+        }
         if board {
             print!("{}", draw(&m));
         }
