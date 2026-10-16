@@ -54,6 +54,8 @@ impl Match {
             self.board.event_at = Some(self.clock(next, lands_tick));
             self.board.event_tiles = tiles.clone();
             self.board.event_from = from;
+            // Once it has been, the switches wait out the rest of its turn, so it comes once.
+            self.board.switch_ready_turn = self.board.switch_ready_turn.max(next.saturating_add(1));
             events.push(Event {
                 turn,
                 tick,

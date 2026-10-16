@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Rules version 9: a switch can no longer set the map event off again in the turn it came round
+  by itself, so a wave, the pond rising or a shaken tree comes at most once a turn.
+
 ## [0.67.10] - 2026-10-16
 
 A patch to 0.67.9, built on Formiga Desktop 0.67.10, which takes the colony to Battle by train as
