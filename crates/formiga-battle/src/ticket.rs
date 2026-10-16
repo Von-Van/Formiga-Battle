@@ -141,23 +141,13 @@ pub fn paint(width: i32, height: i32, to: Destination, lit: bool) -> Canvas {
             ((stub - 8) / 26).min(h / 24).clamp(1, 3),
         ),
     }
-    // The perforation: a row of holes to tear along, each with a shade under it, and a notch
-    // bitten out of the card at either end.
+    // The perforation: a row of holes to tear along, each with a shade under it.
     let mut y = 4;
     while y < h - 4 {
         canvas.set(stub, y, CLEAR);
         paint::put(&mut canvas, stub + 1, y, rgba(0x3b2b3a, 50));
         paint::put(&mut canvas, stub, y + 1, rgba(0x3b2b3a, 30));
         y += 3;
-    }
-    for notch in [0, h - 1] {
-        for dy in -3i32..=3 {
-            for dx in -3i32..=3 {
-                if dx * dx + dy * dy <= 9 {
-                    canvas.set(stub + dx, notch + dy, CLEAR);
-                }
-            }
-        }
     }
     // An engraved frame round the card, its corners turned in.
     let (fx, fy, fw, fh) = (stub + 5, 4, w - stub - 9, h - 8);
@@ -196,6 +186,16 @@ pub fn paint(width: i32, height: i32, to: Destination, lit: bool) -> Canvas {
     paint::vline(&mut canvas, w - 1, 1, h - 2, card_edge);
     for (cx, cy) in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)] {
         canvas.set(cx, cy, CLEAR);
+    }
+    // The perforation's notches, bitten out of the edge last.
+    for notch in [0, h - 1] {
+        for dy in -3i32..=3 {
+            for dx in -3i32..=3 {
+                if dx * dx + dy * dy <= 9 {
+                    canvas.set(stub + dx, notch + dy, CLEAR);
+                }
+            }
+        }
     }
     canvas
 }
