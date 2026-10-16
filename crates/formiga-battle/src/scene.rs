@@ -82,8 +82,10 @@ pub fn paint(
             Terrain::Open => {}
         }
     }
-    // Where each creature's frame lands, for seeing pieces through where they would hide one.
-    let mut bodies: Vec<(i32, Bounds)> = Vec::new();
+    // Each creature's picture as it will be drawn, for seeing pieces through only where they would
+    // hide its shape, and its shadow and rings, painted on the ground under everyone so they never
+    // lie across a neighbour or over a hedge in front.
+    let mut bodies: Vec<Body> = Vec::new();
     for side in Side::BOTH {
         for i in 0..TEAM_SIZE as u8 {
             let slot = Slot::new(side, i);
@@ -95,13 +97,19 @@ pub fn paint(
             // the right turn.
             let depth = (f.at.0 + f.at.1 - 1.0).floor() as i32;
             standing.push((depth, 1, Item::Creature(slot)));
-            let look = &looks[side.index()][i as usize];
-            let (ox, oy) = frame_origin(view, f, look);
-            let size = FRAME_SIZE as i32;
-            bodies.push((
-                depth,
-                (ox + 8, oy + 4, ox + size - 8, oy + look.foot_row + 2),
-            ));
+            footing(
+                &mut canvas,
+                view,
+                slot,
+                f,
+                marks.selected == Some(slot),
+                now,
+                still,
+            );
+            let look = &mut looks[side.index()][i as usize];
+            let (x, y) = placed(view, f, look, now, still);
+            let pic = look.frame(f.pose, f.posed_for, f.facing_right).clone();
+            bodies.push(Body { depth, pic, x, y });
         }
     }
     standing.sort_by_key(|(depth, order, item)| (*depth, *order, item.key()));
@@ -130,16 +138,21 @@ pub fn paint(
             Item::Creature(slot) => {
                 let f = frame.figure(slot);
                 let look = &mut looks[slot.side.index()][slot.index as usize];
-                creature(
-                    &mut canvas,
-                    view,
-                    slot,
-                    f,
-                    look,
-                    marks.selected == Some(slot),
-                    now,
-                    still,
-                );
+                let (x, y) = placed(view, f, look, now, still);
+                let sprite = look.frame(f.pose, f.posed_for, f.facing_right);
+                paint::blit_faded(&mut canvas, sprite, x, y, (f.opacity * 255.0).round() as u8);
+            }
+        }
+    }
+    // Composure and the off-balance swirl over everyone, so a neighbour standing in front never
+    // covers them and theirs never sit on someone else's face.
+    for side in Side::BOTH {
+        for i in 0..TEAM_SIZE as u8 {
+            let slot = Slot::new(side, i);
+            let f = frame.figure(slot);
+            if f.opacity > 0.0 && !f.out {
+                let look = &looks[side.index()][i as usize];
+                tags(&mut canvas, view, slot, f, look, now, still);
             }
         }
     }
@@ -174,26 +187,50 @@ impl Item {
     }
 }
 
-/// A box on the canvas: left, top, right, bottom.
-type Bounds = (i32, i32, i32, i32);
+/// A creature's picture where it will be drawn, and how far down the board it stands.
+struct Body {
+    depth: i32,
+    pic: Canvas,
+    x: i32,
+    y: i32,
+}
+
+impl Body {
+    /// Whether its picture covers this canvas pixel.
+    fn covers(&self, px: i32, py: i32) -> bool {
+        let (sx, sy) = (px - self.x, py - self.y);
+        sx >= 0
+            && sy >= 0
+            && sx < self.pic.width() as i32
+            && sy < self.pic.height() as i32
+            && self.pic.get(sx, sy).a > 0
+    }
+
+    fn overlaps(&self, (l, t, r, b): (i32, i32, i32, i32)) -> bool {
+        self.x < r
+            && self.x + self.pic.width() as i32 > l
+            && self.y < b
+            && self.y + self.pic.height() as i32 > t
+    }
+}
 
 /// A standing piece, seen through wherever it stands in front of someone it would hide: Home's
-/// rule for furniture, so nobody on the board is ever lost behind a hedge.
-fn see_through(canvas: &mut Canvas, sprite: &Sprite, depth: i32, bodies: &[(i32, Bounds)]) {
-    let (l, t, r, b) = sprite.bounds();
-    let hidden: Vec<Bounds> = bodies
+/// rule for furniture, so nobody on the board is ever lost behind a hedge. Only the creature's own
+/// shape shows through, so the piece never has a box cut out of it.
+fn see_through(canvas: &mut Canvas, sprite: &Sprite, depth: i32, bodies: &[Body]) {
+    let hidden: Vec<&Body> = bodies
         .iter()
-        .filter(|(d, (x0, y0, x1, y1))| *d < depth && *x0 < r && *x1 > l && *y0 < b && *y1 > t)
-        .map(|(_, rect)| *rect)
+        .filter(|b| b.depth < depth && b.overlaps(sprite.bounds()))
         .collect();
     if hidden.is_empty() {
         paint::blit(canvas, &sprite.pic, sprite.x, sprite.y);
     } else {
         paint::blit_through(canvas, &sprite.pic, sprite.x, sprite.y, |px, py| {
-            let behind = hidden
-                .iter()
-                .any(|(x0, y0, x1, y1)| px >= *x0 && px < *x1 && py >= *y0 && py < *y1);
-            if behind { 110 } else { 255 }
+            if hidden.iter().any(|b| b.covers(px, py)) {
+                110
+            } else {
+                255
+            }
         });
     }
 }
@@ -433,13 +470,13 @@ fn chevron(canvas: &mut Canvas, at: (i32, i32), team: Ramp) {
     paint::put(canvas, x, y + 5, team.light);
 }
 
-#[allow(clippy::too_many_arguments)]
-fn creature(
+/// A creature's shadow, Hill's two flat ellipses, and its team's ring round its feet: whole while
+/// it stands steady, broken while it is off balance, doubled while it holds.
+fn footing(
     canvas: &mut Canvas,
     view: &View,
     slot: Slot,
     f: &Figure,
-    look: &mut Look,
     chosen: bool,
     now: f32,
     still: bool,
@@ -447,8 +484,6 @@ fn creature(
     let team = TEAM[slot.side.index()];
     let (fx, fy) = view.pixel(f.at.0, f.at.1);
     let alpha = (f.opacity * 255.0).round() as u8;
-    // Its shadow first, Hill's two flat ellipses, then its team's ring round its feet: whole
-    // while it stands steady, broken while it is off balance, doubled while it holds.
     paint::ellipse(canvas, fx + 1, fy, 10, 3, rgba(0x2c3a24, alpha / 4));
     paint::ellipse(canvas, fx + 1, fy, 7, 2, rgba(0x2c3a24, alpha / 6));
     let ring = if chosen { CREAM } else { team.base };
@@ -514,26 +549,42 @@ fn creature(
             0,
         );
     }
-    let (ox, oy) = frame_origin(view, f, look);
-    let sprite = look.frame(f.pose, f.posed_for, f.facing_right);
-    // Off balance, it sways a pixel either way until the turn is over.
-    let sway = if f.off_balance && !f.out && !still {
+}
+
+/// Off balance, it sways a pixel either way until the turn is over.
+fn sway(f: &Figure, now: f32, still: bool) -> i32 {
+    if f.off_balance && !f.out && !still {
         ((now * 5.0).sin() * 1.4).round() as i32
     } else {
         0
-    };
+    }
+}
+
+/// Where a creature's picture is drawn this moment: at its feet, swaying or slumped as it is.
+fn placed(view: &View, f: &Figure, look: &Look, now: f32, still: bool) -> (i32, i32) {
+    let (ox, oy) = frame_origin(view, f, look);
     if f.pose == Pose::Dizzy {
-        paint::blit_faded(canvas, sprite, ox, oy + 4, alpha);
+        (ox, oy + 4)
     } else {
-        paint::blit_faded(canvas, sprite, ox + sway, oy, alpha);
+        (ox + sway(f, now, still), oy)
     }
-    if f.out {
-        return;
-    }
+}
+
+/// Over a creature's head: its composure, and the swirl while it is off balance.
+fn tags(
+    canvas: &mut Canvas,
+    view: &View,
+    slot: Slot,
+    f: &Figure,
+    look: &Look,
+    now: f32,
+    still: bool,
+) {
+    let (ox, oy) = frame_origin(view, f, look);
     let top = head_point(ox, oy);
-    pips(canvas, top, f.composure, team);
+    pips(canvas, top, f.composure, TEAM[slot.side.index()]);
     if f.off_balance {
-        swirl(canvas, (top.0 + sway, top.1 - 6), now, still);
+        swirl(canvas, (top.0 + sway(f, now, still), top.1 - 6), now, still);
     }
 }
 
