@@ -166,6 +166,7 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
                 c.cue = Some(Cue::Miss);
             }
             EventKind::TookOpportunity { slot, took, .. } => {
+                c.place = Some(at(*slot));
                 c.headline = Some(format!("{} went for {} instead!", name(slot), name(took)));
                 c.good_for = Some(slot.side);
             }
@@ -253,6 +254,10 @@ pub fn callouts(m: &Match, playback: &Playback, teams: [&str; 2]) -> Vec<Callout
             | EventKind::Composure { .. }
             | EventKind::CaptureContested => {}
         }
+        // A headline is shown over whoever it is about; one about the beacon, over the beacon.
+        if c.headline.is_some() && c.place.is_none() {
+            c.place = Some(beacon);
+        }
         if c.cue.is_some() || c.word.is_some() || c.headline.is_some() {
             out.push(c);
         }
@@ -303,10 +308,10 @@ mod tests {
         assert!(all.iter().any(|c| c.headline.is_some()));
         assert!(all.iter().any(|c| c.word.is_some()));
         assert!(all.iter().any(|c| c.cue == Some(Cue::Step)));
-        // Every word has somewhere on the board to appear.
+        // Every word and every headline has somewhere on the board to appear.
         assert!(
             all.iter()
-                .filter(|c| c.word.is_some())
+                .filter(|c| c.word.is_some() || c.headline.is_some())
                 .all(|c| c.place.is_some())
         );
     }

@@ -263,6 +263,9 @@ enum Glyph {
     Watch,
 }
 
+/// The least time a headline is shown before the next takes its place.
+const HEADLINE_SECS: f32 = 0.8;
+
 /// How long the ready-up takes: "Ready?", then "Go!".
 const READY_SECS: f32 = 1.5;
 /// When in it "Go!" comes.
@@ -453,7 +456,7 @@ impl BattleApp {
     /// Fires whatever of the turn being shown has come due: its sound, its word on the board and
     /// its headline, which also goes on the card of the last two.
     fn announce(&mut self, now: f32) {
-        self.live.retain(|(_, born)| now - born < 2.4);
+        self.live.retain(|(_, born)| now - born < 4.0);
         let Some(shown) = &self.table.shown else {
             return;
         };
@@ -1363,6 +1366,7 @@ impl BattleApp {
                 rect.min + vec2(hx as f32, hy as f32 - 7.0) * scale - vec2(0.0, u * 22.0 + bob * u);
             pointer_arrow(&painter, tip, color(TEAM[slot.side.index()].light), u);
         }
+        self.headlines(&painter, rect, scale, now, u);
         self.confetti(&painter, rect, now, u);
         self.result_stamp(&painter, rect, now, u);
         if let (Some(pointer), Some((plain, right))) = (response.hover_pos(), aims) {
@@ -1573,7 +1577,6 @@ impl BattleApp {
         let painter = ui.painter().clone();
         self.turn_banner(&painter, page, now, u);
         self.orders_banner(&painter, page, now, u);
-        self.headlines(&painter, page, now, u);
         let card = self.recent_card(ui, page, u);
         if self.account_open {
             self.account(ui.ctx(), page, card, u);
@@ -1583,52 +1586,89 @@ impl BattleApp {
         }
     }
 
-    /// The headlines of the turn as it plays, each on a slip that drops in at the top of the
-    /// board, the newest on top and the one before just under it, fading.
-    fn headlines(&self, painter: &egui::Painter, page: Rect, now: f32, u: f32) {
+    /// The turn's headlines as it plays, each on a little slip over the head of whoever it
+    /// happened to (or over the beacon), with a point down to them. A headline fades as the next
+    /// one comes, so only the newest stays.
+    fn headlines(&self, painter: &egui::Painter, board: Rect, scale: f32, now: f32, u: f32) {
         let reduce = self.table.reduce_motion;
-        let showing: Vec<(&String, Option<Side>, f32)> = self
-            .live
-            .iter()
-            .rev()
-            .filter_map(|(c, born)| c.headline.as_ref().map(|h| (h, c.good_for, now - born)))
-            .filter(|(_, _, age)| *age < 2.2)
-            .take(2)
-            .collect();
-        let mut y = page.min.y + u * 8.0;
-        for (k, (headline, good_for, age)) in showing.into_iter().enumerate() {
-            let galley = painter.layout_no_wrap(
-                headline.clone(),
-                FontId::proportional(if k == 0 { 15.0 } else { 13.0 }),
-                ink::PAGE,
-            );
-            let size = galley.size() + vec2(u * 20.0, u * 8.0);
-            let (drop, alpha) = if reduce {
-                (0.0, 1.0)
-            } else {
-                let t = (age / 0.2).min(1.0);
-                let out = ((2.2 - age) / 0.4).clamp(0.0, 1.0);
-                ((1.0 - t) * -10.0 * u, out)
+        // Each headline gets a moment of its own: one that comes on the heels of another waits
+        // for it, so two in the same tick are both read.
+        let mut told: Vec<(&Callout, f32)> = Vec::new();
+        for (c, born) in &self.live {
+            if c.headline.is_none() || c.place.is_none() {
+                continue;
+            }
+            let shown = told
+                .last()
+                .map_or(*born, |(_, last)| born.max(last + HEADLINE_SECS));
+            told.push((c, shown));
+        }
+        // Only the newest, and the one before it while it fades out.
+        let current = told.iter().rposition(|(_, shown)| *shown <= now);
+        let Some(current) = current else {
+            return;
+        };
+        for k in current.saturating_sub(1)..=current {
+            let (c, shown) = told[k];
+            let age = now - shown;
+            let next = told
+                .get(k + 1)
+                .map(|(_, b)| now - b)
+                .filter(|since| *since >= 0.0);
+            let alpha = match next {
+                // Fading as the next one comes in.
+                Some(since) => 1.0 - (since / 0.2).clamp(0.0, 1.0),
+                None => {
+                    let fade_in = if reduce { 1.0 } else { (age / 0.15).min(1.0) };
+                    fade_in * ((2.2 - age) / 0.4).clamp(0.0, 1.0)
+                }
             };
-            let alpha = alpha * if k == 0 { 1.0 } else { 0.6 };
-            let rect = Rect::from_min_size(pos2(page.center().x - size.x / 2.0, y + drop), size);
-            let rect = Rect::from_min_size(
-                pos2((rect.min.x / u).round() * u, (rect.min.y / u).round() * u),
-                rect.size(),
+            if alpha <= 0.0 {
+                continue;
+            }
+            let (Some(headline), Some((x, y))) = (&c.headline, c.place) else {
+                continue;
+            };
+            let galley =
+                painter.layout_no_wrap(headline.clone(), FontId::proportional(13.0), ink::PAGE);
+            let size = galley.size() + vec2(u * 16.0, u * 6.0);
+            let (sx, sy) = self.view.screen(x, y);
+            let rise = if reduce {
+                0.0
+            } else {
+                (1.0 - (age / 0.2).min(1.0)) * 4.0 * u
+            };
+            let tip = board.min + vec2(sx, sy - 56.0) * scale + vec2(0.0, rise);
+            let left = (tip.x - size.x / 2.0).clamp(
+                board.min.x + u * 2.0,
+                (board.max.x - size.x - u * 2.0).max(board.min.x),
             );
+            let top = (tip.y - u * 3.0 - size.y).max(board.min.y + u * 2.0);
+            let rect =
+                Rect::from_min_size(pos2((left / u).round() * u, (top / u).round() * u), size);
             let mut painter = painter.clone();
             painter.set_opacity(alpha);
             chrome::card(&painter, rect, u, ink::CARD, ink::LINE);
-            tick(&painter, rect, good_for, u);
+            tick(&painter, rect, c.good_for, u);
+            // A little point down towards whoever it is about.
+            let px = tip.x.clamp(rect.min.x + u * 4.0, rect.max.x - u * 4.0);
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    pos2(px - u * 2.5, rect.max.y - u),
+                    pos2(px + u * 2.5, rect.max.y - u),
+                    pos2(px, rect.max.y + u * 2.5),
+                ],
+                ink::LINE,
+                Stroke::NONE,
+            ));
             painter.galley(
                 pos2(
-                    rect.min.x + u * 12.0,
+                    rect.min.x + u * 9.0,
                     rect.center().y - galley.size().y / 2.0,
                 ),
                 galley,
                 ink::PAGE,
             );
-            y = rect.max.y + u * 3.0;
         }
     }
 
