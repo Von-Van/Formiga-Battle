@@ -2080,6 +2080,76 @@ mod tests {
     }
 
     #[test]
+    fn a_trio_changed_after_it_played_tells_desktop_who_played_each_match() {
+        let dir =
+            std::env::temp_dir().join(format!("formiga-battle-lineup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
+        assert!(t.home.len() > TEAM_SIZE, "someone to swap in");
+        t.session = Some(Session {
+            directory: dir.clone(),
+            result: BattleResult::new(
+                formiga_battle_contract::SessionId::parse("00000000000000000000000000000000")
+                    .unwrap(),
+                "0".repeat(64),
+                "0.1.0",
+            ),
+        });
+        let ids = |t: &Table| -> Vec<u64> {
+            t.picked
+                .iter()
+                .map(|&i| t.home[i].0.traveler.id.0)
+                .collect()
+        };
+        let play = |t: &mut Table| {
+            t.start(0.0).unwrap();
+            let mut now = 0.0;
+            while !t.finished(now) {
+                t.coach_orders();
+                t.lock(now);
+                now += 20.0;
+                t.frame(now);
+            }
+        };
+        let first = formiga_battle_contract::lineup_of(&ids(&t));
+        t.set_trio(crate::identity::named("The Thistle Three", &first).unwrap());
+        play(&mut t);
+        // The third gives their place to someone else, and the trio plays again.
+        t.picked = vec![0, 1, TEAM_SIZE];
+        let second = formiga_battle_contract::lineup_of(&ids(&t));
+        let mut card = t.record.trios[0].card();
+        card.members = second.clone();
+        t.set_trio(card);
+        play(&mut t);
+        let written = BattleResult::decode(
+            &std::fs::read(dir.join(formiga_battle_contract::RESULT_FILE)).unwrap(),
+        )
+        .unwrap();
+        let who: Vec<_> = written
+            .matches
+            .iter()
+            .map(|m| m.rewards.trio.as_ref().unwrap().members.clone())
+            .collect();
+        assert_eq!(who, [first.clone(), second.clone()]);
+        // Desktop keeps the three it had first as an earlier lineup, by the contract's own rule.
+        let mut kept = formiga_battle_contract::BattleRecord::default();
+        kept.register_session(
+            written.registry.as_ref().unwrap(),
+            &written.matches,
+            time::OffsetDateTime::UNIX_EPOCH,
+        );
+        for m in &written.matches {
+            kept.apply(m);
+        }
+        assert_eq!(kept.trios[0].members, second);
+        assert_eq!(kept.trios[0].lineups.len(), 1);
+        assert_eq!(kept.trios[0].lineups[0].members, first);
+        assert_eq!(kept.trios[0].visitors.played, 2);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn two_tables_play_a_whole_match_through_a_relay() {
         // A relay named in FORMIGA_BATTLE_RELAY, such as the site's, or one of our own.
         let named = std::env::var(formiga_battle_room::RELAY_ENV)
