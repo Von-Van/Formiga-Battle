@@ -181,6 +181,8 @@ pub struct Table {
     pub relay: String,
     /// The version of the Desktop whose roster this is, as its snapshot says.
     desktop_version: String,
+    /// The newest version of Battle's contract that Desktop reads: its snapshot's own version.
+    desktop_reads: u32,
     /// Something the room said for the Handler to read.
     pub notice: Option<String>,
     /// Why the match ended without a turn to show it, such as a forfeit.
@@ -236,6 +238,7 @@ impl Table {
             friend: None,
             relay: relay_base(),
             desktop_version: roster.desktop_version.clone(),
+            desktop_reads: roster.version,
             notice: None,
             ended_because: None,
         }
@@ -321,6 +324,7 @@ impl Table {
 
     /// Applies what a match earned to the record here and writes it for Desktop.
     fn keep(&mut self, earned: rewards::Earned) {
+        let earned = rewards::for_reader(earned, self.desktop_reads);
         self.record.apply(&earned.result);
         self.earned = earned.lines;
         if let Some(trio) = earned
@@ -1470,6 +1474,51 @@ mod tests {
         .unwrap();
         assert_eq!(written.matches.len(), 1);
         assert_eq!(written.matches[0].mode, formiga_battle_contract::Mode::Ai);
+    }
+
+    #[test]
+    fn a_session_from_a_version_2_desktop_is_written_so_it_can_keep_it() {
+        let dir = std::env::temp_dir().join(format!("formiga-battle-v2-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut roster = sample::snapshot();
+        roster.version = 2;
+        roster.desktop_version = "0.67.8".to_owned();
+        let mut t = Table::new(roster, sample::visitors(9), 5);
+        t.session = Some(Session {
+            directory: dir.clone(),
+            result: BattleResult::new(
+                formiga_battle_contract::SessionId::parse("00000000000000000000000000000000")
+                    .unwrap(),
+                "0".repeat(64),
+                "0.1.0",
+            ),
+        });
+        t.start(0.0).unwrap();
+        let mut now = 0.0;
+        while !t.finished(now) {
+            t.coach_orders();
+            t.lock(now);
+            now += 20.0;
+            t.frame(now);
+        }
+        let written = BattleResult::decode(
+            &std::fs::read(dir.join(formiga_battle_contract::RESULT_FILE)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(written.matches.len(), 1);
+        let r = &written.matches[0].rewards;
+        assert_eq!(written.matches[0].mode, formiga_battle_contract::Mode::Ai);
+        // What Desktop 0.67.8 refuses in a match against the visitors: anything a friend match
+        // earns, the notebook included.
+        assert!(r.notebook.is_empty() && r.participation.is_empty() && r.history.is_none());
+        assert!(!r.journal.is_empty(), "and the rest is still earned");
+        assert!(written.min_reader_version <= 2);
+        assert!(
+            t.record.notebook.is_empty(),
+            "nor kept here as if Desktop would"
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
