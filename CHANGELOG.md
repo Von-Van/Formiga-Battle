@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Built on Formiga Desktop 0.67.8, which keeps every cup's trophy and medal (the Woodland,
+  Millpond and Sandy Cove Cups' as well as the Backyard Cup's) and offers them to Formiga Home,
+  and reads its colonies (save version 31) for `--from-save`. A rehearsal from a colony file says
+  it was opened by the Desktop this Battle is built on, rather than naming 0.67.7.
+
 ## [0.67.7] - 2026-10-15
 
 The first release of Battle. Its version now follows the Formiga release it ships with, and it is

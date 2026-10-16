@@ -52,7 +52,8 @@ pub fn open(source: Source) -> Result<(Host, BattleSnapshot)> {
                 &save,
                 SessionId::parse("00000000000000000000000000000000").expect("a session id"),
                 save.maximum_seen_utc,
-                "0.67.7",
+                // Battle shares its version with the Desktop release it is built on.
+                env!("CARGO_PKG_VERSION"),
             )?;
             Ok((
                 Host::Rehearsal {
