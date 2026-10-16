@@ -39,6 +39,10 @@ pub enum Choice {
     Use,
 }
 
+/// A cartoon word to paint over the board: its picture, where its top-left corner goes, and how
+/// much of it shows, out of 255.
+pub type Lettered = (Canvas, i32, i32, u8);
+
 /// What the window lays over the board: who is chosen, where an order could go, the orders given
 /// so far, and the little flourish wherever the Handler last clicked.
 #[derive(Clone, Debug, Default)]
@@ -51,7 +55,7 @@ pub struct Marks {
     pub pokes: Vec<(Tile, f32)>,
     /// Cartoon words (`lettering`), over everything: each picture, where its top-left corner
     /// goes, and how much of it shows, out of 255.
-    pub lettering: Vec<(Canvas, i32, i32, u8)>,
+    pub lettering: Vec<Lettered>,
 }
 
 /// The board at one moment, as a picture of `view.size`. `still` holds the garden's own motion
