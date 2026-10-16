@@ -1,6 +1,6 @@
 # The Handler, their trios and their legacy
 
-A plan, written before building (2026-10-16). Desktop makes each Formiga unique; this is how
+A plan, written before building (2026-10-16), with what Jake decided and what Phase 1 became. Desktop makes each Formiga unique; this is how
 Battle makes their competitive lives, and the player's own part as their Handler, unique too,
 without a progression system, a currency or anything that changes how a match is played.
 
@@ -33,10 +33,11 @@ One record, kept by Desktop, extended in place:
 - **Recognition is automatic.** When the three picked are exactly a registered trio's members,
   the match is played as that trio. Nothing is restricted: any three still play normally, and a
   trio gives no advantage.
-- **Changing a trio's members does not rewrite it.** Members are fixed when a trio is formed.
-  "Re-form" starts a new trio (it may keep the name) and the old one is retired with its record
-  intact, shown as "retired" in the trio list. Renaming is free, because the record belongs to
-  the trio's id, not its name.
+- **Changing a trio's members does not rewrite its past** (Jake chose swaps over fixed
+  members). Picking two of a trio's three with someone new offers to put the new one in; the
+  trio keeps its name and one continuing record, and the three it had before are kept as earlier
+  lineups with the day each ended, so a past match is never credited to someone who was not
+  there. Renaming is free, because the record belongs to the trio's id, not its name.
 - **Missing companions**: a trio with someone no longer in the colony stays in the list with that
   place shown empty; it cannot be fielded, and its record stays.
 
@@ -47,7 +48,16 @@ travel in `BattleResult` as the card and trio definitions as they stand, applied
 session's matches; Desktop keeps the records itself, so an edit can never change a tally. Contract
 version 3; Desktop's save goes to v32 with nothing to migrate (absent means "not set up yet").
 
+## Decisions (Jake, 2026-10-16)
+
+Phase 1 goes into 0.67.9 with the Desktop change; visitor matches count on a trio's record,
+kept apart from friend matches; a trio's members may be swapped, with one continuing record.
+
 ## Phase 1 for 0.67.9: the foundation
+
+Built on `battle-handler-identity`, with Desktop's `desktop-battle-handler` (contract version 3,
+save version 32) and the site relay's protocol 3 card. One difference from the table: the trio
+pennant is the Handler's pennant in a colour of the trio's own, not a separate design.
 
 | Piece | Where it shows |
 |---|---|

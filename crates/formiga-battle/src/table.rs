@@ -1415,6 +1415,72 @@ mod tests {
     }
 
     #[test]
+    fn a_trio_named_before_a_match_plays_it_and_desktop_is_told_both() {
+        let dir = std::env::temp_dir().join(format!("formiga-battle-trio-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
+        t.session = Some(Session {
+            directory: dir.clone(),
+            result: BattleResult::new(
+                formiga_battle_contract::SessionId::parse("00000000000000000000000000000000")
+                    .unwrap(),
+                "0".repeat(64),
+                "0.1.0",
+            ),
+        });
+        // Signing a name for a friend makes it the Handler's.
+        assert!(t.record.handler.is_none());
+        let card = crate::identity::card_with_name(&t.record, "Jo").unwrap();
+        t.set_handler(card);
+        let ids: Vec<u64> = t
+            .picked
+            .iter()
+            .map(|&i| t.home[i].0.traveler.id.0)
+            .collect();
+        t.set_trio(crate::identity::named("The Thistle Three", &ids).unwrap());
+        let read = |dir: &std::path::Path| {
+            BattleResult::decode(
+                &std::fs::read(dir.join(formiga_battle_contract::RESULT_FILE)).unwrap(),
+            )
+            .unwrap()
+        };
+        let named = read(&dir);
+        assert!(
+            named.matches.is_empty(),
+            "nothing played yet, and still written"
+        );
+        let registry = named.registry.expect("the card and trio, for Desktop");
+        assert_eq!(registry.handler.unwrap().name, "Jo");
+        assert_eq!(registry.trios[0].name, "The Thistle Three");
+        let card = t.shared_card().expect("a card for a friend");
+        assert_eq!(card.trio.as_deref(), Some("The Thistle Three"));
+        assert_eq!(card.standing.as_deref(), Some("New Handler"));
+
+        t.start(0.0).unwrap();
+        let mut now = 0.0;
+        while !t.finished(now) {
+            t.coach_orders();
+            t.lock(now);
+            now += 20.0;
+            t.frame(now);
+        }
+        assert!(
+            t.earned
+                .iter()
+                .any(|l| l.starts_with("The Thistle Three: 1 played"))
+        );
+        assert_eq!(t.record.trios[0].visitors.played, 1);
+        let written = read(&dir);
+        assert_eq!(
+            written.matches[0].rewards.trio.as_ref().unwrap().id,
+            t.record.trios[0].id
+        );
+        assert!(written.registry.is_some());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn two_tables_play_a_whole_match_through_a_relay() {
         // A relay named in FORMIGA_BATTLE_RELAY, such as the site's, or one of our own.
         let named = std::env::var(formiga_battle_room::RELAY_ENV)

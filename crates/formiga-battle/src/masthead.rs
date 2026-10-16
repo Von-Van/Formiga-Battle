@@ -32,6 +32,8 @@ pub struct Masthead {
     /// The two who face each other, left then right.
     pair: [Option<Look>; 2],
     reduce_motion: bool,
+    /// The Handler's own pennant, flown on the left in place of the team's, once they have one.
+    flag: Option<crate::identity::Style>,
 }
 
 impl Masthead {
@@ -39,7 +41,13 @@ impl Masthead {
         Self {
             pair,
             reduce_motion,
+            flag: None,
         }
+    }
+
+    /// The same picture, with the Handler's pennant flying on the left.
+    pub fn with_flag(self, flag: Option<crate::identity::Style>) -> Self {
+        Self { flag, ..self }
     }
 
     /// Where the ribbon is, for the window to letter the title on.
@@ -168,7 +176,10 @@ impl Masthead {
         );
         // A pennant for each team, flying towards the beacon.
         let spread = (sw * 3 / 10).min(70);
-        pennant(&mut canvas, mid - spread - 24, foot, 1, TEAM[0], t);
+        match self.flag {
+            Some(style) => own_pennant(&mut canvas, mid - spread - 24, foot, style),
+            None => pennant(&mut canvas, mid - spread - 24, foot, 1, TEAM[0], t),
+        }
         pennant(&mut canvas, mid + spread + 24, foot, -1, TEAM[1], t + 1.3);
         // The two companions, facing each other across it; now and then one cheers.
         for (side, look) in self.pair.iter_mut().enumerate() {
@@ -250,6 +261,15 @@ fn pennant(canvas: &mut Canvas, x: i32, foot: i32, toward: i32, team: Ramp, t: f
     paint::put(canvas, x, foot - 27, team.shine);
 }
 
+/// The Handler's own pennant on a garden cane at `x`, flying towards the beacon.
+fn own_pennant(canvas: &mut Canvas, x: i32, foot: i32, style: crate::identity::Style) {
+    paint::ellipse(canvas, x + 1, foot + 1, 2, 1, SHADOW);
+    paint::vline(canvas, x, foot - 26, 26, PLANK.shadow);
+    paint::vline(canvas, x + 1, foot - 25, 25, PLANK.light);
+    paint::put(canvas, x, foot - 27, BRASS.shine);
+    paint::blit(canvas, &crate::pennant::cloth(style), x + 2, foot - 26);
+}
+
 /// The ribbon across the picture's foot, its ends folded back and notched.
 fn ribbon(canvas: &mut Canvas, (x, y, w, h): Area) {
     // The folded-back tails, a shade darker, behind it.
@@ -294,5 +314,12 @@ mod tests {
         assert_eq!(picture.get(x + w / 2, y + h / 2).a, 255);
         let mut lively = Masthead::new([None, None], false);
         assert_ne!(lively.paint(240, 96, 0.0), lively.paint(240, 96, 0.6));
+        let mut flown =
+            Masthead::new([None, None], true).with_flag(Some(crate::identity::Style::default()));
+        assert_ne!(
+            flown.paint(240, 96, 0.0),
+            picture,
+            "the Handler's pennant flies"
+        );
     }
 }

@@ -91,7 +91,7 @@ fn inside(shape: usize, x: i32, y: i32) -> bool {
 /// Where the symbol sits on the cloth: nearer the hoist on a pennon, which narrows.
 fn symbol_at(shape: usize) -> (i32, i32) {
     let x = match shape {
-        0 => 3,
+        0 => 2,
         1 => 6,
         _ => 8,
     };
@@ -157,7 +157,7 @@ pub fn cloth(style: Style) -> Canvas {
         }
     }
     // The symbol, in the colour that reads best on the cloth, with a darker shade under it.
-    let ink = if light_field { ramp.edge } else { ramp.shine };
+    let ink = if light_field { ramp.edge } else { THREAD_LIGHT };
     let shade = if light_field { ramp.light } else { ramp.edge };
     let (sx, sy) = symbol_at(shape);
     let glyph = &GLYPHS[style.symbol % GLYPHS.len()];
