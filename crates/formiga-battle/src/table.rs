@@ -1222,6 +1222,9 @@ mod tests {
         guest.relay = relay.base();
         host.open_room("Jake", None);
         let mut now = 0.0;
+        // Opening a room first fingerprints this program, which takes a while in a debug build
+        // with the other tests busy, so the wait is by the wall clock rather than by the table's.
+        let opened = std::time::Instant::now();
         let code = loop {
             host.poll(now);
             if let Some(code) = host.friend.as_ref().and_then(|f| f.code.clone()) {
@@ -1229,7 +1232,11 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
             now += 0.005;
-            assert!(now < 5.0, "the room opens: {:?}", host.notice);
+            assert!(
+                opened.elapsed().as_secs() < 60,
+                "the room opens: {:?}",
+                host.notice
+            );
         };
         guest.open_room("Friend", Some(&code.to_lowercase()));
         let mut began = [false, false];

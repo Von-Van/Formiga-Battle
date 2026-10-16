@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Battle opens at the Battle Grounds, the first spread of the Handler's notebook. On its left page
+- Battle opens at the Battleground, the first spread of the Handler's notebook. On its left page
   the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
   it, a face at each window, and a coach more for every three past six. On its right, two railway
   tickets: Out in the World, to play a friend online, and Close to Home, to play the visiting team

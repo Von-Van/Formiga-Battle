@@ -1,4 +1,4 @@
-//! Getting ready, before a match: the Battle Grounds, where the train brings the companions in, and the
+//! Getting ready, before a match: the Battleground, where the train brings the companions in, and the
 //! notebook's pages after it, turned one by one as Desktop's journal turns its pages. Where to
 //! play, then who goes and, for a friend, the room: open one and pass on its code, or join theirs.
 //! Each page is a spread: what it is about on the left, and on the ruled right page what is
@@ -25,7 +25,7 @@ const STATION_ROWS: f32 = 216.0;
 /// How often the station is repainted while anything moves at it.
 const STATION_FRAMES_PER_SECOND: f32 = 30.0;
 /// The station's name, lettered on its board.
-const GROUNDS: &str = "The Battle Grounds";
+const BATTLEGROUND: &str = "The Battleground";
 
 /// How long after a page starts turning its cards start dropping onto it: once the leaf is
 /// mostly over.
@@ -268,7 +268,7 @@ impl BattleApp {
         }
     }
 
-    /// The station's left page: the Battle Grounds as a big picture pasted onto it, the train
+    /// The station's left page: the Battleground as a big picture pasted onto it, the train
     /// coming in with the companions at its windows. A click on it hurries the train in.
     pub(super) fn station_left(
         &mut self,
@@ -361,10 +361,10 @@ impl BattleApp {
         let board = Rect::from_min_max(at(sx, sy), at(sx + sw, sy + sh));
         let maroon = Color32::from_rgb(0x7a, 0x2c, 0x33);
         let mut letters = (board.height() * 0.42).clamp(8.0, 18.0);
-        let mut lettering = painter.layout_job(label_job(GROUNDS, letters, maroon));
+        let mut lettering = painter.layout_job(label_job(BATTLEGROUND, letters, maroon));
         while lettering.size().x > board.width() * 0.88 && letters > 7.0 {
             letters -= 0.5;
-            lettering = painter.layout_job(label_job(GROUNDS, letters, maroon));
+            lettering = painter.layout_job(label_job(BATTLEGROUND, letters, maroon));
         }
         painter.galley(
             board.center() - lettering.size() / 2.0 + vec2(0.0, u * 0.5),
@@ -389,7 +389,12 @@ impl BattleApp {
         } else {
             "Your companions are coming in on the train. Click the picture to hurry it along."
         };
-        chrome::page_heading(ui, "Formiga Battle · the station", GROUNDS, observation);
+        chrome::page_heading(
+            ui,
+            "Formiga Battle · the station",
+            BATTLEGROUND,
+            observation,
+        );
         ui.add_space(u * 8.0);
         let width = ui.available_width();
         let h = 96.0;
