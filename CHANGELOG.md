@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The Handler's things are painted as the notebook's other pictures are. A pennant is chosen
+  from sample tiles of cloth (its cut, cloth, symbol and edge) and stirs on its cane in a tuft of
+  grass; the Handler's title is engraved on a brass plate, with a ribbon rosette for each cup won
+  and a pencilled one for each still to win; each trio is a team picture taped into the
+  notebook, its three on a strip of lawn by their pennant with their name on a ribbon, faded once
+  retired; and a match opens under a ribbon strung between the two sides' pennants.
 - Your Handler, your trios and their records. "Your Handler & history" at the station opens the
   Handler's own page first: sign your name, add a club if you like, and choose a pennant from
   three cuts, eight cloths, twelve symbols and three trims, painted at the notebook's pixel. Your
