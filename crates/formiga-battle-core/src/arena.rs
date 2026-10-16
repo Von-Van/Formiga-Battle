@@ -69,7 +69,7 @@ pub enum Effect {
     /// Pushed one tile toward the middle row of the board, onto open ground off the event's tiles,
     /// and off balance; off balance where it stands if there is nowhere to go.
     Wash,
-    /// The tiles go under: nobody can stand on them until the end of the next turn. Anyone on
+    /// The tiles go under: nobody can stand on them for the rest of the turn. Anyone on
     /// them is washed off first.
     Close,
 }
@@ -84,7 +84,7 @@ pub struct Scenery {
     /// The tiles it lands on, the same ones every time, so a Handler can learn them. Empty when
     /// it lands round the switch that set it off.
     pub tiles: Vec<Tile>,
-    /// It lands on the open tiles round a switch, corner to corner, rather than on `tiles`: by
+    /// It lands on the open tiles touching a switch, rather than on `tiles`: by
     /// itself on a mirrored pair of switches drawn at random.
     #[serde(default)]
     pub around: bool,
@@ -439,7 +439,7 @@ impl Arena {
     pub fn in_scenery(&self, tile: Tile) -> bool {
         self.scenery.as_ref().is_some_and(|s| {
             if s.around {
-                self.terrain(tile) == Terrain::Open && self.switches.iter().any(|w| w.beside(tile))
+                self.terrain(tile) == Terrain::Open && self.switches.iter().any(|w| w.touches(tile))
             } else {
                 s.tiles.contains(&tile)
             }
@@ -447,13 +447,13 @@ impl Arena {
     }
 
     /// Where the map event lands when these switches set it off: its own tiles, or the open
-    /// ground round each switch, corner to corner, in reading order.
+    /// ground touching each switch, in reading order.
     pub fn scenery_tiles(&self, switches: &[Tile]) -> Vec<Tile> {
         match &self.scenery {
             Some(s) if s.around => self
                 .tiles()
                 .filter(|t| {
-                    self.terrain(*t) == Terrain::Open && switches.iter().any(|w| w.beside(*t))
+                    self.terrain(*t) == Terrain::Open && switches.iter().any(|w| w.touches(*t))
                 })
                 .collect(),
             Some(s) => s.tiles.clone(),

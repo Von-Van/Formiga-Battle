@@ -360,7 +360,7 @@ fn a_wave_washes_whoever_stands_on_the_sandbars_ends_toward_the_middle_of_the_be
 }
 
 #[test]
-fn the_pond_rises_over_the_jettys_sides_for_a_turn_washing_off_whoever_is_there() {
+fn the_pond_rises_over_the_jettys_sides_for_the_rest_of_the_turn_washing_off_whoever_is_there() {
     let arena = Arena::by_id("millpond").unwrap();
     let tiles = arena.scenery_tiles(&[]);
     let mut m = board_on(arena, &[(L0, (3, 3)), (R0, (8, 5))]);
@@ -368,8 +368,6 @@ fn the_pond_rises_over_the_jettys_sides_for_a_turn_washing_off_whoever_is_there(
     m.resolve_orders(orders(&[(L0, hold(3, 3)), (R0, hold(8, 5))]));
     assert_eq!(at(&m, L0), (3, 2));
     assert!(!m.walkable(Tile::new(3, 3)) && !m.walkable(Tile::new(5, 3)));
-    m.resolve_orders(orders(&[(L0, hold(3, 2)), (R0, hold(8, 5))]));
-    assert!(!m.walkable(Tile::new(3, 3)), "under through the turn after");
     let report = m.resolve_orders(orders(&[(L0, hold(3, 2)), (R0, hold(8, 5))]));
     assert!(
         kinds(&report)
@@ -400,14 +398,23 @@ fn a_twig_thrown_in_the_millpond_floats_as_a_raft_anyone_can_stand_on() {
 fn shaking_a_tree_bonks_whoever_stands_round_it_and_drops_a_twig_beside_it() {
     let mut m = board_on(
         Arena::by_id("woodland").unwrap(),
-        &[(L0, (2, 2)), (R0, (0, 1))],
+        &[(L0, (2, 2)), (R0, (1, 1))],
     );
-    let report = m.resolve_orders(orders(&[(L0, tap(1, 2)), (R0, hold(0, 1))]));
+    let report = m.resolve_orders(orders(&[(L0, tap(1, 2)), (R0, walk(1, 1))]));
     let (hit, _) = landed(&report).expect("the acorns fall");
     assert_eq!(hit, vec![L0, R0]);
-    assert!(m.board.ground.contains(&(Tile::new(1, 1), Item::Twig)));
+    // The first free tile beside it, from the far side: under R0, who picks it straight up.
+    assert_eq!(m.fighter(R0).carrying, Some(Item::Twig));
     let mirrored = m.arena.scenery_tiles(&[Tile::new(7, 2)]);
-    assert!(mirrored.contains(&Tile::new(8, 1)) && mirrored.contains(&Tile::new(6, 2)));
+    assert_eq!(
+        mirrored,
+        vec![
+            Tile::new(7, 1),
+            Tile::new(6, 2),
+            Tile::new(8, 2),
+            Tile::new(7, 3)
+        ]
+    );
 }
 
 #[test]
