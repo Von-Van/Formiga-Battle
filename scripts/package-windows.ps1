@@ -37,6 +37,7 @@ try {
     $Icon = Join-Path $IconDir "FormigaBattle.ico"
     if ($env:FORMIGA_SIGNTOOL_CERT_SHA1) {
         signtool sign /sha1 $env:FORMIGA_SIGNTOOL_CERT_SHA1 /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $Exe
+        if ($LASTEXITCODE -ne 0) { throw "signtool sign failed for the program" }
     }
     New-Item -ItemType Directory -Force $DistDir | Out-Null
     if (Test-Path $PortableDir) { Remove-Item -Recurse -Force $PortableDir }
@@ -61,6 +62,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "wix build failed" }
         if ($env:FORMIGA_SIGNTOOL_CERT_SHA1) {
             signtool sign /sha1 $env:FORMIGA_SIGNTOOL_CERT_SHA1 /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $Installer
+            if ($LASTEXITCODE -ne 0) { throw "signtool sign failed for the installer" }
         }
         Write-Checksum $Installer
     }
