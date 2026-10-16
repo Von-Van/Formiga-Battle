@@ -14,8 +14,62 @@ use time::OffsetDateTime;
 pub const BACKYARD_CUP: &str = "cup.backyard";
 /// What winning the Backyard Cup unlocks.
 pub const WOODLAND_CUP: &str = "cup.woodland";
-/// Wins against the AI that win the Backyard Cup.
+/// Wins against the AI that win a cup.
 pub const CUP_WINS: u8 = 3;
+
+/// A cup of the Championship Circuit, played against the visitors on its own arena.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Cup {
+    /// Its id in Desktop's record, which is also what unlocks it.
+    pub id: &'static str,
+    /// The arena it is played on.
+    pub arena: &'static str,
+    pub name: &'static str,
+    /// Its trophy and medal, for Home's shelf.
+    pub keepsakes: [&'static str; 2],
+}
+
+/// The cups in the order they open: the Backyard Cup from the start, and each one after it once
+/// the one before is won.
+pub const CUPS: [Cup; 3] = [
+    Cup {
+        id: BACKYARD_CUP,
+        arena: "backyard",
+        name: "Backyard Cup",
+        keepsakes: ["battle.trophy.backyard_cup", "battle.medal.backyard_cup"],
+    },
+    Cup {
+        id: WOODLAND_CUP,
+        arena: "woodland",
+        name: "Woodland Cup",
+        keepsakes: ["battle.trophy.woodland_cup", "battle.medal.woodland_cup"],
+    },
+    Cup {
+        id: "cup.millpond",
+        arena: "millpond",
+        name: "Millpond Cup",
+        keepsakes: ["battle.trophy.millpond_cup", "battle.medal.millpond_cup"],
+    },
+];
+
+/// The cup played on an arena, if any.
+pub fn cup_for(arena: &str) -> Option<&'static Cup> {
+    CUPS.iter().find(|c| c.arena == arena)
+}
+
+/// Whether a cup is open to play: the first always, any other once it is unlocked.
+pub fn is_open(cup: &Cup, record: &BattleRecord) -> bool {
+    cup.id == CUPS[0].id || record.unlocked.iter().any(|u| u == cup.id)
+}
+
+/// The arenas open for a match against the visitors, in the order their cups open. Friend
+/// matches may be played on any arena that comes with Battle.
+pub fn open_to_play(record: &BattleRecord) -> Vec<&'static str> {
+    CUPS.iter()
+        .filter(|c| is_open(c, record))
+        .map(|c| c.arena)
+        .collect()
+}
 
 /// Points for finishing a match with a friend, and more for winning or drawing it.
 const FINISHED_POINTS: u32 = 10;
@@ -183,45 +237,61 @@ pub fn friend_match(
     }
 }
 
-/// What a match against the AI earns.
+/// What a match against the AI earns. A win counts toward the cup played on the match's arena,
+/// if that cup is open; the third wins it, with its trophy and medal, and opens the next.
 pub fn ai_match(m: &Match, you: Side, record: &BattleRecord) -> Earned {
     let won = m.outcome().and_then(|o| o.winner) == Some(you);
     let team = names(m, you);
+    let cup = cup_for(&m.arena.id).filter(|c| is_open(c, record));
+    let place = cup.map_or("Backyard", |c| c.name.trim_end_matches(" Cup"));
     let mut rewards = Rewards::default();
     let mut lines = Vec::new();
-    if won {
-        rewards.cup_win = Some(BACKYARD_CUP.to_owned());
-        let wins = record.cup_wins(BACKYARD_CUP).saturating_add(1);
-        rewards.journal.push(format!(
-            "{team} won a Backyard Cup match against the visitors."
-        ));
-        lines.push(format!(
-            "Backyard Cup: {} of {CUP_WINS} wins",
-            wins.min(CUP_WINS)
-        ));
-        if wins == CUP_WINS && !record.unlocked.iter().any(|u| u == WOODLAND_CUP) {
-            rewards.unlocks.push(WOODLAND_CUP.to_owned());
-            rewards
-                .journal
-                .push(format!("{team} won the Backyard Cup!"));
-            rewards
-                .keepsakes
-                .push("battle.trophy.backyard_cup".to_owned());
-            rewards
-                .keepsakes
-                .push("battle.medal.backyard_cup".to_owned());
-            lines.push("Won the Backyard Cup: a trophy and a medal for the shelf".to_owned());
-            lines.push("Unlocked the Woodland Cup".to_owned());
+    match (won, cup) {
+        (true, Some(cup)) => {
+            rewards.cup_win = Some(cup.id.to_owned());
+            let wins = record.cup_wins(cup.id).saturating_add(1);
+            rewards.journal.push(format!(
+                "{team} won a {} match against the visitors.",
+                cup.name
+            ));
+            lines.push(format!(
+                "{}: {} of {CUP_WINS} wins",
+                cup.name,
+                wins.min(CUP_WINS)
+            ));
+            if wins == CUP_WINS {
+                rewards
+                    .journal
+                    .push(format!("{team} won the {}!", cup.name));
+                rewards
+                    .keepsakes
+                    .extend(cup.keepsakes.iter().map(|k| (*k).to_owned()));
+                lines.push(format!(
+                    "Won the {}: a trophy and a medal for the shelf",
+                    cup.name
+                ));
+                let next = CUPS
+                    .iter()
+                    .skip_while(|c| c.id != cup.id)
+                    .nth(1)
+                    .filter(|next| !record.unlocked.iter().any(|u| u == next.id));
+                if let Some(next) = next {
+                    rewards.unlocks.push(next.id.to_owned());
+                    lines.push(format!("Unlocked the {}", next.name));
+                }
+            }
         }
-    } else {
-        rewards.journal.push(format!(
-            "{team} played the visitors in the Backyard{}",
+        (true, None) => rewards.journal.push(format!(
+            "{team} won a match against the visitors in the {place}."
+        )),
+        (false, _) => rewards.journal.push(format!(
+            "{team} played the visitors in the {place}{}",
             if m.outcome().and_then(|o| o.winner).is_none() {
                 " and drew."
             } else {
                 ", and had fun losing."
             }
-        ));
+        )),
     }
     lines.push("A journal entry for your colony".to_owned());
     Earned {
@@ -339,5 +409,42 @@ mod tests {
         assert!(record.unlocked.iter().any(|u| u == WOODLAND_CUP));
         assert_eq!(record.circuit_points, 0, "the AI never gives points");
         assert!(record.notebook.is_empty(), "nor notebook entries");
+    }
+
+    /// A match won by the left team on an arena, standing in for one played there.
+    fn won_on(arena: &str, seed: u64) -> Match {
+        let (mut m, _) = played(seed);
+        m.arena.id = arena.to_owned();
+        m.board.outcome = Some(formiga_battle_core::Outcome {
+            winner: Some(Side::Left),
+            victory: Some(Victory::Capture),
+            turn: 5,
+        });
+        m
+    }
+
+    #[test]
+    fn each_cup_opens_the_next_and_a_locked_one_counts_for_nothing_yet() {
+        let mut record = BattleRecord::default();
+        assert_eq!(open_to_play(&record), vec!["backyard"]);
+        // The Woodland Cup is not open: a win there earns a journal line and nothing toward it.
+        let earned = ai_match(&won_on("woodland", 1), Side::Left, &record);
+        assert!(earned.result.rewards.cup_win.is_none());
+        assert!(!earned.result.rewards.journal.is_empty());
+        for (i, cup) in CUPS.iter().enumerate() {
+            for n in 0..CUP_WINS {
+                let earned = ai_match(&won_on(cup.arena, u64::from(n)), Side::Left, &record);
+                assert_eq!(earned.result.rewards.cup_win.as_deref(), Some(cup.id));
+                checks_out(earned.result.clone());
+                record.apply(&earned.result);
+            }
+            assert_eq!(record.cup_wins(cup.id), CUP_WINS);
+            assert_eq!(open_to_play(&record).len(), (i + 2).min(CUPS.len()));
+        }
+        // A fourth win in a cup already won adds a win and nothing else.
+        let earned = ai_match(&won_on("backyard", 9), Side::Left, &record);
+        assert!(
+            earned.result.rewards.unlocks.is_empty() && earned.result.rewards.keepsakes.is_empty()
+        );
     }
 }

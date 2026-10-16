@@ -28,6 +28,7 @@ fn entrant(seed: u8, handler: &str) -> Entrant {
         handler: handler.to_owned(),
         bonds: bonds_among(&roster, &team),
         team,
+        arena: "backyard".to_owned(),
     }
 }
 
@@ -624,6 +625,34 @@ fn a_body_too_big_to_read_is_answered_with_a_refusal_rather_than_a_reset() {
     stream.read_to_string(&mut answer).unwrap();
     assert!(answer.starts_with("HTTP/1.1 400"), "{answer}");
     relay.stop();
+}
+
+#[test]
+fn the_opener_s_arena_reaches_both_sides_and_a_badly_named_one_is_turned_away() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let mut opener = entrant(0, "Jake");
+    opener.arena = "woodland".to_owned();
+    let (code, host) = seated(relay.handle(Request::Open { entrant: opener }, 0));
+    relay.handle(
+        Request::Join {
+            code: code.clone(),
+            entrant: entrant(9, "Friend"),
+        },
+        10,
+    );
+    let v = viewed(relay.handle(Request::Look { code, seat: host }, 20));
+    let [a, b] = v.entrants.expect("both are in");
+    assert_eq!(
+        (a.arena.as_str(), b.arena.as_str()),
+        ("woodland", "backyard")
+    );
+
+    let mut odd = entrant(0, "Jake");
+    odd.arena = "Back Yard!".to_owned();
+    assert_eq!(
+        refusal(relay.handle(Request::Open { entrant: odd }, 30)),
+        Refusal::Malformed
+    );
 }
 
 #[test]

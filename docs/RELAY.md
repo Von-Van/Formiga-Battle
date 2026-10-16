@@ -26,12 +26,15 @@ and 256 KiB out. Every answer carries `Cache-Control: no-store`. The seat travel
 A code is six characters from `34679ACDEFGHJKMNPQRTUVWXY`, read generously (any case; spaces and
 dashes ignored). A seat is 32 lowercase hex digits from a cryptographic random source.
 
-An **Entrant** is `{"protocol": 2, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3]}`.
+An **Entrant** is `{"protocol": 2, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3], "arena": "backyard"}`.
 An entrant with any other numeric `protocol` is refused `version` before anything else about it is
 read, so an older Battle is told to update rather than that it was not understood. Otherwise the
 relay checks `protocol == 2`, three contenders and at most three bonds, and trims `handler` to
 at most 24 printable characters ("A Handler" if empty). A joiner's `rules_version` must equal the
-opener's. It does not look inside the contenders.
+opener's. It does not look inside the contenders. `arena` (`"backyard"` when missing) is the id of
+one of the arenas that come with Battle: 1 to 32 characters of lowercase letters, digits, `_` and
+`-`, anything else malformed. The relay passes it on as it is; the opener's is the room's, and
+both windows build the match on it, refusing an id their Battle does not have.
 
 A **Build** is `{"battle": "0.1.0", "desktop": "0.67.7" or null, "digest": "…"}`: Battle's
 version, the version of the Desktop that opened it (`null` in a rehearsal), and the SHA-256 of

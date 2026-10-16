@@ -93,6 +93,26 @@ pub struct Entrant {
     pub team: Vec<Contender>,
     #[serde(default)]
     pub bonds: Vec<TravelRelationship>,
+    /// The arena to play on, by id, from the ones that come with Battle. The opener's is the
+    /// room's; a joiner's says nothing.
+    #[serde(default = "backyard")]
+    pub arena: String,
+}
+
+fn backyard() -> String {
+    "backyard".to_owned()
+}
+
+/// The most characters an arena id may have.
+pub const MAX_ARENA_CHARS: usize = 32;
+
+/// An arena id as Battle names one: lowercase letters, digits, `_` and `-`.
+pub fn arena_id_well_formed(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= MAX_ARENA_CHARS
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-'))
 }
 
 /// One locked turn: the orders each side sent, `None` for any not given in time.
@@ -388,7 +408,7 @@ impl Relay {
                 reason: "a team is three companions".to_owned(),
             });
         }
-        if !entrant.build.well_formed() {
+        if !entrant.build.well_formed() || !arena_id_well_formed(&entrant.arena) {
             return Err(Refusal::Malformed);
         }
         if !self.released.admits(&entrant.build) {

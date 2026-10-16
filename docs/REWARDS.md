@@ -29,8 +29,8 @@ both are in, the match earns nothing. A match ended by a forfeit counts as it st
 
 | | |
 |---|---|
-| Backyard Cup | Each win counts toward the cup. The third wins it: a trophy and a medal (`battle.trophy.backyard_cup`, `battle.medal.backyard_cup`), and the Woodland Cup unlocks (`cup.woodland`) |
-| Journal | A line for every match: "Mochi, Biscuit and Fig won a Backyard Cup match against the visitors.", and one for winning the cup |
+| Cups | Each cup is played on its own arena: the Backyard Cup in the Backyard, open from the start; the Woodland Cup (`cup.woodland`) on Woodland Glade; the Millpond Cup (`cup.millpond`) on Millpond. A win counts toward the cup of the arena it was played on, if that cup is open. The third wins it: a trophy and a medal (`battle.trophy.<arena>_cup`, `battle.medal.<arena>_cup`), and the next cup unlocks under its id. The visitors play only on arenas whose cup is open; friend matches may be played on any arena |
+| Journal | A line for every match: "Mochi, Biscuit and Fig won a Backyard Cup match against the visitors.", and one for winning a cup |
 
 ## The contract
 

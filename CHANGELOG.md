@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A cup for each arena: the Backyard Cup opens the Woodland Cup on Woodland Glade, and that opens
+  the Millpond Cup on Millpond, each won by three wins there with its own trophy and medal. A
+  friend match is played on the arena the Handler who opened the room picked.
 - A friend match earns only once the relay confirms both windows came to the same board after its
   last turn: a match whose boards first differ on the last turn no longer counts on one side. A
   room its opener leaves before anyone joins closes at once, and the development relay answers a

@@ -311,6 +311,10 @@ impl Table {
     /// Puts both teams on the board. Fails only if a look cannot be drawn.
     pub fn start(&mut self, now: f32) -> anyhow::Result<()> {
         anyhow::ensure!(self.picked.len() == TEAM_SIZE, "pick three");
+        // The visitors play only on arenas whose cup is open; anywhere else, the Backyard.
+        if !rewards::open_to_play(&self.record).contains(&self.arena.id.as_str()) {
+            self.arena = Arena::backyard();
+        }
         let away = self.opponents();
         anyhow::ensure!(
             away.len() == TEAM_SIZE,
@@ -400,6 +404,7 @@ impl Table {
             handler: handler.trim().to_owned(),
             team,
             bonds,
+            arena: self.arena.id.clone(),
         };
         self.friend = Some(Friend {
             line: Line::start(self.relay.clone(), entrant, code.map(str::to_owned)),
@@ -526,9 +531,18 @@ impl Table {
                 self.leave_room();
                 return false;
             }
+            // The opener's arena, which both Battles must have: they are the same version.
+            let Some(arena) = Arena::by_id(&a.arena) else {
+                self.notice = Some(
+                    "Your friend picked an arena this Battle does not have; both need the newest."
+                        .to_owned(),
+                );
+                self.leave_room();
+                return false;
+            };
             let handlers = [a.handler.clone(), b.handler.clone()];
             match room_match(
-                Arena::backyard(),
+                arena,
                 view.ruleset,
                 view.seed,
                 [&a.team, &b.team],
