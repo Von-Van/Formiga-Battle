@@ -1,8 +1,9 @@
 // Millpond: a meadow by the mill, with the beacon on a jetty above the water. A channel cuts the
 // far lane, crossed only by a footbridge the winch on the near bank lowers and raises; the
 // pond's two arms flank the jetty, so the way onto it is from the near side or round the ends.
-// On the fifth and tenth turns the pond rises over the jetty's two sides, leaving the yard a
-// single line for the rest of the turn; a sluice on each bank lets it in early. A twig thrown in the
+// On the fifth and tenth turns the pond rises over the banks either side of the jetty, the four
+// tiles from which its sides are come at, for the rest of the turn; a sluice on each bank lets it
+// in early. A twig thrown in the
 // water floats there for a turn as a raft.
 id: millpond
 name: Millpond
@@ -11,7 +12,7 @@ cooldown_turns: 1
 water: yes
 event: close
 event_name: pond
-event_tiles: 3,3 5,3
+event_tiles: 3,2 5,2 3,4 5,4
 event_first: 5
 event_every: 5
 switch_rest: 2
