@@ -202,6 +202,11 @@ impl Playback {
         }
     }
 
+    /// Each event and when it happens, in seconds from the start: what the announcer reads.
+    pub fn moments(&self) -> &[(f32, Event)] {
+        &self.timed
+    }
+
     /// How long the whole turn takes to show.
     pub fn duration(&self) -> f32 {
         REVEAL_SECS + f32::from(self.ticks) * TICK_SECS + HOLD_SECS

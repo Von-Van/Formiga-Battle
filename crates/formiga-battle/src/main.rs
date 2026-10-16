@@ -1,6 +1,7 @@
 //! Formiga Battle: 3v3 simultaneous-order tactics for Formiga Desktop's companions. With no
 //! command it opens the window; the headless commands are in `cli`.
 
+mod announce;
 mod app;
 mod chrome;
 mod cli;
@@ -13,6 +14,7 @@ mod look;
 mod playback;
 mod rewards;
 mod scene;
+mod sound;
 mod table;
 
 use anyhow::{Context, Result, bail};
@@ -44,7 +46,8 @@ WINDOW:
                              every turn locked at once; the default) or notebook (the sample
                              colony's notebook, as Desktop would send it, open) or room (a room
                              opened on the relay, its code showing; FORMIGA_BATTLE_RELAY points
-                             at a local one from `formiga-battle relay`)
+                             at a local one from `formiga-battle relay`) or account (as
+                             playing, with the whole match open)
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
                              (default 0), at --scale (default 3), --into seconds into the
                              turn after (default: still)
@@ -131,6 +134,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "playing" => app::Review::Playing,
                     "notebook" => app::Review::Notebook,
                     "room" => app::Review::Room,
+                    "account" => app::Review::Account,
                     other => bail!("unknown stage {other:?}"),
                 }
             }
@@ -208,7 +212,15 @@ fn window(args: Vec<String>) -> Result<()> {
         options,
         Box::new(move |cc| {
             cc.egui_ctx.set_theme(eframe::egui::ThemePreference::Dark);
-            Ok(Box::new(app::BattleApp::new(host, table, review, snap)))
+            // A window opened only for its picture plays nothing.
+            let sound = if reviewing {
+                sound::Sound::silent()
+            } else {
+                sound::Sound::open()
+            };
+            Ok(Box::new(app::BattleApp::new(
+                host, table, review, snap, sound,
+            )))
         }),
     )
     .map_err(|error| anyhow::anyhow!("the window could not open: {error}"))

@@ -1,0 +1,678 @@
+//! Every effect in Battle, as a cue: what happened, and the sound it makes. Each is a cheerful
+//! placeholder made in code from the synthesiser's parts, cartoon rather than real (a hit is a
+//! thump with a spring in it, a knockout a boom and a few tweeting birds), until real audio
+//! replaces it.
+//!
+//! A cue played again and again (a step, a pow, the clock's tock) comes out a little different
+//! each time, but the `n`th time is always the same, so every sound can be listened to in a test.
+
+use super::synth::{
+    BAR, BLOCK, CHIME, DcBlock, METAL, Noise, Phase, Smooth, Struck, Svf, ease, hz as note_hz,
+    reed, sine, strike, swell, triangle,
+};
+
+/// Something that makes a sound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Cue {
+    // The window's own controls, used sparingly.
+    /// A button pressed.
+    Click,
+    /// A companion chosen for the team, or a page opened.
+    Pick,
+    /// A companion let go from the team, or a page closed.
+    Unpick,
+    /// One of the Handler's three picked out on the board.
+    Select,
+    /// An order given.
+    Order,
+    /// An order or a choice let go.
+    Cancel,
+    /// The orders locked in.
+    Lock,
+    /// The turn begins to play out.
+    Reveal,
+    /// The timer's last seconds.
+    Tick,
+    /// The referee's whistle: a match begins.
+    Whistle,
+
+    // The board, as the turn plays out.
+    /// A soft footstep.
+    Step,
+    /// Caught on the move.
+    Pow,
+    /// A contest turned away by someone holding firm.
+    Clang,
+    /// A hold broken from two sides.
+    Wham,
+    /// Knocked out, dizzy.
+    Boom,
+    /// Two caught up in a scuffle.
+    Scuffle,
+    /// Two wanting the same tile.
+    Boink,
+    /// Hanging back.
+    Hmm,
+    /// The lever yanked.
+    Clunk,
+    /// A gate swinging.
+    Creak,
+    /// The lever guarded: shooed off.
+    Shoo,
+    /// The beacon warming.
+    Glow,
+    /// The beacon held by both.
+    Contested,
+    /// The beacon lit.
+    Fwoosh,
+
+    // The end of a match.
+    /// A win.
+    Fanfare,
+    /// A loss: the sad trombone, kindly.
+    Womp,
+    /// A draw: a shrug.
+    Shrug,
+}
+
+impl Cue {
+    pub const ALL: [Cue; 27] = [
+        Cue::Click,
+        Cue::Pick,
+        Cue::Unpick,
+        Cue::Select,
+        Cue::Order,
+        Cue::Cancel,
+        Cue::Lock,
+        Cue::Reveal,
+        Cue::Tick,
+        Cue::Whistle,
+        Cue::Step,
+        Cue::Pow,
+        Cue::Clang,
+        Cue::Wham,
+        Cue::Boom,
+        Cue::Scuffle,
+        Cue::Boink,
+        Cue::Hmm,
+        Cue::Clunk,
+        Cue::Creak,
+        Cue::Shoo,
+        Cue::Glow,
+        Cue::Contested,
+        Cue::Fwoosh,
+        Cue::Fanfare,
+        Cue::Womp,
+        Cue::Shrug,
+    ];
+
+    /// Its name, for a file of it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Cue::Click => "click",
+            Cue::Pick => "pick",
+            Cue::Unpick => "unpick",
+            Cue::Select => "select",
+            Cue::Order => "order",
+            Cue::Cancel => "cancel",
+            Cue::Lock => "lock",
+            Cue::Reveal => "reveal",
+            Cue::Tick => "tick",
+            Cue::Whistle => "whistle",
+            Cue::Step => "step",
+            Cue::Pow => "pow",
+            Cue::Clang => "clang",
+            Cue::Wham => "wham",
+            Cue::Boom => "boom",
+            Cue::Scuffle => "scuffle",
+            Cue::Boink => "boink",
+            Cue::Hmm => "hmm",
+            Cue::Clunk => "clunk",
+            Cue::Creak => "creak",
+            Cue::Shoo => "shoo",
+            Cue::Glow => "glow",
+            Cue::Contested => "contested",
+            Cue::Fwoosh => "fwoosh",
+            Cue::Fanfare => "fanfare",
+            Cue::Womp => "womp",
+            Cue::Shrug => "shrug",
+        }
+    }
+
+    /// Its place in `ALL`.
+    pub fn index(self) -> usize {
+        Cue::ALL
+            .iter()
+            .position(|cue| *cue == self)
+            .unwrap_or_default()
+    }
+
+    /// The least time between two of it, so a crowd of them is heard as a patter and not a roar.
+    pub fn spacing(self) -> f32 {
+        match self {
+            Cue::Step => 0.09,
+            Cue::Click | Cue::Tick => 0.05,
+            Cue::Pow | Cue::Clang | Cue::Boink => 0.08,
+            Cue::Glow | Cue::Hmm => 0.15,
+            _ => 0.0,
+        }
+    }
+
+    /// How loud it is beside the others: the controls and the footsteps are kept small.
+    fn level(self) -> f32 {
+        match self {
+            Cue::Step => 0.18,
+            Cue::Click | Cue::Tick => 0.3,
+            Cue::Select | Cue::Order | Cue::Cancel | Cue::Pick | Cue::Unpick => 0.38,
+            Cue::Hmm | Cue::Glow => 0.4,
+            _ => 0.6,
+        }
+    }
+
+    /// The sound, the `variation`th time it is played, made at `rate` samples a second.
+    pub fn voice(self, variation: u32, rate: f32) -> Voice {
+        let seed = variation
+            .wrapping_mul(0x9e37_79b9)
+            .wrapping_add(self.index() as u32 * 7919);
+        // A little higher or lower each time, in five steps either side of the note.
+        let vary = 1.0 + (seed % 9) as f32 * 0.012 - 0.048;
+        let voice = match self {
+            Cue::Click => struck(rate, BLOCK, &[(0.0, 1900.0 * vary, 1.0)], 0.08),
+            Cue::Pick => struck(rate, BAR, &[(0.0, n(84.0), 0.8), (0.07, n(91.0), 1.0)], 0.5),
+            Cue::Unpick => struck(rate, BAR, &[(0.0, n(79.0), 0.9), (0.07, n(72.0), 0.8)], 0.5),
+            Cue::Select => glide(rate, 520.0, 780.0, 0.07, 0.1, 0.3),
+            Cue::Order => struck(
+                rate,
+                CHIME,
+                &[(0.0, n(79.0), 0.8), (0.05, n(86.0), 0.6)],
+                0.6,
+            ),
+            Cue::Cancel => glide(rate, 700.0, 330.0, 0.12, 0.12, 0.3),
+            Cue::Lock => lock(rate, seed),
+            Cue::Reveal => slide_whistle(rate, seed, 620.0, 1500.0, 0.36),
+            Cue::Tick => struck(rate, BLOCK, &[(0.0, 1250.0 * vary, 1.0)], 0.1),
+            Cue::Whistle => whistle(rate, seed),
+            Cue::Step => step(rate, seed, vary),
+            Cue::Pow => pow(rate, seed, vary),
+            Cue::Clang => clang(rate, seed, vary),
+            Cue::Wham => wham(rate, seed),
+            Cue::Boom => boom(rate, seed),
+            Cue::Scuffle => scuffle(rate, seed),
+            Cue::Boink => boink(rate, vary),
+            Cue::Hmm => horn(rate, &[(0.0, 0.16, 64.0), (0.2, 0.28, 67.0)], 1500.0, 0.5),
+            Cue::Clunk => clunk(rate),
+            Cue::Creak => creak(rate, seed),
+            Cue::Shoo => whoosh(rate, seed, 0.32, 3200.0),
+            Cue::Glow => struck(
+                rate,
+                CHIME,
+                &[
+                    (0.0, n(88.0) * vary, 0.6),
+                    (0.06, n(91.0) * vary, 0.5),
+                    (0.12, n(95.0) * vary, 0.45),
+                ],
+                0.9,
+            ),
+            Cue::Contested => horn(rate, &[(0.0, 0.14, 69.0), (0.19, 0.3, 65.0)], 1800.0, 0.6),
+            Cue::Fwoosh => fwoosh(rate, seed),
+            Cue::Fanfare => fanfare(rate),
+            Cue::Womp => womp(rate),
+            Cue::Shrug => struck(rate, BAR, &[(0.0, n(76.0), 0.9), (0.18, n(72.0), 0.8)], 0.7),
+        };
+        voice.louder(self.level())
+    }
+}
+
+fn n(note: f32) -> f32 {
+    note_hz(note)
+}
+
+/// How long the last part of every sound takes to fade to nothing, so none ends on a click.
+const FADE_SECS: f32 = 0.006;
+
+/// One sound playing: made a sample at a time until it is over.
+pub struct Voice {
+    rate: f32,
+    made: usize,
+    length: usize,
+    loudness: f32,
+    dc: DcBlock,
+    make: Box<dyn FnMut(f32) -> f32 + Send>,
+}
+
+impl Voice {
+    fn new(rate: f32, seconds: f32, make: impl FnMut(f32) -> f32 + Send + 'static) -> Self {
+        Self {
+            rate,
+            made: 0,
+            length: (seconds * rate) as usize,
+            loudness: 1.0,
+            dc: DcBlock::new(rate),
+            make: Box::new(make),
+        }
+    }
+
+    /// The same sound, `by` as loud.
+    pub fn louder(mut self, by: f32) -> Self {
+        self.loudness *= by.max(0.0);
+        self
+    }
+
+    /// How long it lasts, in seconds.
+    #[cfg(test)]
+    pub fn seconds(&self) -> f32 {
+        self.length as f32 / self.rate
+    }
+}
+
+impl Iterator for Voice {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        if self.made >= self.length {
+            return None;
+        }
+        let t = self.made as f32 / self.rate;
+        let left = (self.length - self.made) as f32 / self.rate;
+        self.made += 1;
+        let fade = (left / FADE_SECS).min(1.0);
+        Some(self.dc.run((self.make)(t)) * fade * self.loudness)
+    }
+}
+
+/// Notes struck on a bar, a chime or a block.
+fn struck(
+    rate: f32,
+    partials: super::synth::Partials,
+    notes: &[(f32, f32, f32)],
+    seconds: f32,
+) -> Voice {
+    let mut bar = Struck::new(partials, notes);
+    Voice::new(rate, seconds, move |t| bar.run(t, rate) * 0.6)
+}
+
+/// A pure tone sliding from one pitch to another: a boop up, or a bloop down.
+fn glide(rate: f32, from: f32, to: f32, over: f32, decay: f32, seconds: f32) -> Voice {
+    let mut phase = Phase::default();
+    Voice::new(rate, seconds, move |t| {
+        let hz = from + (to - from) * ease(t / over);
+        sine(phase.tick(hz, rate)) * strike(t, 0.004, decay) * 0.8
+    })
+}
+
+/// A soft thump: a low sine dropping in pitch, like something landing.
+struct Thump {
+    phase: Phase,
+}
+
+impl Thump {
+    fn new() -> Self {
+        Self {
+            phase: Phase::default(),
+        }
+    }
+
+    fn run(&mut self, t: f32, from: f32, to: f32, rate: f32) -> f32 {
+        let hz = to + (from - to) * (-t / 0.03).exp();
+        sine(self.phase.tick(hz, rate))
+    }
+}
+
+/// Noise through a band-pass, swept wherever each sound wants it.
+struct Hiss {
+    noise: Noise,
+    filter: Svf,
+}
+
+impl Hiss {
+    fn new(seed: u32, rate: f32) -> Self {
+        Self {
+            noise: Noise::new(seed),
+            filter: Svf::new(1000.0, 1.0, rate),
+        }
+    }
+
+    fn band(&mut self, hz: f32, q: f32) -> f32 {
+        self.filter.tune(hz, q);
+        self.filter.run(self.noise.next()).band
+    }
+
+    fn low(&mut self, hz: f32) -> f32 {
+        self.filter.tune(hz, 0.7);
+        self.filter.run(self.noise.next()).low
+    }
+}
+
+/// A slide whistle: up (or down) in one breath, with a wobble in it.
+fn slide_whistle(rate: f32, seed: u32, from: f32, to: f32, over: f32) -> Voice {
+    let mut phase = Phase::default();
+    let mut breath = Hiss::new(seed, rate);
+    Voice::new(rate, over + 0.12, move |t| {
+        let hz = from + (to - from) * ease(t / over);
+        let wobble = 1.0 + 0.012 * sine(t * 9.0);
+        let tone = sine(phase.tick(hz * wobble, rate));
+        let air = breath.band(hz, 2.0) * 0.25;
+        (tone + air) * swell(t, 0.03, over, 0.1) * 0.5
+    })
+}
+
+fn lock(rate: f32, seed: u32) -> Voice {
+    let mut roll = Hiss::new(seed, rate);
+    let mut bar = Struck::new(BAR, &[(0.26, n(72.0), 0.9), (0.34, n(84.0), 1.0)]);
+    Voice::new(rate, 0.9, move |t| {
+        // A short drum roll: a snare's rattle, beaten thirty times a second, then the ta-da.
+        let beat = (t * 30.0).fract();
+        let snare = roll.band(3200.0, 0.8) * strike(beat, 0.002, 0.012) * swell(t, 0.1, 0.22, 0.03);
+        snare * 0.7 + bar.run(t, rate) * 0.6
+    })
+}
+
+/// The referee's whistle: a trill, the pea rattling in it.
+fn whistle(rate: f32, seed: u32) -> Voice {
+    let mut phase = Phase::default();
+    let mut breath = Hiss::new(seed, rate);
+    Voice::new(rate, 0.55, move |t| {
+        let trill = 1.0 + 0.06 * sine(t * 38.0);
+        let hz = 2700.0 * trill;
+        let tone = sine(phase.tick(hz, rate)) * 0.7 + breath.band(hz, 4.0) * 0.4;
+        tone * swell(t, 0.02, 0.45, 0.08) * 0.45
+    })
+}
+
+fn step(rate: f32, seed: u32, vary: f32) -> Voice {
+    let mut thump = Thump::new();
+    let mut scuff = Hiss::new(seed, rate);
+    Voice::new(rate, 0.12, move |t| {
+        thump.run(t, 220.0 * vary, 95.0 * vary, rate) * strike(t, 0.002, 0.035)
+            + scuff.low(1800.0) * strike(t, 0.001, 0.02) * 0.6
+    })
+}
+
+/// Caught on the move: a punch of a thump, a crack, and a spring that boings down after it.
+fn pow(rate: f32, seed: u32, vary: f32) -> Voice {
+    let mut thump = Thump::new();
+    let mut crack = Hiss::new(seed, rate);
+    let mut spring = Phase::default();
+    Voice::new(rate, 0.5, move |t| {
+        let body = thump.run(t, 170.0 * vary, 55.0, rate) * strike(t, 0.002, 0.11);
+        let snap = crack.low(2600.0) * strike(t, 0.001, 0.04) * 1.2;
+        let since = t - 0.03;
+        let boing = if since > 0.0 {
+            let hz = (320.0 + 700.0 * (-since / 0.07).exp()) * vary;
+            sine(spring.tick(hz * (1.0 + 0.05 * sine(since * 22.0)), rate))
+                * strike(since, 0.005, 0.16)
+                * 0.35
+        } else {
+            0.0
+        };
+        body + snap + boing
+    })
+}
+
+/// Turned away: a pan lid struck, ringing.
+fn clang(rate: f32, seed: u32, vary: f32) -> Voice {
+    let mut lid = Struck::new(METAL, &[(0.0, 540.0 * vary, 1.0)]);
+    let mut tap = Hiss::new(seed, rate);
+    Voice::new(rate, 1.1, move |t| {
+        lid.run(t, rate) * 0.45 + tap.band(4000.0, 1.0) * strike(t, 0.001, 0.015) * 0.6
+    })
+}
+
+/// A hold broken from two sides: a bigger thump, and a slide whistle down as it goes.
+fn wham(rate: f32, seed: u32) -> Voice {
+    let mut thump = Thump::new();
+    let mut crack = Hiss::new(seed, rate);
+    let mut whistle = Phase::default();
+    Voice::new(rate, 0.75, move |t| {
+        let body = thump.run(t, 140.0, 40.0, rate) * strike(t, 0.002, 0.2);
+        let snap = crack.low(1800.0) * strike(t, 0.001, 0.06);
+        let since = t - 0.06;
+        let slide = if since > 0.0 {
+            let hz = 1300.0 - 950.0 * ease(since / 0.45);
+            sine(whistle.tick(hz, rate)) * swell(since, 0.03, 0.45, 0.15) * 0.3
+        } else {
+            0.0
+        };
+        body + snap + slide
+    })
+}
+
+/// Knocked out: a soft boom, a wobble, and birds tweeting round its head.
+fn boom(rate: f32, seed: u32) -> Voice {
+    let mut thump = Thump::new();
+    let mut rumble = Hiss::new(seed, rate);
+    let mut birds = [Phase::default(); 3];
+    let tweets = [0.38, 0.58, 0.78];
+    Voice::new(rate, 1.25, move |t| {
+        let body = thump.run(t, 110.0, 32.0, rate) * strike(t, 0.004, 0.45);
+        let roar = rumble.low(420.0) * strike(t, 0.002, 0.25) * 1.4;
+        let mut tweet = 0.0;
+        for (bird, at) in birds.iter_mut().zip(tweets) {
+            let since = t - at;
+            if (0.0..0.12).contains(&since) {
+                let hz = 2300.0 + 1200.0 * (since / 0.12);
+                tweet += sine(bird.tick(hz, rate)) * swell(since, 0.01, 0.08, 0.04) * 0.22;
+            }
+        }
+        body + roar + tweet
+    })
+}
+
+/// A scuffle: a quick rustle of bursts, like two rolling about in leaves.
+fn scuffle(rate: f32, seed: u32) -> Voice {
+    let mut rustle = Hiss::new(seed, rate);
+    let mut pick = Noise::new(seed ^ 0x55);
+    let bursts: Vec<(f32, f32)> = (0..6)
+        .map(|k| {
+            (
+                k as f32 * 0.075 + pick.unit() * 0.03,
+                900.0 + pick.unit() * 1800.0,
+            )
+        })
+        .collect();
+    Voice::new(rate, 0.6, move |t| {
+        let mut out = 0.0;
+        let mut centre = 1200.0;
+        for &(at, hz) in &bursts {
+            let since = t - at;
+            if since >= 0.0 {
+                out += strike(since, 0.004, 0.03);
+                if since < 0.08 {
+                    centre = hz;
+                }
+            }
+        }
+        rustle.band(centre, 1.2) * out.min(1.2) * 1.8
+    })
+}
+
+/// A bump: a spring going boing.
+fn boink(rate: f32, vary: f32) -> Voice {
+    let mut phase = Phase::default();
+    Voice::new(rate, 0.42, move |t| {
+        let hz = 240.0 * vary * (1.0 + 0.6 * (-t / 0.06).exp());
+        let wobble = 1.0 + 0.12 * sine(t * 24.0) * (-t / 0.2).exp();
+        triangle(phase.tick(hz * wobble, rate)) * strike(t, 0.004, 0.14) * 0.7
+    })
+}
+
+/// Notes on a soft reed, each a held note with a little vibrato: a hum, a horn, a trombone.
+/// `notes` are (start, length, MIDI note); `bright` is how far the reed's buzz is let through.
+fn horn(rate: f32, notes: &[(f32, f32, f32)], bright: f32, gain: f32) -> Voice {
+    let notes = notes.to_vec();
+    let seconds = notes
+        .iter()
+        .map(|(at, held, _)| at + held)
+        .fold(0.0, f32::max)
+        + 0.15;
+    let mut phases = vec![Phase::default(); notes.len()];
+    let mut tone = Svf::new(bright, 0.7, rate);
+    Voice::new(rate, seconds, move |t| {
+        let mut out = 0.0;
+        for (phase, &(at, held, note)) in phases.iter_mut().zip(&notes) {
+            let since = t - at;
+            if since < 0.0 || since > held + 0.12 {
+                continue;
+            }
+            let vibrato = 1.0 + 0.01 * sine(since * 5.5) * ease((since - 0.12) / 0.2);
+            out += reed(phase.tick(n(note) * vibrato, rate)) * swell(since, 0.025, held, 0.1);
+        }
+        tone.run(out).low * gain
+    })
+}
+
+/// The lever yanked: a wooden clunk and its ratchet clicking.
+fn clunk(rate: f32) -> Voice {
+    let mut thump = Thump::new();
+    let mut knock = Struck::new(BLOCK, &[(0.0, 320.0, 1.0)]);
+    let mut ratchet = Struck::new(
+        BLOCK,
+        &[
+            (0.08, 2100.0, 0.5),
+            (0.11, 2000.0, 0.45),
+            (0.14, 2150.0, 0.4),
+            (0.17, 2050.0, 0.35),
+        ],
+    );
+    Voice::new(rate, 0.5, move |t| {
+        (thump.run(t, 200.0, 80.0, rate) * strike(t, 0.002, 0.07)
+            + knock.run(t, rate) * 0.9
+            + ratchet.run(t, rate) * 0.5)
+            * 0.55
+    })
+}
+
+/// A gate swinging: a squeaky hinge, its pitch wandering as it goes.
+fn creak(rate: f32, seed: u32) -> Voice {
+    let mut phase = Phase::default();
+    let mut wander = Noise::new(seed);
+    let mut drift = Smooth::new(6.0, rate);
+    let mut body = Svf::new(900.0, 6.0, rate);
+    Voice::new(rate, 0.85, move |t| {
+        let hz = 105.0 + 35.0 * sine(t * 1.6) + 120.0 * drift.run(wander.next());
+        let rasp = phase.tick(hz.max(40.0), rate) * 2.0 - 1.0;
+        body.tune(850.0 + 300.0 * sine(t * 2.3), 6.0);
+        body.run(rasp).band * swell(t, 0.08, 0.68, 0.12) * 1.8
+    })
+}
+
+/// A whoosh: air through a sweep, up and back.
+fn whoosh(rate: f32, seed: u32, seconds: f32, top: f32) -> Voice {
+    let mut air = Hiss::new(seed, rate);
+    Voice::new(rate, seconds + 0.05, move |t| {
+        let share = (t / seconds).clamp(0.0, 1.0);
+        let hz = 500.0 + (top - 500.0) * sine(share * 0.5);
+        air.band(hz, 1.4) * swell(t, seconds * 0.3, seconds * 0.6, seconds * 0.4) * 1.1
+    })
+}
+
+/// The beacon lit: a rush of flame and a sparkle over it.
+fn fwoosh(rate: f32, seed: u32) -> Voice {
+    let mut flame = Hiss::new(seed, rate);
+    let mut sparkle = Struck::new(
+        CHIME,
+        &[
+            (0.3, n(84.0), 0.5),
+            (0.38, n(88.0), 0.45),
+            (0.46, n(91.0), 0.45),
+            (0.54, n(96.0), 0.5),
+        ],
+    );
+    Voice::new(rate, 1.4, move |t| {
+        let hz = 300.0 + 3200.0 * ease(t / 0.5);
+        flame.low(hz) * swell(t, 0.25, 0.45, 0.5) * 1.3 + sparkle.run(t, rate) * 0.45
+    })
+}
+
+/// A win: a little brass fanfare, with a marimba doubling it.
+fn fanfare(rate: f32) -> Voice {
+    let notes = [
+        (0.0, 0.1, 72.0),
+        (0.13, 0.1, 76.0),
+        (0.26, 0.1, 79.0),
+        (0.4, 0.55, 84.0),
+    ];
+    let mut brass = horn(rate, &notes, 2600.0, 0.5);
+    let mut bar = Struck::new(BAR, &notes.map(|(at, _, note)| (at, n(note), 0.8)));
+    Voice::new(rate, 1.2, move |t| {
+        brass.next().unwrap_or(0.0) + bar.run(t, rate) * 0.35
+    })
+}
+
+/// A loss: wah, wah, wah, wahhh, with the last one wobbling, kindly.
+fn womp(rate: f32) -> Voice {
+    let notes = [
+        (0.0, 0.26, 67.0),
+        (0.32, 0.26, 66.0),
+        (0.64, 0.26, 65.0),
+        (0.96, 0.8, 64.0),
+    ];
+    let mut phases = [Phase::default(); 4];
+    let mut tone = Svf::new(1200.0, 0.9, rate);
+    Voice::new(rate, 1.9, move |t| {
+        let mut out = 0.0;
+        for (phase, &(at, held, note)) in phases.iter_mut().zip(&notes) {
+            let since = t - at;
+            if since < 0.0 || since > held + 0.12 {
+                continue;
+            }
+            // The last note sags and wobbles; each opens like a hand off a mute.
+            let wobble = if note == 64.0 {
+                1.0 + 0.025 * sine(since * 6.0) * ease(since / 0.3)
+            } else {
+                1.0
+            };
+            let mute = 0.35 + 0.65 * ease(since / 0.12);
+            out += reed(phase.tick(n(note) * wobble, rate)) * swell(since, 0.03, held, 0.1) * mute;
+        }
+        tone.run(out).low * 0.55
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sound::synth::RATE;
+
+    fn loudest(cue: Cue, variation: u32) -> f32 {
+        cue.voice(variation, RATE)
+            .fold(0.0f32, |most, x| most.max(x.abs()))
+    }
+
+    #[test]
+    fn every_cue_is_heard_and_none_is_too_loud_or_runs_on() {
+        for cue in Cue::ALL {
+            let voice = cue.voice(0, RATE);
+            assert!(voice.seconds() < 2.5, "{cue:?} runs on");
+            let peak = loudest(cue, 0);
+            assert!(peak > 0.02, "{cue:?} is silent: {peak}");
+            assert!(peak < 0.9, "{cue:?} is too loud: {peak}");
+        }
+    }
+
+    #[test]
+    fn a_cue_played_again_is_the_same_the_nth_time() {
+        for cue in [Cue::Pow, Cue::Step, Cue::Scuffle] {
+            let a: Vec<f32> = cue.voice(3, RATE).collect();
+            let b: Vec<f32> = cue.voice(3, RATE).collect();
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    fn every_cue_ends_in_silence() {
+        for cue in Cue::ALL {
+            let samples: Vec<f32> = cue.voice(1, RATE).collect();
+            let last = samples.last().copied().unwrap_or(0.0);
+            assert!(last.abs() < 1e-3, "{cue:?} ends on {last}");
+        }
+    }
+
+    #[test]
+    fn every_cue_has_its_own_name() {
+        let mut names: Vec<&str> = Cue::ALL.iter().map(|c| c.name()).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), Cue::ALL.len());
+    }
+}
