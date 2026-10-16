@@ -32,8 +32,8 @@ always being less likely to do another.
 
 Each axis is read as how far it leans from the middle, from -500 to 500 (`lean`). Each learned
 leaning is its own value, -100 to 100. Every result is held to -500..=500. On the way there,
-Battle counts what each leaning makes of a tile four times over (the pull, rules version 5), so
-each turn about one creature of a team's three does something of its own.
+Battle counts what each leaning makes of a tile twice over (the pull: four times over in rules
+versions 5 and 6), so each turn about one creature of a team's three does something of its own.
 
 | Battle leaning | From | What it does |
 |---|---|---|

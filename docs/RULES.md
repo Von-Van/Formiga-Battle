@@ -283,7 +283,7 @@ Its profile picks the way, and what it does with a moment to spare.
 
 Each tick it looks ahead over the steps left in the turn (at most three), at every way that
 spends at most its remaining detour budget, and scores each whole way: what every tile on it is
-like to this creature, counted four times over, less 220 for each step it would arrive later
+like to this creature, counted twice over, less 220 for each step it would arrive later
 than the quickest way. Danger
 counts on every tile the way passes; company and the lane it keeps to count as the way's
 average, so a long way round is never worth more company for being long. It takes the first
@@ -299,10 +299,13 @@ step of the best and looks again next tick.
 | Marked for something about to land (the map event, or a puff or honey used last tick), or sticky with honey | −caution / 2, for a cautious creature; nothing for a bold one, which walks straight on and takes its chances |
 | Something lying there, with empty paws | +(wanderlust + opportunism) / 2, counting only leanings toward it: a curious or playful creature goes out of its way for it, one that keeps to its way does not |
 
-Counting a way's tiles four times over is the pull (`PULL` in `interpret.rs`, 400%), set so that
-each turn about one creature of a team's three does something of its own: in 200 Exhibition
-matches, 27% of team-turns had none, 46% one and 26% two, and 39% of steps were not the plain
-way. Only about one step in ten has two ways there that arrive equally soon, so beyond that every
+Counting a way's tiles twice over is the pull (`PULL` in `interpret.rs`, 200% since rules version
+7), set so that each turn about one creature of a team's three does something of its own: in 300
+Exhibition matches, 28% of the creatures that walked somewhere took a way of their own or hung
+back, about 0.8 a team-turn. Under rules versions 5 and 6 it was 400%, which gave the same with an
+order for each creature; with team orders, creatures walk further and more often, and at 400% it
+became nearly one in two (1.5 a team-turn), and the kinds fell 0.143 apart under thinking coaches
+(0.057 at 200%). Only about one step in ten has two ways there that arrive equally soon, so beyond that every
 way a profile chooses costs time. At 100%, under rules version 4, 79% of team-turns had none. It weighs only the way there: what a creature does with
 a moment to spare is weighed as the table says.
 
@@ -374,6 +377,13 @@ out of the sharing out (`LEAN_PERCENT` at 0), familiar self-play over 1,600 matc
 which now shows more because nobody can be steered round it, and why knowing your creatures is
 worth a little more than it was. More matches are also drawn: 22% of Exhibition matches on
 Backyard, against 12%.
+
+The numbers above are with the pull at 400%. With it at 200% (this branch), so that again about
+one creature in three goes its own way each turn: over 10,000 Exhibition matches on Backyard the
+kinds are 0.069 apart (Scholars highest at 0.538, Troublemakers and Showoffs lowest at 0.469); on
+the other arenas 0.113 on Sandy Cove, 0.069 at the Millpond and 0.117 in the glade; under familiar
+coaching 0.057 (1,600 matches, seed 9). Knowing your creatures is worth 0.629 and Exhibition beats
+the turtle 0.661.
 
 Rules version 6 added Backyard's sprinkler and found things. Before it, under version 5, 13% of
 Exhibition matches were won at the beacon and the kinds were 0.098 apart; with familiar coaching,

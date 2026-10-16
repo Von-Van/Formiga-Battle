@@ -20,11 +20,13 @@ use crate::rng::{self, Purpose};
 
 /// How hard a creature's leanings pull on the way it walks, against arriving on time, in percent
 /// of what `Behavior` gives. Only about one step in ten has two ways there that arrive equally
-/// soon, so beyond that every way a profile chooses costs time. At 400 about one creature of a
-/// team's three does something of its own each turn (sometimes none, sometimes two); at 100
-/// (rules version 4) it was about one team-turn in four. What a creature does with a moment to
+/// soon, so beyond that every way a profile chooses costs time. At 200 (rules version 7) about one
+/// creature of a team's three that walks does something of its own each turn. At 400 (rules
+/// versions 5 and 6) it was the same with an order for each creature, and nearer one in two once
+/// the team shared out its own jobs, which let the kinds that lean hardest fall well behind; at
+/// 100 (rules version 4) it was about one team-turn in four. What a creature does with a moment to
 /// spare is weighed as `Behavior` gives it.
-const PULL: i32 = 400;
+const PULL: i32 = 200;
 
 /// What it takes to shift from where it arrived with a moment to spare.
 const SHIFT_COST: i32 = 150;
