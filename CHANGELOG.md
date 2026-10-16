@@ -2,10 +2,11 @@
 
 ## Unreleased
 
-- Rules version 5: a creature's personality pulls three times as hard on the way it walks, so
-  about three steps in ten go its own way rather than the plain way (one in eleven before). A
-  coach who knows its creatures now wins 62.2% against one who plans as well without knowing
-  them (from 59.0%). Recorded matches from earlier builds no longer replay.
+- Rules version 5: a creature's personality pulls four times as hard on the way it walks, so
+  each turn about one of a team's three goes its own way rather than the plain way: sometimes
+  none, sometimes two (about one team-turn in four before). Fewer matches are won at the beacon
+  (13%, from 21%), and the kinds score further apart under the Exhibition coach. Recorded matches
+  from earlier builds no longer replay.
 
 ## [0.67.8] - 2026-10-15
 

@@ -32,12 +32,12 @@ another.
 
 Each axis is read as how far it leans from the middle, from -500 to 500 (`lean`). Each learned
 leaning is its own value, -100 to 100. Every result is held to -500..=500. On the way there,
-Battle counts what each leaning makes of a tile three times over (the pull, rules version 5), so
-about three steps in ten are not the plain way.
+Battle counts what each leaning makes of a tile four times over (the pull, rules version 5), so
+each turn about one creature of a team's three does something of its own.
 
 | Battle leaning | From | What it does |
 |---|---|---|
-| `caution` | (−6 × lean(boldness) + 4 × lean(suspicion)) / 10 − sleep security | Keeps out of the other team's reach and close to cover. Over about 150 it will take a two-step detour round a single creature of theirs. Below zero it does nothing: a bold creature does not avoid the other team, and does not seek it out. At 150 or more it is wary: sent to walk, it waits one tick, once a turn, rather than step within reach of more of the other team; sent to hold or contest, it goes |
+| `caution` | (−6 × lean(boldness) + 4 × lean(suspicion)) / 10 − sleep security | Keeps out of the other team's reach and close to cover. Over about 110 it will take a two-step detour round a single creature of theirs. Below zero it does nothing: a bold creature does not avoid the other team, and does not seek it out. At 150 or more it is wary: sent to walk, it waits one tick, once a turn, rather than step within reach of more of the other team; sent to hold or contest, it goes |
 | `togetherness` | 0.8 × lean(social) + 2 × sociability | Keeps beside teammates, more so the ones it is bonded to, and away from one it avoids. Counted as a way's average, so it mostly chooses between ways of about the same length, and pays for a longer one only when it leans hard |
 | `wanderlust` | 0.6 × lean(curiosity) + 2 × exploration − home affinity | Takes the outside lanes rather than the middle |
 | `opportunism` | (5 × lean(feistiness) + 3 × lean(impulsiveness) + 2 × lean(playfulness)) / 10 + play | On the way to one contest, takes another that walks into reach: a chance of opportunism in a thousand |
