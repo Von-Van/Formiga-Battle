@@ -55,15 +55,25 @@ pub enum Cue {
     // The board, as the turn plays out.
     /// A soft footstep.
     Step,
-    /// Caught on the move.
+    /// Pressed with nowhere to go: knocked off its feet where it stands.
     Pow,
-    /// A contest turned away by someone holding firm.
+    /// Pressed and pushed a tile on: a thump and a whoosh away.
+    Shove,
+    /// A PRESS turned away by someone holding firm.
     Clang,
+    /// Two PRESSes meeting: two heads knocking.
+    Bonk,
     /// A hold broken from two sides.
     Wham,
+    /// A TRICK round a holder's side or back: a tiptoe and a swish.
+    Sneak,
+    /// A TRICK seen coming from the front: "uh-uh".
+    Read,
+    /// Something snatched by a presser: a quick fwip and a pluck.
+    Snatch,
     /// Knocked out, dizzy.
     Boom,
-    /// A contest that came to nothing, the two caught up in a scuffle: a whiff of air.
+    /// Something that came to nothing: a whiff of air.
     Miss,
     /// Two wanting the same tile.
     Boink,
@@ -124,7 +134,7 @@ pub enum Cue {
 }
 
 impl Cue {
-    pub const ALL: [Cue; 50] = [
+    pub const ALL: [Cue; 55] = [
         Cue::Hover,
         Cue::Click,
         Cue::Confirm,
@@ -145,8 +155,13 @@ impl Cue {
         Cue::Begin,
         Cue::Step,
         Cue::Pow,
+        Cue::Shove,
         Cue::Clang,
+        Cue::Bonk,
         Cue::Wham,
+        Cue::Sneak,
+        Cue::Read,
+        Cue::Snatch,
         Cue::Boom,
         Cue::Miss,
         Cue::Boink,
@@ -200,8 +215,13 @@ impl Cue {
             Cue::Begin => "begin",
             Cue::Step => "step",
             Cue::Pow => "pow",
+            Cue::Shove => "shove",
             Cue::Clang => "clang",
+            Cue::Bonk => "bonk",
             Cue::Wham => "wham",
+            Cue::Sneak => "sneak",
+            Cue::Read => "read",
+            Cue::Snatch => "snatch",
             Cue::Boom => "boom",
             Cue::Miss => "miss",
             Cue::Boink => "boink",
@@ -247,7 +267,7 @@ impl Cue {
             Cue::Step => 0.09,
             Cue::Hover => 0.04,
             Cue::Click | Cue::Tick => 0.05,
-            Cue::Pow | Cue::Clang | Cue::Boink => 0.08,
+            Cue::Pow | Cue::Shove | Cue::Clang | Cue::Bonk | Cue::Boink => 0.08,
             Cue::Glow | Cue::Hmm | Cue::Glint | Cue::Plop => 0.15,
             _ => 0.0,
         }
@@ -327,8 +347,13 @@ impl Cue {
             .louder(0.85),
             Cue::Step => step(rate, seed, vary),
             Cue::Pow => pow(rate, seed, vary),
+            Cue::Shove => shove(rate, seed, vary),
             Cue::Clang => clang(rate, seed, vary),
+            Cue::Bonk => bonk(rate, vary),
             Cue::Wham => wham(rate, seed),
+            Cue::Sneak => sneak(rate, seed, vary),
+            Cue::Read => horn(rate, &[(0.0, 0.09, 74.0), (0.13, 0.16, 69.0)], 2400.0, 0.6),
+            Cue::Snatch => snatch(rate, seed, vary),
             Cue::Boom => boom(rate, seed),
             Cue::Miss => miss(rate, seed),
             Cue::Boink => boink(rate, vary),
@@ -588,6 +613,78 @@ fn pow(rate: f32, seed: u32, vary: f32) -> Voice {
             0.0
         };
         (body + snap + boing) * 0.85
+    })
+}
+
+/// Pushed a tile on: a thump, and a whoosh of air as it goes.
+fn shove(rate: f32, seed: u32, vary: f32) -> Voice {
+    let mut thump = Thump::new();
+    let mut air = Hiss::new(seed, rate);
+    Voice::new(rate, 0.45, move |t| {
+        let body = thump.run(t, 160.0 * vary, 60.0, rate) * strike(t, 0.002, 0.08);
+        let since = t - 0.03;
+        let rush = if since > 0.0 {
+            let hz = 2600.0 - 1600.0 * ease(since / 0.3);
+            air.band(hz, 1.4) * swell(since, 0.02, 0.18, 0.12) * 1.1
+        } else {
+            0.0
+        };
+        (body + rush) * 0.85
+    })
+}
+
+/// Two PRESSes meeting: two wooden knocks close together, and a little spring after them.
+fn bonk(rate: f32, vary: f32) -> Voice {
+    let mut heads = Struck::new(
+        BLOCK,
+        &[(0.0, 360.0 * vary, 1.0), (0.06, 300.0 * vary, 0.9)],
+    );
+    let mut thump = Thump::new();
+    let mut spring = Phase::default();
+    Voice::new(rate, 0.5, move |t| {
+        let knock = heads.run(t, rate) * 0.7;
+        let body = thump.run(t, 200.0 * vary, 80.0, rate) * strike(t, 0.002, 0.05) * 0.6;
+        let since = t - 0.1;
+        let boing = if since > 0.0 {
+            let hz = 520.0 * vary * (1.0 + 0.4 * (-since / 0.05).exp());
+            triangle(spring.tick(hz * (1.0 + 0.1 * sine(since * 26.0)), rate))
+                * strike(since, 0.004, 0.12)
+                * 0.3
+        } else {
+            0.0
+        };
+        knock + body + boing
+    })
+}
+
+/// A TRICK: three tiptoes, high and light, then a swish round the side.
+fn sneak(rate: f32, seed: u32, vary: f32) -> Voice {
+    let mut toes = Struck::new(
+        BLOCK,
+        &[
+            (0.0, 1500.0 * vary, 0.5),
+            (0.07, 1300.0 * vary, 0.5),
+            (0.14, 1700.0 * vary, 0.6),
+        ],
+    );
+    let mut swish = whoosh(rate, seed, 0.22, 3600.0);
+    Voice::new(rate, 0.5, move |t| {
+        toes.run(t, rate) * 0.6
+            + if t > 0.2 {
+                swish.next().unwrap_or(0.0) * 0.9
+            } else {
+                0.0
+            }
+    })
+}
+
+/// Something snatched: a quick fwip of air up, and a pluck as it lands with the presser.
+fn snatch(rate: f32, seed: u32, vary: f32) -> Voice {
+    let mut air = Hiss::new(seed, rate);
+    let mut pluck = Struck::new(BAR, &[(0.12, n(88.0) * vary, 0.9)]);
+    Voice::new(rate, 0.5, move |t| {
+        let hz = 1200.0 + 3000.0 * ease(t / 0.12);
+        air.band(hz, 2.0) * swell(t, 0.01, 0.08, 0.04) * 0.9 + pluck.run(t, rate) * 0.6
     })
 }
 

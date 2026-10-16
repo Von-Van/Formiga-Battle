@@ -16,13 +16,13 @@ pub enum Pose {
     Walk,
     /// Standing its ground: settled and watching.
     Hold,
-    /// Reaching for whoever it is contesting.
+    /// Reaching for whoever it is pressing or tricking.
     Reach,
     /// Caught on the move.
     Gasp,
     /// Pressed while holding, and wobbling.
     Wobble,
-    /// Bumped, or tangled in a scuffle.
+    /// Bumped, or caught out.
     Worry,
     /// Knocked out: flopped over, dizzy.
     Dizzy,

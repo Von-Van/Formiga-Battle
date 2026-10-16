@@ -17,8 +17,8 @@ use formiga_battle_core::notebook::Page;
 use formiga_battle_core::recap::recap_naming;
 use formiga_battle_core::rng::{self, Purpose};
 use formiga_battle_core::{
-    Arena, Directive, Match, Outcome, PLAN_SIZE, Profile, Ruleset, Side, Slot, TEAM_SIZE, TeamPlan,
-    Tile, TurnReport, order::MAX_SQUARES,
+    Arena, Directive, Facing, Match, Outcome, PLAN_SIZE, Profile, Ruleset, Side, Slot, TEAM_SIZE,
+    TeamPlan, Tile, TurnReport, order::MAX_SQUARES,
 };
 use formiga_battle_room::roster::{check_team, room_match};
 use formiga_battle_room::{Build, Card, Entrant, View, relay_base};
@@ -75,42 +75,84 @@ impl Friend {
     }
 }
 
-/// The three kinds of team order.
+/// The kinds of team order: the four that take one of the three places in the plan, and USE
+/// ITEM, a bonus for each of the team carrying something.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Verb {
-    Take,
-    Defend,
+    Press,
+    Hold,
+    Trick,
     Interact,
+    UseItem,
 }
 
 impl Verb {
-    pub const ALL: [Self; 3] = [Self::Take, Self::Defend, Self::Interact];
+    /// The orders that take one of the three places.
+    pub const ALL: [Self; 4] = [Self::Press, Self::Hold, Self::Trick, Self::Interact];
 
     pub const fn word(self) -> &'static str {
         match self {
-            Self::Take => "TAKE",
-            Self::Defend => "DEFEND",
+            Self::Press => "PRESS",
+            Self::Hold => "HOLD",
+            Self::Trick => "TRICK",
             Self::Interact => "INTERACT",
+            Self::UseItem => "USE ITEM",
         }
     }
 
+    /// The key that picks it up.
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Press => "P",
+            Self::Hold => "H",
+            Self::Trick => "T",
+            Self::Interact => "I",
+            Self::UseItem => "U",
+        }
+    }
+
+    /// What it does, in a few words, for the order buttons and the field guide.
+    pub const fn gloss(self) -> &'static str {
+        match self {
+            Self::Press => "push theirs off, take what they carry",
+            Self::Hold => "keep squares, facing one way",
+            Self::Trick => "round a holder's side or back",
+            Self::Interact => "levers, taps, found things",
+            Self::UseItem => "a bonus, at the start of the turn",
+        }
+    }
+
+    /// What it does and what beats it, in plain words.
     pub const fn hint(self) -> &'static str {
         match self {
-            Self::Take => {
-                "Squares for the team to get and hold: walk onto an empty one, move theirs off one."
+            Self::Press => {
+                "PRESS pushes back anyone not holding and steals what it carries; turned away by a HOLD, and hurt by one facing it; two from different sides overwhelm a lone holder."
             }
-            Self::Defend => "Squares for the team to keep: stand on them and keep theirs off.",
-            Self::Interact => {
-                "Something for the team to go and get: a found thing, the lever, the switch, or what one of theirs carries. On one of yours carrying something, it uses it."
+            Self::Hold => {
+                "HOLD keeps a square facing one way; turns away a PRESS and hurts one coming head on; open to a TRICK from the side or behind. R or the mouse wheel turns which way it faces."
+            }
+            Self::Trick => {
+                "TRICK slips round a holder's side or back to break its hold; fails from the front; caught by a PRESS."
+            }
+            Self::Interact => "INTERACT works levers, taps and fetches found things.",
+            Self::UseItem => {
+                "USE ITEM: a bonus for a creature carrying something, used at the start of the turn. It does not take one of the three orders."
             }
         }
     }
 
-    fn of(d: &Directive) -> Self {
+    /// Whether it names squares, one after another, as the pointer is clicked or dragged.
+    pub const fn names_squares(self) -> bool {
+        matches!(self, Self::Press | Self::Hold | Self::Trick)
+    }
+
+    pub fn of(d: &Directive) -> Self {
         match d {
-            Directive::Take { .. } => Self::Take,
-            Directive::Defend { .. } => Self::Defend,
+            Directive::Press { .. } => Self::Press,
+            Directive::Hold { .. } => Self::Hold,
+            Directive::Trick { .. } => Self::Trick,
             Directive::Interact { .. } => Self::Interact,
+            Directive::UseItem { .. } => Self::UseItem,
         }
     }
 }
@@ -118,8 +160,10 @@ impl Verb {
 /// What a click on the board does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Aim {
-    /// Sets the chosen order to this.
+    /// Sets the chosen order to this; a USE ITEM goes beside the three, for its user.
     Give(Directive),
+    /// With USE ITEM in hand, picks which of the team carrying something uses it, by roster place.
+    Carrier(u8),
     Nothing,
 }
 
@@ -154,6 +198,13 @@ pub struct Table {
     /// Which of the three orders a click on the board gives.
     pub selected: Option<u8>,
     pub verb: Option<Verb>,
+    /// The bonus USE ITEMs given so far this turn: for each of the team by roster place, the tile
+    /// it is to use what it carries on.
+    pub uses: [Option<Tile>; TEAM_SIZE],
+    /// With USE ITEM in hand, which of the team carrying something it is for, by roster place.
+    pub user: Option<u8>,
+    /// The HOLD the R key and the mouse wheel turn: the one last given or added to.
+    pub turning: Option<u8>,
     /// When the current turn's orders began, on the window's clock.
     pub turn_began: f32,
     pub shown: Option<Shown>,
@@ -222,6 +273,9 @@ impl Table {
             orders: [None, None, None],
             selected: None,
             verb: None,
+            uses: [None; TEAM_SIZE],
+            user: None,
+            turning: None,
             turn_began: 0.0,
             shown: None,
             log: Vec::new(),
@@ -838,7 +892,7 @@ impl Table {
             started: now,
         });
         self.selected = None;
-        self.verb = None;
+        self.put_down();
         if over {
             self.finish_match();
         }
@@ -846,9 +900,17 @@ impl Table {
 
     fn begin_orders(&mut self, now: f32) {
         self.orders = [None, None, None];
-        self.verb = None;
+        self.uses = [None; TEAM_SIZE];
+        self.put_down();
+        self.turning = None;
         self.turn_began = now;
         self.selected = Some(0);
+    }
+
+    /// Puts down whatever order is in hand, and the creature a USE ITEM was for.
+    pub fn put_down(&mut self) {
+        self.verb = None;
+        self.user = None;
     }
 
     pub fn outcome(&self) -> Option<Outcome> {
@@ -875,19 +937,43 @@ impl Table {
     pub fn select(&mut self, index: u8) {
         if usize::from(index) < PLAN_SIZE {
             self.selected = Some(index);
-            self.verb = None;
+            self.put_down();
         }
     }
 
     pub fn choose_verb(&mut self, verb: Verb) {
-        if self.selected.is_some() {
+        if verb == Verb::UseItem {
+            self.take_token(verb);
+        } else if self.selected.is_some() {
             self.verb = Some(verb);
+            self.user = None;
         }
     }
 
-    /// The team's plan as given so far, in order.
+    /// The team's plan as given so far: the orders in their places, then each USE ITEM.
     pub fn plan(&self) -> TeamPlan {
-        self.orders.iter().flatten().cloned().collect()
+        let mut plan: TeamPlan = self.orders.iter().flatten().cloned().collect();
+        plan.extend(
+            self.uses
+                .iter()
+                .enumerate()
+                .filter_map(|(by, at)| at.map(|at| Directive::UseItem { by: by as u8, at })),
+        );
+        plan
+    }
+
+    /// Those of the Handler's team who can be told to USE ITEM this turn, by roster place: each
+    /// one standing and carrying something.
+    pub fn carriers(&self) -> Vec<u8> {
+        let Some(m) = &self.m else {
+            return Vec::new();
+        };
+        (0..TEAM_SIZE as u8)
+            .filter(|i| {
+                let slot = Slot::new(self.you, *i);
+                m.standing(slot) && m.fighter(slot).carrying.is_some()
+            })
+            .collect()
     }
 
     /// Who of the Handler's team would probably take which job if the plan were locked as it
@@ -915,25 +1001,78 @@ impl Table {
             .collect()
     }
 
-    /// Whether this order could be carried out at all just now.
+    /// Whether this order could be carried out at all just now. A USE ITEM needs its user
+    /// standing, carrying something, and the tile within its reach.
     fn fits(&self, d: &Directive) -> bool {
-        self.m
-            .as_ref()
-            .is_some_and(|m| checked(m, self.you, &vec![d.clone()]).0.len() == 1)
+        self.m.as_ref().is_some_and(|m| match d {
+            Directive::UseItem { by, at } => {
+                let slot = Slot::new(self.you, *by);
+                usize::from(*by) < TEAM_SIZE && m.standing(slot) && m.can_use(slot, *at)
+            }
+            _ => checked(m, self.you, &vec![d.clone()]).0.len() == 1,
+        })
+    }
+
+    /// The way a new HOLD on `tile` faces to begin with: toward the nearest of the other team
+    /// still standing, or across the board toward their side if there is no telling.
+    pub fn first_facing(&self, tile: Tile) -> Facing {
+        let across = Facing::across(self.you);
+        let Some(m) = &self.m else {
+            return across;
+        };
+        m.team(self.you.other())
+            .filter(|s| m.standing(*s))
+            .map(|s| m.fighter(s).at)
+            .min_by_key(|at| (tile.distance(*at), at.y, at.x))
+            .and_then(|at| Facing::toward(tile, at))
+            .unwrap_or(across)
+    }
+
+    /// Turns the HOLD in this place of the plan a quarter clockwise, or back the other way. True
+    /// if there was a HOLD there to turn.
+    pub fn turn_order(&mut self, index: u8, back: bool) -> bool {
+        let Some(Some(Directive::Hold { facing, .. })) = self.orders.get_mut(usize::from(index))
+        else {
+            return false;
+        };
+        *facing = if back {
+            facing.turned().turned().turned()
+        } else {
+            facing.turned()
+        };
+        self.turning = Some(index);
+        true
+    }
+
+    /// The HOLD the R key and the mouse wheel turn: the one in hand, or else the one last given
+    /// or added to.
+    pub fn turnable(&self) -> Option<u8> {
+        let hold = |i: &u8| matches!(self.orders[usize::from(*i)], Some(Directive::Hold { .. }));
+        self.selected
+            .filter(|i| self.verb == Some(Verb::Hold) && hold(i))
+            .or(self.turning.filter(hold))
+    }
+
+    /// Turns the HOLD `turnable` names. True if there was one.
+    pub fn turn_hold(&mut self, back: bool) -> bool {
+        self.turnable().is_some_and(|i| self.turn_order(i, back))
     }
 
     /// The squares the plan names, each with its order's colour and kind, a square named by more
-    /// than one order stacked.
+    /// than one order stacked; and where each USE ITEM is to land, from its user.
     pub fn plan_marks(&self) -> Vec<PlanMark> {
         let mut out: Vec<PlanMark> = Vec::new();
         for (i, d) in self.orders.iter().enumerate() {
             let Some(d) = d else {
                 continue;
             };
-            let kind = match d {
-                Directive::Take { .. } => PlanKind::Take,
-                Directive::Defend { .. } => PlanKind::Defend,
-                Directive::Interact { .. } => PlanKind::Interact,
+            let (kind, facing) = match d {
+                Directive::Press { .. } => (PlanKind::Press, None),
+                Directive::Hold { facing, .. } => (PlanKind::Hold, Some(*facing)),
+                Directive::Trick { .. } => (PlanKind::Trick, None),
+                Directive::Interact { .. } | Directive::UseItem { .. } => {
+                    (PlanKind::Interact, None)
+                }
             };
             for t in d.squares() {
                 let stack = out.iter().filter(|m| m.tile == *t).count() as u8;
@@ -942,44 +1081,110 @@ impl Table {
                     order: i as u8,
                     kind,
                     stack,
-                    chosen: self.selected == Some(i as u8) && self.verb.is_some(),
+                    chosen: self.selected == Some(i as u8)
+                        && self.verb.is_some_and(|v| v != Verb::UseItem),
+                    facing,
+                    from: None,
                 });
             }
+        }
+        for (by, at) in self.uses.iter().enumerate() {
+            let Some(at) = at else {
+                continue;
+            };
+            let stack = out.iter().filter(|m| m.tile == *at).count() as u8;
+            out.push(PlanMark {
+                tile: *at,
+                order: by as u8,
+                kind: PlanKind::UseItem,
+                stack,
+                chosen: self.verb == Some(Verb::UseItem) && self.user == Some(by as u8),
+                facing: None,
+                from: self
+                    .m
+                    .as_ref()
+                    .map(|m| m.fighter(Slot::new(self.you, by as u8)).at),
+            });
         }
         out
     }
 
-    /// Adds a square to the TAKE or DEFEND being given, as the pointer is dragged across the
-    /// board; never takes one out. True if it changed anything.
+    /// Adds a square to the PRESS, HOLD or TRICK being given, as the pointer is dragged across
+    /// the board; never takes one out. True if it changed anything.
     pub fn add_square(&mut self, tile: Tile) -> bool {
         let (Some(index), Some(verb)) = (self.selected, self.verb) else {
             return false;
         };
-        if !matches!(verb, Verb::Take | Verb::Defend) {
+        if !verb.names_squares() {
             return false;
         }
-        let mut squares = match &self.orders[usize::from(index)] {
-            Some(d) if Verb::of(d) == verb => d.squares().to_vec(),
-            _ => Vec::new(),
-        };
+        let current = self.orders[usize::from(index)]
+            .clone()
+            .filter(|d| Verb::of(d) == verb);
+        let mut squares = current
+            .as_ref()
+            .map_or_else(Vec::new, |d| d.squares().to_vec());
         if squares.contains(&tile) || squares.len() >= MAX_SQUARES {
             return false;
         }
         squares.push(tile);
-        let order = match verb {
-            Verb::Take => Directive::Take { squares },
-            _ => Directive::Defend { squares },
-        };
+        let order = self.with_squares(verb, squares, current.as_ref());
         if !self.fits(&order) {
             return false;
         }
         self.orders[usize::from(index)] = Some(order);
+        if verb == Verb::Hold {
+            self.turning = Some(index);
+        }
         true
     }
 
+    /// An order of this kind naming these squares. A HOLD keeps the way `current` faced, or a new
+    /// one faces the way `first_facing` says from its first square.
+    fn with_squares(
+        &self,
+        verb: Verb,
+        squares: Vec<Tile>,
+        current: Option<&Directive>,
+    ) -> Directive {
+        match verb {
+            Verb::Hold => {
+                let facing = match current {
+                    Some(Directive::Hold { facing, .. }) => *facing,
+                    _ => squares
+                        .first()
+                        .map_or(Facing::across(self.you), |t| self.first_facing(*t)),
+                };
+                Directive::Hold { squares, facing }
+            }
+            Verb::Trick => Directive::Trick { squares },
+            _ => Directive::Press { squares },
+        }
+    }
+
     /// Picks an order to give: into the chosen place in the plan if it is empty or already of
-    /// this kind, otherwise into the first empty one. False if all three are given.
+    /// this kind, otherwise into the first empty one. False if all three are given. USE ITEM
+    /// takes no place: it is for whoever of the team carries something (the only one, if there is
+    /// one; picked up again, the next), and false if nobody does.
     pub fn take_token(&mut self, verb: Verb) -> bool {
+        if verb == Verb::UseItem {
+            let carriers = self.carriers();
+            let user = match (self.verb, self.user) {
+                (Some(Verb::UseItem), Some(by)) => carriers
+                    .iter()
+                    .copied()
+                    .find(|c| *c > by)
+                    .or(carriers.first().copied()),
+                _ if carriers.len() == 1 => carriers.first().copied(),
+                _ => None,
+            };
+            if carriers.is_empty() {
+                return false;
+            }
+            self.verb = Some(verb);
+            self.user = user;
+            return true;
+        }
         let fits_here = |i: u8| {
             self.orders[usize::from(i)]
                 .as_ref()
@@ -993,45 +1198,100 @@ impl Table {
             Some(i) => {
                 self.selected = Some(i);
                 self.verb = Some(verb);
+                self.user = None;
                 true
             }
             None => false,
         }
     }
 
-    /// What the board marks: with INTERACT picked, everything there is to interact with.
+    /// USE ITEM in hand for this one of the team, by roster place. False unless it carries
+    /// something.
+    pub fn pick_user(&mut self, by: u8) -> bool {
+        if !self.carriers().contains(&by) {
+            return false;
+        }
+        self.verb = Some(Verb::UseItem);
+        self.user = Some(by);
+        true
+    }
+
+    /// What the board marks: with INTERACT picked, everything there is to interact with; with
+    /// USE ITEM, whoever carries something, and every tile in reach of the one chosen.
     pub fn choices(&self) -> Vec<(Tile, Choice)> {
         let Some(m) = &self.m else {
             return Vec::new();
         };
         let mut marks: Vec<(Tile, Choice)> = Vec::new();
-        if self.verb == Some(Verb::Interact) {
-            let named: Vec<Tile> = self
-                .orders
-                .iter()
-                .flatten()
-                .flat_map(|d| d.squares().to_vec())
-                .collect();
-            for t in m.arena.tiles() {
-                if !named.contains(&t) && self.fits(&Directive::Interact { at: t }) {
-                    marks.push((t, Choice::Use));
+        match self.verb {
+            Some(Verb::Interact) => {
+                let named: Vec<Tile> = self
+                    .orders
+                    .iter()
+                    .flatten()
+                    .flat_map(|d| d.squares().to_vec())
+                    .collect();
+                for t in m.arena.tiles() {
+                    if !named.contains(&t) && self.fits(&Directive::Interact { at: t }) {
+                        marks.push((t, Choice::Interact));
+                    }
                 }
             }
+            Some(Verb::UseItem) => {
+                if let Some(by) = self.user {
+                    for t in m.arena.tiles() {
+                        if self.fits(&Directive::UseItem { by, at: t }) {
+                            marks.push((t, Choice::Reach));
+                        }
+                    }
+                }
+                for c in self.carriers() {
+                    if self.user != Some(c) {
+                        marks.push((m.fighter(Slot::new(self.you, c)).at, Choice::Carrier));
+                    }
+                }
+            }
+            _ => {}
         }
         marks
     }
 
     /// What a click on `tile` would do while giving orders: a plain click (`hold` false) or a
-    /// right click (`hold` true). With TAKE or DEFEND picked, it adds the square to the chosen
-    /// order, or takes it out again; with INTERACT picked, it sets the chosen order to that. With
-    /// none picked, a plain click interacts with whatever is there to interact with and otherwise
-    /// takes the square, and a right click defends it.
+    /// right click (`hold` true). With PRESS, HOLD or TRICK picked, it adds the square to the
+    /// chosen order, or takes it out again; with INTERACT picked, it sets the chosen order to
+    /// that. With USE ITEM picked, a tile in reach of the one chosen is where it uses what it
+    /// carries, and another of the team carrying something is chosen instead. With none picked, a
+    /// plain click interacts with whatever is there to interact with and otherwise presses the
+    /// square, and a right click holds it.
     pub fn aim(&self, tile: Tile, hold: bool) -> Aim {
         let Some(m) = &self.m else {
             return Aim::Nothing;
         };
         if self.shown.is_some() || m.outcome().is_some() {
             return Aim::Nothing;
+        }
+        if self.verb == Some(Verb::UseItem) {
+            if hold {
+                return Aim::Nothing;
+            }
+            if let Some(by) = self.user {
+                let order = Directive::UseItem { by, at: tile };
+                if self.fits(&order) {
+                    return if self.uses[usize::from(by)] == Some(tile) {
+                        Aim::Nothing
+                    } else {
+                        Aim::Give(order)
+                    };
+                }
+            }
+            return match self
+                .carriers()
+                .into_iter()
+                .find(|c| m.fighter(Slot::new(self.you, *c)).at == tile)
+            {
+                Some(by) if self.user != Some(by) => Aim::Carrier(by),
+                _ => Aim::Nothing,
+            };
         }
         let Some(index) = self.selected else {
             return Aim::Nothing;
@@ -1055,18 +1315,17 @@ impl Table {
         };
         let interact = Directive::Interact { at: tile };
         let order = match (self.verb, hold) {
-            (Some(Verb::Take), _) => Directive::Take {
-                squares: squares(Verb::Take),
-            },
-            (Some(Verb::Defend), _) => Directive::Defend {
-                squares: squares(Verb::Defend),
-            },
-            (Some(Verb::Interact), _) => interact,
-            (None, true) => Directive::Defend {
+            (Some(verb), _) if verb.names_squares() => {
+                let same = current.as_ref().filter(|d| Verb::of(d) == verb);
+                self.with_squares(verb, squares(verb), same)
+            }
+            (Some(_), _) => interact,
+            (None, true) => Directive::Hold {
                 squares: vec![tile],
+                facing: self.first_facing(tile),
             },
             (None, false) if self.fits(&interact) => interact,
-            (None, false) => Directive::Take {
+            (None, false) => Directive::Press {
                 squares: vec![tile],
             },
         };
@@ -1076,21 +1335,33 @@ impl Table {
         Aim::Give(order)
     }
 
-    /// A click on a tile while giving orders, as `aim` says. A TAKE or DEFEND being built stays
-    /// chosen for more squares; anything else moves on to the next order still empty.
+    /// A click on a tile while giving orders, as `aim` says. A PRESS, HOLD or TRICK being built
+    /// stays chosen for more squares; anything else moves on to the next order still empty. A
+    /// USE ITEM given goes beside the three, and the order in hand is put down.
     pub fn press(&mut self, tile: Tile, hold: bool) -> Aim {
         let aim = self.aim(tile, hold);
-        if let Aim::Give(order) = &aim {
-            let index = self
-                .selected
-                .expect("an order is aimed at the chosen place");
-            self.orders[usize::from(index)] = Some(order.clone());
-            if !matches!(self.verb, Some(Verb::Take | Verb::Defend)) {
-                self.verb = None;
-                self.selected = (0..PLAN_SIZE as u8)
-                    .find(|i| self.orders[usize::from(*i)].is_none())
-                    .or(Some(index));
+        match &aim {
+            Aim::Give(Directive::UseItem { by, at }) => {
+                self.uses[usize::from(*by)] = Some(*at);
+                self.put_down();
             }
+            Aim::Give(order) => {
+                let index = self
+                    .selected
+                    .expect("an order is aimed at the chosen place");
+                self.orders[usize::from(index)] = Some(order.clone());
+                if matches!(order, Directive::Hold { .. }) {
+                    self.turning = Some(index);
+                }
+                if !self.verb.is_some_and(Verb::names_squares) {
+                    self.put_down();
+                    self.selected = (0..PLAN_SIZE as u8)
+                        .find(|i| self.orders[usize::from(*i)].is_none())
+                        .or(Some(index));
+                }
+            }
+            Aim::Carrier(by) => self.user = Some(*by),
+            Aim::Nothing => {}
         }
         aim
     }
@@ -1104,6 +1375,16 @@ impl Table {
     pub fn clear_order(&mut self, index: u8) {
         if let Some(order) = self.orders.get_mut(usize::from(index)) {
             *order = None;
+        }
+        if self.turning == Some(index) {
+            self.turning = None;
+        }
+    }
+
+    /// Takes back the USE ITEM given to this one of the team, by roster place.
+    pub fn clear_use(&mut self, by: u8) {
+        if let Some(at) = self.uses.get_mut(usize::from(by)) {
+            *at = None;
         }
     }
 
@@ -1156,7 +1437,7 @@ impl Table {
             friend.line.ask(Ask::Orders { turn, orders: ours });
             friend.sent_turn = Some(turn);
             self.selected = None;
-            self.verb = None;
+            self.put_down();
             return;
         }
         let away = Coach::Exhibition.plan(m, self.you.other());
@@ -1186,7 +1467,16 @@ impl Table {
     pub fn coach_orders(&mut self) {
         if let Some(m) = &self.m {
             let plan = Coach::Exhibition.plan(m, self.you);
-            self.orders = [0, 1, 2].map(|i| plan.get(i).cloned());
+            let mut tactical = plan.iter().filter(|d| d.tactical()).cloned();
+            self.orders = [(); PLAN_SIZE].map(|_| tactical.next());
+            self.uses = [None; TEAM_SIZE];
+            for d in &plan {
+                if let Directive::UseItem { by, at } = d
+                    && let Some(using) = self.uses.get_mut(usize::from(*by))
+                {
+                    *using = Some(*at);
+                }
+            }
         }
     }
 
@@ -1257,29 +1547,29 @@ mod tests {
     fn a_handler_builds_a_team_order_square_by_square() {
         let mut t = table();
         assert_eq!(t.selected, Some(0));
-        t.choose_verb(Verb::Take);
+        t.choose_verb(Verb::Press);
         let centre = yard(&t);
         let next = Tile::new(centre.x - 1, centre.y);
         assert!(t.click(centre));
         assert!(t.click(next));
         assert_eq!(
             t.orders[0],
-            Some(Directive::Take {
+            Some(Directive::Press {
                 squares: vec![centre, next]
             })
         );
-        assert_eq!(t.selected, Some(0), "a TAKE stays chosen for more squares");
+        assert_eq!(t.selected, Some(0), "a PRESS stays chosen for more squares");
         assert!(t.click(next), "a square clicked again comes out");
         assert_eq!(
             t.orders[0],
-            Some(Directive::Take {
+            Some(Directive::Press {
                 squares: vec![centre]
             })
         );
         assert!(
             t.plan_marks()
                 .iter()
-                .any(|m| m.tile == centre && m.kind == PlanKind::Take && m.order == 0)
+                .any(|m| m.tile == centre && m.kind == PlanKind::Press && m.order == 0)
         );
     }
 
@@ -1287,26 +1577,84 @@ mod tests {
     fn dragging_adds_squares_to_the_order_in_hand_and_never_takes_one_out() {
         let mut t = table();
         let zone = t.arena.zone.clone();
-        assert!(t.take_token(Verb::Defend));
+        assert!(t.take_token(Verb::Hold));
         assert!(t.add_square(zone[0]));
         assert!(t.add_square(zone[1]));
         assert!(!t.add_square(zone[1]), "a square already named stays");
         assert_eq!(
             t.orders[0],
-            Some(Directive::Defend {
+            Some(Directive::Hold {
+                squares: vec![zone[0], zone[1]],
+                facing: t.first_facing(zone[0]),
+            })
+        );
+    }
+
+    #[test]
+    fn a_trick_names_squares_as_a_press_does() {
+        let mut t = table();
+        let zone = t.arena.zone.clone();
+        assert!(t.take_token(Verb::Trick));
+        assert!(t.click(zone[0]));
+        assert!(t.add_square(zone[1]));
+        assert_eq!(
+            t.orders[0],
+            Some(Directive::Trick {
                 squares: vec![zone[0], zone[1]]
             })
         );
+        assert!(t.plan_marks().iter().all(|m| m.kind == PlanKind::Trick));
+    }
+
+    #[test]
+    fn a_hold_faces_their_nearest_and_turns_a_quarter_at_a_time() {
+        let mut t = table();
+        let centre = yard(&t);
+        let first = t.first_facing(centre);
+        let m = t.m.as_ref().unwrap();
+        let nearest = m
+            .team(Side::Right)
+            .map(|s| m.fighter(s).at)
+            .min_by_key(|at| (centre.distance(*at), at.y, at.x))
+            .unwrap();
+        assert_eq!(Some(first), Facing::toward(centre, nearest));
+        assert!(t.take_token(Verb::Hold));
+        assert!(t.click(centre));
+        let facing = |t: &Table| match &t.orders[0] {
+            Some(Directive::Hold { facing, .. }) => *facing,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(facing(&t), first);
+        assert!(t.turn_hold(false));
+        assert_eq!(facing(&t), first.turned());
+        // More squares keep the way it faces.
+        assert!(t.add_square(Tile::new(centre.x - 1, centre.y)));
+        assert_eq!(facing(&t), first.turned());
+        assert!(t.turn_hold(true));
+        assert_eq!(facing(&t), first);
+        // The facing is on the board's marks.
+        assert!(
+            t.plan_marks()
+                .iter()
+                .all(|m| m.kind == PlanKind::Hold && m.facing == Some(first))
+        );
+        // Put down and given elsewhere, the R key still turns the one last given.
+        t.put_down();
+        t.selected = Some(1);
+        assert!(t.turn_hold(false));
+        assert_eq!(facing(&t), first.turned());
+        t.clear_order(0);
+        assert!(!t.turn_hold(false), "nothing left to turn");
     }
 
     #[test]
     fn a_square_named_by_two_orders_is_marked_twice_stacked() {
         let mut t = table();
         let centre = yard(&t);
-        t.take_token(Verb::Take);
+        t.take_token(Verb::Press);
         t.press(centre, false);
         t.verb = None;
-        t.take_token(Verb::Defend);
+        t.take_token(Verb::Hold);
         t.press(centre, false);
         let marks: Vec<_> = t
             .plan_marks()
@@ -1323,33 +1671,106 @@ mod tests {
         let mut t = table();
         let zone = t.arena.zone.clone();
         for (i, tile) in zone.iter().take(3).enumerate() {
-            assert!(t.take_token(Verb::Defend), "order {i}");
+            assert!(t.take_token(Verb::Hold), "order {i}");
             t.press(*tile, false);
             t.verb = None;
         }
         t.selected = None;
-        assert!(!t.take_token(Verb::Take));
+        assert!(!t.take_token(Verb::Press));
     }
 
     #[test]
-    fn with_no_order_picked_a_click_takes_a_square_and_a_right_click_defends_it() {
+    fn with_no_order_picked_a_click_presses_a_square_and_a_right_click_holds_it() {
         let mut t = table();
         let centre = yard(&t);
         assert_eq!(
             t.press(centre, false),
-            Aim::Give(Directive::Take {
+            Aim::Give(Directive::Press {
                 squares: vec![centre]
             })
         );
         assert_eq!(t.selected, Some(1), "on to the next order still empty");
         assert_eq!(
             t.press(centre, true),
-            Aim::Give(Directive::Defend {
-                squares: vec![centre]
+            Aim::Give(Directive::Hold {
+                squares: vec![centre],
+                facing: t.first_facing(centre),
             })
         );
         assert_eq!(t.selected, Some(2));
         assert_eq!(t.plan().len(), 2);
+        assert_eq!(t.turnable(), Some(1), "the HOLD just given turns");
+    }
+
+    #[test]
+    fn use_item_is_a_bonus_for_whoever_carries_something() {
+        let mut t = table();
+        assert!(!t.take_token(Verb::UseItem), "nobody carries anything");
+        let carrier = Slot::new(Side::Left, 1);
+        let at = {
+            let m = t.m.as_mut().unwrap();
+            m.board.fighters[0][1].carrying = Some(formiga_battle_core::Item::Bell);
+            m.fighter(carrier).at
+        };
+        // Three orders given: USE ITEM still goes beside them.
+        let zone = t.arena.zone.clone();
+        for tile in zone.iter().take(3) {
+            t.take_token(Verb::Hold);
+            t.press(*tile, false);
+            t.verb = None;
+        }
+        assert!(t.take_token(Verb::UseItem));
+        assert_eq!(t.user, Some(1), "the only one carrying something is chosen");
+        assert!(
+            t.choices()
+                .iter()
+                .any(|(tile, c)| *tile == at && *c == Choice::Reach)
+        );
+        let far = Tile::new(at.x + 4, at.y);
+        assert_eq!(t.aim(far, false), Aim::Nothing, "out of the bell's reach");
+        assert_eq!(
+            t.press(at, false),
+            Aim::Give(Directive::UseItem { by: 1, at })
+        );
+        assert_eq!(t.verb, None);
+        let plan = t.plan();
+        assert_eq!(plan.iter().filter(|d| d.tactical()).count(), PLAN_SIZE);
+        assert!(plan.contains(&Directive::UseItem { by: 1, at }));
+        assert!(
+            t.plan_marks()
+                .iter()
+                .any(|m| m.kind == PlanKind::UseItem && m.tile == at && m.from == Some(at))
+        );
+        // One for each carrier: given again, it moves rather than adds.
+        let near = Tile::new(at.x + 1, at.y);
+        assert!(t.take_token(Verb::UseItem));
+        t.press(near, false);
+        assert_eq!(
+            t.plan()
+                .iter()
+                .filter(|d| matches!(d, Directive::UseItem { .. }))
+                .count(),
+            1
+        );
+        t.clear_use(1);
+        assert!(!t.plan().iter().any(|d| !d.tactical()));
+    }
+
+    #[test]
+    fn with_two_carrying_something_use_item_asks_which() {
+        let mut t = table();
+        let at = {
+            let m = t.m.as_mut().unwrap();
+            m.board.fighters[0][0].carrying = Some(formiga_battle_core::Item::Bell);
+            m.board.fighters[0][2].carrying = Some(formiga_battle_core::Item::Bell);
+            m.fighter(Slot::new(Side::Left, 2)).at
+        };
+        assert!(t.take_token(Verb::UseItem));
+        assert_eq!(t.user, None);
+        assert_eq!(t.press(at, false), Aim::Carrier(2));
+        assert_eq!(t.user, Some(2));
+        assert!(t.take_token(Verb::UseItem), "picked up again, the next");
+        assert_eq!(t.user, Some(0));
     }
 
     #[test]

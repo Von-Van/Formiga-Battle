@@ -438,6 +438,18 @@ fn run_tournament(mut args: Args) -> Result<()> {
         f64::from(s.flanks) / f64::from(s.matches.max(1)),
         100.0 * f64::from(s.flanks_that_paid) / f64::from(s.flanks.max(1))
     );
+    let per = |n: u32| f64::from(n) / f64::from(s.matches.max(1));
+    println!(
+        "  {:.2} tricks landed and {:.2} read a match; {:.2} presses on someone not holding \
+         ({:.2} caught a trickster), {:.2} things taken; {:.2} collisions; {:.2} turned away head on",
+        per(s.tricks),
+        per(s.tricks_read),
+        per(s.presses),
+        per(s.tricksters_caught),
+        per(s.steals),
+        per(s.collisions),
+        per(s.head_on)
+    );
     println!("  left side scores {:.3} (0.5 is even)", s.left.score());
     println!();
     println!("By temperament kind (wins plus half of draws):");

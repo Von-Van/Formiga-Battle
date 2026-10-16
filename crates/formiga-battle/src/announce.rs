@@ -61,16 +61,21 @@ impl Callout {
 
     /// How much a moment's headline matters. 3: what decides or swings the match (a knockout,
     /// a breakthrough, the beacon lit, time up). 2: a turning point a Handler planned for or
-    /// against (a flank, a hold that turned them away, someone caught on the move, the map event
-    /// landing), and one of the Handler's own going its own way. 1: everything else.
+    /// against (a flank, a hold that turned a press away, a trick that broke one, someone pushed
+    /// back, two presses meeting, something snatched, the map event landing), and one of the
+    /// Handler's own going its own way. 1: everything else.
     fn rank_of(kind: &EventKind) -> u8 {
         match kind {
             EventKind::KnockedOut { .. }
             | EventKind::BrokeThrough { .. }
             | EventKind::Finished { .. } => 3,
             EventKind::Flanked { .. }
-            | EventKind::Countered { .. }
-            | EventKind::Interrupted { .. }
+            | EventKind::Repelled { .. }
+            | EventKind::Pressed { .. }
+            | EventKind::Collided { .. }
+            | EventKind::Tricked { .. }
+            | EventKind::TrickRead { .. }
+            | EventKind::Stole { .. }
             | EventKind::SceneryLanded { .. }
             | EventKind::CaptureProgress { .. }
             | EventKind::HungBack { .. }
@@ -82,11 +87,16 @@ impl Callout {
 
 /// Words for each kind of moment; which one is used goes round with the turn, so a match is not
 /// all "POW!".
-const HIT: [&str; 4] = ["POW!", "BONK!", "WHAP!", "BIFF!"];
+const HIT: [&str; 4] = ["POW!", "WHAP!", "BIFF!", "OOF!"];
+const PUSHED: [&str; 2] = ["SHOVED!", "PUSHED!"];
 const TURNED: [&str; 3] = ["CLANG!", "TONK!", "DONG!"];
+/// A holder facing a presser head on, and hurting it.
+const FACED: [&str; 2] = ["THWACK!", "HEAD ON!"];
 const SHOVE: [&str; 2] = ["WHAM!", "SHOVE!"];
+const BONK: [&str; 2] = ["BONK!", "CONK!"];
+const TRICKED: [&str; 2] = ["TRICKED!", "GOTCHA!"];
+const READ: [&str; 2] = ["READ IT!", "NOPE!"];
 const OUT: [&str; 3] = ["BOOM!", "KER-FLOP!", "BWOMP!"];
-const WHIFF: [&str; 2] = ["MISS!", "WHIFF!"];
 const BUMP: [&str; 2] = ["BOINK", "BOING"];
 
 /// How an arena's map event is told: the sprinkler, the wave, the pond, the oak.
@@ -312,29 +322,126 @@ pub fn callouts(
                     c.headline = told(&event.kind);
                 }
             }
-            EventKind::Interrupted { target, by } => {
-                c.place = Some(at(*target));
-                c.about = Some(*target);
-                c.word = Some(pick(&HIT, turn, k));
-                c.headline = Some(format!("{} caught {} on the move!", list(by), name(target)));
-                c.good_for = by.first().map(|s| s.side);
-                c.cue = Some(Cue::Pow);
-            }
-            EventKind::Countered {
+            EventKind::Pressed {
                 target,
-                holders,
-                contesters,
+                by,
+                pushed_to,
+                tricking,
             } => {
                 c.place = Some(at(*target));
                 c.about = Some(*target);
-                c.word = Some(pick(&TURNED, turn, k));
-                c.headline = Some(if holders.len() > 1 {
-                    format!("{} held firm together!", list(holders))
+                c.good_for = by.first().map(|s| s.side);
+                // Pushed a tile on, or with nowhere to go, knocked off its feet where it stood;
+                // caught in the middle of a trick, the presser saw it coming.
+                let (word, line) = match (tricking, pushed_to) {
+                    (true, _) => (
+                        pick(&READ, turn, k),
+                        format!(
+                            "{} saw through {}'s trick and pushed it back!",
+                            list(by),
+                            name(target)
+                        ),
+                    ),
+                    (false, Some(_)) => (
+                        pick(&PUSHED, turn, k),
+                        format!(
+                            "{} pushed {} back: it was not holding!",
+                            list(by),
+                            name(target)
+                        ),
+                    ),
+                    (false, None) => (
+                        pick(&HIT, turn, k),
+                        format!(
+                            "{} pressed {} with nowhere to go: off its feet!",
+                            list(by),
+                            name(target)
+                        ),
+                    ),
+                };
+                c.word = Some(word);
+                c.headline = Some(line);
+                c.cue = Some(if pushed_to.is_some() {
+                    Cue::Shove
                 } else {
-                    format!("{} held firm against {}!", name(target), list(contesters))
+                    Cue::Pow
                 });
+            }
+            EventKind::Stole { by, from, item } => {
+                c.place = Some(at(*by));
+                c.about = Some(*by);
+                c.word = Some("SNATCHED!");
+                c.headline = Some(format!(
+                    "{} snatched {}'s {}: it can use it next turn!",
+                    name(by),
+                    name(from),
+                    item.name()
+                ));
+                c.good_for = Some(by.side);
+                c.cue = Some(Cue::Snatch);
+            }
+            EventKind::Collided { target, by } => {
+                c.place = Some(at(*target));
+                c.about = Some(*target);
+                c.word = Some(pick(&BONK, turn, k));
+                c.headline = Some(format!(
+                    "{} and {} pressed into each other: both lose 1 and stop!",
+                    list(by),
+                    name(target)
+                ));
+                c.cue = Some(Cue::Bonk);
+            }
+            EventKind::Repelled {
+                target,
+                holders,
+                pressers,
+                faced,
+            } => {
+                c.place = Some(at(*target));
+                c.about = Some(*target);
+                let held = if holders.len() > 1 {
+                    format!("{} held firm together", list(holders))
+                } else {
+                    format!("{} held firm", name(target))
+                };
+                // Head on, a holder's front hurts whoever pressed into it; from the side or
+                // behind, a press is only turned away.
+                if faced.is_empty() {
+                    c.word = Some(pick(&TURNED, turn, k));
+                    c.headline = Some(format!("{held} and turned {} away!", list(pressers)));
+                } else {
+                    c.word = Some(pick(&FACED, turn, k));
+                    c.headline = Some(format!(
+                        "{held}: {} came at its front and lost 1!",
+                        list(faced)
+                    ));
+                }
                 c.good_for = Some(target.side);
                 c.cue = Some(Cue::Clang);
+            }
+            EventKind::Tricked { target, by, .. } => {
+                c.place = Some(at(*target));
+                c.about = Some(*target);
+                c.word = Some(pick(&TRICKED, turn, k));
+                c.headline = Some(format!(
+                    "{} slipped round {}'s side and broke its hold: it loses 1 and can be pushed!",
+                    list(by),
+                    name(target)
+                ));
+                c.good_for = by.first().map(|s| s.side);
+                c.cue = Some(Cue::Sneak);
+            }
+            EventKind::TrickRead { target, by } => {
+                c.place = Some(at(*target));
+                c.about = Some(*target);
+                c.word = Some(pick(&READ, turn, k));
+                c.headline = Some(format!(
+                    "{} saw {}'s trick coming from the front and held!",
+                    name(target),
+                    name(by)
+                ));
+                c.good_for = Some(target.side);
+                c.cue = Some(Cue::Read);
             }
             EventKind::Flanked {
                 target,
@@ -359,19 +466,6 @@ pub fn callouts(
                 c.good_for = Some(slot.side.other());
                 c.cue = Some(Cue::Boom);
                 c.style = Style::Big;
-            }
-            EventKind::Scuffle {
-                contester, target, ..
-            } => {
-                c.place = Some(at(*target));
-                c.about = Some(*target);
-                c.word = Some(pick(&WHIFF, turn, k));
-                c.headline = Some(format!(
-                    "{} missed: {} was busy with a contest of its own!",
-                    name(contester),
-                    name(target)
-                ));
-                c.cue = Some(Cue::Miss);
             }
             EventKind::TookOpportunity { slot, took, .. } => {
                 c.place = Some(at(*slot));
@@ -830,6 +924,80 @@ mod tests {
     fn a_turns_callouts_come_in_the_order_they_happen() {
         let all = played(3, 1);
         assert!(all.windows(2).all(|w| w[0].at <= w[1].at));
+    }
+
+    #[test]
+    fn each_press_hold_and_trick_moment_has_its_own_word_line_and_sound() {
+        use formiga_battle_core::{Event, Item};
+        let rosters = [
+            (0..3).map(|i| drawn_creature(4, i)).collect(),
+            (3..6).map(|i| drawn_creature(4, i)).collect(),
+        ];
+        let m = Match::new(Arena::backyard(), Ruleset::default(), 4, rosters).unwrap();
+        let (a, b) = (Slot::new(Side::Left, 0), Slot::new(Side::Right, 0));
+        let there = m.fighter(b).at;
+        let kinds = vec![
+            EventKind::Pressed {
+                target: b,
+                by: vec![a],
+                pushed_to: Some(there),
+                tricking: false,
+            },
+            EventKind::Stole {
+                by: a,
+                from: b,
+                item: Item::Twig,
+            },
+            EventKind::Collided {
+                target: b,
+                by: vec![a],
+            },
+            EventKind::Repelled {
+                target: b,
+                holders: vec![b],
+                pressers: vec![a],
+                faced: vec![a],
+            },
+            EventKind::Tricked {
+                target: b,
+                by: vec![a],
+                from: there,
+            },
+            EventKind::TrickRead { target: b, by: a },
+        ];
+        let events: Vec<Event> = kinds
+            .into_iter()
+            .map(|kind| Event {
+                turn: 1,
+                tick: 1,
+                kind,
+            })
+            .collect();
+        let facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
+        let playback = Playback::new(&m.board, &m.arena.gates, &facing, &events, 3);
+        let all = callouts(&m, &playback, &events, ["you", "the visitors"], Side::Left);
+        let said: Vec<(&str, Cue)> = all.iter().filter_map(|c| Some((c.word?, c.cue?))).collect();
+        for (word, cue) in [
+            ("SHOVED!", Cue::Shove),
+            ("SNATCHED!", Cue::Snatch),
+            ("CONK!", Cue::Bonk),
+            ("HEAD ON!", Cue::Clang),
+            ("TRICKED!", Cue::Sneak),
+            ("NOPE!", Cue::Read),
+        ] {
+            assert!(
+                said.iter()
+                    .any(|(w, c)| (*w == word || w.ends_with('!')) && *c == cue),
+                "{word} {cue:?} in {said:?}"
+            );
+        }
+        assert!(all.iter().all(|c| c.headline.is_some() && c.rank == 2));
+        let faced = all
+            .iter()
+            .find(|c| c.cue == Some(Cue::Clang))
+            .and_then(|c| c.headline.clone())
+            .unwrap();
+        assert!(faced.contains("lost 1"), "{faced}");
     }
 
     #[test]

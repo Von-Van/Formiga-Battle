@@ -83,16 +83,43 @@ pub fn orders(given: &[(Slot, Order)]) -> [Orders; 2] {
     all
 }
 
-pub fn contest(slot: Slot) -> Order {
-    Order::Contest {
-        target: Target::Creature { slot },
+pub fn press(slot: Slot) -> Order {
+    Order::Press { target: slot }
+}
+
+pub fn trick(slot: Slot) -> Order {
+    Order::Trick { target: slot }
+}
+
+/// Holding facing north, toward the far edge: side-on to anyone coming from the left or right.
+pub fn hold(x: i8, y: i8) -> Order {
+    facing(x, y, Facing::North)
+}
+
+pub fn facing(x: i8, y: i8, facing: Facing) -> Order {
+    Order::Hold {
+        at: Tile::new(x, y),
+        facing,
     }
 }
 
-pub fn hold(x: i8, y: i8) -> Order {
-    Order::Hold {
+pub fn interact(x: i8, y: i8) -> Order {
+    Order::Interact {
         at: Tile::new(x, y),
     }
+}
+
+/// A plan of USE ITEMs only, for `resolve_orders_using`.
+pub fn using(side: Side, given: &[(u8, (i8, i8))]) -> [TeamPlan; 2] {
+    let mut plans: [TeamPlan; 2] = [Vec::new(), Vec::new()];
+    plans[side.index()] = given
+        .iter()
+        .map(|(by, (x, y))| Directive::UseItem {
+            by: *by,
+            at: Tile::new(*x, *y),
+        })
+        .collect();
+    plans
 }
 
 pub fn walk(x: i8, y: i8) -> Order {

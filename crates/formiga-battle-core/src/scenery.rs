@@ -12,7 +12,7 @@ use crate::event::{Blown, Event, EventKind};
 use crate::game::Match;
 use crate::grid::Tile;
 use crate::items::{self, Item};
-use crate::order::{Order, Side, Slot};
+use crate::order::{Side, Slot};
 use crate::rng::{self, Purpose};
 use serde::{Deserialize, Serialize};
 
@@ -396,7 +396,6 @@ impl Match {
         events: &mut Vec<Event>,
     ) {
         let f = self.fighter_mut(slot);
-        f.spent = true;
         let Some(item) = f.carrying.take() else {
             return;
         };
@@ -546,7 +545,7 @@ impl Match {
     }
 
     /// A pebble bell rings where its user stands: everyone of the other team within
-    /// `items::BELL_REACH` who has not settled a contest this turn loses it. Rung beside a switch,
+    /// `items::BELL_REACH` who has not settled its PRESS, TRICK or INTERACT this turn loses it. Rung beside a switch,
     /// it sets the map event off too, if the switch is ready.
     fn ring(&mut self, p: Pending, turn: u8, tick: u8, now: u16, events: &mut Vec<Event>) {
         if !self.standing(p.by) {
@@ -559,7 +558,7 @@ impl Match {
                 let f = self.fighter(*e);
                 f.at.distance(at) <= items::BELL_REACH
                     && !f.spent
-                    && matches!(f.order, Some(Order::Contest { .. }))
+                    && f.order.is_some_and(|o| o.settles())
             })
             .collect();
         for e in &hushed {
@@ -666,7 +665,10 @@ impl Match {
             });
             return;
         }
-        self.fighter_mut(p.by).at = to;
+        // The hop is all it does this tick.
+        let f = self.fighter_mut(p.by);
+        f.at = to;
+        f.pause = true;
         events.push(Event {
             turn,
             tick,
