@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- As a turn plays, the lines that matter most come first: a knockout, a breakthrough or the
+  beacon lit is never crowded out by a lesser line. When one of your own goes its own way (the
+  long way round, beside a friend, along the edge, on a whim, hanging back), a word goes over it
+  and the line says why, once a turn, so a companion being itself is not mistaken for a slip or
+  the other team's doing.
 - The match screen says more of what a turn came to. While orders are given, the "Just now"
   card lists what came of each of last turn's orders. The top strip says "Last turn" on the
   last turn and "One tick to go" beside a beacon one tick from lighting. A match won when time

@@ -1523,22 +1523,31 @@ impl BattleApp {
                 && !taken.iter().any(|t| t.intersects(r))
         };
 
-        // The line: one at a time, each given a moment of its own before the next.
+        // The line: one at a time, each given a moment of its own before the next. The lines
+        // that matter most are placed first; a lesser one takes whatever room is left near its
+        // moment. A line that would come too long after its moment is left to the card of the
+        // last two, so the board never falls behind the turn.
         let mut told: Vec<(&Callout, f32)> = Vec::new();
-        for (c, born) in &self.live {
-            if c.headline.is_none() || anchor(c).is_none() {
-                continue;
+        for rank in (1..=3).rev() {
+            for (c, born) in &self.live {
+                if c.rank != rank || c.headline.is_none() || anchor(c).is_none() {
+                    continue;
+                }
+                // The first moment from its own on that keeps clear of every line already
+                // placed.
+                let mut shown = *born;
+                while let Some((_, other)) = told
+                    .iter()
+                    .find(|(_, other)| (shown - other).abs() < HEADLINE_SECS)
+                {
+                    shown = other + HEADLINE_SECS;
+                }
+                if shown - born <= 1.0 {
+                    told.push((c, shown));
+                }
             }
-            let shown = told
-                .last()
-                .map_or(*born, |(_, last)| born.max(last + HEADLINE_SECS));
-            // A line that would come too long after its moment is left to the card of the last
-            // two, so the board never falls behind the turn.
-            if shown - born > 1.0 {
-                continue;
-            }
-            told.push((c, shown));
         }
+        told.sort_by(|a, b| a.1.total_cmp(&b.1));
         let mut caption = None;
         // Once the match is over, its stamp says so; no line over it.
         if self.finished_at.is_some() {

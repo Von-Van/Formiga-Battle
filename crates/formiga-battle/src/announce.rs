@@ -9,7 +9,7 @@
 use crate::playback::Playback;
 use crate::sound::Cue;
 use formiga_battle_core::recap::recap_naming;
-use formiga_battle_core::{Because, EventKind, Match, Role, Side, Slot, Victory, Why};
+use formiga_battle_core::{Because, EventKind, Match, Reason, Role, Side, Slot, Victory, Why};
 
 /// One moment of a turn, as it is announced.
 #[derive(Clone, Debug, PartialEq)]
@@ -28,6 +28,9 @@ pub struct Callout {
     pub good_for: Option<Side>,
     pub cue: Option<Cue>,
     pub style: Style,
+    /// How much its headline matters, 1 to 3: when a busy moment has more lines than the board
+    /// has time for, the lesser ones give way (`Callout::rank_of`).
+    pub rank: u8,
 }
 
 /// How a callout's word is drawn.
@@ -52,6 +55,27 @@ impl Callout {
             good_for: None,
             cue: None,
             style: Style::Word,
+            rank: 1,
+        }
+    }
+
+    /// How much a moment's headline matters. 3: what decides or swings the match (a knockout,
+    /// a breakthrough, the beacon lit, time up). 2: a turning point a Handler planned for or
+    /// against (a flank, a hold that turned them away, someone caught on the move, the map event
+    /// landing), and one of the Handler's own going its own way. 1: everything else.
+    fn rank_of(kind: &EventKind) -> u8 {
+        match kind {
+            EventKind::KnockedOut { .. }
+            | EventKind::BrokeThrough { .. }
+            | EventKind::Finished { .. } => 3,
+            EventKind::Flanked { .. }
+            | EventKind::Countered { .. }
+            | EventKind::Interrupted { .. }
+            | EventKind::SceneryLanded { .. }
+            | EventKind::CaptureProgress { .. }
+            | EventKind::HungBack { .. }
+            | EventKind::Stepped { .. } => 2,
+            _ => 1,
         }
     }
 }
@@ -205,6 +229,8 @@ pub fn callouts(
         recap_naming(m, &[event], teams).into_iter().next()
     };
     let mut progress_told = [false; 2];
+    // The Handler's own creatures already told going their own way this turn.
+    let mut own_way: std::collections::BTreeSet<Slot> = std::collections::BTreeSet::new();
     // How the team shared out the plan, as the orders are revealed: only where a companion's
     // own leanings chose its job, and only for the Handler's team.
     let mut leaning = 0;
@@ -243,7 +269,34 @@ pub fn callouts(
         let mut c = Callout::new(*when);
         let at = |slot: Slot| playback.at(*when).figure(slot).at;
         match &event.kind {
-            EventKind::Stepped { .. } => c.cue = Some(Cue::Step),
+            EventKind::Stepped { slot, reason, .. } => {
+                c.cue = Some(Cue::Step);
+                // One of the Handler's own going a way of its own: a word over it, once a turn,
+                // and the line saying why, so a creature being itself is not taken for a
+                // mistake or the other team's doing.
+                let word = match reason {
+                    Reason::AvoidedExposure | Reason::AvoidedContestedCentre => Some("CAREFUL..."),
+                    Reason::KeptNearAlly { .. } | Reason::FollowedUpToAlly { .. } => Some("BUDDY!"),
+                    Reason::KeptApartFrom { .. } => Some("HMPH!"),
+                    Reason::SideRoute => Some("WANDER!"),
+                    Reason::TookCover | Reason::FollowedUpToCover => Some("SNEAK..."),
+                    Reason::OnImpulse => Some("WHIM!"),
+                    Reason::Bold => Some("BOLD!"),
+                    Reason::SkirtedWarning => Some("EEK!"),
+                    Reason::WentForItem => Some("OOH!"),
+                    Reason::Direct | Reason::SteppedBack | Reason::HungBack => None,
+                };
+                if slot.side == you
+                    && let Some(word) = word
+                    && own_way.insert(*slot)
+                {
+                    c.about = Some(*slot);
+                    c.place = Some(at(*slot));
+                    c.word = Some(word);
+                    c.headline = told(&event.kind);
+                    c.good_for = Some(slot.side);
+                }
+            }
             EventKind::Bumped { slot, wanted } => {
                 c.place = Some(centre(*wanted));
                 c.about = Some(*slot);
@@ -255,6 +308,9 @@ pub fn callouts(
                 c.about = Some(*slot);
                 c.word = Some("HMM?");
                 c.cue = Some(Cue::Hmm);
+                if slot.side == you && own_way.insert(*slot) {
+                    c.headline = told(&event.kind);
+                }
             }
             EventKind::Interrupted { target, by } => {
                 c.place = Some(at(*target));
@@ -657,6 +713,7 @@ pub fn callouts(
             | EventKind::CaptureContested => {}
             EventKind::HoneyDried { .. } => {}
         }
+        c.rank = Callout::rank_of(&event.kind);
         // A headline is shown over whoever it is about; one about the beacon, over the beacon.
         if c.headline.is_some() && c.place.is_none() {
             c.place = Some(beacon);
@@ -723,6 +780,35 @@ mod tests {
                 .filter(|c| c.word.is_some() || c.headline.is_some())
                 .all(|c| c.place.is_some())
         );
+    }
+
+    #[test]
+    fn your_own_going_their_own_way_is_told_and_breakthroughs_outrank_the_rest() {
+        let all: Vec<Callout> = (1..8).flat_map(|seed| played(seed, 12)).collect();
+        let own: Vec<&Callout> = all
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c.word,
+                    Some("CAREFUL..." | "BUDDY!" | "WANDER!" | "SNEAK..." | "WHIM!" | "BOLD!")
+                )
+            })
+            .collect();
+        assert!(
+            !own.is_empty(),
+            "someone of yours goes its own way in seven matches"
+        );
+        assert!(
+            own.iter()
+                .all(|c| c.about.is_some_and(|s| s.side == Side::Left) && c.headline.is_some()),
+            "only your own, each with the line saying why"
+        );
+        let broke: Vec<&Callout> = all
+            .iter()
+            .filter(|c| c.word == Some("BREAKTHROUGH!"))
+            .collect();
+        assert!(!broke.is_empty(), "a breakthrough in seven matches");
+        assert!(broke.iter().all(|c| c.rank == 3 && c.style == Style::Big));
     }
 
     #[test]
