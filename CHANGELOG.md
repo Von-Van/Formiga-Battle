@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Battle comes as an app to download for macOS and Windows, with an icon of its own: the
+  Backyard's beacon between the two teams' pennants. Installed in Applications, or with the
+  Windows installer, Formiga Desktop finds it on its own.
+
 ## [0.67.7] - 2026-10-15
 
 The first release of Battle. Its version now follows the Formiga release it ships with, and it is
