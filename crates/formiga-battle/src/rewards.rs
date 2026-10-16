@@ -31,7 +31,7 @@ pub struct Cup {
 
 /// The cups in the order they open: the Backyard Cup from the start, and each one after it once
 /// the one before is won.
-pub const CUPS: [Cup; 3] = [
+pub const CUPS: [Cup; 4] = [
     Cup {
         id: BACKYARD_CUP,
         arena: "backyard",
@@ -49,6 +49,12 @@ pub const CUPS: [Cup; 3] = [
         arena: "millpond",
         name: "Millpond Cup",
         keepsakes: ["battle.trophy.millpond_cup", "battle.medal.millpond_cup"],
+    },
+    Cup {
+        id: "cup.cove",
+        arena: "cove",
+        name: "Sandy Cove Cup",
+        keepsakes: ["battle.trophy.cove_cup", "battle.medal.cove_cup"],
     },
 ];
 
