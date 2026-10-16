@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rules version 5: a creature's personality pulls three times as hard on the way it walks, so
+  about three steps in ten go its own way rather than the plain way (one in eleven before). A
+  coach who knows its creatures now wins 62.2% against one who plans as well without knowing
+  them (from 59.0%). Recorded matches from earlier builds no longer replay.
+
 ## [0.67.8] - 2026-10-15
 
 The first Battle to download: an app for macOS and an installer for Windows, released with Formiga

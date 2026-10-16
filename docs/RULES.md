@@ -2,7 +2,7 @@
 
 How a match of Formiga Battle resolves, as `formiga-battle-core` plays it. Every number here lives
 in `Ruleset` (`crates/formiga-battle-core/src/ruleset.rs`), travels with every recorded match, and
-is provisional until playtests settle it. `RULES_VERSION` is 4.
+is provisional until playtests settle it. `RULES_VERSION` is 5.
 
 ## A match
 
@@ -164,7 +164,8 @@ Its profile picks the way, and what it does with a moment to spare.
 
 Each tick it looks ahead over the steps left in the turn (at most three), at every way that
 spends at most its remaining detour budget, and scores each whole way: what every tile on it is
-like to this creature, less 220 for each step it would arrive later than the quickest way. Danger
+like to this creature, counted three times over, less 220 for each step it would arrive later
+than the quickest way. Danger
 counts on every tile the way passes; company and the lane it keeps to count as the way's
 average, so a long way round is never worth more company for being long. It takes the first
 step of the best and looks again next tick.
@@ -176,6 +177,12 @@ step of the best and looks again next tick.
 | Beside a teammate | +togetherness / 2, +100 for a high bond (+50 medium), −200 for high avoidance (−100 medium) |
 | How far out from the middle row | +wanderlust × rows out / half the board's height |
 | Against a wall or obstacle | +caution / 4 for each, likewise |
+
+Counting a way's tiles three times over is the pull (`PULL` in `interpret.rs`, 300%). Only
+about one step in ten has two ways there that arrive equally soon, so beyond that every way a
+profile chooses costs time; at 300%, about three steps in ten are not the plain way, against one
+in eleven at 100% under rules version 4. It weighs only the way there: what a creature does with
+a moment to spare is weighed as the table says.
 
 Ties are broken by a seeded draw. Now and then (`variability`, 1% to 6%) it takes its second-best
 choice instead, if both are on time. A wary creature (caution 150 or more) sent to walk waits one
@@ -210,14 +217,19 @@ Over 10,000 Exhibition-coached matches with the default rules (`--pairings 5000 
 
 | | |
 |---|---|
-| Left side | 0.502 |
-| Kinds, highest to lowest | Showoff 0.516, Troublemaker 0.513, Lazybones 0.511, Sweetheart 0.506, Explorer 0.497, Oddball 0.496, Scholar 0.494, Guardian 0.493, Grump 0.489, Wallflower 0.480 |
-| Spread between kinds | 0.036, each kind over 3,600 to 7,000 matches |
-| Won by capture, knockout, at the cap, drawn | 21%, 0%, 67%, 12%, in 11.4 turns |
+| Left side | 0.494 |
+| Kinds, highest to lowest | Troublemaker 0.531, Guardian 0.523, Lazybones 0.523, Grump 0.521, Explorer 0.512, Sweetheart 0.508, Scholar 0.485, Showoff 0.477, Oddball 0.457, Wallflower 0.436 |
+| Spread between kinds | 0.095, each kind over 3,600 to 7,000 matches |
+| Won by capture, knockout, at the cap, drawn | 14%, 0%, 70%, 16%, in 11.5 turns |
 
 With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500`, seeds 7 and
-8), kinds score within 0.037 of each other on both, with no kind lowest on both; 27% of those
-matches are won by capture and 2% by knockout, in about 10 turns.
+8), kinds score within 0.056 and 0.044 of each other, with no kind lowest on both; 25% of those
+matches are won by capture and 1% by knockout, in about 10 turns.
+
+Rules version 5 tripled the pull, and the Exhibition spread with it (0.036 under version 4, when
+Wallflowers scored 0.480 and 21% of matches were won by capture): every way a profile chooses
+past the first one in ten costs time, and the kinds that lean hardest pay most when nobody plans
+for it. Coached by someone who knows them, kinds stay about as close as they were.
 
 Most matches now go to the turn cap. With good holding on both sides the zone stays contested,
 and the cap's order (beacon progress, then composure, then creatures standing) decides them;
@@ -237,9 +249,9 @@ of the zone and holds it for the rest of the match. Over 2,000 matches each (`--
 
 | Against turtle | Score | How |
 |---|---|---|
-| exhibition | 0.679 | 78% won or lost at the cap, 22% drawn |
-| familiar | 0.897 | 92% at the cap, 8% drawn |
-| generic | 0.634 | 92% at the cap, 7% drawn |
+| exhibition | 0.704 | 76% won or lost at the cap, 22% drawn |
+| familiar | 0.890 | 89% at the cap, 10% drawn |
+| generic | 0.644 | 86% at the cap, 9% drawn |
 
 Three holders in a five-tile cross keep it contested for as long as they stand, so they are
 almost never beaten by capture; they are beaten on the cap, because a team that only holds never
@@ -256,16 +268,17 @@ creatures as they are; the generic one imagines every creature as one that leans
 
 | Coaches | Familiar's score |
 |---|---|
-| familiar against generic, 6,000 matches | 0.590 |
-| familiar against Exhibition, 2,000 matches | 0.978 |
-| generic against Exhibition, 2,000 matches | 0.683 |
+| familiar against generic, 6,000 matches | 0.622 |
+| familiar against Exhibition, 2,000 matches | 0.953 |
+| generic against Exhibition, 2,000 matches | 0.677 |
 
-Knowing your creatures is worth more under rules version 4 than it was: the coach who knows them
-wins 59.0% against one who plans as well without knowing them (52.4% under version 3). A flank
+Knowing your creatures is worth more under rules version 5 than it was: the coach who knows them
+wins 62.2% against one who plans as well without knowing them (59.0% under version 4, 52.4%
+under version 3), because three times as many of its creatures' steps are theirs. A flank
 lands only if both flankers are in place at the start of a turn, so knowing who will wander, who
 hangs back and who goes the long way round decides whether a flank lands. It shows most with the
-creatures that differ most from a plain one: the generic coach scores 0.426 with its Wallflowers
-against Exhibition, while the familiar coach scores 0.503 with them.
+creatures that differ most from a plain one: under version 4 the generic coach scored 0.426 with its Wallflowers
+against Exhibition, while the familiar coach scored 0.503 with them.
 
 Under version 3, most of it came from hanging back: a coach who knows which of its creatures are
 wary plans for the tick they lose, or sends them to contest instead. It was 51.1% in rules

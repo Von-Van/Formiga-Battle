@@ -3,9 +3,9 @@
 //! Every tick a creature still on its way looks at the steps that bring it closer, and at a
 //! sideways step if it has detours left, and weighs them by what it is like: whether a step puts
 //! it within reach of the other team, beside a friend, along the outside, or against a wall. The
-//! weights come from `Behavior`; the board decides which choices exist at all. Progress always
-//! counts for more than any one preference, and a sideways step costs a tick, so a creature that
-//! goes round is later for it.
+//! weights come from `Behavior`, pulled `PULL` as hard; the board decides which choices exist at
+//! all. Every step later than the quickest way is weighed against them, and a sideways step costs
+//! a tick, so a creature that goes round is later for it.
 //!
 //! A creature never chooses whether to obey. Its order sets where it is going and what it does
 //! there; its profile only picks the way, and what to do with a moment to spare once it has
@@ -16,6 +16,13 @@ use crate::game::Match;
 use crate::grid::Tile;
 use crate::order::{Order, Slot, Target};
 use crate::rng::{self, Purpose};
+
+/// How hard a creature's leanings pull on the way it walks, against arriving on time, in percent
+/// of what `Behavior` gives. Only about one step in ten has two ways there that arrive equally
+/// soon, so beyond that every way a profile chooses costs time: at 100 (rules version 4) about
+/// one step in eleven was not the plain way, at 300 about three in ten are. What a creature does
+/// with a moment to spare is weighed as `Behavior` gives it.
+const PULL: i32 = 300;
 
 /// What it takes to shift from where it arrived with a moment to spare.
 const SHIFT_COST: i32 = 150;
@@ -170,6 +177,21 @@ impl Weighed {
     fn along(&self, steps: usize) -> i32 {
         let steps = steps.max(1) as i32;
         self.exposure + self.centre + self.cover + (self.together + self.apart + self.lane) / steps
+    }
+
+    /// The same tile, its every part pulling `percent` as hard.
+    fn scaled(mut self, percent: i32) -> Self {
+        for part in [
+            &mut self.exposure,
+            &mut self.centre,
+            &mut self.together,
+            &mut self.apart,
+            &mut self.lane,
+            &mut self.cover,
+        ] {
+            *part = *part * percent / 100;
+        }
+        self
     }
 
     fn total(&self) -> i32 {
@@ -429,7 +451,7 @@ impl Look<'_> {
             if detour && detours >= budget {
                 continue;
             }
-            let w = weigh(self.m, self.slot, next, self.chasing, self.passing_zone);
+            let w = weigh(self.m, self.slot, next, self.chasing, self.passing_zone).scaled(PULL);
             let before = *sum;
             sum.add(&w);
             path.push(next);
