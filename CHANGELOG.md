@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The Handler's things are painted as the notebook's other pictures are. A pennant is chosen
+  from sample tiles of cloth (its cut, cloth, symbol and edge) and stirs on its cane in a tuft of
+  grass; the Handler's title is engraved on a brass plate, with a ribbon rosette for each cup won
+  and a pencilled one for each still to win; each trio is a team picture taped into the
+  notebook, its three on a strip of lawn by their pennant with their name on a ribbon, faded once
+  retired; and a match opens under a ribbon strung between the two sides' pennants.
 - Matches against the visitors write the Handler's Notebook too, as friend matches do: what each
   of the three was seen to do, and its moments, listed with what the match earned. The notebook
   also notes now when a companion tends to hang back or is good at flanking with a friend, and
