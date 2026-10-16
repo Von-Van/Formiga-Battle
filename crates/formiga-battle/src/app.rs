@@ -45,9 +45,9 @@ const TABS: [&str; 2] = ["Orders", "Notebook"];
 
 /// What a friend match sends, said in full before the first is opened.
 const SHARED: [&str; 5] = [
-    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here; your three companions' names, looks and temperaments, and how they get on; your orders each turn; a check number for the board after each turn; and which versions of Battle and Formiga Desktop you have, with a fingerprint of your copy of Battle (the same for everyone with that copy), so only matching, unaltered copies play each other.",
+    "Battle sends these to Formiga's relay at formigaworld.com, and on to your friend's Battle: the name you type here; for each of your three companions, its name, the number Formiga Desktop knows it by, when it was born, its parent's number if it is a little one, its look, size and what it wears, how it moves, its temperament, the habits it has picked up and the leanings it has learned, and how the three get on; your orders each turn; a check number for the board after each turn; and which versions of Battle and Formiga Desktop you have, with a fingerprint of your copy of Battle (the same for everyone with that copy), so only matching, unaltered copies play each other.",
     "Nothing else from your colony is sent. There is no account, no email, no device or computer ID.",
-    "The relay keeps your room only while it is open. It deletes it when the match ends, or after five minutes with nobody in it, and never keeps a copy. Your seat's key is kept only in scrambled form.",
+    "The relay keeps your room only while it is in use, and never keeps a copy. It deletes it two minutes after the match ends, fifteen minutes after it opens if your friend never joins, five minutes after neither Battle has checked in, and two hours after it opens in any case. Your seat's key is kept only in scrambled form.",
     "Like any website, formigaworld.com's host may keep its usual short-lived request logs (when a request came, and from what internet address). The relay itself logs nothing about your room.",
     "What the match earns is written to your colony on this computer when Battle closes.",
 ];

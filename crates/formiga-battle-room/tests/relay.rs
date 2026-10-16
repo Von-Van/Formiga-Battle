@@ -616,7 +616,7 @@ fn a_body_too_big_to_read_is_answered_with_a_refusal_rather_than_a_reset() {
     let body = vec![b'x'; 200 * 1024];
     write!(
         stream,
-        "POST /api/battle/rooms HTTP/1.1\r\nHost: {host}\r\nContent-Length: {}\r\n\r\n",
+        "POST /api/battle/rooms HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
         body.len()
     )
     .unwrap();
@@ -816,7 +816,7 @@ fn an_older_battle_is_told_to_update_whatever_else_its_entrant_lacks() {
     let mut stream = std::net::TcpStream::connect(address).unwrap();
     write!(
         stream,
-        "POST /api/battle/rooms HTTP/1.1\r\nContent-Length: {}\r\n\r\n{body}",
+        "POST /api/battle/rooms HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
         body.len()
     )
     .unwrap();

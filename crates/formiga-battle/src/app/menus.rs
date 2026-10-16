@@ -975,24 +975,13 @@ impl BattleApp {
                         ui.horizontal(|ui| {
                             ui.label(label_job(&format!("{}", slot + 1), 13.0, ink::STAMP));
                             portrait_mat(ui, &texture, 44.0, u, true);
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new(&contender.traveler.name)
-                                        .size(15.0)
-                                        .strong()
-                                        .color(ink::PAGE),
-                                );
-                                ui.label(
-                                    RichText::new(&contender.traveler.character.phrase)
-                                        .size(12.0)
-                                        .color(ink::MUTED),
-                                );
-                            });
-                            if !waiting {
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        if chrome::button(
+                            // The button takes its room at the right first, so the words beside
+                            // the portrait wrap rather than run under it.
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if !waiting
+                                        && chrome::button(
                                             ui,
                                             "take out",
                                             Kind::Back,
@@ -1002,12 +991,27 @@ impl BattleApp {
                                             u,
                                         )
                                         .clicked()
-                                        {
-                                            take_out = Some(place);
-                                        }
-                                    },
-                                );
-                            }
+                                    {
+                                        take_out = Some(place);
+                                    }
+                                    ui.with_layout(
+                                        egui::Layout::top_down(egui::Align::Min),
+                                        |ui| {
+                                            ui.label(
+                                                RichText::new(&contender.traveler.name)
+                                                    .size(15.0)
+                                                    .strong()
+                                                    .color(ink::PAGE),
+                                            );
+                                            ui.label(
+                                                RichText::new(&contender.traveler.character.phrase)
+                                                    .size(12.0)
+                                                    .color(ink::MUTED),
+                                            );
+                                        },
+                                    );
+                                },
+                            );
                         });
                     });
                 }
