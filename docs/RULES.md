@@ -143,7 +143,7 @@ Props use the three orders and grant nothing permanent. Each is data in the aren
 | Beacon (`Z`) | HOLD in the zone | Capture progress | Progress shown to both teams | Stand in the zone unbroken to pause it; flank its holders to clear it |
 | Gate lever (`L`, gates `G`/`g`) | CONTEST from a tile touching the lever | Every gate swings `swing_ticks` later (at least 1), then the lever rests `cooldown_turns` whole turns | The pull, and the tick the gates will swing, are an event both teams see | HOLD on a tile touching the lever: a pull is turned away like a contest, one composure for each such holder. A gate cannot close on someone standing in it, or on a twig |
 | Map event (`event:` and its tiles) | Comes round by itself on `event_first` and every `event_every` turns after | Its effect on everyone standing on its tiles | Its tiles are marked a whole turn before, from the end of the turn before it comes; it lands on that turn's second tick | Stand elsewhere when it comes, or under a leaf umbrella |
-| Tap (`S`) | CONTEST from a tile touching it | The map event lands a tick later; then every tap rests `switch_rest` whole turns | The turn, and the tiles, are an event both teams see | HOLD on a tile touching the tap, as at the lever. A tap does nothing while the event is already coming |
+| Switch (`S`): a tap, a shell, a sluice, a tree | CONTEST from a tile touching it, or a pebble bell rung beside it | The map event lands a tick later; then every switch rests `switch_rest` whole turns | The turn, and the tiles, are an event both teams see | HOLD on a tile touching the switch, as at the lever. A switch does nothing while the event is already coming |
 | Item spot (`*`) | Step onto what turns up there | See [Found things](#found-things) | It glints a whole turn before | Get there first, or knock it out of the carrier's paws |
 
 ## The map event
@@ -154,6 +154,15 @@ composure.
 | Effect | What happens to anyone on its tiles when it lands |
 |---|---|
 | Soak | Off balance, as when boxed in by a flank: it stops for the rest of the turn, stops holding, does not count in the zone, and drops what it carries. Under a leaf umbrella it stays dry |
+| Wash | Pushed one tile onto the free open ground beside it nearest the board's middle row, off the event's tiles (upper first among equals, then nearer its own side), then off balance as for a soak; off balance where it stands if there is nowhere to go. Under a leaf umbrella it stays put |
+| Close | The tiles go under until the end of the next turn: nobody can stand there, and whatever lay or stood wedged there floats off. Anyone on them is washed off first, never onto the yard; a leaf umbrella does not help |
+
+| Arena | Event | Effect | Tiles | By itself | Switches |
+|---|---|---|---|---|---|
+| Backyard | The sprinkler | Soak | The whole yard | Turns 4, 8 and 12 | A garden tap on each side of the near edge |
+| Sandy Cove | A wave | Wash | The sandbar's two ends and the sand either side of them | Turns 3, 6, 9 and 12 | A big shell on each side of the near edge |
+| Millpond | The pond rising | Close | The jetty's two sides, leaving the yard a line | Turns 5 and 10 | A sluice on each bank |
+| Woodland Glade | A tree shaken | Soak, and a twig falls beside the tree | The open ground round the tree, corner to corner | Turns 4, 8 and 12, on a pair of trees across from each other drawn at random | Each of the four old trees by the lanes (`event_tiles: around`) |
 
 Backyard's is a sprinkler that soaks the whole yard on turns 4, 8 and 12, with a tap on each side
 of the near edge. It clears the yard for both teams alike: what it rewards is having someone
@@ -166,7 +175,8 @@ Exhibition matches were won at the beacon in about 7 turns.
 Things turn up on an arena's item spots, which come in pairs mirrored across the board, on turn 2
 and every three turns after. At the end of the turn before, a seeded draw picks a pair whose
 spots are clear and one item, and the same item glints on both spots for both teams to see.
-Puffs turn up 40% of the time, twigs 35% and leaf umbrellas 25%.
+Puffs turn up 26% of the time, twigs 22%, leaf umbrellas 18%, pebble bells 16%, honey 12% and
+springy seeds, the one that only moves its user, 6%.
 
 A creature that steps onto something with empty paws picks it up, whatever its order; one thing
 at a time, and both teams can see who carries what. Caught on the move, flanked, soaked, blown
@@ -178,11 +188,17 @@ Nothing found costs composure, nothing outlasts the match, and the fallback neve
 |---|---|---|---|
 | Dandelion puff | 2 | Blows across the tile and the two either side of it, across the way from its user to the tile (along whichever way is further; across the board when level). Everyone there is pushed one tile on and knocked off balance, or knocked off balance where it stands if the way on is blocked. A holder with a holder of its team beside it, corner to corner, braces and is not moved. Twigs there blow over | Lands and is gone |
 | Twig | 2 | Wedges into the tile, if nobody and nothing is there and anyone could stand there: nobody can stand there, and a gate cannot close on it | To the end of the turn two after it lands |
-| Leaf umbrella | 1 | Opens over whoever of its user's team stands on the tile, itself included: the map event cannot soak it, and a contest against it while it is not holding bounces off, hurting nobody. A puff catches it like a sail and carries it two tiles | To the end of the next turn |
+| Leaf umbrella | 1 | Opens over whoever of its user's team stands on the tile, itself included: the map event cannot soak or wash it, and a contest against it while it is not holding bounces off, hurting nobody. A puff catches it like a sail and carries it two tiles | To the end of the next turn |
+| Pebble bell | 2 | Rings where its user stands: everyone of the other team within two tiles who has not settled a contest (or a pull, or a turn of a switch) this turn loses it. Rung beside a switch that is ready, it sets the map event off | Lands and is gone |
+| Honey drop | 2 | Spills over the tile and the four round it, wherever anyone could stand: whoever steps in, or is already there, is stuck where it stands for the rest of the turn, and can still hold | To the end of the turn two after it lands |
+| Springy seed | 2 | Hops its user onto the tile, if it is free ground: over anyone or a twig in between, never over a wall, an obstacle or water | Lands and is gone |
 
-Things meet each other and the board in a few fixed ways: a leaf keeps off the sprinkler, a puff
-blows twigs over and carries a leaf two tiles, a twig wedged in an open gate keeps it open, and a
-puff can blow someone onto ground marked for the sprinkler just before it lands.
+Things meet each other and the board in a few fixed ways: a leaf keeps off the sprinkler, the
+acorns and the wave; a puff blows twigs over and carries a leaf two tiles; a twig wedged in an open
+gate keeps it open, and thrown into the millpond floats as a raft anyone can stand on until the
+end of the next turn; a pebble bell rung by a switch sets the event off; honey stops a creature
+pushed onto it by a puff or a wave, and a twig will not stand in it; a puff can blow someone onto
+ground marked for the event just before it lands.
 
 ## Arenas
 
@@ -225,7 +241,7 @@ step of the best and looks again next tick.
 | Beside a teammate | +togetherness / 2, +100 for a high bond (+50 medium), −200 for high avoidance (−100 medium) |
 | How far out from the middle row | +wanderlust × rows out / half the board's height |
 | Against a wall or obstacle | +caution / 4 for each, likewise |
-| Marked for something about to land (the map event, or a puff used last tick) | −caution / 2, for a cautious creature; nothing for a bold one, which walks straight on and takes its chances |
+| Marked for something about to land (the map event, or a puff or honey used last tick), or sticky with honey | −caution / 2, for a cautious creature; nothing for a bold one, which walks straight on and takes its chances |
 | Something lying there, with empty paws | +(wanderlust + opportunism) / 2, counting only leanings toward it: a curious or playful creature goes out of its way for it, one that keeps to its way does not |
 
 Counting a way's tiles four times over is the pull (`PULL` in `interpret.rs`, 400%), set so that

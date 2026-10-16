@@ -2,17 +2,23 @@
 
 ## Unreleased
 
-- Rules version 6: Backyard has a sprinkler. It sweeps the whole yard on turns 4, 8 and 12, its
-  tiles washed blue and ringed with droplets the turn before, and a garden tap on each side of the
-  near edge sets it off a tick early. Whoever it soaks is off balance for the rest of the turn and
-  lets go of what it carries; nobody loses composure. A quarter of matches are now won at the
-  beacon. Recorded matches from earlier builds no longer replay.
-- Found things: a dandelion puff, a twig or a leaf umbrella glints on two mirrored spots and turns
-  up the turn after. Whoever steps onto one picks it up and can USE it once: a puff bowls over
-  whoever stands across its way, a twig blocks a tile for two turns (and keeps an open gate from
-  closing), and a leaf umbrella keeps a teammate dry and bounces contests off. Cautious companions
-  keep off ground about to be soaked; curious, playful ones go out of their way for what lies in
-  the grass.
+- Rules version 6: every arena has a map event, warned on the board the turn before it comes
+  round and set off early from a switch of its own. Backyard's sprinkler sweeps the whole yard
+  (turns 4, 8 and 12; a garden tap on each side). Sandy Cove's wave washes whoever stands on the
+  sandbar's ends toward the middle of the beach (every third turn; a big shell on each side).
+  Millpond's water rises over the jetty's sides, washing off whoever is there and leaving the yard
+  a line until the turn after (turns 5 and 10; a sluice on each bank). In Woodland Glade, a shaken
+  oak sheds acorns on whoever stands round it and drops a twig (a breeze shakes a pair every fourth
+  turn; a contest shakes one). Nobody loses composure to any of them. Recorded matches from earlier
+  builds no longer replay.
+- Found things: a dandelion puff, a twig, a leaf umbrella, a pebble bell, a honey drop or, rarely,
+  a springy seed glints on two mirrored spots and turns up the turn after. Whoever steps onto one
+  picks it up and can USE it once: a puff bowls over whoever stands across its way, a twig blocks a
+  tile for two turns (keeps an open gate from closing, and floats as a raft in the millpond), a
+  leaf umbrella keeps a teammate dry and bounces contests off, a bell spoils the other team's
+  contests nearby (and sets the map event off, rung by a switch), honey stops whoever steps in,
+  and a seed hops its user two tiles. Cautious companions keep off ground about to be hit;
+  curious, playful ones go out of their way for what lies in the grass.
 - Battle opens at the Battleground, the first spread of the Handler's notebook. On its left page
   the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
   it, a face at each window, and a coach more for every three past six. On its right, two railway

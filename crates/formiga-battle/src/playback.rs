@@ -72,6 +72,8 @@ pub enum Burst {
     Gust,
     /// Something found turning up, or picked up.
     Twinkle,
+    /// A pebble bell ringing.
+    Ring,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -107,6 +109,14 @@ pub struct Frame {
     pub tap_ready: bool,
     /// Tiles a puff is about to blow across.
     pub gusty: Vec<Tile>,
+    /// Where the map event will land, while it is coming.
+    pub event_tiles: Vec<Tile>,
+    /// Ground gone under.
+    pub closed: Vec<Tile>,
+    /// Twigs floating as rafts.
+    pub rafts: Vec<Tile>,
+    /// Sticky ground.
+    pub honey: Vec<Tile>,
 }
 
 /// How long effects stay on the board.
@@ -149,6 +159,10 @@ impl Frame {
             sprinkler_coming: board.event_at.is_some(),
             tap_ready: board.event_at.is_none()
                 && board.turn.saturating_add(1) >= board.switch_ready_turn,
+            event_tiles: board.event_tiles.clone(),
+            closed: board.closed.iter().map(|(t, _)| *t).collect(),
+            rafts: board.rafts.iter().map(|(t, _)| *t).collect(),
+            honey: board.honey.iter().map(|(t, _)| *t).collect(),
             gusty: board
                 .pending
                 .iter()
@@ -468,10 +482,31 @@ impl Playback {
                 }
                 // Where the map event and found things move or topple anyone; how they look and
                 // sound is the match screen's to draw.
-                EventKind::SceneryLanded { hit, tiles, .. } => {
+                EventKind::SceneryLanded {
+                    hit,
+                    tiles,
+                    effect: what,
+                    moved,
+                    ..
+                } => {
                     frame.sprinkler_coming = false;
+                    frame.event_tiles.clear();
                     for tile in tiles {
                         effect(&mut frame, Burst::Splash, *tile);
+                    }
+                    if *what == formiga_battle_core::Effect::Close {
+                        frame.ground.retain(|(t, _)| !tiles.contains(t));
+                        frame.closed.extend(tiles.iter().copied());
+                    }
+                    for b in moved {
+                        if let Some(to) = b.to {
+                            let f = frame.figure_mut(b.slot);
+                            let share = (age / 0.35).clamp(0.0, 1.0);
+                            let (fx, fy) = (f32::from(b.from.x) + 0.5, f32::from(b.from.y) + 0.5);
+                            let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
+                            f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
+                            f.tile = to;
+                        }
                     }
                     for slot in hit {
                         let f = frame.figure_mut(*slot);
@@ -499,7 +534,32 @@ impl Playback {
                         set_pose(&mut frame, &mut since, b.slot, Pose::Wobble, *when);
                     }
                 }
-                EventKind::SceneryWarned { .. } => frame.sprinkler_coming = true,
+                EventKind::SceneryWarned { tiles, .. } => {
+                    frame.sprinkler_coming = true;
+                    frame.event_tiles = tiles.clone();
+                }
+                EventKind::GroundReopened { tiles } => frame.closed.retain(|t| !tiles.contains(t)),
+                EventKind::RaftFloated { at, .. } => frame.rafts.push(*at),
+                EventKind::RaftSank { at } => frame.rafts.retain(|t| t != at),
+                EventKind::Rung { at, .. } => effect(&mut frame, Burst::Ring, *at),
+                EventKind::HoneySpilled { tiles, .. } => {
+                    frame.gusty.retain(|t| !tiles.contains(t));
+                    frame.honey.extend(tiles.iter().copied());
+                }
+                EventKind::HoneyDried { tiles } => frame.honey.retain(|t| !tiles.contains(t)),
+                EventKind::Stuck { slot, .. } => {
+                    set_pose(&mut frame, &mut since, *slot, Pose::Wobble, *when);
+                }
+                EventKind::Hopped { slot, from, to } => {
+                    // Up and over, quickly.
+                    let share = (age / 0.4).clamp(0.0, 1.0);
+                    let f = frame.figure_mut(*slot);
+                    let (fx, fy) = (f32::from(from.x) + 0.5, f32::from(from.y) + 0.5);
+                    let (tx, ty) = (f32::from(to.x) + 0.5, f32::from(to.y) + 0.5);
+                    f.at = (fx + (tx - fx) * share, fy + (ty - fy) * share);
+                    f.tile = *to;
+                    effect(&mut frame, Burst::Twinkle, *from);
+                }
                 EventKind::SwitchTurned { .. } => {
                     frame.tap_ready = false;
                     frame.sprinkler_coming = true;
@@ -526,7 +586,7 @@ impl Playback {
                 } => {
                     frame.figure_mut(*slot).carrying = None;
                     set_pose(&mut frame, &mut since, *slot, Pose::Reach, *when);
-                    if *item == Item::Puff {
+                    if matches!(item, Item::Puff | Item::Honey) {
                         frame.gusty = tiles.clone();
                     }
                 }

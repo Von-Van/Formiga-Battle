@@ -23,8 +23,10 @@
 //! | `S` | A switch (a garden tap): nobody stands on it; a CONTEST from next door sets off the map event early |
 //! | `*` | An item spot: open ground where found things turn up, always one of a mirrored pair |
 //!
-//! An arena may have one map event, set by `event:` and the settings after it: which tiles it
-//! lands on, and which turns it comes round on by itself. A switch needs an event to set off.
+//! An arena may have one map event, set by `event:` and the settings after it: what it is called,
+//! which tiles it lands on (or `around`, the tiles round whichever switch set it off), and which
+//! turns it comes round on by itself. A switch needs an event to set off. `water: yes` says the
+//! arena's obstacles are water, where a twig floats.
 //!
 //! Gameplay lives only in these tiles. Whatever is drawn over them later is decoration and never
 //! decides where anyone can walk.
@@ -64,14 +66,28 @@ pub enum Effect {
     /// Off balance: it stops for the rest of the turn, stops holding, and does not count in the
     /// zone, the same as being boxed in by a flank.
     Soak,
+    /// Pushed one tile toward the middle row of the board, onto open ground off the event's tiles,
+    /// and off balance; off balance where it stands if there is nowhere to go.
+    Wash,
+    /// The tiles go under: nobody can stand on them until the end of the next turn. Anyone on
+    /// them is washed off first.
+    Close,
 }
 
-/// An arena's map event, as its file sets it: the sprinkler sweeping Backyard's yard.
+/// An arena's map event, as its file sets it: the sprinkler sweeping Backyard's yard, a wave over
+/// the Cove's sandbar, the millpond rising round the jetty, a tree shaken in the glade.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Scenery {
     pub effect: Effect,
-    /// The tiles it lands on, the same ones every time, so a Handler can learn them.
+    /// What it is called, for the recap: "sprinkler", "wave".
+    pub name: String,
+    /// The tiles it lands on, the same ones every time, so a Handler can learn them. Empty when
+    /// it lands round the switch that set it off.
     pub tiles: Vec<Tile>,
+    /// It lands on the open tiles round a switch, corner to corner, rather than on `tiles`: by
+    /// itself on a mirrored pair of switches drawn at random.
+    #[serde(default)]
+    pub around: bool,
     /// The first turn it comes round on by itself, warned a whole turn before. Never the first
     /// turn, which has no turn before it to be warned in.
     pub first: u8,
@@ -134,6 +150,9 @@ pub struct Arena {
     /// Where found things turn up, in reading order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub item_spots: Vec<Tile>,
+    /// The obstacles are water: a twig thrown in floats there as a raft.
+    #[serde(default)]
+    pub water: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -166,6 +185,9 @@ impl Arena {
         let mut lever = LeverSpec::default();
         let mut effect: Option<Effect> = None;
         let mut event_tiles: Vec<Tile> = Vec::new();
+        let mut around = false;
+        let mut event_name = String::new();
+        let mut water = false;
         let (mut first, mut every, mut rest) = (2u8, 0u8, 2u8);
         let mut rows: Vec<Vec<char>> = Vec::new();
         for (index, raw) in text.lines().enumerate() {
@@ -189,9 +211,14 @@ impl Arena {
                     "event" => {
                         effect = Some(match value {
                             "soak" => Effect::Soak,
+                            "wash" => Effect::Wash,
+                            "close" => Effect::Close,
                             _ => return Err(fail("unknown event")),
                         })
                     }
+                    "event_name" => event_name = value.to_owned(),
+                    "water" => water = value == "yes",
+                    "event_tiles" if value == "around" => around = true,
                     "event_tiles" => {
                         event_tiles = value
                             .split_whitespace()
@@ -250,6 +277,7 @@ impl Arena {
             scenery: None,
             switches: Vec::new(),
             item_spots: Vec::new(),
+            water,
         };
         let mut starts: [Vec<Tile>; 2] = [Vec::new(), Vec::new()];
         for (y, row) in rows.iter().enumerate() {
@@ -305,16 +333,26 @@ impl Arena {
         }
         match effect {
             Some(effect) => {
-                if event_tiles.is_empty()
+                let placed = if around {
+                    !arena.switches.is_empty() && event_tiles.is_empty()
+                } else {
+                    !event_tiles.is_empty()
+                };
+                if !placed
                     || event_tiles
                         .iter()
                         .any(|t| arena.terrain(*t) != Terrain::Open)
                 {
                     return Err(ArenaError::Scenery);
                 }
+                if event_name.is_empty() {
+                    event_name = "sprinkler".to_owned();
+                }
                 arena.scenery = Some(Scenery {
                     effect,
+                    name: event_name,
                     tiles: event_tiles,
+                    around,
                     first,
                     every,
                     rest,
@@ -396,11 +434,48 @@ impl Arena {
         pairs
     }
 
-    /// Whether the map event lands on this tile.
+    /// Whether the map event can land on this tile: one of its tiles, or open ground round one of
+    /// its switches.
     pub fn in_scenery(&self, tile: Tile) -> bool {
-        self.scenery
-            .as_ref()
-            .is_some_and(|s| s.tiles.contains(&tile))
+        self.scenery.as_ref().is_some_and(|s| {
+            if s.around {
+                self.terrain(tile) == Terrain::Open && self.switches.iter().any(|w| w.beside(tile))
+            } else {
+                s.tiles.contains(&tile)
+            }
+        })
+    }
+
+    /// Where the map event lands when these switches set it off: its own tiles, or the open
+    /// ground round each switch, corner to corner, in reading order.
+    pub fn scenery_tiles(&self, switches: &[Tile]) -> Vec<Tile> {
+        match &self.scenery {
+            Some(s) if s.around => self
+                .tiles()
+                .filter(|t| {
+                    self.terrain(*t) == Terrain::Open && switches.iter().any(|w| w.beside(*t))
+                })
+                .collect(),
+            Some(s) => s.tiles.clone(),
+            None => Vec::new(),
+        }
+    }
+
+    /// The switches in mirrored pairs, each pair in reading order.
+    pub fn switch_pairs(&self) -> Vec<Vec<Tile>> {
+        let mut pairs: Vec<Vec<Tile>> = Vec::new();
+        for switch in &self.switches {
+            if pairs.iter().any(|p| p.contains(switch)) {
+                continue;
+            }
+            let twin = self.mirror(*switch);
+            pairs.push(if twin == *switch {
+                vec![*switch]
+            } else {
+                vec![*switch, twin]
+            });
+        }
+        pairs
     }
 
     /// How far a tile is across the board from `side`'s own edge: the column, counted from the
