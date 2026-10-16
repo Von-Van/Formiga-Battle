@@ -169,17 +169,14 @@ pub fn paint(
                 paint::blit_faded(&mut canvas, sprite, x, y, (f.opacity * 255.0).round() as u8);
                 if f.opacity > 0.0 && !f.out {
                     let top = head_point(x, y);
-                    // What it carries, held up at its side; a leaf umbrella open over its head.
+                    // What it carries, held up at its side, and drops running off it if it is
+                    // soaked. Its umbrella goes over everyone, with its pips.
                     if let Some(thing) = f.carrying {
                         let side = if f.facing_right { 14 } else { -14 };
                         found::icon(&mut canvas, (top.0 + side, top.1 + 32), thing, false);
                     }
-                    if f.sheltered {
-                        found::umbrella(&mut canvas, top);
-                    }
                     if f.soaked {
-                        let feet = view.pixel(f.at.0, f.at.1);
-                        found::dripping(&mut canvas, top, feet, now, still);
+                        found::dripping(&mut canvas, top, now, still);
                     }
                 }
             }
@@ -552,6 +549,9 @@ fn footing(
     let team = TEAM[slot.side.index()];
     let (fx, fy) = view.pixel(f.at.0, f.at.1);
     let alpha = (f.opacity * 255.0).round() as u8;
+    if f.soaked && !f.out {
+        found::puddle(canvas, (fx, fy));
+    }
     paint::ellipse(canvas, fx + 1, fy, 10, 3, rgba(0x2c3a24, alpha / 4));
     paint::ellipse(canvas, fx + 1, fy, 7, 2, rgba(0x2c3a24, alpha / 6));
     let ring = if chosen { CREAM } else { team.base };
@@ -650,6 +650,10 @@ fn tags(
 ) {
     let (ox, oy) = frame_origin(view, f, look);
     let top = head_point(ox, oy);
+    if f.sheltered {
+        let (px, py) = placed(view, f, look, now, still);
+        found::umbrella(canvas, head_point(px, py));
+    }
     pips(canvas, top, f.composure, TEAM[slot.side.index()]);
     if f.off_balance {
         swirl(canvas, (top.0 + sway(f, now, still), top.1 - 6), now, still);
