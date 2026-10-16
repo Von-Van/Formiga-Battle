@@ -358,6 +358,18 @@ pub fn callouts(
                 c.headline = Some(format!("{} is in the way: the gate is jammed!", name(by)));
                 c.cue = Some(Cue::Clunk);
             }
+            EventKind::BrokeThrough { side, target } => {
+                c.place = Some(beacon);
+                c.word = Some("BREAKTHROUGH!");
+                c.headline = Some(format!(
+                    "{} broke through past {}: the beacon jumps!",
+                    teams[side.index()],
+                    name(target)
+                ));
+                c.good_for = Some(*side);
+                c.cue = Some(Cue::Glow);
+                c.style = Style::Big;
+            }
             EventKind::CaptureContested if !contested_told => {
                 contested_told = true;
                 c.headline = Some("The beacon is held by both!".to_owned());

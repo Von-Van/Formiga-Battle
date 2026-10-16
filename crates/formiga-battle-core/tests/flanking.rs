@@ -262,3 +262,58 @@ fn each_order_is_told_once_with_what_came_of_it() {
     );
     assert!(!told[0].contains('('), "no coordinates: {told:?}");
 }
+
+#[test]
+fn a_flank_in_the_zone_takes_the_ground_and_breaks_through() {
+    // As above: R0 holds the top arm, L0 comes at it from the middle of the cross, L1 from
+    // outside the yard on its left.
+    let mut m = board_on(
+        Arena::backyard(),
+        &[(L0, (4, 3)), (L1, (3, 2)), (R0, (4, 2))],
+    );
+    let report = m.resolve_orders(orders(&[
+        (L0, contest(R0)),
+        (L1, contest(R0)),
+        (R0, hold(4, 2)),
+    ]));
+    // L0, standing in the yard, holds where it stands; L1, outside it, does not.
+    assert!(m.fighter(L0).holding);
+    assert!(!m.fighter(L1).holding);
+    assert!(kinds(&report).contains(&&EventKind::BrokeThrough {
+        side: Side::Left,
+        target: R0,
+    }));
+    let first = report
+        .events
+        .iter()
+        .find_map(|e| match e.kind {
+            EventKind::CaptureProgress { side, progress } if side == Side::Left => Some(progress),
+            _ => None,
+        })
+        .expect("the beacon went up");
+    assert_eq!(
+        first, 2,
+        "a tick for the breakthrough and one for holding the yard alone"
+    );
+}
+
+#[test]
+fn a_flank_outside_the_zone_is_no_breakthrough() {
+    let mut m = board(&[(L0, (0, 2)), (L1, (2, 2)), (R0, (1, 2))]);
+    let report = m.resolve_orders(orders(&[
+        (L0, contest(R0)),
+        (L1, contest(R0)),
+        (R0, hold(1, 2)),
+    ]));
+    assert!(
+        kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::Flanked { .. }))
+    );
+    assert!(
+        !kinds(&report)
+            .iter()
+            .any(|k| matches!(k, EventKind::BrokeThrough { .. }))
+    );
+    assert!(!m.fighter(L0).holding && !m.fighter(L1).holding);
+}

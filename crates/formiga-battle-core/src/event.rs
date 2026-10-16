@@ -153,6 +153,13 @@ pub enum EventKind {
         from: Tile,
         pushed_to: Option<Tile>,
     },
+    /// A flank broke a hold in the zone: the flankers' beacon goes up a tick for it, as well as
+    /// for holding there.
+    BrokeThrough {
+        side: Side,
+        /// The one whose hold was broken.
+        target: Slot,
+    },
     /// A contest met someone busy with a contest of their own. Nobody is hurt.
     Scuffle {
         contester: Slot,

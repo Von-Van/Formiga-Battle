@@ -517,6 +517,11 @@ pub fn recap_naming(m: &Match, events: &[Event], teams: [&str; 2]) -> Vec<String
                 "{} flopped over, dizzy, and sits out the rest of the match.",
                 name(slot)
             )),
+            EventKind::BrokeThrough { side, target } => Some(format!(
+                "{} broke through: with {}'s hold broken, their beacon jumped a tick.",
+                team_name(*side),
+                name(target)
+            )),
             EventKind::CaptureContested if !contested_told => {
                 contested_told = true;
                 Some("The beacon is contested.".to_owned())
@@ -708,7 +713,15 @@ pub fn orders_told(m: &Match, side: Side, events: &[Event]) -> Vec<String> {
             for e in events {
                 match &e.kind {
                     EventKind::Flanked { target, by, .. } if by.iter().any(ours) => {
-                        came.push(format!("flanked {}", m.profile(*target).name));
+                        let broke = events.iter().any(|b| {
+                            matches!(&b.kind, EventKind::BrokeThrough { side: s, target: t }
+                                if *s == side && t == target)
+                        });
+                        came.push(if broke {
+                            format!("flanked {} and broke through", m.profile(*target).name)
+                        } else {
+                            format!("flanked {}", m.profile(*target).name)
+                        });
                     }
                     EventKind::Countered {
                         holders,

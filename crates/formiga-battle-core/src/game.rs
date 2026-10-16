@@ -24,7 +24,8 @@
 //!    is settled, at most `Ruleset::damage_cap` from one creature in a tick; anyone at zero is
 //!    knocked out.
 //! 7. The beacon counts: a team holding in the zone with nobody from the other team in it gains a
-//!    tick of progress.
+//!    tick of progress, and a team that broke a hold in the zone by flanking it this tick gains
+//!    one more (a breakthrough).
 //! 8. The match ends by knockout, then by capture.
 
 use crate::arena::{Arena, TEAM_SIZE, Terrain};
@@ -709,6 +710,18 @@ impl Match {
 
         // 6. Contests that have just come into reach.
         self.settle(turn, tick, now, &mut lost, events);
+        // A hold in the zone broken by a flank this tick is a breakthrough for the flankers.
+        let mut broke: [Option<Slot>; 2] = [None, None];
+        for e in events.iter().filter(|e| e.turn == turn && e.tick == tick) {
+            if let EventKind::Flanked {
+                target, by, from, ..
+            } = &e.kind
+                && self.arena.in_zone(*from)
+                && let Some(c) = by.first()
+            {
+                broke[c.side.index()].get_or_insert(*target);
+            }
+        }
         let mut push = |kind| events.push(Event { turn, tick, kind });
 
         // 7. The beacon.
@@ -732,24 +745,34 @@ impl Match {
                 CaptureRule::Majority => holders[s] > present[o],
             }
         };
+        // A tick for holding the zone alone, and one for a breakthrough. Only one team can gain
+        // in a tick: if both would, neither does.
+        let gain = Side::BOTH
+            .map(|side| u8::from(progressed(side)) + u8::from(broke[side.index()].is_some()));
+        let both = gain[0] > 0 && gain[1] > 0;
         for side in Side::BOTH {
             let (s, o) = (side.index(), side.other().index());
-            if progressed(side) {
-                self.board.capture[s] = (self.board.capture[s] + 1).min(self.ruleset.capture_ticks);
-                if self.ruleset.capture_decays {
-                    self.board.capture[o] = self.board.capture[o].saturating_sub(1);
-                }
-                push(EventKind::CaptureProgress {
-                    side,
-                    progress: self.board.capture[s],
-                });
+            if gain[s] == 0 || both {
+                continue;
             }
+            if let Some(target) = broke[s] {
+                push(EventKind::BrokeThrough { side, target });
+            }
+            self.board.capture[s] =
+                (self.board.capture[s] + gain[s]).min(self.ruleset.capture_ticks);
+            if self.ruleset.capture_decays {
+                self.board.capture[o] = self.board.capture[o].saturating_sub(gain[s]);
+            }
+            push(EventKind::CaptureProgress {
+                side,
+                progress: self.board.capture[s],
+            });
         }
-        if (holders[0] > 0 || holders[1] > 0)
-            && present[0] > 0
-            && present[1] > 0
-            && !progressed(Side::Left)
-            && !progressed(Side::Right)
+        if both
+            || (holders[0] > 0 || holders[1] > 0)
+                && present[0] > 0
+                && present[1] > 0
+                && gain == [0, 0]
         {
             push(EventKind::CaptureContested);
         }
@@ -988,12 +1011,23 @@ impl Match {
                         f.at = to;
                     }
                     knocked.push(t);
+                    // The flank takes the ground: flankers standing in the zone start holding
+                    // where they stand.
+                    let taking: Vec<(Slot, Tile)> = cs
+                        .iter()
+                        .map(|c| (*c, self.fighter(*c).at))
+                        .filter(|(_, at)| self.arena.in_zone(*at))
+                        .collect();
                     push(EventKind::Flanked {
                         target: t,
                         by: cs,
                         from: there,
                         pushed_to,
                     });
+                    for (c, at) in taking {
+                        self.fighter_mut(c).holding = true;
+                        push(EventKind::Holding { slot: c, at });
+                    }
                 } else {
                     let mut hits = vec![0u8; cs.len()];
                     for h in &holders {
