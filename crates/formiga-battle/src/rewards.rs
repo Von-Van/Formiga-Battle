@@ -1,7 +1,7 @@
 //! What a finished match earns, as Jake set it (2026-10-15): a match with a friend earns Open
 //! Circuit points, a line in the match history, notebook entries and a match played for each of
-//! the three; a match against the AI earns Championship progress, journal entries and keepsakes.
-//! Nothing else earns anything. Every reward is handed to Desktop, which keeps it.
+//! the three; a match against the AI earns Championship progress, journal entries and keepsakes,
+//! and since 2026-10-16 notebook entries too. Nothing else earns anything. Every reward is handed to Desktop, which keeps it.
 
 use formiga_battle_contract::{
     BattleRecord, MatchResult, MatchSummary, Mode, NotebookAddition, NotebookPage, Rewards,
@@ -227,26 +227,10 @@ pub fn friend_match(
         .iter()
         .map(|p| p.creature_id)
         .collect();
-    let additions: Vec<NotebookAddition> = observe(m, you, events)
-        .into_iter()
-        .map(|seen| NotebookAddition {
-            creature_id: seen.creature_id,
-            won: won == Some(true),
-            showing: to_contract(&seen.showing),
-            moments: seen.moments,
-        })
-        .collect();
+    let additions = notebook_additions(m, you, events, won == Some(true));
     let mut lines = vec![format!("+{points} Open Circuit points")];
     lines.push(format!("A friend match played for {}", names(m, you)));
-    for a in &additions {
-        let name = m.rosters[you.index()]
-            .iter()
-            .find(|p| p.creature_id == a.creature_id)
-            .map_or("", |p| p.name.as_str());
-        for moment in &a.moments {
-            lines.push(format!("In the notebook, {name}: {moment}"));
-        }
-    }
+    lines.extend(notebook_lines(m, you, &additions));
     Earned {
         result: MatchResult {
             id: match_id(),
@@ -280,9 +264,38 @@ pub fn friend_match(
     }
 }
 
+/// What the match showed of each of the Handler's three, for the notebook.
+fn notebook_additions(m: &Match, you: Side, events: &[Event], won: bool) -> Vec<NotebookAddition> {
+    observe(m, you, events)
+        .into_iter()
+        .map(|seen| NotebookAddition {
+            creature_id: seen.creature_id,
+            won,
+            showing: to_contract(&seen.showing),
+            moments: seen.moments,
+        })
+        .collect()
+}
+
+/// The notebook's new moments, as the result card lists them.
+fn notebook_lines(m: &Match, you: Side, additions: &[NotebookAddition]) -> Vec<String> {
+    let mut lines = Vec::new();
+    for a in additions {
+        let name = m.rosters[you.index()]
+            .iter()
+            .find(|p| p.creature_id == a.creature_id)
+            .map_or("", |p| p.name.as_str());
+        for moment in &a.moments {
+            lines.push(format!("In the notebook, {name}: {moment}"));
+        }
+    }
+    lines
+}
+
 /// What a match against the AI earns. A win counts toward the cup played on the match's arena,
-/// if that cup is open; the third wins it, with its trophy and medal, and opens the next.
-pub fn ai_match(m: &Match, you: Side, record: &BattleRecord) -> Earned {
+/// if that cup is open; the third wins it, with its trophy and medal, and opens the next. What
+/// the match showed of each of the three goes in the notebook, as a friend match's does.
+pub fn ai_match(m: &Match, you: Side, events: &[Event], record: &BattleRecord) -> Earned {
     let winner = m.outcome().and_then(|o| o.winner);
     let won = winner == Some(you);
     let trio = trio_for(m, you, record);
@@ -339,6 +352,8 @@ pub fn ai_match(m: &Match, you: Side, record: &BattleRecord) -> Earned {
         )),
     }
     lines.push("A journal entry for your colony".to_owned());
+    rewards.notebook = notebook_additions(m, you, events, won);
+    lines.extend(notebook_lines(m, you, &rewards.notebook));
     rewards.trio = trio.map(|t| TrioPlayed {
         id: t.id.clone(),
         won: winner.map(|w| w == you),
@@ -443,15 +458,16 @@ mod tests {
     }
 
     #[test]
-    fn an_ai_match_earns_cup_progress_journal_and_keepsakes_and_nothing_else() {
+    fn an_ai_match_earns_cup_progress_journal_keepsakes_and_notebook_and_nothing_else() {
         let mut record = BattleRecord::default();
         let mut cup_won = false;
         for seed in 0..40 {
-            let (m, _) = played(seed);
-            let earned = ai_match(&m, Side::Left, &record);
+            let (m, events) = played(seed);
+            let earned = ai_match(&m, Side::Left, &events, &record);
             let r = &earned.result.rewards;
             assert_eq!(r.circuit_points, 0);
-            assert!(r.participation.is_empty() && r.notebook.is_empty() && r.history.is_none());
+            assert!(r.participation.is_empty() && r.history.is_none());
+            assert_eq!(r.notebook.len(), 3, "a page's worth for each of the three");
             assert!(!r.journal.is_empty());
             cup_won |= r.unlocks.iter().any(|u| u == WOODLAND_CUP);
             checks_out(earned.result.clone());
@@ -460,7 +476,7 @@ mod tests {
         assert!(cup_won, "three wins win the cup");
         assert!(record.unlocked.iter().any(|u| u == WOODLAND_CUP));
         assert_eq!(record.circuit_points, 0, "the AI never gives points");
-        assert!(record.notebook.is_empty(), "nor notebook entries");
+        assert!(!record.notebook.is_empty(), "but the notebook fills in");
     }
 
     /// A record in which the left team of `m` is a trio, named before it played.
@@ -502,7 +518,7 @@ mod tests {
         assert_eq!(summary.opponent_pennant, theirs.pennant);
         checks_out(friend.result.clone());
         record.apply(&friend.result);
-        let visitors = ai_match(&won_on("backyard", 3), Side::Left, &record);
+        let visitors = ai_match(&won_on("backyard", 3), Side::Left, &[], &record);
         assert!(
             visitors.result.rewards.journal[0].contains("(The Thistle Three)"),
             "{:?}",
@@ -515,7 +531,12 @@ mod tests {
         assert_eq!(trio.visitors.won, 1);
         assert_eq!(trio.cups[0].cup, BACKYARD_CUP);
         // Three who are not a trio play exactly as before, crediting nobody.
-        let plain = ai_match(&won_on("backyard", 4), Side::Left, &BattleRecord::default());
+        let plain = ai_match(
+            &won_on("backyard", 4),
+            Side::Left,
+            &[],
+            &BattleRecord::default(),
+        );
         assert!(plain.result.rewards.trio.is_none());
     }
 
@@ -536,12 +557,12 @@ mod tests {
         let mut record = BattleRecord::default();
         assert_eq!(open_to_play(&record), vec!["backyard"]);
         // The Woodland Cup is not open: a win there earns a journal line and nothing toward it.
-        let earned = ai_match(&won_on("woodland", 1), Side::Left, &record);
+        let earned = ai_match(&won_on("woodland", 1), Side::Left, &[], &record);
         assert!(earned.result.rewards.cup_win.is_none());
         assert!(!earned.result.rewards.journal.is_empty());
         for (i, cup) in CUPS.iter().enumerate() {
             for n in 0..CUP_WINS {
-                let earned = ai_match(&won_on(cup.arena, u64::from(n)), Side::Left, &record);
+                let earned = ai_match(&won_on(cup.arena, u64::from(n)), Side::Left, &[], &record);
                 assert_eq!(earned.result.rewards.cup_win.as_deref(), Some(cup.id));
                 checks_out(earned.result.clone());
                 record.apply(&earned.result);
@@ -550,7 +571,7 @@ mod tests {
             assert_eq!(open_to_play(&record).len(), (i + 2).min(CUPS.len()));
         }
         // A fourth win in a cup already won adds a win and nothing else.
-        let earned = ai_match(&won_on("backyard", 9), Side::Left, &record);
+        let earned = ai_match(&won_on("backyard", 9), Side::Left, &[], &record);
         assert!(
             earned.result.rewards.unlocks.is_empty() && earned.result.rewards.keepsakes.is_empty()
         );

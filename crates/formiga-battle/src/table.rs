@@ -286,7 +286,7 @@ impl Table {
                 friend.cards[self.you.other().index()].as_ref(),
                 now,
             ),
-            None => rewards::ai_match(m, self.you, &self.record),
+            None => rewards::ai_match(m, self.you, &self.match_events, &self.record),
         };
         // A match with a friend that ended on the board counts once the relay has both windows'
         // boards after the last turn and they are the same. One that ended by someone leaving or

@@ -287,7 +287,10 @@ fn a_flank_in_the_zone_takes_the_ground_and_breaks_through() {
         .events
         .iter()
         .find_map(|e| match e.kind {
-            EventKind::CaptureProgress { side, progress } if side == Side::Left => Some(progress),
+            EventKind::CaptureProgress {
+                side: Side::Left,
+                progress,
+            } => Some(progress),
             _ => None,
         })
         .expect("the beacon went up");

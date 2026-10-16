@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Matches against the visitors write the Handler's Notebook too, as friend matches do: what each
+  of the three was seen to do, and its moments, listed with what the match earned. The notebook
+  also notes now when a companion tends to hang back or is good at flanking with a friend, and
+  while you give orders, pointing at one of yours shows the first thing it has noted of it. This
+  needs Desktop's Battle contract version 3 as it is on the desktop-battle-ai-notebook branch,
+  which Battle is pinned to until it merges.
 - Rules version 8: a flank in the yard takes the ground. When two of a team break a hold in the
   yard, those of them standing in the yard start holding where they stand, and the beacon goes up
   a tick for the breakthrough as well as for holding the yard alone. Before, about half of all

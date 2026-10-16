@@ -8,7 +8,7 @@ match once, by its id. A rehearsal, with no Desktop behind it, keeps nothing at 
 | Against | Earns |
 |---|---|
 | A friend | Open Circuit points, a line in the match history, notebook entries for the three who played, and a friend match played for each of them |
-| The visitors (the AI) | Progress toward the cup of the arena played on, and once it is won the cup, its trophy and medal and the next cup's unlock; a journal entry; keepsakes for Home to show |
+| The visitors (the AI) | Progress toward the cup of the arena played on, and once it is won the cup, its trophy and medal and the next cup's unlock; a journal entry; keepsakes for Home to show; notebook entries for the three who played |
 
 Nothing else earns anything, and nothing earned changes how a match is played.
 
@@ -22,7 +22,7 @@ both are in, the match earns nothing. A match ended by a forfeit counts as it st
 |---|---|
 | Open Circuit points | 10 for finishing, 5 more for a win or 2 for a draw. From the sixth friend match in one day (UTC), 2 each, so playing the same friend over and over is never the way to points. A Handler who forfeits earns none |
 | Match history | When, won or lost, how it ended, in how many turns, the three who played and the trio they played as, and the other Handler's name as they typed it, with their trio's name and pennant. The newest 20 are kept |
-| Notebook | What the match showed of each of the three (`docs/PERSONALITY.md`), and its moments. A page keeps its last ten friend matches |
+| Notebook | What the match showed of each of the three (`docs/PERSONALITY.md`), and its moments. A page keeps its last ten matches, against friends and the visitors alike |
 | Participation | A friend match played, for each of the three |
 
 ## Matches against the visitors
@@ -31,6 +31,7 @@ both are in, the match earns nothing. A match ended by a forfeit counts as it st
 |---|---|
 | Cups | Each cup is played on its own arena: the Backyard Cup in the Backyard, open from the start; the Woodland Cup (`cup.woodland`) on Woodland Glade; the Millpond Cup (`cup.millpond`) on Millpond; the Sandy Cove Cup (`cup.cove`) on Sandy Cove. A win counts toward the cup of the arena it was played on, if that cup is open. The third wins it: a trophy and a medal (`battle.trophy.<arena>_cup`, `battle.medal.<arena>_cup`), and the next cup unlocks under its id. The visitors play only on arenas whose cup is open; friend matches may be played on any arena |
 | Journal | A line for every match: "Mochi, Biscuit and Fig won a Backyard Cup match against the visitors.", and one for winning a cup |
+| Notebook | As for a friend match: what the match showed of each of the three, and its moments |
 
 ## Trios
 
@@ -59,7 +60,8 @@ won against the visitors, with "Champion of the Circuit" once all four are.
 result Battle answers with (`BattleResult`), and holds the one rule both sides apply:
 `BattleRecord::apply` adds a match's points, history line, notebook additions, cup win and
 unlocks, once per match id. Journal lines and keepsakes are Desktop's to keep. A result is
-refused if a friend match carries AI rewards or an AI match carries friend rewards.
+refused if a friend match carries AI rewards or an AI match carries friend rewards; notebook
+additions are both kinds' since version 3.
 
 Version 3 adds the Handler card and trios to the record, the trio a match was played as to its
 rewards and history line, and the registry a session ends with to the result.
