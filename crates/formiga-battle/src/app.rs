@@ -1595,6 +1595,32 @@ impl BattleApp {
             ));
         }
 
+        // The end of a match, said big in the middle of the board under the stamp: a cheer, a
+        // sigh, or a shrug.
+        if let (Some(at), Some(outcome)) = (self.finished_at, self.table.outcome()) {
+            let age = now - at;
+            if age <= 2.4 {
+                let (text, colours) = match outcome.winner {
+                    Some(side) if side == self.table.you => ("HOORAY!", Paint::GOLD),
+                    Some(_) => ("SO CLOSE!", Paint::CREAM),
+                    None => ("A TIE!", Paint::CREAM),
+                };
+                let since = age - 0.35;
+                if since >= 0.0 {
+                    let size = 3 + i32::from(!reduce && since < 0.1);
+                    let alpha = 1.0 - ((age - 2.0) / 0.4).clamp(0.0, 1.0);
+                    let picture = word(text, size, colours);
+                    let x = (w - picture.width() as f32) / 2.0;
+                    let y = h * 0.58 - picture.height() as f32 / 2.0;
+                    out.push((
+                        picture,
+                        x.round() as i32,
+                        y.round() as i32,
+                        (alpha * 255.0) as u8,
+                    ));
+                }
+            }
+        }
         if let Some((at, _)) = self.ready {
             let age = now - at;
             if age <= READY_SECS {

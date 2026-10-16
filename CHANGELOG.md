@@ -69,7 +69,7 @@
   composure it cost floating up as a number, and a sound for each. The last two lines stay on a
   card in the board's corner, and the whole match, in full, opens from there (L).
 - A match begins with READY? and GO!, each turn's orders with a slip in the Handler's colour, and
-  a win ends in confetti.
+  it ends with HOORAY!, SO CLOSE! or A TIE! big on the board, and confetti for a win.
 - A click on the board does what the tile suggests: the ground to MOVE, one of theirs or the lever
   to CONTEST, the chosen one itself to HOLD where it stands; a right click holds there. A card by
   the pointer says what a click will do, and an arrow bobs over whoever is chosen.

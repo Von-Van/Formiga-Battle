@@ -80,6 +80,9 @@ fn glyph(letter: char) -> &'static [&'static str] {
         'Y' => &[
             "#...#", "#...#", ".#.#.", "..#..", "..#..", "..#..", "..#..",
         ],
+        'Z' => &[
+            "#####", "....#", "...#.", "..#..", ".#...", "#....", "#####",
+        ],
         '!' => &["#", "#", "#", "#", "#", ".", "#"],
         '?' => &[
             ".###.", "#...#", "....#", "..##.", "..#..", ".....", "..#..",
@@ -243,8 +246,36 @@ mod tests {
             "-1",
             "-2",
             "-3",
+            "DRIP...",
+            "SQUEAK!",
+            "SPLOOSH!",
+            "TING!",
+            "POP!",
+            "GOT IT!",
+            "PLOP",
+            "WHOOSH!",
+            "WEDGE!",
+            "STUCK!",
+            "FWIP!",
+            "FIZZLE",
+            "SWASH...",
+            "TOOT!",
+            "KER-SPLASH!",
+            "GLUG...",
+            "SPLASH!",
+            "RUSTLE...",
+            "SHAKE!",
+            "CLONK!",
+            "GLUB",
+            "BOB!",
+            "DING!",
+            "SPLAT!",
+            "BOING!",
+            "HOORAY!",
+            "SO CLOSE!",
+            "A TIE!",
         ] {
-            for letter in text.chars() {
+            for letter in text.chars().filter(|c| *c != ' ') {
                 assert!(
                     glyph(letter).iter().any(|row| row.contains('#')),
                     "{letter:?} in {text}"
