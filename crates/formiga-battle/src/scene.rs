@@ -101,10 +101,7 @@ pub fn paint(
     for tile in arena.tiles() {
         let depth = i32::from(tile.x) + i32::from(tile.y);
         match arena.terrain(tile) {
-            // In the glade a switch is one of the trees, drawn with the rest.
-            Terrain::Obstacle
-                if arena.switches.contains(&tile) && dressing != garden::Dressing::Woodland =>
-            {
+            Terrain::Obstacle if arena.switches.contains(&tile) => {
                 standing.push((depth, 0, Item::Tap(tile)))
             }
             Terrain::Obstacle => standing.push((depth, 0, Item::Piece(tile))),
@@ -202,6 +199,9 @@ pub fn paint(
                 }
                 garden::Dressing::Millpond => {
                     found::sluice(&mut canvas, view, tile, frame.tap_ready, now, still);
+                }
+                garden::Dressing::Woodland => {
+                    found::tree(&mut canvas, view, tile, frame.tap_ready, now, still);
                 }
                 _ => found::tap(&mut canvas, view, tile, frame.tap_ready, now, still),
             },

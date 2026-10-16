@@ -2,52 +2,23 @@
 
 ## Unreleased
 
-- Rules version 6: Backyard has a sprinkler. It sweeps the whole yard on turns 4, 8 and 12, its
-  tiles washed blue and ringed with droplets the turn before, and a garden tap on each side of the
-  near edge sets it off a tick early. Whoever it soaks is off balance for the rest of the turn and
-  lets go of what it carries; nobody loses composure. A quarter of matches are now won at the
-  beacon. Recorded matches from earlier builds no longer replay.
-- Found things: a dandelion puff, a twig or a leaf umbrella glints on two mirrored spots and turns
-  up the turn after. Whoever steps onto one picks it up and can USE it once: a puff bowls over
-  whoever stands across its way, a twig blocks a tile for two turns (and keeps an open gate from
-  closing), and a leaf umbrella keeps a teammate dry and bounces contests off. Cautious companions
-  keep off ground about to be soaked; curious, playful ones go out of their way for what lies in
-  the grass.
-- Battle opens at the Battleground, the first spread of the Handler's notebook. On its left page
-  the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
-  it, a face at each window, and a coach more for every three past six. On its right, two railway
-  tickets: Out in the World, to play a friend online, and Close to Home, to play the visiting team
-  offline. A click hurries the train in; with reduced motion it is already in. After a match, Back
-  to the station brings it in again.
-- History & settings, beneath the two tickets: every match the colony has played with who went
-  and how it ended, beside the Open Circuit points and each cup's progress; and reduced motion and
-  sound for the sitting, with keys to remember.
-- Every button, card and switch answers a touch the same way: it lifts when pointed at, sinks when
-  pressed and springs back, with a brass sparkle for the way on and a shake for the way back. Cards
-  drop onto each page as it turns, a chosen companion hops, and the next place in the team breathes
-  until it is filled. None of it moves under reduced motion.
-- Getting ready is the Handler's notebook, its pages turned as Desktop's journal turns them: where
-  to play, with the place pictured large and each cup's progress; who goes, every companion on a
-  card with temperament, habits and notebook note, beside a lineup of the three chosen; and, for a
-  friend, the room. Tabs along the top turn back to any page, and the way back to the station is
-  beside them.
-- The friend's room is its own page: sign the name your friend sees on a line, then open a room or
-  join one side by side. An open room's code is shown on a ticket with a button to copy it, and a
-  mistyped code says what a code is made of.
-- A turn is told over the board as it plays: a line over the head of whoever it happened to, a
-  word in Formiga's own pixel lettering where it happened (POW!, CLANG!, WHAM!, BOOM!, MISS!), the
-  composure it cost floating up as a number, and a sound for each. The last two lines stay on a
-  card in the board's corner, and the whole match, in full, opens from there (L).
-- A match begins with READY? and GO!, each turn's orders with a slip in the Handler's colour, and
-  a win ends in confetti.
-- A click on the board does what the tile suggests: the ground to MOVE, one of theirs or the lever
-  to CONTEST, the chosen one itself to HOLD where it stands; a right click holds there. A card by
-  the pointer says what a click will do, and an arrow bobs over whoever is chosen.
-- The right page keeps the orders and a glance at the arena: how to win, the orders and the
-  board's marks, one at a time, the detail on hover.
-- Sound: cheerful placeholder effects and music, all made in code, with music and sound volumes
-  and a mute behind the speaker on the leather. `formiga-battle sounds <folder>` writes them all
-  as WAV files to listen to.
+- Rules version 6: every arena has a map event, warned on the board the turn before it comes
+  round and set off early from a switch of its own. Backyard's sprinkler sweeps the whole yard
+  (turns 4, 8 and 12; a garden tap on each side). Sandy Cove's wave washes whoever stands on the
+  sandbar's ends toward the middle of the beach (every third turn; a big shell on each side).
+  Millpond's water rises over the jetty's sides, washing off whoever is there and leaving the yard
+  a line until the turn after (turns 5 and 10; a sluice on each bank). In Woodland Glade, a shaken
+  oak sheds acorns on whoever stands round it and drops a twig (a breeze shakes a pair every fourth
+  turn; a contest shakes one). Nobody loses composure to any of them. Recorded matches from earlier
+  builds no longer replay.
+- Found things: a dandelion puff, a twig, a leaf umbrella, a pebble bell, a honey drop or, rarely,
+  a springy seed glints on two mirrored spots and turns up the turn after. Whoever steps onto one
+  picks it up and can USE it once: a puff bowls over whoever stands across its way, a twig blocks a
+  tile for two turns (keeps an open gate from closing, and floats as a raft in the millpond), a
+  leaf umbrella keeps a teammate dry and bounces contests off, a bell spoils the other team's
+  contests nearby (and sets the map event off, rung by a switch), honey stops whoever steps in,
+  and a seed hops its user two tiles. Cautious companions keep off ground about to be hit;
+  curious, playful ones go out of their way for what lies in the grass.
 - Rules version 5: a creature's personality pulls four times as hard on the way it walks, so
   each turn about one of a team's three goes its own way rather than the plain way: sometimes
   none, sometimes two (about one team-turn in four before). Fewer matches are won at the beacon

@@ -505,12 +505,26 @@ pub fn wave(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, fade: u8) {
 pub fn acorns(canvas: &mut Canvas, view: &View, tile: Tile, age: f32, fade: u8) {
     let (cx, cy) = view.centre(tile);
     let t = (age / 0.7).clamp(0.0, 1.0);
-    for k in 0..3 {
-        let dx = [-6, 2, 7][k];
-        let fall = ((t * 1.6 - k as f32 * 0.15).clamp(0.0, 1.0) * 30.0) as i32;
-        let y = cy - 32 + fall;
-        paint::rect(canvas, cx + dx, y, 2, 2, paint::faded(BARK.base, fade));
-        paint::hline(canvas, cx + dx, y - 1, 2, paint::faded(BARK.shadow, fade));
+    for k in 0..4 {
+        let dx = [-8, -1, 5, 10][k];
+        let fall = ((t * 1.6 - k as f32 * 0.12).clamp(0.0, 1.0) * 34.0) as i32;
+        // A little bounce once it lands.
+        let bounce = if fall >= 34 {
+            ((t * 12.0).sin().abs() * 3.0) as i32
+        } else {
+            0
+        };
+        let y = cy - 36 + fall - bounce + (k as i32 % 2) * 3;
+        paint::ellipse(canvas, cx + dx, y, 2, 2, paint::faded(BARK.light, fade));
+        paint::put(canvas, cx + dx - 1, y - 1, paint::faded(BARK.shine, fade));
+        paint::hline(
+            canvas,
+            cx + dx - 2,
+            y - 2,
+            5,
+            paint::faded(BARK.shadow, fade),
+        );
+        paint::put(canvas, cx + dx, y - 3, paint::faded(BARK.edge, fade));
     }
 }
 
@@ -577,6 +591,64 @@ pub fn sluice(canvas: &mut Canvas, view: &View, tile: Tile, ready: bool, now: f3
         let run = if still { 0 } else { ((now * 8.0) as i32) % 3 };
         for k in 0..4 {
             paint::put(canvas, cx - 5 + k * 3, cy - 1 + run, WATER.shine);
+        }
+    }
+}
+
+/// One of the glade's old oaks by the lanes, still in leaf and hung with acorns: shaken, it sheds
+/// them on whoever stands round it. It sways while it can be shaken, and stands still while it
+/// rests.
+pub fn tree(canvas: &mut Canvas, view: &View, tile: Tile, ready: bool, now: f32, still: bool) {
+    let (cx, cy) = view.centre(tile);
+    paint::ellipse(canvas, cx + 6, cy + 1, 14, 4, rgba(0x24452b, 90));
+    // Roots, and the trunk: lit on its left.
+    paint::line(canvas, (cx - 7, cy + 1), (cx - 2, cy - 3), BARK.shadow);
+    paint::line(canvas, (cx + 8, cy + 1), (cx + 3, cy - 3), BARK.edge);
+    for dy in 0..26 {
+        paint::put(canvas, cx - 3, cy - dy, BARK.light);
+        paint::put(canvas, cx - 2, cy - dy, BARK.base);
+        paint::put(canvas, cx - 1, cy - dy, BARK.base);
+        paint::put(canvas, cx, cy - dy, BARK.base);
+        paint::put(canvas, cx + 1, cy - dy, BARK.shadow);
+        paint::put(canvas, cx + 2, cy - dy, BARK.edge);
+    }
+    for dy in [6, 13, 19] {
+        paint::hline(canvas, cx - 2, cy - dy, 2, BARK.shadow);
+    }
+    let sway = if still || !ready {
+        0
+    } else {
+        ((now * 1.3 + f32::from(tile.y)).sin() * 1.2).round() as i32
+    };
+    let lumps = [
+        (-9, -32, 8),
+        (8, -33, 8),
+        (0, -40, 9),
+        (-4, -28, 7),
+        (5, -27, 7),
+    ];
+    for (dx, dy, r) in lumps {
+        paint::ellipse(canvas, cx + dx + sway, cy + dy, r, r - 1, LEAF.shadow);
+    }
+    for (dx, dy, r) in lumps {
+        paint::ellipse(
+            canvas,
+            cx + dx + sway - 1,
+            cy + dy - 1,
+            r - 1,
+            r - 2,
+            LEAF.base,
+        );
+    }
+    for (dx, dy) in [(-10, -35), (-3, -45), (3, -40), (-6, -31)] {
+        paint::ellipse(canvas, cx + dx + sway, cy + dy, 3, 2, LEAF.light);
+    }
+    paint::put(canvas, cx - 4 + sway, cy - 46, LEAF.shine);
+    // Acorns among the leaves, gone while it rests.
+    if ready {
+        for (dx, dy) in [(-5, -27), (7, -30), (1, -35), (-10, -31)] {
+            paint::rect(canvas, cx + dx + sway, cy + dy, 2, 2, BARK.light);
+            paint::hline(canvas, cx + dx + sway, cy + dy - 1, 2, BARK.edge);
         }
     }
 }
