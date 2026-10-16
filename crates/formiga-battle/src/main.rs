@@ -13,6 +13,7 @@ mod look;
 mod playback;
 mod rewards;
 mod scene;
+mod station;
 mod table;
 
 use anyhow::{Context, Result, bail};
@@ -39,8 +40,11 @@ WINDOW:
     --snap <PNG>             Open, save a picture of the window after --at seconds (default 6)
                              and close
     --at <SECONDS>           With --snap
-    --review <STAGE>         With --snap: picking (the team choice), orders (a turn's orders
-                             half given, MOVE chosen), playing (the AI giving your orders too,
+    --review <STAGE>         With --snap: station (the train in at the halt, everyone hopping
+                             aboard), where (choosing a place), picking or who (the team
+                             choice), friend (a friend's room about to be opened), orders (a
+                             turn's orders half given, MOVE chosen), playing (the AI giving
+                             your orders too,
                              every turn locked at once; the default) or notebook (the sample
                              colony's notebook, as Desktop would send it, open) or room (a room
                              opened on the relay, its code showing; FORMIGA_BATTLE_RELAY points
@@ -126,7 +130,10 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
             "--at" => parsed.at = value()?.parse().context("--at takes seconds")?,
             "--review" => {
                 parsed.review = match value()?.as_str() {
-                    "picking" => app::Review::Picking,
+                    "station" => app::Review::Station,
+                    "where" => app::Review::Where,
+                    "picking" | "who" => app::Review::Picking,
+                    "friend" => app::Review::Friend,
                     "orders" => app::Review::Orders,
                     "playing" => app::Review::Playing,
                     "notebook" => app::Review::Notebook,

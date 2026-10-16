@@ -51,11 +51,15 @@ cargo run --release -p formiga-battle -- arena                           # draws
 cargo run --release -p formiga-battle -- relay                           # a local relay, for development
 ```
 
-In the window: choose a card (or 1, 2, 3), then MOVE, HOLD or CONTEST (or M, H, C), then a tile
+Battle opens at Battle Halt, where the colony's train pulls in and your companions hop aboard;
+choose Out in the World (a friend, online) or Close to Home (the visitors, offline), and the
+Handler's notebook opens on where to play, then who goes and, for a friend, the room.
+
+In a match: choose a card (or 1, 2, 3), then MOVE, HOLD or CONTEST (or M, H, C), then a tile
 or a creature on the board; Enter locks in, right-click or Escape cancels.
 
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
-window (`--turns`, `--into`, `--scale`); `--snap <png> --review picking|orders|playing --at <s>`
+window (`--turns`, `--into`, `--scale`); `--snap <png> --review station|where|who|friend|orders|playing --at <s>`
 opens the window behind everything, pictures it and closes. Either takes `--arena
 backyard|woodland|millpond|cove`. Look at them after changing anything
 visual.
@@ -108,8 +112,9 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
   `formiga-art`'s tools at pixel scale, and the marks laid over it), `garden` (each arena as a
   place: its ground, what stands on it and round it, and what moves there, dressed by the
-  arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `app` (the egui
-  window), `rewards` (what a finished match earns) and `cli` (the headless commands).
+  arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the halt the
+  train picks the companions up at), `app` (the egui window; `app/menus` the station and the
+  notebook's pages of getting ready), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
 by one release tag (`v0.67.8`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is

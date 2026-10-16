@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Battle opens at Battle Halt: the colony's train, the one Desktop and Hill share, pulls in, and
+  every companion hops aboard to look out of a window, with a coach more for every three past six.
+  Then choose where they are off to: Out in the World, to play a friend online, or Close to Home,
+  to play the visiting team offline. A click hurries everyone aboard; with reduced motion the train
+  is already in.
+- Getting ready is the Handler's notebook, its pages turned as Desktop's journal turns them: where
+  to play, with the place pictured large and each cup's progress; who goes, every companion on a
+  card with temperament, habits and notebook note, beside a lineup of the three chosen; and, for a
+  friend, the room. Tabs along the top turn back to any page, and the way back to the station is
+  beside them.
+- The friend's room is its own page: sign the name your friend sees on a line, then open a room or
+  join one side by side. An open room's code is shown on a ticket with a button to copy it, and a
+  mistyped code says what a code is made of.
+
 ## [0.67.8] - 2026-10-15
 
 The first Battle to download: an app for macOS and an installer for Windows, released with Formiga

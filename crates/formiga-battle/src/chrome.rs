@@ -513,6 +513,208 @@ pub fn button(
     response
 }
 
+/// How long a page takes to turn, in seconds: Desktop's journal turns in a little longer, but
+/// this leaf crosses two pages at once.
+pub const TURN_SECONDS: f32 = 0.62;
+
+/// A page of the notebook being turned, since `started`: forward to the next page, or back.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PageTurn {
+    pub started: f32,
+    pub forward: bool,
+}
+
+/// Paints the leaf of a page being turned over the spread, after the page it turns to has been
+/// written: the leaf's free edge sweeps across from one outer edge to the other, quick to lift and
+/// slow to settle as Desktop's journal turns, covering what is still the old page in blank paper
+/// and shading the new one where the leaf still lies over it. False once the leaf has settled.
+pub fn turn_leaf(
+    painter: &egui::Painter,
+    turn: PageTurn,
+    now: f32,
+    left: egui::Rect,
+    right: egui::Rect,
+    unit: f32,
+) -> bool {
+    let t = ((now - turn.started) / TURN_SECONDS).clamp(0.0, 1.0);
+    if t >= 1.0 {
+        return false;
+    }
+    let eased = 1.0 - (1.0 - t).powi(3);
+    let paper = Color32::from_rgb(0xf9, 0xf0, 0xd4);
+    let (start, end) = if turn.forward {
+        (right.right(), left.left())
+    } else {
+        (left.left(), right.right())
+    };
+    let edge = start + (end - start) * eased;
+    let fold = (left.right() + right.left()) / 2.0;
+    // What is still the old page, which the leaf has not yet uncovered.
+    let blank = |rect: egui::Rect, ruled: bool| {
+        if rect.width() <= 0.0 {
+            return;
+        }
+        painter.rect_filled(rect, 0.0, paper);
+        if ruled {
+            let mut y = right.top() + unit * 24.0;
+            while y < right.bottom() - unit * 4.0 {
+                painter.rect_filled(
+                    egui::Rect::from_min_max(
+                        egui::pos2(rect.left(), y),
+                        egui::pos2(rect.right(), y + unit),
+                    ),
+                    0.0,
+                    Color32::from_rgb(0xe9, 0xdb, 0xb2),
+                );
+                y += unit * 14.0;
+            }
+        }
+    };
+    let span = |a: f32, b: f32, page: egui::Rect| {
+        egui::Rect::from_min_max(
+            egui::pos2(a.min(b).max(page.left()), page.top()),
+            egui::pos2(a.max(b).min(page.right()), page.bottom()),
+        )
+    };
+    // The leaf itself: on the side it left, its front is the old page; on the side it is coming
+    // down on, its back is the new page, shaded the nearer the edge still curling over.
+    let (from, onto, from_ruled) = if turn.forward {
+        (right, left, true)
+    } else {
+        (left, right, false)
+    };
+    let over_from = if turn.forward {
+        edge > fold
+    } else {
+        edge < fold
+    };
+    if over_from {
+        blank(onto, !from_ruled);
+        let leaf = span(edge, fold, from);
+        blank(leaf, from_ruled);
+        painter.rect_filled(leaf, 0.0, Color32::from_black_alpha((eased * 50.0) as u8));
+    } else {
+        let old = if turn.forward {
+            span(onto.left(), edge, onto)
+        } else {
+            span(edge, onto.right(), onto)
+        };
+        blank(old, !from_ruled);
+        let leaf = span(edge, fold, onto);
+        painter.rect_filled(
+            leaf,
+            0.0,
+            Color32::from_black_alpha(((1.0 - eased) * 60.0) as u8),
+        );
+    }
+    // A soft shadow beside the free edge, on whatever lies under it.
+    let width = unit * 14.0 * (1.0 - eased);
+    let away = if (turn.forward && over_from) || (!turn.forward && !over_from) {
+        1.0
+    } else {
+        -1.0
+    };
+    let steps = 6;
+    for k in 0..steps {
+        let a = edge + away * width * k as f32 / steps as f32;
+        let b = edge + away * width * (k + 1) as f32 / steps as f32;
+        let page = if a.min(b) >= fold { right } else { left };
+        let strip = span(a, b, page);
+        let alpha = (70.0 * (1.0 - eased) * (1.0 - k as f32 / steps as f32)) as u8;
+        painter.rect_filled(strip, 0.0, Color32::from_black_alpha(alpha));
+    }
+    let edge_line = span(
+        edge - unit / 2.0,
+        edge + unit / 2.0,
+        if edge >= fold { right } else { left },
+    );
+    painter.rect_filled(edge_line, 0.0, Color32::from_rgb(0xc9, 0xb7, 0x8e));
+    true
+}
+
+/// A page's heading, as Desktop's journal heads its pages: a printed line saying which page of
+/// the notebook this is, the page's title, and a line on what it is for.
+pub fn page_heading(ui: &mut egui::Ui, line: &str, title: &str, observation: &str) {
+    ui.label(label_job(line, LABEL, ink::FOREST));
+    ui.label(
+        egui::RichText::new(title)
+            .size(26.0)
+            .color(ink::PAGE)
+            .strong(),
+    );
+    ui.label(
+        egui::RichText::new(observation)
+            .size(13.5)
+            .color(ink::MUTED),
+    );
+}
+
+/// A destination on the station's departure board: a big brass-rimmed button in the notebook's
+/// green, its name printed large and a word about it small and centred beneath.
+pub fn destination(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    id: egui::Id,
+    title: &str,
+    small: &str,
+    unit: f32,
+) -> egui::Response {
+    let response = ui.interact(rect, id, egui::Sense::click());
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    let lift = ui
+        .ctx()
+        .animate_bool_with_time(id.with("lift"), response.hovered(), 0.12);
+    let pressed = response.is_pointer_button_down_on();
+    let painter = ui.painter();
+    let face = rect.translate(egui::vec2(
+        0.0,
+        if pressed {
+            unit
+        } else {
+            -(lift * unit * 2.0).round()
+        },
+    ));
+    let shadow = rect.translate(egui::vec2(unit * 2.0, unit * 2.0));
+    painter.rect_filled(shadow.shrink(unit), 0.0, ink::SHADOW);
+    let (fill, rim) = if response.hovered() {
+        (Color32::from_rgb(40, 90, 75), ink::BRASS_LIGHT)
+    } else {
+        (ink::FOREST, ink::BRASS)
+    };
+    let lip = egui::Rect::from_min_max(
+        egui::pos2(face.left(), face.bottom() - unit * 2.0),
+        egui::pos2(face.right(), face.bottom() + unit),
+    );
+    painter.rect_filled(lip.shrink2(egui::vec2(unit, 0.0)), 0.0, ink::BRASS_EDGE);
+    painter.rect_filled(face.shrink(unit), 0.0, rim);
+    painter.rect_filled(face.shrink(unit * 3.0), 0.0, fill);
+    stepped(painter, face, unit, ink::BRASS_EDGE);
+    painter.hline(
+        (face.left() + unit * 3.0)..=(face.right() - unit * 3.0),
+        face.top() + unit * 3.5,
+        egui::Stroke::new(unit, Color32::from_rgba_unmultiplied(255, 255, 255, 30)),
+    );
+    let big = painter.layout_job(label_job(title, 19.0, ink::COVER));
+    let little = painter.layout_job(label_job(small, LABEL, ink::DEBOSS));
+    let gap = unit * 3.0;
+    let total = big.size().y + gap + little.size().y;
+    let top = face.center().y - total / 2.0;
+    painter.galley(
+        egui::pos2(face.center().x - big.size().x / 2.0, top),
+        big,
+        ink::COVER,
+    );
+    let below = top + total - little.size().y;
+    painter.galley(
+        egui::pos2(face.center().x - little.size().x / 2.0, below),
+        little,
+        ink::DEBOSS,
+    );
+    response
+}
+
 /// The page's visuals: ink on paper, mint for whatever is chosen, and the notebook's plum outline
 /// instead of rounded grey boxes. Home's, so a text field or a scroll bar reads the same in both.
 pub fn style(ctx: &egui::Context) {

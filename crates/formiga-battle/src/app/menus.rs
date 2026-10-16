@@ -1,0 +1,1226 @@
+//! Getting ready, before a match: the halt where the train picks the companions up, and the
+//! notebook's pages after it, turned one by one as Desktop's journal turns its pages. Where to
+//! play, then who goes and, for a friend, the room: open one and pass on its code, or join theirs.
+//! Each page is a spread: what it is about on the left, and on the ruled right page what is
+//! chosen so far and the way on.
+
+use super::{
+    BattleApp, Kind, Outing, SHARED, Stage, Step, card, dashed_rule, locked_behind, portrait_mat,
+    rosette, shrunk, sticky, texture,
+};
+use crate::chrome::{self, ink, label_job};
+use crate::garden::Garden;
+use crate::iso::View;
+use crate::look::Look;
+use crate::station::Station;
+use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
+use formiga_battle_contract::Contender;
+use formiga_battle_core::TEAM_SIZE;
+
+/// How tall the halt is drawn, in its own pixels, whatever the window: each of them as many
+/// screen pixels as fit.
+const STATION_ROWS: f32 = 216.0;
+/// How often the halt is repainted while anything moves at it.
+const STATION_FRAMES_PER_SECOND: f32 = 30.0;
+/// The halt's name, lettered on its board.
+const HALT: &str = "Battle Halt";
+
+impl BattleApp {
+    /// Opens the notebook at a page of getting ready for an outing.
+    pub(super) fn open_journal(&mut self, outing: Outing, step: Step) {
+        self.outing = outing;
+        self.step = step;
+        self.stage = Stage::Journal;
+        self.turn = None;
+        self.turned = self.clock;
+        self.notebook_open = false;
+        self.keep_arena_open();
+    }
+
+    /// Back to the halt, where the train waits with everyone aboard.
+    pub(super) fn back_to_station(&mut self) {
+        let now = self.clock;
+        if let Some(station) = &mut self.station {
+            station.wait_at_platform(now);
+        }
+        self.stage = Stage::Station;
+        self.turn = None;
+        self.turned = now;
+    }
+
+    /// Against the visitors, only an arena whose cup is open can be chosen; close to home, a
+    /// locked one chosen for a friend gives way to the Backyard.
+    fn keep_arena_open(&mut self) {
+        if self.outing == Outing::Home && !self.arena_open(&self.table.arena.id) {
+            self.choose_arena(formiga_battle_core::Arena::backyard());
+        }
+    }
+
+    fn arena_open(&self, id: &str) -> bool {
+        crate::rewards::open_to_play(&self.table.record).contains(&id)
+    }
+
+    fn choose_arena(&mut self, arena: formiga_battle_core::Arena) {
+        self.view = View::new(arena.width, arena.height);
+        self.table.arena = arena;
+        self.garden = None;
+    }
+
+    /// A room is open and waiting for the friend: what it was opened with holds until it closes.
+    fn room_waiting(&self) -> bool {
+        self.table.friend.as_ref().is_some_and(|f| !f.seated)
+    }
+
+    /// Whether a page can be turned to now, and if not, why.
+    pub(super) fn reachable(&self, step: Step) -> Result<(), String> {
+        if self.room_waiting() && step != Step::Room {
+            return Err("Close the room first".to_owned());
+        }
+        if step == Step::Room && self.table.picked.len() < TEAM_SIZE {
+            return Err("Choose three first".to_owned());
+        }
+        Ok(())
+    }
+
+    /// Turns the notebook to a page of getting ready: forward or back, the leaf crossing the
+    /// spread; at once under reduced motion.
+    pub(super) fn turn_to(&mut self, step: Step, now: f32) {
+        if step == self.step || self.reachable(step).is_err() {
+            return;
+        }
+        if self.table.reduce_motion {
+            self.turned = now;
+        } else {
+            self.turn = Some(chrome::PageTurn {
+                started: now,
+                forward: step > self.step,
+            });
+        }
+        self.step = step;
+    }
+
+    /// The leather along the top while getting ready: the way back to the station, and where the
+    /// companions are off to.
+    pub(super) fn journal_strip(&mut self, ui: &mut egui::Ui, area: Rect, u: f32, _now: f32) {
+        let waiting = self.room_waiting();
+        let mut back = false;
+        ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
+            ui.horizontal_centered(|ui| {
+                ui.spacing_mut().item_spacing.x = u * 4.0;
+                let id = Id::new("to-station");
+                let hovered = ui.ctx().data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+                let colour = if waiting {
+                    ink::DEBOSS.gamma_multiply(0.45)
+                } else if hovered {
+                    ink::COVER
+                } else {
+                    ink::DEBOSS
+                };
+                let response = ui.add(
+                    egui::Label::new(label_job("‹ The station", chrome::LABEL, colour)).sense(
+                        if waiting {
+                            Sense::hover()
+                        } else {
+                            Sense::click()
+                        },
+                    ),
+                );
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(id, response.hovered() && !waiting));
+                if response.hovered() && !waiting {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+                let response = if waiting {
+                    response.on_hover_text("Close the room first")
+                } else {
+                    response
+                        .on_hover_text("Back to the train, to choose again where they are off to")
+                };
+                back = response.clicked() && !waiting;
+                ui.add_space(u * 6.0);
+                ui.label(label_job(self.outing.name(), chrome::LABEL, ink::COVER));
+                ui.label(label_job(
+                    match self.outing {
+                        Outing::World => "· online",
+                        Outing::Home => "· offline",
+                    },
+                    chrome::LABEL,
+                    ink::DEBOSS,
+                ));
+            });
+        });
+        if back {
+            self.back_to_station();
+        }
+    }
+
+    /// What to do next, along the foot, while getting ready.
+    pub(super) fn journal_hint(&self) -> String {
+        match self.step {
+            Step::Where => match self.outing {
+                Outing::Home => "Choose where to play the visiting team, then turn the page.",
+                Outing::World => "Choose where to play your friend, then turn the page.",
+            }
+            .to_owned(),
+            Step::Who => match (self.table.picked.len(), self.outing) {
+                (0, _) => {
+                    "You are their Handler: choose three of your companions to go.".to_owned()
+                }
+                (3, Outing::Home) => "Your three are ready: play the visiting team.".to_owned(),
+                (3, Outing::World) => {
+                    "Your three are ready: turn the page to your friend's room.".to_owned()
+                }
+                (n, _) => format!("Choose {} more.", TEAM_SIZE - n),
+            },
+            Step::Room => match &self.table.friend {
+                Some(f) if f.code.is_some() && !f.seated => {
+                    "Give your friend the code. The match begins when they join.".to_owned()
+                }
+                Some(_) => "Waiting for the relay…".to_owned(),
+                None => {
+                    "Sign your name, read what is shared, then open a room or join one.".to_owned()
+                }
+            },
+        }
+    }
+
+    /// The halt, filling the window: the train coming in for the companions, and once it has
+    /// stopped, the two places they can be off to, over it.
+    pub(super) fn station_page(&mut self, ui: &mut egui::Ui, full: Rect, now: f32) {
+        let ctx = ui.ctx().clone();
+        let ppp = ctx.pixels_per_point();
+        let u = chrome::unit(ppp);
+        let screen = full.size() * ppp;
+        let scale = (screen.y / STATION_ROWS).floor().max(1.0);
+        let size = (
+            (screen.x / scale).ceil() as i32,
+            (screen.y / scale).ceil() as i32,
+        );
+        let reduce = self.table.reduce_motion;
+        let station = self.station.get_or_insert_with(|| {
+            let looks = self
+                .table
+                .home
+                .iter()
+                .filter_map(|(c, _)| Look::of(c, reduce).ok())
+                .collect();
+            Station::new(looks, size, now, reduce)
+        });
+        station.resize(size);
+        // Hurrying everyone aboard: a click anywhere, or a key, while the train is coming in.
+        let hurry = ui.interact(full, Id::new("station-hurry"), Sense::click());
+        let keyed = ctx.input(|i| {
+            i.key_pressed(egui::Key::Space)
+                || i.key_pressed(egui::Key::Enter)
+                || i.key_pressed(egui::Key::Escape)
+        });
+        if (hurry.clicked() || keyed) && !station.boarded(now) && !station.leaving() {
+            station.skip(now);
+        }
+        // The picture, repainted only as often as anything at the halt moves.
+        let tick = if reduce && !station.leaving() {
+            0
+        } else {
+            (now * STATION_FRAMES_PER_SECOND) as i64
+        };
+        let key = tick * 1_000_000 + i64::from(size.0) * 1000 + i64::from(size.1);
+        if self.station_picture.as_ref().is_none_or(|(k, _)| *k != key) {
+            let picture = station.compose(now);
+            let image = egui::ColorImage::from_rgba_unmultiplied(
+                [picture.width() as usize, picture.height() as usize],
+                &picture.rgba_bytes(),
+            );
+            match &mut self.station_picture {
+                Some((k, t)) => {
+                    t.set(image, egui::TextureOptions::NEAREST);
+                    *k = key;
+                }
+                None => {
+                    let t = ctx.load_texture("station", image, egui::TextureOptions::NEAREST);
+                    self.station_picture = Some((key, t));
+                }
+            }
+        }
+        let k = scale / ppp;
+        let painter = ui.painter().clone();
+        if let Some((_, picture)) = &self.station_picture {
+            painter.image(
+                picture.id(),
+                Rect::from_min_size(full.min, vec2(size.0 as f32, size.1 as f32) * k),
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+        }
+        let station = self.station.as_ref().expect("the halt");
+        let at = |x: i32, y: i32| full.min + vec2(x as f32, y as f32) * k;
+        // The halt's name on its board.
+        let (sx, sy, sw, sh) = station.sign();
+        let board = Rect::from_min_max(at(sx, sy), at(sx + sw, sy + sh));
+        let lettering = painter.layout_job(label_job(
+            HALT,
+            (board.height() * 0.42).clamp(9.0, 18.0),
+            Color32::from_rgb(0x7a, 0x2c, 0x33),
+        ));
+        painter.galley(
+            board.center() - lettering.size() / 2.0 + vec2(0.0, u * 0.5),
+            lettering,
+            Color32::from_rgb(0x7a, 0x2c, 0x33),
+        );
+        // Above the train's steam, the title and the choices.
+        let clear = full.top() + station.clear_above() as f32 * k;
+        let sky = Rect::from_min_max(full.min, pos2(full.right(), clear));
+        let plaque_text = painter.layout_job(label_job("Formiga Battle", 22.0, ink::COVER));
+        let plaque = Rect::from_center_size(
+            pos2(sky.center().x, sky.top() + sky.height() * 0.16),
+            plaque_text.size() + vec2(u * 24.0, u * 14.0),
+        );
+        chrome::card(
+            &painter,
+            plaque,
+            u,
+            Color32::from_rgb(0x5b, 0x3a, 0x27),
+            Color32::from_rgb(0x2f, 0x1c, 0x12),
+        );
+        // Saddle stitches round the plaque, as round the notebook's cover.
+        let stitched = plaque.shrink(u * 3.0);
+        let mut x = stitched.left() + u;
+        while x + u * 3.0 < stitched.right() {
+            for y in [stitched.top(), stitched.bottom() - u] {
+                painter.rect_filled(
+                    Rect::from_min_size(pos2(x, y), vec2(u * 3.0, u)),
+                    0.0,
+                    Color32::from_rgb(0xcd, 0xb1, 0x7a),
+                );
+            }
+            x += u * 6.0;
+        }
+        painter.galley(
+            plaque.center() - plaque_text.size() / 2.0,
+            plaque_text,
+            ink::COVER,
+        );
+        let leaving = station.leaving();
+        let stopped = station.stopped(now);
+        let line = if leaving {
+            "Off they go…"
+        } else if stopped {
+            "All aboard! Where are they off to?"
+        } else {
+            "The train is coming in for your companions. Click to hurry them aboard."
+        };
+        let words = painter.layout_job(label_job(line, chrome::LABEL + 1.0, ink::FOREST));
+        let words_at = pos2(
+            sky.center().x - words.size().x / 2.0,
+            plaque.bottom() + u * 8.0,
+        );
+        let backing = Rect::from_min_size(words_at, words.size()).expand2(vec2(u * 5.0, u * 3.0));
+        chrome::card(
+            &painter,
+            backing,
+            u,
+            ink::CARD,
+            ink::LINE.gamma_multiply(0.55),
+        );
+        painter.galley(words_at, words, ink::FOREST);
+        let mut chosen = None;
+        if stopped && !leaving {
+            let gap = u * 18.0;
+            let w = ((full.width() - gap * 3.0) / 2.0).min(340.0);
+            let h = 112.0_f32.min((clear - backing.bottom()) * 0.7).max(72.0);
+            let middle = pos2(
+                sky.center().x,
+                backing.bottom() + (clear - backing.bottom()) * 0.45,
+            );
+            let snap = |p: egui::Pos2| pos2((p.x / u).round() * u, (p.y / u).round() * u);
+            let world = Rect::from_min_size(
+                snap(pos2(middle.x - gap / 2.0 - w, middle.y - h / 2.0)),
+                vec2(w, h),
+            );
+            let home = Rect::from_min_size(
+                snap(pos2(middle.x + gap / 2.0, middle.y - h / 2.0)),
+                vec2(w, h),
+            );
+            if chrome::destination(
+                ui,
+                world,
+                Id::new("out-in-the-world"),
+                "Out in the World",
+                "Online",
+                u,
+            )
+            .on_hover_text("Play a friend: open a room and give them its code, or join theirs.")
+            .clicked()
+            {
+                chosen = Some(Outing::World);
+            }
+            if chrome::destination(
+                ui,
+                home,
+                Id::new("close-to-home"),
+                "Close to Home",
+                "Offline",
+                u,
+            )
+            .on_hover_text("Play the visiting team on this computer. Wins fill each place's cup.")
+            .clicked()
+            {
+                chosen = Some(Outing::Home);
+            }
+        }
+        // Who Battle is open for, on a ticket by the line.
+        let ticket =
+            painter.layout_no_wrap(self.host.describe(), FontId::proportional(11.5), ink::PAGE);
+        let ticket_rect = Rect::from_min_size(
+            full.max - ticket.size() - vec2(u * 14.0, u * 10.0),
+            ticket.size() + vec2(u * 8.0, u * 4.0),
+        );
+        chrome::card(
+            &painter,
+            ticket_rect,
+            u,
+            ink::CARD,
+            ink::LINE.gamma_multiply(0.55),
+        );
+        painter.galley(ticket_rect.min + vec2(u * 4.0, u * 2.0), ticket, ink::PAGE);
+
+        let station = self.station.as_mut().expect("the halt");
+        if let Some(outing) = chosen {
+            self.outing = outing;
+            station.set_off(now);
+        }
+        if station.seen_off(now) {
+            let outing = self.outing;
+            self.open_journal(outing, Step::Where);
+        }
+    }
+
+    /// The left page of getting ready.
+    pub(super) fn journal_left(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
+        let steps = self.outing.steps();
+        let number = steps.iter().position(|s| *s == self.step).unwrap_or(0) + 1;
+        let line = format!(
+            "{} · page {} of {}",
+            self.outing.name(),
+            number,
+            steps.len()
+        );
+        match self.step {
+            Step::Where => {
+                let observation = match self.outing {
+                    Outing::Home => {
+                        "Pick a place for the match. Each has a cup to win against the visiting team, and winning one opens the next."
+                    }
+                    Outing::World => {
+                        "Pick a place for the match. Every place is open for friends. If you join a friend's room instead, you play where they chose."
+                    }
+                };
+                chrome::page_heading(ui, &line, "Where to?", observation);
+                ui.add_space(u * 6.0);
+                self.arena_picture(ui, ctx, u);
+            }
+            Step::Who => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "Who goes?",
+                    "Choose three of your companions. They take the field in the order you choose them.",
+                );
+                ui.add_space(u * 6.0);
+                self.companions(ui, ctx, u);
+            }
+            Step::Room => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "Your friend's room",
+                    "Open a room and give your friend its code, or join theirs with the code they give you.",
+                );
+                ui.add_space(u * 6.0);
+                self.room(ui, u);
+            }
+        }
+    }
+
+    /// The ruled right page of getting ready: what is chosen so far, and the way on.
+    pub(super) fn journal_right(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| match self.step {
+                Step::Where => self.places(ui, u),
+                Step::Who => self.lineup(ui, ctx, u),
+                Step::Room => self.shared(ui, ctx, u),
+            });
+    }
+
+    /// The chosen place, as a picture pasted onto the page with a caption under it.
+    fn arena_picture(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
+        let garden = self
+            .garden
+            .get_or_insert_with(|| Garden::new(&self.table.arena, &self.view));
+        let key = format!("preview-{}", self.table.arena.id);
+        let fresh = !matches!(&self.preview, Some((k, _)) if *k == key);
+        let picture = if fresh { Some(garden.picture()) } else { None };
+        let (w, h) = (garden.ground.width() as f32, garden.ground.height() as f32);
+        let caption_h = 86.0;
+        let area = ui.available_rect_before_wrap();
+        let room = Rect::from_min_max(area.min, pos2(area.max.x, area.max.y - caption_h));
+        let ppp = ctx.pixels_per_point();
+        let pad = u * 6.0;
+        let pixels = (((room.width() - pad * 2.0) * ppp) / w)
+            .min(((room.height() - pad * 2.0) * ppp) / h)
+            .floor()
+            .min(4.0);
+        let texture = match (picture, &self.preview) {
+            (Some(picture), _) => {
+                let t = texture(ctx, &key, &picture);
+                self.preview = Some((key, t.clone()));
+                t
+            }
+            (None, Some((_, t))) => t.clone(),
+            (None, None) => return,
+        };
+        let size = if pixels >= 1.0 {
+            vec2(w, h) * pixels / ppp
+        } else {
+            let fit = ((room.width() - pad * 2.0) / w).min((room.height() - pad * 2.0) / h);
+            vec2(w, h) * fit.max(0.1)
+        };
+        let min = pos2(room.center().x - size.x / 2.0, room.min.y + pad);
+        let min = pos2((min.x * ppp).round() / ppp, (min.y * ppp).round() / ppp);
+        let photo = Rect::from_min_size(min, size);
+        // A mat of card round it, as a photograph is pasted in.
+        chrome::card(
+            ui.painter(),
+            photo.expand(u * 4.0),
+            u,
+            ink::CARD,
+            ink::LINE.gamma_multiply(0.55),
+        );
+        ui.painter().image(
+            texture.id(),
+            photo,
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        ui.allocate_rect(
+            Rect::from_min_max(area.min, pos2(area.max.x, photo.max.y + u * 8.0)),
+            Sense::hover(),
+        );
+        let arena = self.table.arena.clone();
+        let open = self.arena_open(&arena.id);
+        let cup = crate::rewards::cup_for(&arena.id);
+        ui.vertical_centered(|ui| {
+            ui.label(label_job(&arena.name, 14.0, ink::FOREST));
+            ui.label(
+                RichText::new(crate::garden::Dressing::of(&arena).blurb())
+                    .size(13.0)
+                    .color(ink::PAGE),
+            );
+            if let Some(cup) = cup {
+                let wins = self
+                    .table
+                    .record
+                    .cup_wins(cup.id)
+                    .min(crate::rewards::CUP_WINS);
+                ui.horizontal(|ui| {
+                    // Centred by hand: a row of rosettes and a few words.
+                    let words = if open {
+                        format!("{} · {wins} of {} wins", cup.name, crate::rewards::CUP_WINS)
+                    } else if self.outing == Outing::Home {
+                        format!("Win the {} to open it", locked_behind(&arena.id))
+                    } else {
+                        format!(
+                            "Open for friends · the {} opens it for the visitors",
+                            locked_behind(&arena.id)
+                        )
+                    };
+                    let galley = ui.painter().layout_job(label_job(&words, 9.0, ink::MUTED));
+                    let width = galley.size().x
+                        + if open {
+                            f32::from(crate::rewards::CUP_WINS) * (u * 10.0 + u) + u * 4.0
+                        } else {
+                            0.0
+                        };
+                    ui.add_space(((ui.available_width() - width) / 2.0).max(0.0));
+                    ui.spacing_mut().item_spacing.x = u;
+                    if open {
+                        for k in 0..crate::rewards::CUP_WINS {
+                            rosette(ui, k < wins, u);
+                        }
+                        ui.add_space(u * 3.0);
+                    }
+                    ui.label(galley);
+                });
+            }
+        });
+    }
+
+    /// Every place to play, on a card with its little picture, and the page's way on.
+    fn places(&mut self, ui: &mut egui::Ui, u: f32) {
+        chrome::kicker(ui, "Places");
+        ui.add_space(u * 2.0);
+        let ctx = ui.ctx().clone();
+        let waiting = self.room_waiting();
+        let home = self.outing == Outing::Home;
+        let mut chosen = None;
+        for i in 0..self.arenas.len() {
+            let (arena, thumb) = &mut self.arenas[i];
+            let picture = thumb
+                .get_or_insert_with(|| {
+                    let view = View::new(arena.width, arena.height);
+                    let garden = Garden::new(arena, &view);
+                    texture(
+                        &ctx,
+                        &format!("arena-{}", arena.id),
+                        &shrunk(&garden.picture(), 3),
+                    )
+                })
+                .clone();
+            let arena = arena.clone();
+            let here = self.table.arena.id == arena.id;
+            let unlocked = self.arena_open(&arena.id);
+            let choosable = !waiting && (unlocked || !home);
+            let cup = crate::rewards::cup_for(&arena.id);
+            let wins = cup.map_or(0, |c| {
+                self.table
+                    .record
+                    .cup_wins(c.id)
+                    .min(crate::rewards::CUP_WINS)
+            });
+            let (response, _) = card(
+                ui,
+                Id::new(("arena", i)),
+                here,
+                choosable || here,
+                choosable,
+                u,
+                |ui| {
+                    ui.horizontal(|ui| {
+                        let size = picture.size_vec2();
+                        let w = 72.0;
+                        let (rect, _) =
+                            ui.allocate_exact_size(vec2(w, w * size.y / size.x), Sense::hover());
+                        ui.painter().image(
+                            picture.id(),
+                            rect,
+                            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                            Color32::WHITE,
+                        );
+                        ui.vertical(|ui| {
+                            ui.label(label_job(
+                                &arena.name,
+                                chrome::LABEL,
+                                if here { ink::FOREST } else { ink::PAGE },
+                            ));
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = u;
+                                if unlocked {
+                                    for k in 0..crate::rewards::CUP_WINS {
+                                        rosette(ui, k < wins, u);
+                                    }
+                                } else if home {
+                                    ui.label(label_job("Locked", 9.0, ink::MUTED));
+                                } else {
+                                    ui.label(label_job("Open for friends", 9.0, ink::MUTED));
+                                }
+                            });
+                        });
+                    });
+                },
+            );
+            let response = if !unlocked && home {
+                response.on_hover_text(format!("Win the {} to play here", locked_behind(&arena.id)))
+            } else {
+                response
+            };
+            if response.hovered() && choosable && !here {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            if response.clicked() && choosable && !here {
+                chosen = Some(arena);
+            }
+            ui.add_space(u * 2.0);
+        }
+        if let Some(arena) = chosen {
+            self.choose_arena(arena);
+        }
+        if waiting {
+            ui.label(
+                RichText::new(format!("Your room plays in the {}.", self.table.arena.name))
+                    .size(11.5)
+                    .italics()
+                    .color(ink::MUTED),
+            );
+        }
+        ui.add_space(u * 6.0);
+        let width = ui.available_width();
+        let now = self.clock;
+        if chrome::button(
+            ui,
+            "Turn the page: who goes",
+            Kind::Primary,
+            false,
+            true,
+            Some(width),
+            u,
+        )
+        .clicked()
+        {
+            self.turn_to(Step::Who, now);
+        }
+    }
+
+    /// Every companion, on a card: tap three to send them.
+    fn companions(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
+        let count = self.table.home.len();
+        let gap = u * 6.0;
+        let width = ui.available_width();
+        let per_row = ((width + gap) / (250.0 + gap)).floor().max(1.0) as usize;
+        let card_w = ((width - gap * (per_row as f32 - 1.0)) / per_row as f32).floor();
+        let full = self.table.picked.len() >= TEAM_SIZE;
+        let waiting = self.room_waiting();
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for row in (0..count).collect::<Vec<_>>().chunks(per_row) {
+                    ui.horizontal_top(|ui| {
+                        ui.spacing_mut().item_spacing.x = gap;
+                        for &place in row {
+                            let contender = self.table.home[place].0.clone();
+                            let texture = self.portrait(ctx, &contender);
+                            let chosen = self.table.picked.iter().position(|p| *p == place);
+                            let note = match self.table.page(contender.traveler.id.0) {
+                                Some(page) => {
+                                    page.notes().into_iter().next().unwrap_or_else(|| {
+                                        format!(
+                                            "Played {}: no habits noted yet",
+                                            times(page.matches)
+                                        )
+                                    })
+                                }
+                                None => "Not in your notebook yet".to_owned(),
+                            };
+                            let card = Companion {
+                                place,
+                                contender: &contender,
+                                texture: &texture,
+                                chosen,
+                                note: &note,
+                                spare: (full || waiting) && chosen.is_none(),
+                            };
+                            let response = card.show(ui, card_w, u);
+                            if response.clicked() && !waiting {
+                                self.table.toggle_pick(place);
+                            }
+                        }
+                    });
+                    ui.add_space(gap);
+                }
+                if let Some(error) = &self.error {
+                    ui.colored_label(ink::STAMP, error);
+                }
+            });
+    }
+
+    /// The three chosen, in order, with room for whoever is still to be chosen; and the way on.
+    fn lineup(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
+        chrome::kicker(ui, "Your three");
+        ui.add_space(u * 2.0);
+        let waiting = self.room_waiting();
+        let mut take_out = None;
+        for slot in 0..TEAM_SIZE {
+            match self.table.picked.get(slot).copied() {
+                Some(place) => {
+                    let contender = self.table.home[place].0.clone();
+                    let texture = self.portrait(ctx, &contender);
+                    card(ui, Id::new(("slot", slot)), false, true, false, u, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(label_job(&format!("{}", slot + 1), 13.0, ink::STAMP));
+                            portrait_mat(ui, &texture, 44.0, u, true);
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(&contender.traveler.name)
+                                        .size(15.0)
+                                        .strong()
+                                        .color(ink::PAGE),
+                                );
+                                ui.label(
+                                    RichText::new(&contender.traveler.character.phrase)
+                                        .size(12.0)
+                                        .color(ink::MUTED),
+                                );
+                            });
+                            if !waiting {
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if chrome::button(
+                                            ui,
+                                            "take out",
+                                            Kind::Quiet,
+                                            false,
+                                            true,
+                                            None,
+                                            u,
+                                        )
+                                        .clicked()
+                                        {
+                                            take_out = Some(place);
+                                        }
+                                    },
+                                );
+                            }
+                        });
+                    });
+                }
+                None => empty_slot(ui, slot, u),
+            }
+            ui.add_space(u * 3.0);
+        }
+        if let Some(place) = take_out {
+            self.table.toggle_pick(place);
+        }
+        ui.add_space(u * 2.0);
+        dashed_rule(ui, u);
+        ui.add_space(u * 2.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(format!("Playing in the {}", self.table.arena.name))
+                    .size(12.5)
+                    .color(ink::MUTED),
+            );
+            if !waiting && chrome::button(ui, "change", Kind::Quiet, false, true, None, u).clicked()
+            {
+                let now = self.clock;
+                self.turn_to(Step::Where, now);
+            }
+        });
+        ui.add_space(u * 4.0);
+        let width = ui.available_width();
+        let short = TEAM_SIZE - self.table.picked.len().min(TEAM_SIZE);
+        match self.outing {
+            Outing::Home => {
+                let open = self.arena_open(&self.table.arena.id);
+                let ready = short == 0 && open;
+                let label = if !open {
+                    format!("Win the {} first", locked_behind(&self.table.arena.id))
+                } else if ready {
+                    "Play the visiting team".to_owned()
+                } else {
+                    format!("Choose {short} more")
+                };
+                if chrome::button(ui, &label, Kind::Primary, false, ready, Some(width), u)
+                    .on_hover_text(
+                        "Wins against the visitors fill the place's cup, and earn journal entries and keepsakes.",
+                    )
+                    .clicked()
+                {
+                    self.begin();
+                }
+            }
+            Outing::World => {
+                let label = if short == 0 {
+                    "Turn the page: your friend's room".to_owned()
+                } else {
+                    format!("Choose {short} more")
+                };
+                if chrome::button(ui, &label, Kind::Primary, false, short == 0, Some(width), u)
+                    .clicked()
+                {
+                    let now = self.clock;
+                    self.turn_to(Step::Room, now);
+                }
+            }
+        }
+    }
+
+    /// The friend's room, before it opens: a name signed, then open one or join one. Once open,
+    /// its code, to read out or copy.
+    fn room(&mut self, ui: &mut egui::Ui, u: f32) {
+        let now = self.clock;
+        if let Some(friend) = &self.table.friend {
+            if friend.seated {
+                ui.label(
+                    RichText::new("Your last match is still closing on the relay…")
+                        .size(13.0)
+                        .color(ink::MUTED),
+                );
+                return;
+            }
+            match friend.code.clone() {
+                Some(code) if !self.joining => {
+                    chrome::kicker(ui, "Give your friend this code");
+                    ui.add_space(u * 3.0);
+                    ui.horizontal(|ui| {
+                        let galley = ui.painter().layout_job(label_job(&code, 34.0, ink::FOREST));
+                        let size = galley.size() + vec2(u * 24.0, u * 14.0);
+                        let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                        ticket(ui.painter(), rect, u);
+                        ui.painter().galley(
+                            rect.center() - galley.size() / 2.0,
+                            galley,
+                            ink::FOREST,
+                        );
+                        ui.add_space(u * 6.0);
+                        let id = Id::new("copied-at");
+                        let copied = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<f32>(id))
+                            .is_some_and(|at| now - at < 2.0);
+                        let word = if copied { "Copied" } else { "Copy the code" };
+                        if chrome::button(ui, word, Kind::Plain, copied, true, None, u).clicked() {
+                            ui.ctx().copy_text(code.clone());
+                            ui.ctx().data_mut(|d| d.insert_temp(id, now));
+                        }
+                    });
+                    ui.add_space(u * 4.0);
+                    let dots = ".".repeat(1 + (now * 2.0) as usize % 3);
+                    ui.label(
+                        RichText::new(format!(
+                            "Waiting for your friend to join{dots} The match begins as soon as they do."
+                        ))
+                        .size(13.0)
+                        .color(ink::MUTED),
+                    );
+                }
+                Some(code) => {
+                    ui.label(RichText::new(format!("Joining room {code}…")).size(14.0));
+                }
+                None if self.joining => {
+                    ui.label(
+                        RichText::new(format!(
+                            "Joining room {}…",
+                            formiga_battle_room::code::normalize(&self.join_code)
+                                .unwrap_or_else(|| self.join_code.clone())
+                        ))
+                        .size(14.0),
+                    );
+                }
+                None => {
+                    ui.label(
+                        RichText::new("Opening the room…")
+                            .size(14.0)
+                            .color(ink::MUTED),
+                    );
+                }
+            }
+            ui.add_space(u * 4.0);
+            if chrome::button(ui, "Close the room", Kind::Plain, false, true, None, u).clicked() {
+                self.table.leave_room();
+                self.joining = false;
+            }
+            if let Some(notice) = self.table.notice.clone() {
+                ui.add_space(u * 3.0);
+                sticky(ui, &notice, u);
+            }
+            return;
+        }
+
+        // Signing the page: the name the friend sees.
+        chrome::kicker(ui, "Your name for your friend");
+        ui.add_space(u);
+        let field = ui.add(
+            egui::TextEdit::singleline(&mut self.handler)
+                .font(FontId::proportional(20.0))
+                .char_limit(24)
+                .frame(egui::Frame::NONE)
+                .hint_text("The name your friend knows you by")
+                .desired_width(ui.available_width().min(360.0)),
+        );
+        // A line to sign on.
+        let r = field.rect;
+        ui.painter().rect_filled(
+            Rect::from_min_size(pos2(r.left(), r.bottom() + u), vec2(r.width(), u)),
+            0.0,
+            if field.has_focus() {
+                ink::FOREST
+            } else {
+                ink::LINE.gamma_multiply(0.5)
+            },
+        );
+        ui.add_space(u * 2.0);
+        let shown = self.handler.trim();
+        ui.label(
+            RichText::new(if shown.is_empty() {
+                "Your friend sees this beside your team. Left blank, you are “A Handler”."
+                    .to_owned()
+            } else {
+                format!("Your friend will see “{shown}” beside your team.")
+            })
+            .size(12.0)
+            .color(ink::MUTED),
+        );
+        ui.add_space(u * 8.0);
+
+        let ready = self.table.picked.len() == TEAM_SIZE && self.understood;
+        let typed = formiga_battle_room::code::normalize(&self.join_code);
+        let half = ((ui.available_width() - u * 6.0) / 2.0).floor();
+        let mut open = false;
+        let mut join = false;
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = u * 6.0;
+            ui.allocate_ui_with_layout(vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+                card(ui, Id::new("open-room"), false, true, false, u, |ui| {
+                    ui.set_min_height(132.0);
+                    ui.label(label_job("Open a room", chrome::LABEL + 1.0, ink::FOREST));
+                    ui.label(
+                        RichText::new(
+                            "Battle gives you a six-letter code to pass on. Your friend joins with it, and the match begins in the place you chose.",
+                        )
+                        .size(12.5),
+                    );
+                    ui.add_space(u * 3.0);
+                    let width = ui.available_width();
+                    open = chrome::button(ui, "Open a room", Kind::Primary, false, ready, Some(width), u)
+                        .clicked();
+                });
+            });
+            ui.allocate_ui_with_layout(vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+                card(ui, Id::new("join-room"), false, true, false, u, |ui| {
+                    ui.set_min_height(132.0);
+                    ui.label(label_job("Join their room", chrome::LABEL + 1.0, ink::FOREST));
+                    ui.label(
+                        RichText::new("Type the code your friend gives you. You play in the place they chose.")
+                            .size(12.5),
+                    );
+                    ui.add_space(u * 2.0);
+                    ui.horizontal(|ui| {
+                        let edit = ui.add(
+                            egui::TextEdit::singleline(&mut self.join_code)
+                                .font(FontId::monospace(20.0))
+                                .char_limit(9)
+                                .hint_text("CODE")
+                                .desired_width(110.0),
+                        );
+                        if edit.changed() {
+                            self.join_code = self.join_code.to_uppercase();
+                        }
+                        let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                        join = (chrome::button(ui, "Join", Kind::Primary, false, ready && typed.is_some(), None, u)
+                            .clicked()
+                            || enter)
+                            && ready
+                            && typed.is_some();
+                    });
+                    let trimmed = self.join_code.trim();
+                    if !trimmed.is_empty() && typed.is_none() {
+                        ui.label(
+                            RichText::new(
+                                "A code is six letters and numbers, with no 0, 1, 2, 5 or 8 to mix up.",
+                            )
+                            .size(11.5)
+                            .color(ink::STAMP),
+                        );
+                    }
+                });
+            });
+        });
+        if !ready {
+            ui.add_space(u * 3.0);
+            let why = if self.table.picked.len() < TEAM_SIZE {
+                "Choose three companions first."
+            } else {
+                "Read what a friend match shares, on the right, and tick that you understand."
+            };
+            ui.label(RichText::new(why).size(12.5).italics().color(ink::MUTED));
+        }
+        if open {
+            let handler = self.handler.clone();
+            self.joining = false;
+            self.table.open_room(&handler, None);
+        } else if join && let Some(code) = typed {
+            let handler = self.handler.clone();
+            self.joining = true;
+            self.table.open_room(&handler, Some(&code));
+        }
+        if let Some(notice) = self.table.notice.clone() {
+            ui.add_space(u * 3.0);
+            sticky(ui, &notice, u);
+        }
+    }
+
+    /// The ruled page beside the room: what a friend match shares, said in full before anything
+    /// is sent, and the team going.
+    fn shared(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
+        chrome::kicker(ui, "What a friend match shares");
+        ui.add_space(u * 2.0);
+        for line in SHARED {
+            ui.label(RichText::new(format!("· {line}")).size(12.0));
+            ui.add_space(u);
+        }
+        ui.add_space(u * 2.0);
+        let open = self.table.friend.is_some();
+        ui.add_enabled(
+            !open,
+            egui::Checkbox::new(&mut self.understood, "I understand what is shared"),
+        );
+        ui.add_space(u * 4.0);
+        dashed_rule(ui, u);
+        ui.add_space(u * 2.0);
+        chrome::kicker(ui, "Going");
+        ui.horizontal(|ui| {
+            for place in self.table.picked.clone() {
+                let contender = self.table.home[place].0.clone();
+                let texture = self.portrait(ctx, &contender);
+                portrait_mat(ui, &texture, 40.0, u, true)
+            }
+        });
+        ui.label(
+            RichText::new(format!(
+                "To the {}. Open Circuit points so far: {}. Friend matches earn points, match history and notebook entries.",
+                self.table.arena.name, self.table.record.circuit_points
+            ))
+            .size(11.5)
+            .color(ink::MUTED),
+        );
+    }
+}
+
+/// "once", "twice", or "n times".
+fn times(n: u32) -> String {
+    match n {
+        1 => "once".to_owned(),
+        2 => "twice".to_owned(),
+        n => format!("{n} times"),
+    }
+}
+
+/// A place in the team still to fill: a dashed outline, numbered.
+fn empty_slot(ui: &mut egui::Ui, slot: usize, u: f32) {
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 60.0), Sense::hover());
+    let painter = ui.painter();
+    let colour = ink::LINE.gamma_multiply(0.35);
+    let dash = |a: egui::Pos2, b: egui::Pos2| {
+        let along = b - a;
+        let length = along.length();
+        let step = along / length;
+        let mut t = 0.0;
+        while t < length {
+            let end = (t + u * 3.0).min(length);
+            painter.line_segment([a + step * t, a + step * end], Stroke::new(u, colour));
+            t += u * 5.0;
+        }
+    };
+    let r = rect.shrink(u);
+    dash(r.left_top(), r.right_top());
+    dash(r.left_bottom(), r.right_bottom());
+    dash(r.left_top(), r.left_bottom());
+    dash(r.right_top(), r.right_bottom());
+    painter.text(
+        pos2(r.left() + u * 6.0, r.center().y),
+        Align2::LEFT_CENTER,
+        format!("{}", slot + 1),
+        FontId::monospace(13.0),
+        ink::MUTED,
+    );
+    painter.text(
+        pos2(r.left() + u * 16.0, r.center().y),
+        Align2::LEFT_CENTER,
+        "Choose a companion",
+        FontId::proportional(12.5),
+        ink::MUTED,
+    );
+}
+
+/// A ticket stub for a room's code: card with a notch bitten out of each end.
+fn ticket(painter: &egui::Painter, rect: Rect, u: f32) {
+    chrome::card(
+        painter,
+        rect,
+        u,
+        ink::NOTE,
+        Color32::from_rgb(0xb8, 0x9a, 0x52),
+    );
+    for x in [rect.left(), rect.right()] {
+        painter.circle_filled(
+            pos2(x, rect.center().y),
+            u * 4.0,
+            Color32::from_rgb(0xf9, 0xf0, 0xd4),
+        );
+    }
+    let mut y = rect.top() + u * 3.0;
+    while y < rect.bottom() - u * 3.0 {
+        painter.rect_filled(
+            Rect::from_min_size(pos2(rect.left() + u * 9.0, y), vec2(u, u * 2.0)),
+            0.0,
+            Color32::from_rgb(0xb8, 0x9a, 0x52),
+        );
+        y += u * 4.0;
+    }
+}
+
+/// A companion's card while choosing: its portrait, name and temperament, its habits in a word
+/// or three and what the notebook says of it, all on the card; chosen, it turns mint and gets
+/// its place in the team stamped on its corner. A spare one, while three are chosen, is faded.
+struct Companion<'a> {
+    place: usize,
+    contender: &'a Contender,
+    texture: &'a egui::TextureHandle,
+    chosen: Option<usize>,
+    note: &'a str,
+    spare: bool,
+}
+
+impl Companion<'_> {
+    fn show(&self, ui: &mut egui::Ui, width: f32, u: f32) -> egui::Response {
+        let id = Id::new(("companion", self.place));
+        let (response, _) = ui
+            .allocate_ui(vec2(width, 0.0), |ui| {
+                card(ui, id, self.chosen.is_some(), !self.spare, true, u, |ui| {
+                    ui.set_min_height(96.0);
+                    ui.horizontal_top(|ui| {
+                        portrait_mat(ui, self.texture, 64.0, u, true);
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(&self.contender.traveler.name)
+                                    .size(16.0)
+                                    .strong()
+                                    .color(ink::PAGE),
+                            );
+                            ui.label(
+                                RichText::new(&self.contender.traveler.character.phrase)
+                                    .size(12.5)
+                                    .color(ink::MUTED),
+                            );
+                            ui.label(label_job(
+                                &self.contender.traveler.character.traits.join(" · "),
+                                9.0,
+                                ink::MUTED,
+                            ));
+                            ui.label(
+                                RichText::new(self.note)
+                                    .size(12.0)
+                                    .italics()
+                                    .color(ink::FOREST),
+                            );
+                        });
+                    });
+                })
+            })
+            .inner;
+        let response = if self.spare {
+            response.on_hover_text("Your three are chosen: take one out to send this one instead")
+        } else {
+            response
+        };
+        if response.hovered() && !self.spare {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        if let Some(n) = self.chosen {
+            // Its place in the team, stamped on the corner.
+            let rect = response.rect;
+            let centre = pos2(rect.max.x - u * 9.0, rect.min.y + u * 9.0);
+            let painter = ui.painter();
+            painter.circle_filled(centre, u * 6.5, ink::STAMP);
+            painter.circle_stroke(centre, u * 5.0, Stroke::new(u * 0.7, ink::CARD));
+            painter.text(
+                centre,
+                Align2::CENTER_CENTER,
+                format!("{}", n + 1),
+                FontId::monospace(12.0),
+                ink::CARD,
+            );
+        }
+        response
+    }
+}

@@ -133,4 +133,22 @@ impl Look {
     pub fn portrait(&mut self) -> Canvas {
         self.frame(Pose::Idle, 0.0, true).clone()
     }
+
+    /// Where the middle of its face is in its idle frames, as `formiga-art` places it: for
+    /// framing it in a train window, as Hill does.
+    pub fn face(&self, facing_right: bool) -> (i32, i32) {
+        let anchor = CreatureRenderer::render_dressed_body_frame(
+            &self.genome,
+            self.dress,
+            Pose::Idle.clip(),
+            0,
+            self.reduce_motion,
+        )
+        .face_anchor;
+        if facing_right {
+            (anchor.x, anchor.y)
+        } else {
+            (FRAME_SIZE as i32 - anchor.x, anchor.y)
+        }
+    }
 }
