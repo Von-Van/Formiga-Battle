@@ -114,7 +114,7 @@ pub struct Sprite {
 
 impl Sprite {
     /// The painted part of a whole-board canvas, cut out.
-    fn cut(full: &Canvas) -> Self {
+    pub(crate) fn cut(full: &Canvas) -> Self {
         let Some((x0, y0, x1, y1)) = full.alpha_bounds() else {
             return Self {
                 pic: Canvas::new(1, 1),
