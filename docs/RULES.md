@@ -397,6 +397,16 @@ and the cap's order (beacon progress, then composure, then creatures standing) d
 flanks are what move composure. Every tie between equal tiles, in the rules and in the coaches,
 is broken from each team's own side of the board, so the board plays the same from both sides.
 
+`tournament` also says how its matches ended: how many never lit the beacon at all, how many were
+won by a team that had been behind on the beacon, and how often a flank was followed by beacon
+progress that turn. Over 4,000 Exhibition matches each (`--pairings 2000 --seed 7`), the beacon
+was never lit in 45% of matches on Backyard, 10% on Sandy Cove, 52% at the Millpond and 59% in the
+glade, and the winner had been behind on the beacon in 1% to 3% of them (10% on Sandy Cove). The
+zone is held by both teams for 24 to 29 of a match's 33 or so ticks, most often two of one team
+holding against one of the other: one holder is enough to stop the beacon, and a flank that
+breaks it leaves the flankers standing beside it, not holding, so only about two flanks in five
+lead to progress that turn.
+
 Before rules version 2, under strong coaching, a bold creature went out of its way to walk into
 the other team's reach, and a social one detoured to stay beside its teammates because company
 counted on every tile of a long way round: Grumps scored 0.554 and Explorers 0.459. Both now

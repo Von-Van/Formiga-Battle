@@ -172,3 +172,20 @@ fn a_team_that_only_ever_holds_the_beacon_loses_to_one_that_walks_round_it() {
         s.left.score()
     );
 }
+
+#[test]
+fn a_tournament_says_how_its_matches_ended() {
+    let s = run(
+        &Arena::backyard(),
+        Ruleset::default(),
+        5,
+        60,
+        [Coach::Exhibition, Coach::Exhibition],
+    );
+    assert!(s.flanks > 0, "no flanks in {} matches", s.matches);
+    assert!(s.flanks_that_paid <= s.flanks);
+    // A match won at the beacon lit it; one never lit was decided some other way.
+    assert!(s.beacon_scoreless <= s.matches - s.by_capture);
+    // A comeback is a match someone won.
+    assert!(s.comebacks <= s.matches - s.draws);
+}

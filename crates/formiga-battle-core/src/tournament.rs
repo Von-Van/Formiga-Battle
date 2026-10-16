@@ -8,7 +8,7 @@
 
 use crate::ai::Coach;
 use crate::arena::Arena;
-use crate::event::Victory;
+use crate::event::{EventKind, Victory};
 use crate::game::{Match, TurnReport};
 use crate::order::Side;
 use crate::profile::Profile;
@@ -108,6 +108,15 @@ pub struct Summary {
     pub turns: u32,
     pub knockouts: u32,
     pub fallback_orders: u32,
+    /// Matches that ended with neither team's beacon lit at all: whatever decided them, nobody
+    /// ever had the zone to themselves.
+    pub beacon_scoreless: u32,
+    /// Matches whose winner was behind on the beacon at the end of some turn.
+    pub comebacks: u32,
+    /// Holds broken by a flank.
+    pub flanks: u32,
+    /// Flanks after which the flanking team's beacon went up before the turn was out.
+    pub flanks_that_paid: u32,
     /// Each creature counts its team's result.
     pub by_kind: BTreeMap<String, Record>,
     /// By trio of kinds, sorted, so the same three in any order are one trio.
@@ -163,14 +172,36 @@ pub fn run(
                 Some(Victory::TurnCap | Victory::Forfeit) => summary.at_cap += 1,
                 None => summary.draws += 1,
             }
+            let mut progress = [0u8; 2];
+            let mut behind = [false; 2];
             for report in &reports {
+                let mut flanked: Vec<Side> = Vec::new();
                 for e in &report.events {
-                    match e.kind {
-                        crate::event::EventKind::KnockedOut { .. } => summary.knockouts += 1,
-                        crate::event::EventKind::OrderFilled { .. } => summary.fallback_orders += 1,
+                    match &e.kind {
+                        EventKind::KnockedOut { .. } => summary.knockouts += 1,
+                        EventKind::OrderFilled { .. } => summary.fallback_orders += 1,
+                        EventKind::Flanked { by, .. } => {
+                            summary.flanks += 1;
+                            flanked.push(by[0].side);
+                        }
+                        EventKind::CaptureProgress { side, progress: p } => {
+                            progress[side.index()] = *p;
+                            let before = flanked.len();
+                            flanked.retain(|s| s != side);
+                            summary.flanks_that_paid += (before - flanked.len()) as u32;
+                        }
                         _ => {}
                     }
                 }
+                for side in Side::BOTH {
+                    behind[side.index()] |= progress[side.index()] < progress[side.other().index()];
+                }
+            }
+            if m.board.capture == [0, 0] {
+                summary.beacon_scoreless += 1;
+            }
+            if outcome.winner.is_some_and(|w| behind[w.index()]) {
+                summary.comebacks += 1;
             }
             let result = |side: Side| outcome.winner.map(|w| w == side);
             summary.left.add(result(Side::Left));

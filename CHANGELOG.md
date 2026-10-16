@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `formiga-battle tournament` says how its matches ended: how many never lit the beacon, how
+  many were won from behind on the beacon, and how many flanks led to beacon progress that turn.
 - Rules version 7: team orders. Each turn a Handler gives the whole team up to three orders
   instead of one to each companion: TAKE some squares (walk onto an empty one, move theirs off
   one, two flanking a holder), DEFEND some squares (stand on them, guard beside them, head off
