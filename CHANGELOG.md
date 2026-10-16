@@ -70,9 +70,13 @@
   card in the board's corner, and the whole match, in full, opens from there (L).
 - A match begins with READY? and GO!, each turn's orders with a slip in the Handler's colour, and
   it ends with HOORAY!, SO CLOSE! or A TIE! big on the board, and confetti for a win.
-- A click on the board does what the tile suggests: the ground to MOVE, one of theirs or the lever
-  to CONTEST, the chosen one itself to HOLD where it stands; a right click holds there. A card by
-  the pointer says what a click will do, and an arrow bobs over whoever is chosen.
+- The team's orders are three coloured tokens on the notes page: pick TAKE, DEFEND or INTERACT (or
+  T, D, I) and click the board, or drag across it to name more squares; a click takes or interacts,
+  a right click defends. Each order's squares are washed in its colour (gold, sky, plum) under a
+  flag, a shield or a sparkle, side by side where two orders name one square, and a card by the
+  pointer says what a click will do. As a turn is revealed, footprints run from each of the team to
+  the job it took on; where a companion's leanings chose its job it says so over its head
+  (CHARGE!, STEADY!, PALS!, OOH!), and a change of plan mid-turn is told with why.
 - The right page keeps the orders and a glance at the arena: how to win, the orders and the
   board's marks, one at a time, the detail on hover.
 - Sound: cheerful placeholder effects and music, all made in code, with music and sound volumes
