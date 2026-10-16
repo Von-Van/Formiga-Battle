@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- The CLEAR and TURN buttons on the orders given work again: the card under them took their
+  clicks. The words on each card now wrap short of its buttons instead of running under them.
+
 ## [0.67.12] - 2026-10-16
 
 Built on Formiga Desktop 0.67.11, with Battle contract version 4: each match played as a trio says

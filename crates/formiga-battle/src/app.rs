@@ -2628,7 +2628,17 @@ impl BattleApp {
                 |ui| {
                     ui.horizontal(|ui| {
                         token(ui, i, has_order || chosen, facing, u);
+                        // Room kept on the right for the buttons, so the words wrap short of them.
+                        let mut buttons = Vec::new();
+                        if giving && has_order {
+                            buttons.push("clear");
+                            if facing.is_some() {
+                                buttons.push("turn");
+                            }
+                        }
+                        let room = ui.available_width() - beside(ui, &buttons, u);
                         ui.vertical(|ui| {
+                            ui.set_max_width(room);
                             ui.spacing_mut().item_spacing.y = 0.0;
                             ui.label(label_job(
                                 &title,
@@ -2721,7 +2731,14 @@ impl BattleApp {
                 |ui| {
                     ui.horizontal(|ui| {
                         bonus_token(ui, given.is_some() || chosen, u);
+                        let buttons: &[&str] = if giving && given.is_some() {
+                            &["clear"]
+                        } else {
+                            &[]
+                        };
+                        let room = ui.available_width() - beside(ui, buttons, u);
                         ui.vertical(|ui| {
+                            ui.set_max_width(room);
                             ui.spacing_mut().item_spacing.y = 0.0;
                             ui.label(label_job(
                                 "USE ITEM · bonus",
@@ -3481,6 +3498,16 @@ pub fn speak_order(m: &Match, you: Side, order: &formiga_battle_core::Directive)
     }
 }
 
+/// The width a row of these little buttons takes at the right of a card, with the gap before
+/// them: nothing for none.
+fn beside(ui: &egui::Ui, buttons: &[&str], u: f32) -> f32 {
+    let gap = ui.spacing().item_spacing.x;
+    buttons
+        .iter()
+        .map(|b| chrome::button_size(ui, b, Kind::Back, u).x + gap)
+        .sum()
+}
+
 /// One of the team and what it carries, in a few words: "Pip's twig".
 fn carried(m: &Match, slot: Slot) -> String {
     let name = &m.profile(slot).name;
@@ -3492,7 +3519,8 @@ fn carried(m: &Match, slot: Slot) -> String {
 
 /// A card on the page round whatever `add` writes on it, painted under the writing: card
 /// coloured on a hard shadow with a stepped edge, mint when chosen, faded for someone sitting
-/// out. A `lively` card can be clicked, and lifts a unit when pointed at.
+/// out. A `lively` card can be clicked, and lifts a unit when pointed at. The card senses its
+/// click beneath what is written on it, so a button on the card takes its own click.
 fn card<R>(
     ui: &mut egui::Ui,
     id: Id,
@@ -3504,22 +3532,25 @@ fn card<R>(
 ) -> (egui::Response, R) {
     let mark = crate::feel::mark(ui);
     let under = ui.painter().add(egui::Shape::Noop);
-    let inner = egui::Frame::new()
-        .inner_margin(egui::Margin::same((u * 5.0).round() as i8))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            if !up {
-                ui.multiply_opacity(0.55);
-            }
-            add(ui)
-        });
-    let rect = inner.response.rect;
     let sense = if lively {
         Sense::click()
     } else {
         Sense::hover()
     };
-    let response = ui.interact(rect, id, sense);
+    let inner = ui.scope_builder(egui::UiBuilder::new().id_salt(id).sense(sense), |ui| {
+        egui::Frame::new()
+            .inner_margin(egui::Margin::same((u * 5.0).round() as i8))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                if !up {
+                    ui.multiply_opacity(0.55);
+                }
+                add(ui)
+            })
+            .inner
+    });
+    let response = inner.response;
+    let rect = response.rect;
     let pointed = lively && up && response.hovered();
     let press = if lively && up {
         crate::feel::press(ui.ctx(), id, &response, crate::feel::Feel::Select)
@@ -4444,6 +4475,92 @@ mod tests {
         h.click("All the lessons", 0);
         h.frames(2);
         assert_eq!((h.app.stage, h.app.step), (Stage::Journal, Step::Lessons));
+    }
+
+    /// The Facing lesson on the board with its orders open: a HOLD and a PRESS given, the third
+    /// left empty. The HOLD names several squares, for the longest words a card says.
+    fn hold_and_press_given() -> Headless {
+        use formiga_battle_core::{Directive, Facing};
+        let mut h = Headless::new();
+        h.frames(2);
+        h.app.lesson = Lesson::Facing;
+        h.app.outing = Outing::Lessons;
+        h.app.begin_lesson();
+        h.time += f64::from(READY_SECS) + 1.0;
+        h.frames(4);
+        let at = h
+            .app
+            .table
+            .m
+            .as_ref()
+            .expect("on the board")
+            .arena
+            .zone_centre();
+        let beside = Tile { x: at.x + 1, ..at };
+        h.app.table.orders[0] = Some(Directive::Hold {
+            squares: vec![at, beside],
+            facing: Facing::North,
+        });
+        h.app.table.orders[1] = Some(Directive::Press { squares: vec![at] });
+        h.frames(4);
+        h
+    }
+
+    #[test]
+    fn the_turn_and_clear_buttons_on_an_order_card_do_what_they_say() {
+        use formiga_battle_core::{Directive, Facing};
+        let mut h = hold_and_press_given();
+        let in_hand = (h.app.table.selected, h.app.table.verb);
+        h.click("turn", 0);
+        h.frames(2);
+        assert!(matches!(
+            h.app.table.orders[0],
+            Some(Directive::Hold {
+                facing: Facing::East,
+                ..
+            })
+        ));
+        // The button took the click, not the card under it: the order was not picked up again.
+        assert_eq!((h.app.table.selected, h.app.table.verb), in_hand);
+        // The PRESS's clear is the second on the page.
+        h.click("clear", 1);
+        h.frames(2);
+        assert!(h.app.table.orders[0].is_some() && h.app.table.orders[1].is_none());
+        h.click("clear", 0);
+        h.frames(2);
+        assert!(h.app.table.orders.iter().all(Option::is_none));
+        // The card round the buttons is still clicked to pick its order up again.
+        let mut h = hold_and_press_given();
+        h.click("PRESS", 1);
+        h.frames(2);
+        assert_eq!(
+            (h.app.table.selected, h.app.table.verb),
+            (Some(1), Some(Verb::Press))
+        );
+    }
+
+    #[test]
+    fn the_buttons_on_an_order_card_cover_none_of_its_words() {
+        let h = hold_and_press_given();
+        let u = chrome::unit(1.0);
+        let buttons: Vec<Rect> = h
+            .drawn
+            .iter()
+            .filter(|(w, _)| w == "CLEAR" || w == "TURN")
+            .map(|(_, r)| r.expand2(vec2(u * 5.0, u * 3.0)))
+            .collect();
+        assert_eq!(buttons.len(), 3, "a clear each and the HOLD's turn");
+        for (words, rect) in &h.drawn {
+            if words == "CLEAR" || words == "TURN" {
+                continue;
+            }
+            for button in &buttons {
+                assert!(
+                    !button.intersects(*rect),
+                    "a button at {button:?} covers {words:?} at {rect:?}"
+                );
+            }
+        }
     }
 
     #[test]

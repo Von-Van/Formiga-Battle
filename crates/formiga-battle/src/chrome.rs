@@ -402,6 +402,26 @@ pub enum Kind {
     Back,
 }
 
+/// How much room a button with these words takes at its natural width, so a row can keep that
+/// much clear for it before laying out what goes beside it.
+pub fn button_size(ui: &egui::Ui, text: &str, kind: Kind, unit: f32) -> egui::Vec2 {
+    let size = match kind {
+        Kind::Primary => 13.0,
+        _ => LABEL,
+    };
+    let galley = ui.painter().layout_job(label_job(text, size, ink::PAGE));
+    natural_size(galley.size(), kind, unit)
+}
+
+/// A button's lettering with its padding round it and its lip under it.
+fn natural_size(lettering: egui::Vec2, kind: Kind, unit: f32) -> egui::Vec2 {
+    let pad = egui::vec2(
+        unit * 5.0,
+        unit * if kind == Kind::Primary { 5.0 } else { 3.0 },
+    );
+    lettering + pad * 2.0 + egui::vec2(0.0, unit)
+}
+
 /// A button in the notebook's way, after Hill's: printed capitals on a slip of card with a
 /// stepped edge and a lip along its foot, mint when pointed at or chosen; pressing it takes the
 /// lip away and sinks the lettering a unit, so it feels pressed.
@@ -424,11 +444,7 @@ pub fn button(
         _ => ink::PAGE,
     };
     let galley = ui.painter().layout_job(label_job(text, size, colour));
-    let pad = egui::vec2(
-        unit * 5.0,
-        unit * if kind == Kind::Primary { 5.0 } else { 3.0 },
-    );
-    let natural = galley.size() + pad * 2.0 + egui::vec2(0.0, unit);
+    let natural = natural_size(galley.size(), kind, unit);
     let size = egui::vec2(width.unwrap_or(natural.x).max(natural.x), natural.y);
     let sense = if enabled {
         egui::Sense::click()
