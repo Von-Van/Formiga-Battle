@@ -15,15 +15,15 @@
 use crate::build::{Build, Mismatch, Released};
 use crate::code;
 use formiga_battle_contract::Contender;
-use formiga_battle_core::{Orders, Ruleset, Side, TEAM_SIZE};
+use formiga_battle_core::{Ruleset, Side, TEAM_SIZE, TeamPlan};
 use formiga_travel::TravelRelationship;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 /// The version of the relay's requests and answers. 2: an entrant says which Battle and Desktop
-/// it plays with ([`Build`]).
-pub const RELAY_VERSION: u32 = 2;
+/// it plays with ([`Build`]). 3: a side sends its team's plan, not an order per creature.
+pub const RELAY_VERSION: u32 = 3;
 /// The largest body the relay reads.
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
 /// The header a seat's token travels in. Never in a URL, so it is never in a link or a log.
@@ -115,11 +115,11 @@ pub fn arena_id_well_formed(id: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-'))
 }
 
-/// One locked turn: the orders each side sent, `None` for any not given in time.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// One locked turn: the plan each side sent, empty for one not given in time.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Locked {
     pub turn: u8,
-    pub submitted: [Orders; 2],
+    pub submitted: [TeamPlan; 2],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,7 +186,7 @@ pub enum Request {
         code: String,
         seat: String,
         turn: u8,
-        orders: Orders,
+        orders: TeamPlan,
     },
     /// `POST /rooms/{code}/board`: the board's hash after a turn, and whether the match ended.
     Board {
@@ -314,7 +314,7 @@ struct Room {
     stage: Stage,
     turn: u8,
     deadline: Millis,
-    pending: [Option<Orders>; 2],
+    pending: [Option<TeamPlan>; 2],
     locked: Vec<Locked>,
     /// Each side's report of the board after a turn: (turn, hash, finished).
     boards: [Option<(u8, u64, bool)>; 2],
@@ -537,6 +537,9 @@ impl Relay {
                     if room.stage != Stage::Playing || turn != room.turn {
                         return Err(Refusal::NotThisTurn);
                     }
+                    if !plan_well_formed(&orders) {
+                        return Err(Refusal::Malformed);
+                    }
                     room.pending[side.index()] = Some(orders);
                     if room.pending.iter().all(Option::is_some) {
                         lock(room, now, grace);
@@ -672,6 +675,15 @@ impl Relay {
     }
 }
 
+/// Whether a plan is no bigger than any plan Battle sends: the relay never runs the rules, so it
+/// checks only that a plan is small enough to keep.
+pub fn plan_well_formed(plan: &TeamPlan) -> bool {
+    plan.len() <= formiga_battle_core::PLAN_SIZE
+        && plan
+            .iter()
+            .all(|d| d.squares().len() <= formiga_battle_core::order::MAX_SQUARES)
+}
+
 fn turn_ms(grace: Millis) -> Millis {
     u64::from(Ruleset::default().turn_seconds) * 1000 + grace
 }
@@ -680,8 +692,8 @@ fn turn_ms(grace: Millis) -> Millis {
 /// from `now`. At the turn cap the match is over, whatever the windows have said.
 fn lock(room: &mut Room, now: Millis, grace: Millis) {
     let submitted = [
-        room.pending[0].unwrap_or([None; TEAM_SIZE]),
-        room.pending[1].unwrap_or([None; TEAM_SIZE]),
+        room.pending[0].clone().unwrap_or_default(),
+        room.pending[1].clone().unwrap_or_default(),
     ];
     for side in Side::BOTH {
         if let Some(s) = room.sides[side.index()].as_mut() {

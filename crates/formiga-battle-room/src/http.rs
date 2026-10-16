@@ -18,7 +18,7 @@ use crate::relay::{
     Answer, Entrant, MAX_BODY_BYTES, Millis, RELAY_VERSION, Refusal, Relay, Request, SEAT_HEADER,
     View, hex_u64,
 };
-use formiga_battle_core::Orders;
+use formiga_battle_core::TeamPlan;
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
@@ -43,7 +43,7 @@ pub fn relay_base() -> String {
 #[derive(Serialize, Deserialize)]
 struct OrdersBody {
     turn: u8,
-    orders: Orders,
+    orders: TeamPlan,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -165,7 +165,7 @@ impl RelayClient {
         code: &str,
         seat: &str,
         turn: u8,
-        orders: Orders,
+        orders: TeamPlan,
     ) -> Result<View, AskError> {
         let body =
             serde_json::to_vec(&OrdersBody { turn, orders }).map_err(|_| AskError::Unreadable)?;
