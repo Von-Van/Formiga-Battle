@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [0.67.7] - 2026-10-15
+
+The first release of Battle. Its version now follows the Formiga release it ships with, and it is
+built on Formiga Desktop 0.67.7's shared crates. A friend match needs both Handlers on Battle
+0.67.7.
+
 - A fourth arena, Sandy Cove: the beacon halfway along a sandbar one tile wide, open to both
   sides, between columns of sea-worn rocks, with the sea, a lighthouse and beach huts round it.
 - Battle looks like Formiga's own: the window is the Handler's notebook in Home's leather,

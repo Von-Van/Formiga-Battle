@@ -52,7 +52,7 @@ pub fn open(source: Source) -> Result<(Host, BattleSnapshot)> {
                 &save,
                 SessionId::parse("00000000000000000000000000000000").expect("a session id"),
                 save.maximum_seen_utc,
-                "0.67.6",
+                "0.67.7",
             )?;
             Ok((
                 Host::Rehearsal {

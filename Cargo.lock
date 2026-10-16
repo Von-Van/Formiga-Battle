@@ -212,7 +212,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
  "x11rb",
 ]
 
@@ -1040,7 +1040,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1175,8 +1175,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-art"
-version = "0.67.6"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.6#a9d0c6804559b68c80b54d001e2e8b06b457a319"
+version = "0.67.7"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.7#f6ac96c8fc3e2591b143f81ce191ed60c4b86d8b"
 dependencies = [
  "epaint",
  "formiga-core",
@@ -1189,7 +1189,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle"
-version = "0.1.0"
+version = "0.67.7"
 dependencies = [
  "anyhow",
  "eframe",
@@ -1209,7 +1209,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-contract"
-version = "0.1.0"
+version = "0.67.7"
 dependencies = [
  "formiga-core",
  "formiga-expansion-rulebook",
@@ -1222,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-core"
-version = "0.1.0"
+version = "0.67.7"
 dependencies = [
  "formiga-core",
  "serde",
@@ -1232,7 +1232,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-room"
-version = "0.1.0"
+version = "0.67.7"
 dependencies = [
  "formiga-battle-contract",
  "formiga-battle-core",
@@ -1250,8 +1250,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-core"
-version = "0.67.6"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.6#a9d0c6804559b68c80b54d001e2e8b06b457a319"
+version = "0.67.7"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.7#f6ac96c8fc3e2591b143f81ce191ed60c4b86d8b"
 dependencies = [
  "getrandom 0.4.3",
  "rand",
@@ -1266,8 +1266,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-expansion-rulebook"
-version = "0.67.6"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.6#a9d0c6804559b68c80b54d001e2e8b06b457a319"
+version = "0.67.7"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.7#f6ac96c8fc3e2591b143f81ce191ed60c4b86d8b"
 dependencies = [
  "getrandom 0.4.3",
  "serde",
@@ -1278,8 +1278,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-travel"
-version = "0.67.6"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.6#a9d0c6804559b68c80b54d001e2e8b06b457a319"
+version = "0.67.7"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.7#f6ac96c8fc3e2591b143f81ce191ed60c4b86d8b"
 dependencies = [
  "formiga-art",
  "formiga-core",
@@ -2920,7 +2920,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3298,7 +3298,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4116,7 +4116,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

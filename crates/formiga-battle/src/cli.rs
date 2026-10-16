@@ -164,7 +164,7 @@ fn load_roster(args: &mut Args) -> Result<Vec<Profile>> {
                 &save,
                 local_session(),
                 save.maximum_seen_utc,
-                "0.67.6",
+                "0.67.7",
             )?
         }
         (None, Some(path)) => BattleSnapshot::read(path.as_ref())?,

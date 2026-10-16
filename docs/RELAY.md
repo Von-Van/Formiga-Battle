@@ -36,7 +36,7 @@ one of the arenas that come with Battle: 1 to 32 characters of lowercase letters
 `-`, anything else malformed. The relay passes it on as it is; the opener's is the room's, and
 both windows build the match on it, refusing an id their Battle does not have.
 
-A **Build** is `{"battle": "0.1.0", "desktop": "0.67.7" or null, "digest": "…"}`: Battle's
+A **Build** is `{"battle": "0.67.7", "desktop": "0.67.7" or null, "digest": "…"}`: Battle's
 version, the version of the Desktop that opened it (`null` in a rehearsal), and the SHA-256 of
 Battle's program file as 64 lowercase hex digits. Versions are 1 to 24 characters of letters,
 digits and `.+-`; anything else is malformed. The relay knows the **released builds**: for some
