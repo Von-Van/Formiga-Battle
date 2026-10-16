@@ -3235,9 +3235,9 @@ fn mouse(painter: &egui::Painter, rect: Rect, right: bool, u: f32) {
 /// and a right click do, and the keys.
 fn controls(painter: &egui::Painter, page: Rect, u: f32) {
     let rows: [(Option<bool>, &str); 3] = [
-        (Some(false), "Move, contest, or choose"),
-        (Some(true), "Hold there"),
-        (None, "Enter lock in  ·  Esc let go  ·  L whole match"),
+        (Some(false), "Take a square, or interact"),
+        (Some(true), "Defend a square"),
+        (None, "T D I orders  ·  Enter lock in  ·  L whole match"),
     ];
     let galleys: Vec<_> = rows
         .iter()

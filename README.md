@@ -2,8 +2,9 @@
 
 A separate desktop app for Formiga Desktop's companions: isometric, simultaneous-order 3v3
 tactics, against the AI or a friend in a private room. You are the Handler: each turn you give
-each of your three Formigas one order (MOVE, HOLD or CONTEST), both teams' orders lock together,
-and the turn plays out at once. How each creature carries out its order comes from who it is in
+your team up to three orders (TAKE some squares, DEFEND some squares, INTERACT with something),
+both teams' plans lock together, and the turn plays out at once. The Formigas share the plan out
+among themselves, and who takes which job, and how each carries it out, comes from who it is in
 Desktop, never from stats, so knowing your Formigas is the skill and rerolling them for a better
 trio is not.
 
@@ -13,13 +14,13 @@ neighbouring colony, in one of four arenas, each a little isometric place of its
 Backyard (a garden of hedges, a brick wall and a potting shed), Woodland Glade (stumps, boulders
 and pines), Millpond (a meadow with a footbridge, a jetty and a watermill) and Sandy Cove (a
 beach with a sandbar, sea-worn rocks and a lighthouse). The creatures are
-drawn exactly as Desktop draws them. Each turn you give your orders on their
-cards and the board (or let the timer run out and they choose for themselves), lock in, and watch
-the turn play out tick by tick with a recap that says why each of them did what it did. The
+drawn exactly as Desktop draws them. Each turn you give your orders on the order cards and the
+board (or let the timer run out and they choose for themselves), lock in, and watch the turn play
+out tick by tick with a recap that says who took on what and why each of them did what it did. The
 Handler's Notebook beside the board keeps what each of your companions has been seen to do, match
 after match, so you can learn how they carry out an order. To play a friend, one of you opens a
 room and reads out its code, and the other joins with it; the relay on the Formiga site passes
-the orders on and keeps nothing once the match is over ([docs/FRIENDS.md](docs/FRIENDS.md)). The same match also runs headless from the command line. Desktop
+the plans on and keeps nothing once the match is over ([docs/FRIENDS.md](docs/FRIENDS.md)). The same match also runs headless from the command line. Desktop
 opens Battle from its tray on a Desktop branch not yet released; Battle's side of that hand-off is
 `--formiga-battle <dir>`.
 
@@ -92,9 +93,10 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
 ## Crates
 
 - **`formiga-battle-core`**: the rules, with no drawing, clock or network. `arena` (boards as
-  data, in `arenas/`), `order`, `game` (a match, and a turn tick by tick), `profile` (a creature
-  as Desktop records it), `interpret` (how a creature carries out its order, and why), `ai` (the
-  fallback for a missing order, and the AI coaches), `plan` (coaches that think a turn ahead,
+  data, in `arenas/`), `order` (a team's plan, and each creature's order), `muster` (how a team
+  shares out its plan, and thinks again partway through a turn), `game` (a match, and a turn tick
+  by tick), `profile` (a creature as Desktop records it), `interpret` (how a creature carries out
+  its order, and why), `ai` (the fallback for a creature with no plan, and the AI coaches), `plan` (coaches that think a turn ahead,
   knowing their creatures or not), `notebook` (what each creature was seen to do), `recap`,
   `replay` and `tournament`.
 - **`formiga-battle-contract`**: what Desktop hands Battle, a read-only roster built from

@@ -324,11 +324,8 @@ pub fn muster(
     let plain = solve(m, &team, &seats, &walks, false, turn);
     let mut taken: Vec<Tile> = Vec::new();
     // Squares to hold are spoken for first, so a guard never stands where a claim is going.
-    for (k, seat) in chosen.iter().enumerate() {
-        if let Some(i) = seat
-            && let Goal::HoldAt(t) = seats[*i].goal
-        {
-            let _ = k;
+    for i in chosen.iter().flatten() {
+        if let Goal::HoldAt(t) = seats[*i].goal {
             taken.push(t);
         }
     }
@@ -578,7 +575,7 @@ fn seats(m: &Match, side: Side, plan: &[(u8, Directive)]) -> Vec<Seat> {
                 .team(side.other())
                 .filter(|e| {
                     let f = m.fighter(*e);
-                    !holds(m, *e) && f.at != t && f.at.distance(t) <= INTERCEPT_REACH
+                    !holds(m, *e) && (2..=INTERCEPT_REACH).contains(&f.at.distance(t))
                 })
                 .collect();
             coming.sort_by_key(|e| (m.fighter(*e).at.distance(t), *e));
@@ -1037,12 +1034,10 @@ fn search(
 ) {
     if k == lists.len() {
         let mut total = sum;
-        for (i, seat) in current.iter().enumerate() {
-            if let Some(s) = seat
-                && let Some(p) = seats[*s].pair
+        for s in current.iter().flatten() {
+            if let Some(p) = seats[*s].pair
                 && !current.contains(&Some(p))
             {
-                let _ = i;
                 total -= seats[*s].value - LONE;
             }
         }
