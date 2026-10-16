@@ -97,7 +97,7 @@ have taken in its place was the same (nearest, or already at it), or the leaning
 most difference against it (bold, careful, beside a friend, away from one it avoids, curious, on a
 whim), or it was the only one free for a job meant for two.
 
-With the Exhibition coach on Backyard, about one job in eleven goes to a different creature than
+With the Exhibition coach on Backyard, about one job in ten goes to a different creature than
 it would without leanings; nearly all the rest of what a creature does of its own is still the way
 it walks there.
 

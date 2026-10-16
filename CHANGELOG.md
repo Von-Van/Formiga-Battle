@@ -16,8 +16,11 @@
   wary one waits beside it; and partway through a turn, a companion whose job came to nothing
   (what it went for was taken, its target dug in or was knocked out, a teammate got there first,
   the ground was marked for the map event) thinks again from the same plan, once. The account
-  says each team's plan, who took on what and why. Friend matches speak relay protocol 3, and
-  recorded matches from earlier builds no longer replay.
+  says each team's plan, who took on what and why. Personality pulls half as hard on the way a
+  companion walks as it did, so that again about one in three goes its own way each turn: with
+  team orders they walk further and more often, and at the old pull nearly half did, which left
+  the kinds that lean hardest well behind against the thinking coaches. Friend matches speak relay
+  protocol 3, and recorded matches from earlier builds no longer replay.
 - Friend matches are more careful with the relay: Battle follows no redirects and never leaves
   HTTPS, takes a room's code and seat only in the shapes a relay gives them, cleans the other
   Handler's name and any reason for an ending before showing or keeping them, and waits longer

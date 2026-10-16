@@ -304,10 +304,11 @@ Counting a way's tiles twice over is the pull (`PULL` in `interpret.rs`, 200% si
 Exhibition matches, 28% of the creatures that walked somewhere took a way of their own or hung
 back, about 0.8 a team-turn. Under rules versions 5 and 6 it was 400%, which gave the same with an
 order for each creature; with team orders, creatures walk further and more often, and at 400% it
-became nearly one in two (1.5 a team-turn), and the kinds fell 0.143 apart under thinking coaches
-(0.057 at 200%). Only about one step in ten has two ways there that arrive equally soon, so beyond that every
-way a profile chooses costs time. At 100%, under rules version 4, 79% of team-turns had none. It weighs only the way there: what a creature does with
-a moment to spare is weighed as the table says.
+became nearly one in two (1.5 a team-turn), and the kinds fell 0.155 apart under thinking coaches
+(0.083 at 200%; see [Fairness](#fairness)). Only about one step in ten has two ways there that arrive equally soon, so
+beyond that every way a profile chooses costs time. At 100%, under rules version 4, 79% of
+team-turns had none. It weighs only the way there: what a creature does with a moment to spare is
+weighed as the table says.
 
 Ties are broken by a seeded draw. Now and then (`variability`, 1% to 6%) it takes its second-best
 choice instead, if both are on time. A wary creature (caution 150 or more) sent to walk waits one
@@ -342,48 +343,42 @@ Over 10,000 Exhibition-coached matches with the default rules (`--pairings 5000 
 
 | | |
 |---|---|
-| Left side | 0.495 |
-| Kinds, highest to lowest | Lazybones 0.542, Guardian 0.531, Grump 0.529, Scholar 0.527, Explorer 0.504, Wallflower 0.497, Sweetheart 0.480, Troublemaker 0.475, Oddball 0.457, Showoff 0.437 |
-| Spread between kinds | 0.105 (0.099 with seed 8), each kind over 3,600 to 7,000 matches |
-| Won by capture, knockout, at the cap, drawn | 28%, 0%, 50%, 22%, in 10.3 turns |
+| Left side | 0.502 |
+| Kinds, highest to lowest | Scholar 0.538, Guardian 0.530, Grump 0.516, Lazybones 0.513, Sweetheart 0.503, Explorer 0.496, Oddball 0.484, Wallflower 0.476, Showoff 0.469, Troublemaker 0.469 |
+| Spread between kinds | 0.069 (0.081 with seed 8), each kind over 3,600 to 7,000 matches |
+| Won by capture, knockout, at the cap, drawn | 26%, 0%, 56%, 18%, in 10.9 turns |
 
 With both teams coached by `familiar` (`--coach familiar,familiar --pairings 1500 --seed 7`),
-kinds score within 0.155 of each other, Guardians highest (0.557) and Wallflowers lowest (0.402);
-55% of those matches are won by capture, in about 9.1 turns.
+kinds score within 0.083 of each other, Sweethearts highest (0.525) and Wallflowers lowest
+(0.442); 41% of those matches are won by capture, in about 10.4 turns.
 
 On every arena, over 4,000 Exhibition-coached matches each (`--pairings 2000 --seed 7 --file
 arenas/<arena>.arena`), with seed 8 in brackets:
 
 | Arena | Left side | Spread between kinds | Won by capture |
 |---|---|---|---|
-| Backyard | 0.496 | 0.089 | 26% |
-| Sandy Cove | 0.498 | 0.143 (0.151) | 66% |
-| Millpond | 0.494 | 0.135 (0.136) | 40% |
-| Woodland Glade | 0.495 | 0.143 (0.097) | 39% |
+| Backyard | 0.502 | 0.069 (0.081) | 26% |
+| Sandy Cove | 0.505 | 0.113 (0.104) | 63% |
+| Millpond | 0.495 | 0.069 (0.055) | 29% |
+| Woodland Glade | 0.489 | 0.117 (0.097) | 34% |
 
-Knowing your creatures (`--coach familiar,generic --pairings 1000 --seed 7`) is worth 0.642 on
-Backyard, 0.627 on Sandy Cove, 0.636 at the Millpond and 0.558 in the glade.
+Knowing your creatures (`--coach familiar,generic --pairings 1000 --seed 7`) is worth 0.629 on
+Backyard, 0.637 on Sandy Cove, 0.649 at the Millpond and 0.595 in the glade.
 
-Rules version 7 replaced an order for each creature with three orders for the team. Under
-version 6, with an order each, Exhibition matches put the kinds 0.108 apart on Backyard, 0.107 on
-Sandy Cove, 0.133 to 0.141 at the Millpond and 0.123 to 0.152 in the glade; familiar coaching kept
-them within 0.078, and knowing your creatures was worth 0.55 to 0.62. With team orders, the
-Exhibition spread is about where it was, a little closer on Backyard and a little wider on Sandy
-Cove. Under thinking coaches it doubled: a coach can no longer send a creature that wanders, hangs
-back or keeps to its friends exactly where its way of walking costs least, so who is in the team
-counts for more. The leanings that pick who takes which job are not what does it: with them taken
-out of the sharing out (`LEAN_PERCENT` at 0), familiar self-play over 1,600 matches puts the kinds
-0.170 apart, against 0.143 with them in. What is left is how each creature walks (rules version 5),
-which now shows more because nobody can be steered round it, and why knowing your creatures is
-worth a little more than it was. More matches are also drawn: 22% of Exhibition matches on
-Backyard, against 12%.
-
-The numbers above are with the pull at 400%. With it at 200% (this branch), so that again about
-one creature in three goes its own way each turn: over 10,000 Exhibition matches on Backyard the
-kinds are 0.069 apart (Scholars highest at 0.538, Troublemakers and Showoffs lowest at 0.469); on
-the other arenas 0.113 on Sandy Cove, 0.069 at the Millpond and 0.117 in the glade; under familiar
-coaching 0.057 (1,600 matches, seed 9). Knowing your creatures is worth 0.629 and Exhibition beats
-the turtle 0.661.
+Rules version 7 replaced an order for each creature with three orders for the team, and halved
+the pull (see [How a creature walks](#how-a-creature-walks)). Under version 6, with an order each
+and the pull at 400%, Exhibition matches put the kinds 0.108 apart on Backyard, 0.107 on Sandy
+Cove, 0.133 to 0.141 at the Millpond and 0.123 to 0.152 in the glade; familiar coaching kept them
+within 0.078, and knowing your creatures was worth 0.55 to 0.62. With team orders and the pull
+left at 400%, the Exhibition spread stayed about where it was but the kinds fell 0.143 to 0.155
+apart under thinking coaches (Wallflowers at 0.40): a coach could no longer send a creature that
+wanders, hangs back or keeps to its friends exactly where its way of walking cost least, and with
+creatures walking further and more often, nearly half of them went their own way each turn. The
+leanings that pick who takes which job were not what did it (with them taken out of the sharing
+out the kinds were 0.170 apart), and neither was the team planning round how each creature walks
+(0.143, tried and dropped). Halving the pull brought back about one creature in three going its
+own way each turn, as chosen for rules version 5, and the kinds within 0.083 under thinking
+coaches.
 
 Rules version 6 added Backyard's sprinkler and found things. Before it, under version 5, 13% of
 Exhibition matches were won at the beacon and the kinds were 0.098 apart; with familiar coaching,
@@ -418,9 +413,9 @@ when it gave each creature its own HOLD, the turtle never contested at all and E
 
 | Against turtle | Score | How |
 |---|---|---|
-| exhibition | 0.549 | 52% won or lost at the cap, 38% drawn, 10% by capture |
-| familiar | 0.743 | 54% at the cap, 31% by capture, 15% drawn |
-| generic | 0.624 | 53% at the cap, 32% by capture, 15% drawn |
+| exhibition | 0.661 | 60% won or lost at the cap, 39% drawn, 1% by capture |
+| familiar | 0.790 | 68% at the cap, 20% by capture, 12% drawn |
+| generic | 0.695 | 64% at the cap, 20% by capture, 16% drawn |
 
 Three holders in a five-tile cross keep it contested for as long as they stand, so they are
 almost never beaten by capture; they are beaten on the cap, because a team that only holds never
@@ -439,11 +434,11 @@ generic one imagines every creature as one that leans no way at all.
 
 | Coaches | Familiar's score |
 |---|---|
-| familiar against generic, 2,000 matches | 0.642 |
-| familiar against Exhibition, 2,000 matches | 0.952 |
-| generic against Exhibition, 2,000 matches | 0.834 |
+| familiar against generic, 2,000 matches | 0.629 |
+| familiar against Exhibition, 2,000 matches | 0.980 |
+| generic against Exhibition, 2,000 matches | 0.933 |
 
-Under rules version 7 the coach who knows its creatures wins 64.2% on Backyard (62.1% under
+Under rules version 7 the coach who knows its creatures wins 62.9% on Backyard (62.1% under
 version 6, with an order for each creature): it cannot say who goes where, but it knows who will
 take which job and how each will walk there. Knowing your creatures was worth more under rules
 version 5 than before it: the coach who knows them
