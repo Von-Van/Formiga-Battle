@@ -774,3 +774,28 @@ fn two_windows_play_a_whole_match_through_a_relay_and_agree_on_every_board() {
         relay.stop();
     }
 }
+
+#[test]
+fn an_older_battle_is_told_to_update_whatever_else_its_entrant_lacks() {
+    use std::io::{Read, Write};
+    let relay = serve_relay("127.0.0.1:0", Limits::default()).unwrap();
+    let address = relay
+        .base()
+        .replace("http://", "")
+        .replace("/api/battle", "");
+    let body = r#"{"protocol":1,"rules_version":3,"handler":"Jake","team":[{},{},{}]}"#;
+    let mut stream = std::net::TcpStream::connect(address).unwrap();
+    write!(
+        stream,
+        "POST /api/battle/rooms HTTP/1.1\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer).unwrap();
+    assert!(answer.starts_with("HTTP/1.1 409"), "{answer}");
+    assert!(
+        answer.ends_with(r#"{"refused":"version","relay":2,"rules_version":3}"#),
+        "{answer}"
+    );
+}
