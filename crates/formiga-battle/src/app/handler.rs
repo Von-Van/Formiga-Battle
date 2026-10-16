@@ -12,7 +12,7 @@ use formiga_battle_contract::{MatchSummary, Mode};
 const KEYS: [(&str, &str); 6] = [
     (
         "Space, Enter or a click",
-        "hurries everyone aboard at the station",
+        "hurries the train in at the station",
     ),
     ("1, 2, 3", "chooses a companion's card in a match"),
     ("M, H, C", "MOVE, HOLD or CONTEST"),
@@ -170,7 +170,7 @@ impl BattleApp {
                         ui.label(label_job("Reduce motion", chrome::LABEL + 1.0, ink::FOREST));
                         ui.label(
                             RichText::new(
-                                "The train waits already in, pages change without turning, and nothing hops or springs. It starts as Formiga Desktop has it.",
+                                "The train is already in, pages change without turning, and nothing hops or springs. It starts as Formiga Desktop has it.",
                             )
                             .size(12.5),
                         );

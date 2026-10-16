@@ -255,14 +255,14 @@ impl BattleApp {
             Station::new(looks, size, now, reduce)
         });
         station.resize(size);
-        // Hurrying everyone aboard: a click anywhere, or a key, while the train is coming in.
+        // Hurrying the train in: a click anywhere, or a key, while it is coming.
         let hurry = ui.interact(full, Id::new("station-hurry"), Sense::click());
         let keyed = ctx.input(|i| {
             i.key_pressed(egui::Key::Space)
                 || i.key_pressed(egui::Key::Enter)
                 || i.key_pressed(egui::Key::Escape)
         });
-        if (hurry.clicked() || keyed) && !station.boarded(now) && !station.leaving() {
+        if (hurry.clicked() || keyed) && !station.stopped(now) && !station.leaving() {
             station.skip(now);
         }
         // The picture, repainted only as often as anything at the halt moves.
@@ -354,7 +354,7 @@ impl BattleApp {
         } else if stopped {
             "All aboard! Where are they off to?"
         } else {
-            "The train is coming in for your companions. Click to hurry them aboard."
+            "Your companions are coming in on the train. Click to hurry it along."
         };
         let words = painter.layout_job(label_job(line, chrome::LABEL + 1.0, ink::FOREST));
         let words_at = pos2(
@@ -469,7 +469,6 @@ impl BattleApp {
                 match heard {
                     Heard::Whistle => Feedback::TrainIn,
                     Heard::Brakes => Feedback::TrainStops,
-                    Heard::Hop => Feedback::Hop,
                     Heard::Away => Feedback::TrainOut,
                 },
             );

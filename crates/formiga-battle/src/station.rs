@@ -1,7 +1,7 @@
-//! The halt Battle opens at: a platform in the country where the colony's train calls for the
-//! Handler's companions. They wait on the platform, the train pulls in, they hop aboard one at a
-//! time, and it stands puffing while the Handler chooses where they are off to; choosing sends it
-//! on its way, as Hill's train takes a colony home.
+//! The halt Battle opens at: a platform in the country where the colony's train comes in with the
+//! Handler's companions already riding it, since they got aboard on Desktop when Battle was
+//! chosen. It stands puffing, a face at every window, while the Handler chooses where they are
+//! off to; choosing sends it on its way, as Hill's train takes a colony home.
 //!
 //! The train is `formiga-art`'s, the one Desktop sends across the desktop and Hill meets at its
 //! station, given a coach more for every three companions past six so all of them ride, and each
@@ -9,7 +9,7 @@
 //! Home's rules: every material a ramp, light from the upper left, edges in a darker shade of
 //! their own colour, grain from `paint::noise`.
 //!
-//! Everything here depends only on the time it is given, so the whole pickup can be checked
+//! Everything here depends only on the time it is given, so the whole arrival can be checked
 //! without a window. With reduced motion there is none of it: the train stands at the platform
 //! with everyone aboard, and goes without being seen to.
 
@@ -20,7 +20,7 @@ use formiga_art::{
     Canvas, FRAME_SIZE, RUNNING_FRAMES, Rgba, TRAIN_FRAMES, TRAIN_GROUND, TRAIN_HEIGHT,
     TRAIN_WIDTH, TrainLook, TrainRenderer,
 };
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::TAU;
 
 // `formiga-art`'s train, measured as Hill measures it.
 /// A coach and the coupling at its front: what one more coach adds to the train.
@@ -35,21 +35,15 @@ const WINDOW_XS: [i32; 3] = [8, 26, 44];
 const DRIVING_WHEEL: f32 = 7.0;
 const PUFFS_PER_SECOND: f32 = 1.3;
 
-// The pickup, in seconds: Hill's own pace.
+// The train's comings and goings, in seconds: Hill's own pace.
 const PULL_IN: f32 = 3.2;
-const SETTLE: f32 = 0.5;
-const HOP: f32 = 0.42;
-const HOP_GAP: f32 = 0.32;
 const PULL_OUT: f32 = 3.0;
-/// How high a hop goes, in scene pixels.
-const HOP_HEIGHT: f32 = 12.0;
 /// How long the train is watched pulling away before the notebook opens.
 pub const SEEN_OFF: f32 = 1.1;
 
 // The halt, in rows up from the near rail.
 /// The near rail, up from the foot of the scene.
 const RAIL: i32 = 14;
-const STAND: i32 = 39;
 const PLATFORM_BACK: i32 = 53;
 const PLATFORM_EDGE: i32 = 26;
 const PLATFORM_FOOT: i32 = 19;
@@ -69,7 +63,6 @@ const PICKET: Ramp = Ramp::new(0x7a7466, 0xb8b0a0, 0xe2dccc, 0xf4f0e4, 0xffffff)
 const BOARD: Ramp = Ramp::new(0x3a1418, 0xd8c9a8, 0xf0e4c6, 0xfaf3e1, 0xffffff);
 const MAROON: Rgba = rgb(0x7a2c33);
 const LAMPLIGHT: Rgba = rgb(0xfff0bd);
-const SHADOW: Rgba = rgba(0x2a2420, 56);
 
 /// A rectangle of the scene, in its pixels: left, top, width, height.
 pub type Area = (i32, i32, i32, i32);
@@ -95,22 +88,16 @@ pub enum Heard {
     Whistle,
     /// Steam let off as it stops.
     Brakes,
-    /// A companion hopping aboard.
-    Hop,
     /// The whistle again, as it pulls away.
     Away,
 }
 
-/// Where one companion is at a moment of the pickup.
+/// Where one companion rides.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Place {
-    /// On the platform, waiting.
-    Platform,
-    /// Hopping aboard, `u` of the way from the platform to its window.
-    Hopping { u: f32 },
-    /// Aboard, at this window.
+    /// At this window.
     Window(usize),
-    /// Aboard, with no window of its own: only a train too long for the halt has these.
+    /// With no window of its own: only a train too long for the halt has these.
     Unseen,
 }
 
@@ -145,13 +132,14 @@ pub struct Station {
 }
 
 impl Station {
-    /// The halt, `size` scene pixels across and down, with the train setting off for it `now`.
+    /// The halt, `size` scene pixels across and down, with the train and everyone on it setting
+    /// off for it `now`.
     pub fn new(looks: Vec<Look>, size: (i32, i32), now: f32, reduce_motion: bool) -> Self {
         let riders = looks
             .into_iter()
             .enumerate()
             .map(|(i, look)| {
-                // Some look up the line and some down it, as people on a platform do.
+                // Some look up the line and some down it, as people on a train do.
                 let facing_right = i % 3 != 1;
                 let face = look.face(facing_right);
                 Rider {
@@ -209,35 +197,19 @@ impl Station {
         ((self.size.0 - self.length()) / 2) as f32
     }
 
-    /// When the train comes to a stop, counted from when it set off.
-    fn stops(&self) -> f32 {
-        PULL_IN
-    }
-
-    /// How long it takes everyone to get aboard, counted from when the train set off.
-    fn aboard_after(&self) -> f32 {
-        let n = self.riders.len().max(1) as f32;
-        PULL_IN + SETTLE + (n - 1.0) * HOP_GAP + HOP
-    }
-
-    /// The train is at the platform: the time to ask where they are off to.
+    /// The train is standing at the platform: the time to ask where they are off to.
     pub fn stopped(&self, now: f32) -> bool {
-        self.leaving.is_none() && now - self.began >= self.stops()
+        self.leaving.is_none() && now - self.began >= PULL_IN
     }
 
-    /// Everyone is aboard and the train is standing.
-    pub fn boarded(&self, now: f32) -> bool {
-        self.leaving.is_none() && now - self.began >= self.aboard_after()
-    }
-
-    /// Skips to everyone aboard, as a click or a key does while the train is coming in.
+    /// Skips to the train standing at the platform, as a click or a key does while it comes in.
     pub fn skip(&mut self, now: f32) {
-        if !self.boarded(now) && self.leaving.is_none() {
-            self.began = now - self.aboard_after();
+        if !self.stopped(now) && self.leaving.is_none() {
+            self.began = now - PULL_IN;
         }
     }
 
-    /// Sends the train on its way, everyone aboard.
+    /// Sends the train on its way.
     pub fn set_off(&mut self, now: f32) {
         self.skip(now);
         self.leaving.get_or_insert(now);
@@ -253,15 +225,15 @@ impl Station {
             .is_some_and(|at| self.reduce_motion || now - at >= SEEN_OFF)
     }
 
-    /// Brings the train back to the platform with everyone still aboard, for whoever comes back
-    /// to the station from the notebook.
+    /// Brings the train back to the platform with everyone aboard, for whoever comes back to the
+    /// station from the notebook.
     pub fn wait_at_platform(&mut self, now: f32) {
         self.leaving = None;
-        self.began = now - self.aboard_after();
+        self.began = now - PULL_IN;
     }
 
-    /// Brings the train in again for everyone, waiting on the platform as they were the first
-    /// time: back from a match. Under reduced motion it is simply in.
+    /// Brings the train in again with everyone aboard, as it came the first time: back from a
+    /// match. Under reduced motion it is simply in.
     pub fn come_in(&mut self, now: f32) {
         self.leaving = None;
         if !self.reduce_motion {
@@ -271,11 +243,11 @@ impl Station {
 
     /// When the train came to a stop at the platform, or will.
     pub fn stopped_at(&self) -> f32 {
-        self.began + self.stops()
+        self.began + PULL_IN
     }
 
-    /// What is heard of the train and its passengers after `from` and up to `to`: its whistle
-    /// as it comes, steam as it stops, each hop aboard, and its whistle as it goes.
+    /// What is heard of the train after `from` and up to `to`: its whistle as it comes, steam as
+    /// it stops, and its whistle as it goes.
     pub fn heard(&self, from: f32, to: f32) -> Vec<Heard> {
         if self.reduce_motion || to <= from {
             return Vec::new();
@@ -284,12 +256,6 @@ impl Station {
             (self.began + WHISTLE_IN, Heard::Whistle),
             (self.began + PULL_IN - BRAKES_BEFORE_STOP, Heard::Brakes),
         ];
-        for i in 0..self.riders.len() {
-            sounds.push((
-                self.began + PULL_IN + SETTLE + i as f32 * HOP_GAP,
-                Heard::Hop,
-            ));
-        }
         if let Some(at) = self.leaving {
             sounds.push((at, Heard::Away));
         }
@@ -298,13 +264,6 @@ impl Station {
             .filter(|(at, _)| *at > from && *at <= to)
             .map(|(_, h)| h)
             .collect()
-    }
-
-    /// Where each companion stands on the platform, across the scene.
-    fn stand_x(&self, index: usize) -> f32 {
-        let n = self.riders.len().max(1) as f32;
-        let spacing = ((self.size.0 - 60) as f32 / n).clamp(12.0, 30.0);
-        self.size.0 as f32 / 2.0 + (index as f32 - (n - 1.0) / 2.0) * spacing
     }
 
     /// Which window a companion rides at: spread along the train, as Hill seats them.
@@ -323,18 +282,8 @@ impl Station {
         let start = -(self.length() as f32) - 8.0;
         let end = self.size.0 as f32 + 8.0;
         let t = now - self.began;
-        let boarding = PULL_IN + SETTLE;
         let places = (0..self.riders.len())
-            .map(|i| {
-                let hop = boarding + i as f32 * HOP_GAP;
-                if t < hop {
-                    Place::Platform
-                } else if t < hop + HOP {
-                    Place::Hopping { u: (t - hop) / HOP }
-                } else {
-                    self.window_for(i).map_or(Place::Unseen, Place::Window)
-                }
-            })
+            .map(|i| self.window_for(i).map_or(Place::Unseen, Place::Window))
             .collect();
         let (train_x, going) = if let Some(at) = self.leaving {
             let u = ((now - at) / PULL_OUT).clamp(0.0, 1.0);
@@ -378,33 +327,6 @@ impl Station {
         let rail = self.size.1 - RAIL;
         let still = self.reduce_motion;
         let windows: Vec<(i32, i32)> = (0..self.windows()).map(window_origin).collect();
-        let stop = self.stop_x();
-        // Whoever is still on the platform, or on their way off it, stands behind the train.
-        for i in 0..self.riders.len() {
-            let (lift, shift) = match moment.places[i] {
-                Place::Platform => (0.0, 0.0),
-                Place::Hopping { u } => {
-                    let target = self.window_for(i).map_or(self.stand_x(i), |w| {
-                        stop + (windows[w].0 + WINDOW_SIZE.0 / 2) as f32
-                    });
-                    ((PI * u).sin() * HOP_HEIGHT, (target - self.stand_x(i)) * u)
-                }
-                _ => continue,
-            };
-            let x = (self.stand_x(i) + shift).round() as i32;
-            let feet = rail - STAND;
-            if lift < 1.0 {
-                paint::ellipse(&mut scene, x, feet + 1, 6, 1, SHADOW);
-            }
-            let rider = &mut self.riders[i];
-            let top = feet - rider.look.foot_row - lift.round() as i32;
-            let frame = rider.look.frame(
-                Pose::Idle,
-                if still { 0.0 } else { now + i as f32 * 0.37 },
-                rider.facing_right,
-            );
-            paint::blit(&mut scene, frame, x - FRAME_SIZE as i32 / 2, top);
-        }
         let Some(train_x) = moment.train_x else {
             return scene;
         };
@@ -805,14 +727,18 @@ mod tests {
     }
 
     #[test]
-    fn everyone_is_aboard_once_the_train_has_stood_long_enough() {
+    fn everyone_rides_in_from_the_start_and_the_train_stops_at_the_platform() {
         let station = Station::new(looks(5, false), (384, 216), 0.0, false);
+        assert!(
+            station
+                .moment(0.5)
+                .places
+                .iter()
+                .all(|p| matches!(p, Place::Window(_)))
+        );
         assert!(!station.stopped(1.0));
         assert!(station.stopped(PULL_IN));
-        assert!(!station.boarded(PULL_IN));
-        let later = station.moment(30.0);
-        assert!(later.places.iter().all(|p| matches!(p, Place::Window(_))));
-        assert_eq!(later.going, Going::Standing);
+        assert_eq!(station.moment(30.0).going, Going::Standing);
     }
 
     #[test]
@@ -848,28 +774,26 @@ mod tests {
     #[test]
     fn with_reduced_motion_the_train_is_already_in_and_goes_at_once() {
         let mut station = Station::new(looks(3, true), (384, 216), 5.0, true);
-        assert!(station.boarded(5.0));
+        assert!(station.stopped(5.0));
         station.set_off(6.0);
         assert!(station.seen_off(6.0));
     }
 
     #[test]
-    fn a_click_while_it_comes_in_puts_everyone_aboard() {
+    fn a_click_while_it_comes_in_brings_it_to_the_platform() {
         let mut station = Station::new(looks(4, false), (384, 216), 0.0, false);
         station.skip(1.0);
-        assert!(station.boarded(1.0));
+        assert!(station.stopped(1.0));
         station.set_off(2.0);
         assert!(!station.seen_off(2.5));
         assert!(station.seen_off(2.0 + SEEN_OFF + 0.01));
     }
 
     #[test]
-    fn the_train_is_heard_coming_stopping_and_each_hop_aboard() {
+    fn the_train_is_heard_coming_stopping_and_going() {
         let mut station = Station::new(looks(3, false), (384, 216), 0.0, false);
         let all = station.heard(-1.0, 30.0);
-        assert_eq!(all.first(), Some(&Heard::Whistle));
-        assert_eq!(all.iter().filter(|h| **h == Heard::Hop).count(), 3);
-        assert!(all.contains(&Heard::Brakes));
+        assert_eq!(all, vec![Heard::Whistle, Heard::Brakes]);
         station.set_off(30.0);
         assert_eq!(station.heard(29.5, 30.5), vec![Heard::Away]);
         assert!(station.heard(31.0, 32.0).is_empty());
