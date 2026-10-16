@@ -617,13 +617,21 @@ fn cast(canvas: &mut Canvas, view: &View, r: (f32, f32, f32, f32), height: f32) 
         if fade > 0.6 && paint::chance(px, py, 5, 128) {
             return;
         }
-        paint::put(
+        shade(
             canvas,
             px,
             py,
             paint::faded(SHADOW, (60.0 * (1.0 - fade * 0.5)) as u8),
         );
     });
+}
+
+/// A shadow's pixel, laid only on ground already painted: a shadow falling past the edge of the
+/// place has nothing to fall on, and would otherwise show as a grey smudge in the air.
+fn shade(canvas: &mut Canvas, px: i32, py: i32, color: Rgba) {
+    if canvas.get(px, py).a > 0 {
+        paint::put(canvas, px, py, color);
+    }
 }
 
 /// The garden's cross-section along its two near edges, and its shadow on the page: topsoil,
@@ -1560,7 +1568,7 @@ fn dappled(canvas: &mut Canvas, (cx, cy): (i32, i32), rx: i32, ry: i32) {
             }
             let (px, py) = (cx + dx, cy + dy);
             if patches(px, py, (6, 4), 19) > 0.42 {
-                paint::put(canvas, px, py, rgba(0x24452b, 48));
+                shade(canvas, px, py, rgba(0x24452b, 48));
             }
         }
     }
