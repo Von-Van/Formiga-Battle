@@ -767,6 +767,14 @@ impl BattleApp {
     }
 
     fn keys(&mut self, ctx: &egui::Context) {
+        if self.stage == Stage::Journal
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        {
+            crate::feel::emit(ctx, crate::feel::Feedback::Cancel);
+            self.go_back();
+            return;
+        }
         if self.stage != Stage::Playing || ctx.egui_wants_keyboard_input() {
             return;
         }

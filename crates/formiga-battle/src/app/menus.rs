@@ -559,13 +559,57 @@ impl BattleApp {
     pub(super) fn journal_right(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
-            .show(ui, |ui| match self.step {
-                Step::Where => self.places(ui, u),
-                Step::Who => self.lineup(ui, ctx, u),
-                Step::Room => self.shared(ui, ctx, u),
-                Step::History => self.totals(ui, u),
-                Step::Settings => self.keys_and_about(ui, u),
+            .show(ui, |ui| {
+                match self.step {
+                    Step::Where => self.places(ui, u),
+                    Step::Who => self.lineup(ui, ctx, u),
+                    Step::Room => self.shared(ui, ctx, u),
+                    Step::History => self.totals(ui, u),
+                    Step::Settings => self.keys_and_about(ui, u),
+                }
+                // The way back, under the way on.
+                if let Some(word) = self.back_word() {
+                    ui.add_space(u * 4.0);
+                    if chrome::button(ui, &format!("‹ {word}"), Kind::Back, false, true, None, u)
+                        .on_hover_text("Escape")
+                        .clicked()
+                    {
+                        self.go_back();
+                    }
+                }
             });
+    }
+
+    /// Where the way back from this page goes, unless an open room holds it here.
+    fn back_word(&self) -> Option<&'static str> {
+        if self.room_waiting() && !self.own_pages() {
+            return None;
+        }
+        let steps = self.steps();
+        let at = steps.iter().position(|s| *s == self.step).unwrap_or(0);
+        Some(match at.checked_sub(1).map(|i| steps[i]) {
+            None => "The station",
+            Some(Step::Where) => "Where to",
+            Some(Step::Who) => "Who goes",
+            Some(Step::History) => "History",
+            Some(_) => "Back",
+        })
+    }
+
+    /// Back a page, or from the first to the station: the button under the way on, or Escape.
+    pub(super) fn go_back(&mut self) {
+        if self.back_word().is_none() {
+            return;
+        }
+        let steps = self.steps();
+        let at = steps.iter().position(|s| *s == self.step).unwrap_or(0);
+        match at.checked_sub(1) {
+            Some(i) => {
+                let now = self.clock;
+                self.turn_to(steps[i], now);
+            }
+            None => self.back_to_station(),
+        }
     }
 
     /// The chosen place, as a picture pasted onto the page with a caption under it.
