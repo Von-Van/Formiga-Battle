@@ -187,6 +187,8 @@ impl BattleApp {
             // The station is painted again the way motion now is.
             self.station = None;
             self.station_picture = None;
+            self.masthead = None;
+            self.masthead_picture = None;
             self.turn = None;
         }
         ui.add_space(u * 4.0);

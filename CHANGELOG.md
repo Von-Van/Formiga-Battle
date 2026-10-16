@@ -17,7 +17,9 @@
   the colony's train, the one Desktop and Hill share, pulls in with every companion already riding
   it, a face at each window, and a coach more for every three past six. On its right, two railway
   tickets: Out in the World, to play a friend online, and Close to Home, to play the visiting team
-  offline. A click hurries the train in; with reduced motion it is already in. After a match, Back
+  offline, painted at the notebook's own pixel with a globe and a cottage on their stubs. Above them,
+  a little scene taped onto the page: two of your companions facing each other across the beacon
+  under bunting, now and then cheering, with the page's title on a ribbon. A click hurries the train in; with reduced motion it is already in. After a match, Back
   to the station brings it in again.
 - History & settings, beneath the two tickets: every match the colony has played with who went
   and how it ended, beside the Open Circuit points and each cup's progress; and reduced motion and
