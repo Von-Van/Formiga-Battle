@@ -1239,13 +1239,20 @@ mod tests {
             );
         };
         guest.open_room("Friend", Some(&code.to_lowercase()));
+        // Joining fingerprints the program too, so this wait is also by the wall clock.
+        let joined = std::time::Instant::now();
         let mut began = [false, false];
         while !(began[0] && began[1]) {
             began[0] |= host.poll(now);
             began[1] |= guest.poll(now);
             std::thread::sleep(std::time::Duration::from_millis(20));
             now += 0.02;
-            assert!(now < 20.0, "both see the match begin");
+            assert!(
+                joined.elapsed().as_secs() < 60,
+                "both see the match begin: {:?} {:?}",
+                host.notice,
+                guest.notice
+            );
         }
         assert_eq!(host.you, Side::Left);
         assert_eq!(guest.you, Side::Right);
