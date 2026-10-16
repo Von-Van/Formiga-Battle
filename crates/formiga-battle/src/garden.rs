@@ -76,6 +76,17 @@ impl Dressing {
         }
     }
 
+    /// The open ground in the Handler's words, for an order going across it and one standing on
+    /// it: the lawn, the glade, the meadow, the sand.
+    pub const fn ground(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Garden => ("across the lawn", "on the lawn"),
+            Self::Woodland => ("across the glade", "in the glade"),
+            Self::Millpond => ("across the meadow", "in the meadow"),
+            Self::Cove => ("across the sand", "on the sand"),
+        }
+    }
+
     pub fn of(arena: &Arena) -> Self {
         match arena.id.as_str() {
             "woodland" => Self::Woodland,

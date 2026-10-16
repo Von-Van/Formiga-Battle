@@ -1635,7 +1635,7 @@ pub fn speak(m: &Match, order: &Order) -> String {
         } else if i16::from(tile.x) >= i16::from(arena.width) - 3 {
             ("over to their side", "on their side")
         } else {
-            ("across the lawn", "on the lawn")
+            crate::garden::Dressing::of(arena).ground()
         }
     };
     match order {
