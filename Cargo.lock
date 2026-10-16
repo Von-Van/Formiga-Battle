@@ -1254,7 +1254,7 @@ dependencies = [
 [[package]]
 name = "formiga-art"
 version = "0.67.8"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-battle-handler#528c3a5d6b382bb1efcd1e06fc53d0a75c0cd33e"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=e4274478940fb48847de8794a49cbe86f91a2496#e4274478940fb48847de8794a49cbe86f91a2496"
 dependencies = [
  "epaint",
  "formiga-core",
@@ -1289,7 +1289,7 @@ dependencies = [
 [[package]]
 name = "formiga-battle-contract"
 version = "0.67.8"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-battle-handler#528c3a5d6b382bb1efcd1e06fc53d0a75c0cd33e"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=e4274478940fb48847de8794a49cbe86f91a2496#e4274478940fb48847de8794a49cbe86f91a2496"
 dependencies = [
  "formiga-core",
  "formiga-expansion-rulebook",
@@ -1331,7 +1331,7 @@ dependencies = [
 [[package]]
 name = "formiga-core"
 version = "0.67.8"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-battle-handler#528c3a5d6b382bb1efcd1e06fc53d0a75c0cd33e"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=e4274478940fb48847de8794a49cbe86f91a2496#e4274478940fb48847de8794a49cbe86f91a2496"
 dependencies = [
  "getrandom 0.4.3",
  "rand",
@@ -1347,7 +1347,7 @@ dependencies = [
 [[package]]
 name = "formiga-expansion-rulebook"
 version = "0.67.8"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-battle-handler#528c3a5d6b382bb1efcd1e06fc53d0a75c0cd33e"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=e4274478940fb48847de8794a49cbe86f91a2496#e4274478940fb48847de8794a49cbe86f91a2496"
 dependencies = [
  "getrandom 0.4.3",
  "serde",
@@ -1359,7 +1359,7 @@ dependencies = [
 [[package]]
 name = "formiga-travel"
 version = "0.67.8"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-battle-handler#528c3a5d6b382bb1efcd1e06fc53d0a75c0cd33e"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=e4274478940fb48847de8794a49cbe86f91a2496#e4274478940fb48847de8794a49cbe86f91a2496"
 dependencies = [
  "formiga-art",
  "formiga-core",
