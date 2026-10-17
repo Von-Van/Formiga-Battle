@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## [0.67.14] - 2026-10-17
+
+Built on Formiga Desktop 0.67.14, released alongside it and Formiga Hill and Home 0.67.14 so every
+app has the same version again. Rules version 9, relay protocol 3 and Battle contract version 4
+are unchanged. A friend match needs both Handlers on Battle 0.67.14 and Formiga Desktop 0.67.14.
 
 - Less plain text where Battle should be pictures, painted at the notebook's pixel as its other
   pictures are. A match ends with a rubber stamp inked onto the board in the board's own letters,
