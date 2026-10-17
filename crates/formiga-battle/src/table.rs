@@ -630,6 +630,7 @@ impl Table {
             bonds,
             arena: self.arena.id.clone(),
             card: self.shared_card(),
+            handler_key: self.handler_key(),
         };
         self.friend = Some(Friend {
             line: Line::start(self.relay.clone(), entrant, code.map(str::to_owned)),
@@ -644,6 +645,16 @@ impl Table {
             deadline: 0.0,
             held: None,
         });
+    }
+
+    /// The colony's anonymous Handler key, as Desktop keeps it, for a friend's Battle to know this
+    /// Handler again. A rehearsal has none, whatever roster it was given.
+    pub fn handler_key(&self) -> Option<String> {
+        self.session.as_ref()?;
+        self.record
+            .handler_key
+            .clone()
+            .filter(|key| formiga_battle_contract::is_handler_key(key))
     }
 
     /// What this Battle plays with: the Desktop that opened it, or none in a rehearsal. The line
@@ -1933,6 +1944,39 @@ mod tests {
             .map(|p| p.name.clone())
             .collect();
         assert!(!theirs.contains(&ours), "{theirs:?}");
+    }
+
+    #[test]
+    fn a_friend_is_sent_desktops_handler_key_and_a_rehearsal_sends_none() {
+        let session = || Session {
+            directory: std::env::temp_dir(),
+            result: BattleResult::new(
+                formiga_battle_contract::SessionId::parse("00000000000000000000000000000000")
+                    .unwrap(),
+                "0".repeat(64),
+                "0.1.0",
+            ),
+        };
+        let mut t = Table::new(sample::snapshot_with_record(), sample::visitors(9), 5);
+        assert_eq!(
+            t.handler_key(),
+            None,
+            "a rehearsal has none, whatever it was given"
+        );
+        t.session = Some(session());
+        assert_eq!(t.handler_key().as_deref(), Some(sample::HANDLER_KEY));
+        t.record.handler_key = Some("Not A Key".to_owned());
+        assert_eq!(
+            t.handler_key(),
+            None,
+            "what is not a key is never sent as one"
+        );
+
+        let mut older = sample::snapshot_with_record();
+        older.record.as_mut().unwrap().handler_key = None;
+        let mut t = Table::new(older, sample::visitors(9), 5);
+        t.session = Some(session());
+        assert_eq!(t.handler_key(), None, "a Desktop that made none sends none");
     }
 
     #[test]

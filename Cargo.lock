@@ -1254,7 +1254,7 @@ dependencies = [
 [[package]]
 name = "formiga-art"
 version = "0.67.14"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.14#3be27a49549e7ef29d0bbbc329ff5ec8916f4b4a"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=76cc29bfa71775138dd3ae4047225a3bc04c75c6#76cc29bfa71775138dd3ae4047225a3bc04c75c6"
 dependencies = [
  "epaint",
  "formiga-core",
@@ -1289,7 +1289,7 @@ dependencies = [
 [[package]]
 name = "formiga-battle-contract"
 version = "0.67.14"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.14#3be27a49549e7ef29d0bbbc329ff5ec8916f4b4a"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=76cc29bfa71775138dd3ae4047225a3bc04c75c6#76cc29bfa71775138dd3ae4047225a3bc04c75c6"
 dependencies = [
  "formiga-core",
  "formiga-expansion-rulebook",
@@ -1331,7 +1331,7 @@ dependencies = [
 [[package]]
 name = "formiga-core"
 version = "0.67.14"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.14#3be27a49549e7ef29d0bbbc329ff5ec8916f4b4a"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=76cc29bfa71775138dd3ae4047225a3bc04c75c6#76cc29bfa71775138dd3ae4047225a3bc04c75c6"
 dependencies = [
  "getrandom 0.4.3",
  "rand",
@@ -1347,7 +1347,7 @@ dependencies = [
 [[package]]
 name = "formiga-expansion-rulebook"
 version = "0.67.14"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.14#3be27a49549e7ef29d0bbbc329ff5ec8916f4b4a"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=76cc29bfa71775138dd3ae4047225a3bc04c75c6#76cc29bfa71775138dd3ae4047225a3bc04c75c6"
 dependencies = [
  "getrandom 0.4.3",
  "serde",
@@ -1359,7 +1359,7 @@ dependencies = [
 [[package]]
 name = "formiga-travel"
 version = "0.67.14"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.67.14#3be27a49549e7ef29d0bbbc329ff5ec8916f4b4a"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=76cc29bfa71775138dd3ae4047225a3bc04c75c6#76cc29bfa71775138dd3ae4047225a3bc04c75c6"
 dependencies = [
  "formiga-art",
  "formiga-core",

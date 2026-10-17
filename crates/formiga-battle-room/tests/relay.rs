@@ -30,6 +30,7 @@ fn entrant(seed: u8, handler: &str) -> Entrant {
         team,
         arena: "backyard".to_owned(),
         card: None,
+        handler_key: None,
     }
 }
 
@@ -733,6 +734,46 @@ fn a_handlers_card_reaches_their_friend_cleaned_and_an_entrant_without_one_still
 }
 
 #[test]
+fn a_handlers_key_reaches_their_friend_and_one_that_is_not_a_key_is_left_out() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let mut opener = entrant(0, "Jake");
+    opener.handler_key = Some(sample::HANDLER_KEY.to_owned());
+    let (code, host) = seated(relay.handle(Request::Open { entrant: opener }, 0));
+    let mut joiner = entrant(9, "Friend");
+    joiner.handler_key = Some("Not A Key, But Somebody's Email".to_owned());
+    relay.handle(
+        Request::Join {
+            code: code.clone(),
+            entrant: joiner,
+        },
+        10,
+    );
+    let v = viewed(relay.handle(Request::Look { code, seat: host }, 20));
+    let [a, b] = v.entrants.expect("both are in");
+    assert_eq!(a.handler_key.as_deref(), Some(sample::HANDLER_KEY));
+    assert_eq!(a.key(), Some(sample::HANDLER_KEY));
+    assert_eq!(b.handler_key, None, "a key that is not one is left out");
+
+    // An entrant without a key, as a rehearsal sends it, plays as before and sends none on.
+    let quiet = serde_json::to_value(entrant(0, "Jake")).unwrap();
+    assert!(quiet.get("handler_key").is_none());
+}
+
+#[test]
+fn a_battle_speaking_the_relay_before_handler_keys_is_told_to_update() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let mut older = entrant(0, "Jake");
+    older.protocol = 3;
+    assert_eq!(
+        refusal(relay.handle(Request::Open { entrant: older }, 0)),
+        Refusal::Version {
+            relay: RELAY_VERSION,
+            rules_version: RULES_VERSION,
+        }
+    );
+}
+
+#[test]
 fn the_opener_s_arena_reaches_both_sides_and_a_badly_named_one_is_turned_away() {
     let mut relay = Relay::with_entropy(Limits::default(), counting());
     let mut opener = entrant(0, "Jake");
@@ -929,7 +970,7 @@ fn an_older_battle_is_told_to_update_whatever_else_its_entrant_lacks() {
     stream.read_to_string(&mut answer).unwrap();
     assert!(answer.starts_with("HTTP/1.1 409"), "{answer}");
     assert!(
-        answer.ends_with(r#"{"refused":"version","relay":3,"rules_version":3}"#),
+        answer.ends_with(r#"{"refused":"version","relay":4,"rules_version":3}"#),
         "{answer}"
     );
 }

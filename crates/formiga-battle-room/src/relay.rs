@@ -7,8 +7,9 @@
 //! `docs/RELAY.md` gives the same rules as HTTP requests. A local copy (`formiga-battle relay`)
 //! serves this one directly for development and tests.
 //!
-//! What it keeps, it keeps only while the room is open: the two Handlers' display names, the six
-//! companions as their windows need to draw and play them, the orders and the hashes. A seat's
+//! What it keeps, it keeps only while the room is open: the two Handlers' display names and
+//! anonymous keys, the six companions as their windows need to draw and play them, the orders and
+//! the hashes. A seat's
 //! token is kept only as a digest. A room is deleted when its match ends and both sides have seen
 //! the end, or when it has gone quiet; nothing outlives it.
 
@@ -23,8 +24,9 @@ use std::collections::BTreeMap;
 
 /// The version of the relay's requests and answers. 2: an entrant says which Battle and Desktop
 /// it plays with ([`Build`]). 3: a side sends its team's plan, not an order per creature, and an
-/// entrant may carry the Handler's [`Card`].
-pub const RELAY_VERSION: u32 = 3;
+/// entrant may carry the Handler's [`Card`]. 4: an entrant may carry the Handler's anonymous key
+/// ([`Entrant::handler_key`]), so a friend's Battle can know the same Handler again.
+pub const RELAY_VERSION: u32 = 4;
 /// The largest body the relay reads.
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
 /// The header a seat's token travels in. Never in a URL, so it is never in a link or a log.
@@ -102,6 +104,21 @@ pub struct Entrant {
     /// cleaned like the name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card: Option<Card>,
+    /// The Handler's anonymous key: 32 lowercase hex digits Desktop made at random for the colony
+    /// and keeps with its Battle record. It says nothing about the Handler, only that it is the
+    /// same one as before. None in a rehearsal; a key that is not one is left out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handler_key: Option<String>,
+}
+
+impl Entrant {
+    /// The entrant's Handler key, if it is one: how a window reads a friend's key, so one that is
+    /// not a key is never taken for one, whatever the relay passed on.
+    pub fn key(&self) -> Option<&str> {
+        self.handler_key
+            .as_deref()
+            .filter(|key| formiga_battle_contract::is_handler_key(key))
+    }
 }
 
 /// What a Handler shows a friend of themselves besides their name: their club, pennant and
@@ -475,6 +492,7 @@ impl Relay {
             name
         };
         entrant.card = entrant.card.as_ref().and_then(Card::cleaned);
+        entrant.handler_key = entrant.key().map(str::to_owned);
         entrant
     }
 

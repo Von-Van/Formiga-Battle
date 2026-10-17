@@ -87,8 +87,12 @@ thread and the match screen thread own; new code goes in new files (`pennant.rs`
   one small contract addition (a trio's distinctions).
 - **Phase 3, emergent identity.** Reputations from observed play over the last matches (lights
   the beacon, flanks, holds the line, pulls levers), each shown with its evidence and allowed to
-  fade. Rematches and rivalries need a way to know a friend again; the honest options are their
-  typed name and pennant (easily changed) or a new anonymous Handler key, which would be a new
-  shared field and a privacy decision for Jake.
+  fade. Rematches and rivalries need a way to know a friend again. Jake chose an anonymous
+  Handler key (2026-10-17), and the key now exists and travels: Desktop makes 128 random bits
+  once per colony and keeps them in the Battle record (contract version 5, save version 33), and
+  each friend-match entrant carries it (relay protocol 4), listed in the shared notice and in
+  `docs/FRIENDS.md`. Nothing reads it yet (`Entrant::key` is how a window will); knowing a returning
+  friend, rematches and rivalries are still to build on it, and remembering a friend's key past
+  the match (for example in the history line) will need its own contract addition.
 - **Phase 4, beyond Battle.** Desktop's journal naming trios, and Home showing a pennant beside
   the trophies. Both are small once Phase 1's record exists, but each is a Desktop or Home change.

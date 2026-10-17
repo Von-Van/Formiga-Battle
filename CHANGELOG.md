@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+- A friend match now carries the Handler's anonymous key: 128 random bits Formiga Desktop makes
+  once for the colony and keeps with its Battle record (Battle contract version 5), so a friend's
+  Battle can know the same Handler again. It is made from nothing about the Handler, the colony or
+  the computer, a rehearsal has none, and the relay and each window drop anything that is not a
+  key. The notice of what a friend match shares, and `docs/FRIENDS.md`, now list it. Relay
+  protocol 4: a friend match needs both Handlers on a Battle that speaks it, and the site's relay
+  must speak it too. Recognising a returning friend, rematches and rivalries come later.
+
 ## [0.67.14] - 2026-10-17
 
 Built on Formiga Desktop 0.67.14, released alongside it and Formiga Hill and Home 0.67.14 so every

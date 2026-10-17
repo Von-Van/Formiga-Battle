@@ -33,10 +33,10 @@ Handler's name, and any reason given for a match ending, before showing or keepi
 A code is six characters from `34679ACDEFGHJKMNPQRTUVWXY`, read generously (any case; spaces and
 dashes ignored). A seat is 32 lowercase hex digits from a cryptographic random source.
 
-An **Entrant** is `{"protocol": 3, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3], "arena": "backyard", "card": a Card}`, `card` optional.
+An **Entrant** is `{"protocol": 4, "rules_version": n, "build": a Build, "handler": "…", "team": [3 contenders], "bonds": [≤ 3], "arena": "backyard", "card": a Card, "handler_key": "…"}`, `card` and `handler_key` optional.
 An entrant with any other numeric `protocol` is refused `version` before anything else about it is
 read, so an older Battle is told to update rather than that it was not understood. Otherwise the
-relay checks `protocol == 3`, three contenders and at most three bonds, and trims `handler` to
+relay checks `protocol == 4`, three contenders and at most three bonds, and trims `handler` to
 at most 24 printable characters ("A Handler" if empty). A joiner's `rules_version` must equal the
 opener's. It does not look inside the contenders. `arena` (`"backyard"` when missing) is the id of
 one of the arenas that come with Battle: 1 to 32 characters of lowercase letters, digits, `_` and
@@ -51,6 +51,13 @@ and `standing` to at most 48, each left out if nothing is left; a Pennant is
 and `-`, and is left out whole if any part is not. A card with nothing left on it is left out.
 It is passed on in each View's `entrants` with the rest of the entrant. Each window cleans it
 again on arrival, and draws a pennant part it does not know as its first choice.
+
+`handler_key` (since protocol 4) is the Handler's anonymous key: 32 lowercase hex digits that
+Desktop made at random for the colony, so a friend's Battle can know the same Handler again. The
+relay passes it on as it is if it is exactly that, and leaves it out otherwise (a string that is
+not a key is not refused, only dropped; anything but a string is malformed). It is kept only with
+the rest of the room and passed on in each View's `entrants`. A rehearsal sends none. A window
+reads a friend's key only through the same check (`Entrant::key`).
 
 A **Build** is `{"battle": "0.67.7", "desktop": "0.67.7" or null, "digest": "…"}`: Battle's
 version, the version of the Desktop that opened it (`null` in a rehearsal), and the SHA-256 of
@@ -87,7 +94,7 @@ digits, because JavaScript numbers lose anything past 53 bits.
 | 400 | `{"refused": "malformed"}` | The body is not the shape above, too large or nested too deep |
 | 415 | `{"refused": "malformed"}` | A `POST` whose body is not said to be JSON |
 | 404 | `{"refused": "no_such_room"}` | No room under that code, or a seat that is not one of its two (the same answer, so a seat cannot be guessed at) |
-| 409 | `{"refused": "version", "relay": 3, "rules_version": n}` | Another protocol, or a joiner playing by other rules than the opener (`n` is the opener's) |
+| 409 | `{"refused": "version", "relay": 4, "rules_version": n}` | Another protocol, or a joiner playing by other rules than the opener (`n` is the opener's) |
 | 409 | `{"refused": "mismatch", "battle": "…", "desktop": "…" or null}` | A joiner with another Battle or Desktop than the opener's (these are the opener's) |
 | 409 | `{"refused": "build"}` | A copy of Battle the relay does not admit, or not the opener's copy |
 | 409 | `{"refused": "room_full"}` | Joining a room that already has two |
