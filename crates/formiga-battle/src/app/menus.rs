@@ -753,9 +753,7 @@ impl BattleApp {
 
     /// The chosen place, as a picture pasted onto the page with a caption under it.
     fn arena_picture(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
-        let garden = self
-            .garden
-            .get_or_insert_with(|| Garden::new(&self.table.arena, &self.view));
+        let garden = super::garden_for(&mut self.garden, &mut self.view, &self.table.arena);
         let key = format!("preview-{}", self.table.arena.id);
         let fresh = !matches!(&self.preview, Some((k, _)) if *k == key);
         let picture = if fresh { Some(garden.picture()) } else { None };
