@@ -293,7 +293,7 @@ composure.
 |---|---|
 | Soak | Off balance, as when boxed in by a flank: it stops for the rest of the turn, stops holding, does not count in the zone, and drops what it carries. Under a leaf umbrella it stays dry |
 | Wash | Pushed one tile onto the free open ground beside it nearest the board's middle row, off the event's tiles (upper first among equals, then nearer its own side), then off balance as for a soak; off balance where it stands if there is nowhere to go. Under a leaf umbrella it stays put |
-| Close | The tiles go under for the rest of the turn: nobody can stand there, and whatever lay or stood wedged there floats off. Anyone on them is washed off first, never onto the yard; a leaf umbrella does not help |
+| Close | The tiles go under for the rest of the turn: nobody can stand there, and whatever lay or stood wedged there floats off. Anyone on them is washed off first, never onto the yard; a leaf umbrella does not help. With nowhere to go, it stays where it stands, off balance |
 
 | Arena | Event | Effect | Tiles | By itself | Switches |
 |---|---|---|---|---|---|
@@ -307,6 +307,13 @@ of the near edge. It clears the yard for both teams alike: what it rewards is ha
 waiting just outside to walk in, or a leaf umbrella over a holder. While it swept only the yard's
 four arms, whoever held the middle when it came gained two ticks for nothing, and 98% of 10,000
 Exhibition matches were won at the beacon in about 7 turns.
+
+The Millpond's rising water washes a creature on a bank onto the free ground beside it, never
+onto the jetty. When every such tile is taken, by someone of either team or a twig, it stays where
+it stands, off balance, the one creature on the water until the banks come up again at the end of
+the turn; nobody else can step onto the water meanwhile. This happens in about 0.4% of matches and
+is left so on purpose: the bank was crowded, and the creature caught there loses the rest of its
+turn just as one washed off would.
 
 ## Found things
 
