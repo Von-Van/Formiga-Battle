@@ -18,6 +18,7 @@
 mod handler;
 mod menus;
 mod registry;
+mod welcome;
 
 use crate::announce::{Callout, Style};
 use crate::chrome::{self, Kind, ink, label_job};
@@ -159,6 +160,8 @@ pub enum Review {
     Lessons,
     /// A Field Lesson on the board, its orders not yet given: the lesson on flanks.
     Lesson,
+    /// The Battleground with the welcome card over it, as Battle opened by itself shows it.
+    Welcome,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -222,6 +225,8 @@ pub struct BattleApp {
     join_code: String,
     /// The Handler has read what a friend match shares, this time.
     understood: bool,
+    /// The welcome card is up: Battle was opened by itself, not by Formiga.
+    welcome: bool,
     /// Every turn's orders come from the AI coach and lock at once: for review pictures.
     autoplay: bool,
     snap: Option<Snap>,
@@ -371,6 +376,7 @@ impl BattleApp {
             renaming: None,
             join_code: String::new(),
             understood: false,
+            welcome: false,
             autoplay: matches!(review, Some(Review::Playing | Review::Account)),
             snap,
             clock: 0.0,
@@ -476,9 +482,17 @@ impl BattleApp {
                 app.outing = Outing::Lessons;
                 app.begin_lesson();
             }
+            Some(Review::Welcome) => app.welcome = true,
             Some(Review::Station) | None => {}
         }
         app
+    }
+
+    /// With the welcome card up, for Battle opened by itself: the sample colony is there to look
+    /// around with, but a player's own companions come from Formiga.
+    pub fn welcoming(mut self) -> Self {
+        self.welcome = true;
+        self
     }
 
     /// Plays what was felt last frame. A companion chosen or taken out is heard as that, not
@@ -950,6 +964,9 @@ impl BattleApp {
             if !chrome::turn_leaf(&painter, turn, now, layout.left, layout.right, layout.unit) {
                 self.turn = None;
             }
+        }
+        if self.welcome {
+            self.welcome_card(&ctx, layout.full, layout.unit);
         }
         self.take_snap(&ctx);
     }
@@ -4307,6 +4324,8 @@ mod tests {
         app: BattleApp,
         time: f64,
         drawn: Vec<(String, Rect)>,
+        /// The app asked for the window to close.
+        closed: bool,
     }
 
     impl Headless {
@@ -4320,6 +4339,7 @@ mod tests {
                 app: BattleApp::new(host, table, None, None, Sound::silent()),
                 time: 0.0,
                 drawn: Vec::new(),
+                closed: false,
             }
         }
 
@@ -4333,6 +4353,11 @@ mod tests {
             let app = &mut self.app;
             let mut output = self.ctx.run_ui(input, |ui| app.frame(ui));
             output.textures_delta.clear();
+            self.closed |= output.viewport_output.values().any(|v| {
+                v.commands
+                    .iter()
+                    .any(|c| matches!(c, egui::ViewportCommand::Close))
+            });
             self.drawn.clear();
             for clipped in &output.shapes {
                 words(&clipped.shape, &mut self.drawn);
@@ -4378,6 +4403,66 @@ mod tests {
             egui::epaint::Shape::Vec(shapes) => shapes.iter().for_each(|s| words(s, out)),
             _ => {}
         }
+    }
+
+    fn says(h: &Headless, words: &str) -> bool {
+        h.drawn.iter().any(|(w, _)| w.eq_ignore_ascii_case(words))
+    }
+
+    #[test]
+    fn battle_opened_by_itself_welcomes_the_player_until_they_look_around() {
+        let mut h = Headless::new();
+        h.app = BattleApp::new(
+            Host::Rehearsal {
+                from: "the sample colony".to_owned(),
+            },
+            Table::new(sample::snapshot(), sample::visitors(9), 5),
+            None,
+            None,
+            Sound::silent(),
+        )
+        .welcoming();
+        h.frames(4);
+        assert!(says(&h, welcome::TITLE));
+        assert!(says(&h, &welcome::how_to_open()));
+        assert!(says(&h, "formigaworld.com"));
+        h.click(welcome::LOOK_AROUND, 0);
+        h.frames(2);
+        assert!(!says(&h, welcome::TITLE));
+        assert!(!h.closed);
+        // The rehearsal carries on at the Battleground, as it would have without the card.
+        assert_eq!(h.app.stage, Stage::Station);
+    }
+
+    #[test]
+    fn the_welcome_takes_the_clicks_meant_for_the_station_under_it() {
+        let mut h = Headless::new();
+        h.app.welcome = true;
+        h.frames(2);
+        // The train in, and the way on from the station dropped onto its page, under the card.
+        let now = h.app.clock;
+        h.app.station.as_mut().expect("the station").skip(now);
+        h.frames(40);
+        h.click("Field Lessons", 0);
+        h.frames(2);
+        assert_eq!(h.app.stage, Stage::Station, "the card took the click");
+        assert!(says(&h, welcome::TITLE));
+    }
+
+    #[test]
+    fn closing_the_welcome_closes_battle() {
+        let mut h = Headless::new();
+        h.app.welcome = true;
+        h.frames(4);
+        h.click(welcome::CLOSE, 0);
+        assert!(h.closed);
+    }
+
+    #[test]
+    fn battle_opened_with_a_colony_has_no_welcome() {
+        let mut h = Headless::new();
+        h.frames(4);
+        assert!(!says(&h, welcome::TITLE));
     }
 
     #[test]
