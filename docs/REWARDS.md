@@ -1,9 +1,10 @@
 # What a match earns
 
-Battle keeps nothing of its own. Desktop keeps a colony's Battle record and hands it to Battle in
-each session's snapshot; Battle writes what each match earns into the session as it goes
-(`result.json`, written whole after every match), and Desktop applies it when Battle closes, each
-match once, by its id. A rehearsal, with no Desktop behind it, keeps nothing at all.
+Battle keeps no record of its own; the one file it keeps is how it looks and sounds
+(`settings.json`, see the [README](../README.md)), and nothing a match earns goes there. Desktop
+keeps a colony's Battle record and hands it to Battle in each session's snapshot; Battle writes
+what each match earns into the session as it goes (`result.json`, written whole after every
+match), and Desktop applies it when Battle closes, each match once, by its id. A rehearsal, with no Desktop behind it, keeps no record at all.
 
 | Against | Earns |
 |---|---|

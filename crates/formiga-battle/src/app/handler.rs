@@ -1,7 +1,7 @@
 //! The Handler's own pages, opened from the station: the colony's history of matches with its
-//! cups and points beside it, and how Battle looks and sounds for this sitting. Desktop keeps the
-//! record; Battle keeps no files, so the settings start fresh each time, with reduced motion as
-//! Desktop has it.
+//! cups and points beside it, and how Battle looks and sounds. Desktop keeps the record; Battle
+//! keeps only these settings, in its own folder (`settings`), with reduced motion as Desktop has
+//! it until the Handler sets it here.
 
 use super::{BattleApp, card, padlock, portrait_mat, rosette};
 use crate::chrome::{self, ink, label_job};
@@ -177,7 +177,7 @@ impl BattleApp {
         );
     }
 
-    /// How Battle looks and sounds, for this sitting.
+    /// How Battle looks and sounds, kept for next time.
     pub(super) fn settings(&mut self, ui: &mut egui::Ui, u: f32) {
         let since = self.turned;
         let mut reduce = self.table.reduce_motion;
@@ -196,6 +196,9 @@ impl BattleApp {
         });
         if reduce != self.table.reduce_motion {
             self.table.reduce_motion = reduce;
+            if let Some(keeper) = &mut self.kept {
+                keeper.choose_motion(reduce);
+            }
             // The station is painted again the way motion now is.
             self.station = None;
             self.station_picture = None;
@@ -259,7 +262,7 @@ impl BattleApp {
 }
 
 const MOTION: &str = "The train is already in, pages change without turning, and nothing hops or \
-     springs. It starts as Formiga Desktop has it.";
+     springs. It starts as Formiga Desktop has it until you set it here.";
 const SOUND: &str = "Music and sounds, or none at all: the same as the speaker on the cover.";
 
 /// A setting that is on or off: its name and what it does, with its switch at the right. The
