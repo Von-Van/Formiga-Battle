@@ -284,6 +284,8 @@ pub struct BattleApp {
     learned: Vec<Lesson>,
     /// How far the mouse wheel has turned over the board since it last turned a HOLD, in points.
     wheel: f32,
+    /// Keeps how Battle looks and sounds for next time; none for a window opened for its picture.
+    kept: Option<crate::settings::Keeper>,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -409,6 +411,7 @@ impl BattleApp {
             lesson: Lesson::Beacon,
             learned: Vec::new(),
             wheel: 0.0,
+            kept: None,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -845,6 +848,11 @@ impl BattleApp {
         );
     }
 
+    /// Keeps the sound, motion and window size as they change, for the next sitting.
+    pub fn keep(&mut self, keeper: crate::settings::Keeper) {
+        self.kept = Some(keeper);
+    }
+
     pub(crate) fn frame(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         if !self.styled {
@@ -852,6 +860,14 @@ impl BattleApp {
             self.styled = true;
         }
         self.clock = ctx.input(|input| input.time) as f32;
+        if let Some(keeper) = &mut self.kept {
+            let (closing, inner) = ctx.input(|input| {
+                let viewport = input.viewport();
+                (viewport.close_requested(), viewport.inner_rect)
+            });
+            let window = inner.map(|rect| [rect.width(), rect.height()]);
+            keeper.note(self.sound.levels(), window, self.clock, closing);
+        }
         crate::feel::set_still(&ctx, self.table.reduce_motion);
         let mut felt = std::mem::take(&mut self.felt);
         felt.extend(crate::feel::take(&ctx));

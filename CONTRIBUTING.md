@@ -29,7 +29,9 @@ If you publish a version of your own, please:
   the root `Cargo.toml`. To try Battle against a Desktop checkout of your own instead, put a
   `[patch]` in `.cargo/config.toml`, which git ignores.
 
-Battle keeps no files of its own and never writes a colony, so it is safe to run against anything:
+Battle never writes a colony, so it is safe to run against anything. The one file it keeps is its
+own `settings.json` (volumes, mute, motion and window size); set `FORMIGA_BATTLE_DATA_DIR` to keep
+it somewhere else while you work:
 
 ```sh
 cargo run --release -p formiga-battle                              # the sample colony

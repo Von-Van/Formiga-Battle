@@ -2,8 +2,8 @@
 //! Formiga Hill makes its own. The window and the menus hold one `Sound` and only ever say what
 //! happened (`play`) or what should be playing (`music`); the speaker thread does the rest.
 //!
-//! Nothing here keeps a file: Desktop keeps Battle's record and has no sound setting to send, so
-//! the levels last as long as the window.
+//! Nothing here keeps a file: the window keeps the levels for next time (`settings`), since
+//! Desktop has no sound setting to send.
 
 mod cues;
 mod mixer;
