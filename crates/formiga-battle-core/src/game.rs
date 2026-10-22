@@ -826,8 +826,9 @@ impl Match {
             if let Some(target) = broke[s] {
                 push(EventKind::BrokeThrough { side, target });
             }
-            self.board.capture[s] =
-                (self.board.capture[s] + gain[s]).min(self.ruleset.capture_ticks);
+            self.board.capture[s] = self.board.capture[s]
+                .saturating_add(gain[s])
+                .min(self.ruleset.capture_ticks);
             if self.ruleset.capture_decays {
                 self.board.capture[o] = self.board.capture[o].saturating_sub(gain[s]);
             }

@@ -7,8 +7,8 @@
 //! |---|---|---|
 //! | Dandelion puff | Everyone on the tile and the two either side of it, across the way it is blown, is pushed one tile on and knocked off balance. Two holders side by side brace each other and are not moved. Twigs there blow over | Lands and is gone |
 //! | Twig | Wedged into an empty tile: nobody can stand there, and a gate cannot close on it | Two turns |
-//! | Leaf umbrella | Opened over a teammate, or itself: the map event cannot soak or wash it and a contest cannot catch it on the move. A puff carries it two tiles instead of one | The rest of this turn and the next |
-//! | Pebble bell | Rung: everyone of the other team within two tiles who has not yet settled a contest this turn loses it. Rung beside a switch, it sets the map event off | Lands and is gone |
+//! | Leaf umbrella | Opened over a teammate, or itself: the map event cannot soak or wash it, and a press against it while it is not holding bounces off. A puff carries it two tiles instead of one | The rest of this turn and the next |
+//! | Pebble bell | Rung: everyone of the other team within two tiles who has not yet settled its press, trick or interaction this turn loses it. Rung beside a switch that is ready, it sets the map event off | Lands and is gone |
 //! | Honey drop | The tile and the four round it go sticky: whoever steps in stops there for the turn, and can still hold. A pushed creature sticks on the first honey it is pushed onto, and a twig will not stand in it | Two turns |
 //! | Springy seed | Its user hops onto the tile, up to two away, over anyone or a twig in between, never over a wall or water | Lands and is gone |
 //!
@@ -27,7 +27,7 @@ pub enum Item {
     Twig,
     /// Shield: keeps a teammate dry and on its feet.
     Leaf,
-    /// Interrupt: rung, it spoils the other team's contests nearby.
+    /// Interrupt: rung, it spoils the other team's presses, tricks and interactions nearby.
     Bell,
     /// Terrain: sticky ground that stops whoever steps in.
     Honey,
