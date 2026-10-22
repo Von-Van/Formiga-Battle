@@ -9,8 +9,9 @@ use std::time::{Duration, Instant};
 
 /// How often the room is looked at while nothing else is said.
 const POLL: Duration = Duration::from_millis(900);
-/// While the relay cannot be reached, each look waits twice as long as the last, up to this many
-/// doublings, so a relay that is down is not asked again and again.
+/// While the relay cannot be reached, or says it is busy, each look waits twice as long as the
+/// last, up to this many doublings, so a relay that is down or struggling is not asked again and
+/// again.
 const MOST_DOUBLINGS: u32 = 3;
 
 pub enum Ask {
@@ -43,6 +44,15 @@ impl Line {
         let (tell, told) = mpsc::channel();
         std::thread::spawn(move || run(base, entrant, code, asked, tell));
         Self { asks, told }
+    }
+
+    /// A line to no relay, for tests: what the window asks comes out of the receiver, and what
+    /// is sent in is told to the window.
+    #[cfg(test)]
+    pub fn fake() -> (Self, Receiver<Ask>, Sender<Told>) {
+        let (asks, asked) = mpsc::channel();
+        let (tell, told) = mpsc::channel();
+        (Self { asks, told }, asked, tell)
     }
 
     pub fn ask(&self, ask: Ask) {
@@ -94,7 +104,7 @@ fn run(
         return;
     }
     let mut last_look: Option<Instant> = None;
-    let mut unreachable = 0u32;
+    let mut strained_looks = 0u32;
     loop {
         let ask = match asked.recv_timeout(Duration::from_millis(100)) {
             Ok(ask) => Some(ask),
@@ -115,8 +125,9 @@ fn run(
                 hash,
                 finished,
             }) => Some(client.board(&code, &seat, turn, hash, finished)),
-            None if last_look
-                .is_none_or(|at| at.elapsed() >= POLL * (1 << unreachable.min(MOST_DOUBLINGS))) =>
+            None if last_look.is_none_or(|at| {
+                at.elapsed() >= POLL * (1 << strained_looks.min(MOST_DOUBLINGS))
+            }) =>
             {
                 last_look = Some(Instant::now());
                 Some(client.look(&code, &seat))
@@ -124,8 +135,8 @@ fn run(
             None => None,
         };
         match &answer {
-            Some(Err(AskError::Unreachable(_))) => unreachable += 1,
-            Some(_) => unreachable = 0,
+            Some(answer) if strained(answer) => strained_looks += 1,
+            Some(_) => strained_looks = 0,
             None => {}
         }
         let told = match answer {
@@ -141,5 +152,28 @@ fn run(
             let _ = client.leave(&code, &seat);
             return;
         }
+    }
+}
+
+/// Whether an answer says the relay is down or too busy to answer, so the next look waits longer.
+fn strained(answer: &Result<View, AskError>) -> bool {
+    matches!(
+        answer,
+        Err(AskError::Unreachable(_) | AskError::Refused(formiga_battle_room::relay::Refusal::Busy))
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use formiga_battle_room::relay::Refusal;
+
+    #[test]
+    fn a_busy_relay_is_asked_less_often_like_one_that_is_down() {
+        assert!(strained(&Err(AskError::Unreachable("no route".to_owned()))));
+        assert!(strained(&Err(AskError::Refused(Refusal::Busy))));
+        // Anything else is an answer: the relay is there and coping.
+        assert!(!strained(&Err(AskError::Refused(Refusal::NotThisTurn))));
+        assert!(!strained(&Err(AskError::Unreadable)));
     }
 }

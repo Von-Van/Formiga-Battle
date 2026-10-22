@@ -260,23 +260,15 @@ pub fn paint(
             // A map's switch and a wedged twig stand up off the ground, so like a hedge they are
             // seen through wherever they would hide someone behind them.
             Item::Tap(tile) => {
-                let mut full = Canvas::new(canvas.width(), canvas.height());
-                let (ready, c) = (frame.tap_ready, &mut full);
-                match dressing {
-                    garden::Dressing::Cove => found::shell(c, view, tile, ready, now, still),
-                    garden::Dressing::Millpond => found::sluice(c, view, tile, ready, now, still),
-                    garden::Dressing::Woodland => found::tree(c, view, tile, ready, now, still),
-                    _ => found::tap(c, view, tile, ready, now, still),
-                }
-                see_through(&mut canvas, &Sprite::cut(&full), depth, &bodies);
+                let sprite = switch(dressing, view, tile, frame.tap_ready, now, still);
+                see_through(&mut canvas, &sprite, depth, &bodies);
             }
             Item::Found(tile, thing) => {
                 found::on_ground(&mut canvas, view, tile, thing, now, still);
             }
             Item::Twig(tile) => {
-                let mut full = Canvas::new(canvas.width(), canvas.height());
-                found::wedged(&mut full, view, tile);
-                see_through(&mut canvas, &Sprite::cut(&full), depth, &bodies);
+                let sprite = near_tile(view, tile, |c, v| found::wedged(c, v, tile));
+                see_through(&mut canvas, &sprite, depth, &bodies);
             }
         }
     }
@@ -367,6 +359,47 @@ impl Body {
 /// A standing piece, seen through wherever it stands in front of someone it would hide: Home's
 /// rule for furniture, so nobody on the board is ever lost behind a hedge. Only the creature's own
 /// shape shows through, so the piece never has a box cut out of it.
+/// A map's switch, as this place dresses it, cut out to stand on the board.
+fn switch(
+    dressing: garden::Dressing,
+    view: &View,
+    tile: Tile,
+    ready: bool,
+    now: f32,
+    still: bool,
+) -> Sprite {
+    near_tile(view, tile, |c, v| match dressing {
+        garden::Dressing::Cove => found::shell(c, v, tile, ready, now, still),
+        garden::Dressing::Millpond => found::sluice(c, v, tile, ready, now, still),
+        garden::Dressing::Woodland => found::tree(c, v, tile, ready, now, still),
+        _ => found::tap(c, v, tile, ready, now, still),
+    })
+}
+
+/// How much room is left round a tile's middle for what stands on it: across, then above and
+/// below. The Woodland's tree, the tallest, reaches 50 pixels up and 20 to a side.
+const NEAR_TILE: (i32, i32, i32) = (48, 72, 24);
+
+/// What `paint` draws on and round a tile, painted on a small canvas there rather than a whole
+/// board's and cut out: the same pixels, without filling and scanning the whole board each frame.
+fn near_tile(view: &View, tile: Tile, paint: impl FnOnce(&mut Canvas, &View)) -> Sprite {
+    let (across, above, below) = NEAR_TILE;
+    let (cx, cy) = view.centre(tile);
+    let (x0, y0) = (cx - across, cy - above);
+    let mut near = Canvas::new((2 * across) as u32, (above + below) as u32);
+    // The same view, moved by whole pixels so the tile's middle lands on the small canvas.
+    let shifted = View {
+        origin: (view.origin.0 - x0 as f32, view.origin.1 - y0 as f32),
+        size: (near.width(), near.height()),
+        ..*view
+    };
+    paint(&mut near, &shifted);
+    let mut sprite = Sprite::cut(&near);
+    sprite.x += x0;
+    sprite.y += y0;
+    sprite
+}
+
 fn see_through(canvas: &mut Canvas, sprite: &Sprite, depth: i32, bodies: &[Body]) {
     let hidden: Vec<&Body> = bodies
         .iter()
@@ -1590,6 +1623,58 @@ impl Key {
 mod tests {
     use super::*;
     use crate::playback::Effect;
+
+    #[test]
+    fn switches_and_twigs_painted_near_their_tile_match_a_whole_board_painting() {
+        let same = |a: &Sprite, b: &Sprite| {
+            (a.x, a.y) == (b.x, b.y) && a.pic.rgba_bytes() == b.pic.rgba_bytes()
+        };
+        // Steady and moving, ready and resting, at a few moments.
+        let moments = [
+            (true, false, 0.4),
+            (true, false, 2.7),
+            (false, false, 0.4),
+            (false, false, 2.7),
+            (true, true, 0.0),
+            (false, true, 0.0),
+        ];
+        for arena in Arena::built_in() {
+            let view = View::new(arena.width, arena.height);
+            for tile in arena.tiles() {
+                let mut whole = Canvas::new(view.size.0, view.size.1);
+                found::wedged(&mut whole, &view, tile);
+                let near = near_tile(&view, tile, |c, v| found::wedged(c, v, tile));
+                assert!(same(&near, &Sprite::cut(&whole)), "twig at {tile:?}");
+                for dressing in [
+                    garden::Dressing::Garden,
+                    garden::Dressing::Woodland,
+                    garden::Dressing::Millpond,
+                    garden::Dressing::Cove,
+                ] {
+                    for (ready, still, now) in moments {
+                        let mut whole = Canvas::new(view.size.0, view.size.1);
+                        let (c, v) = (&mut whole, &view);
+                        match dressing {
+                            garden::Dressing::Cove => found::shell(c, v, tile, ready, now, still),
+                            garden::Dressing::Millpond => {
+                                found::sluice(c, v, tile, ready, now, still);
+                            }
+                            garden::Dressing::Woodland => {
+                                found::tree(c, v, tile, ready, now, still)
+                            }
+                            garden::Dressing::Garden => found::tap(c, v, tile, ready, now, still),
+                        }
+                        let near = switch(dressing, &view, tile, ready, now, still);
+                        assert!(
+                            same(&near, &Sprite::cut(&whole)),
+                            "{dressing:?} switch at {tile:?} in {}",
+                            arena.id
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn every_press_hold_and_trick_burst_draws_something_where_it_happens() {

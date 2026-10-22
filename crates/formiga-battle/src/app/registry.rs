@@ -38,18 +38,19 @@ impl BattleApp {
             .clone()
     }
 
-    /// A painted picture, painted once under its key and kept.
+    /// A painted picture, painted once under its key and kept while it is shown.
     pub(super) fn painted(
         &mut self,
         ctx: &egui::Context,
         key: String,
         paint: impl FnOnce(&Self) -> Canvas,
     ) -> egui::TextureHandle {
-        if let Some(t) = self.art.get(&key) {
-            return t.clone();
+        let shown = ctx.cumulative_frame_nr();
+        if let Some(t) = self.art.get(&key, shown) {
+            return t;
         }
         let t = texture(ctx, &key, &paint(self));
-        self.art.insert(key, t.clone());
+        self.art.keep(key, t.clone(), shown);
         t
     }
 
