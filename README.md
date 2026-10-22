@@ -47,7 +47,8 @@ with "Play Formiga Battle…"; Battle's side of that hand-off is `--formiga-batt
    where Formiga Desktop looks for it, or a portable zip, which runs without installing but which
    Desktop does not look for.
 2. In Formiga Desktop (0.67.9 or later), choose "Play Formiga Battle…" from the tray. Battle opens
-   with your companions. Opened by itself, it plays with a sample colony and keeps nothing.
+   with your companions. Opened by itself, it says where your own companions come from and
+   offers a look around with a sample colony, which keeps nothing.
 3. To play a friend, both of you need the same Battle, opened by the same Desktop.
 
 The downloads are not signed yet. On macOS, open the app the first time with Control-click → Open;
@@ -58,7 +59,8 @@ the rest.
 ## Commands
 
 ```bash
-cargo run --release -p formiga-battle                                    # the window, on the sample colony
+cargo run --release -p formiga-battle                                    # the window, as opened by itself
+cargo run --release -p formiga-battle -- --sample                        # on the sample colony, no welcome card
 cargo run --release -p formiga-battle -- --from-save <colony.json>       # on a colony, read and never written
 cargo run --release -p formiga-battle -- --help
 cargo run --release -p formiga-battle -- roster                          # the sample colony's companions
@@ -84,7 +86,7 @@ opens the whole match turn by turn.
 
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
 window (`--turns`, `--into`, `--scale`); `--render-window <png> --review
-station|where|who|friend|orders|playing --at <s>` pictures the whole window, as a Retina screen
+station|welcome|where|who|friend|orders|playing --at <s>` pictures the whole window, as a Retina screen
 shows it, without opening one; `--snap <png>` with the same options opens the window behind
 everything, pictures it and closes. Each takes `--arena backyard|woodland|millpond|cove`. Look at them after changing anything
 visual.

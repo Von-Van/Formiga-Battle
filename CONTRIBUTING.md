@@ -32,7 +32,7 @@ If you publish a version of your own, please:
 Battle keeps no files of its own and never writes a colony, so it is safe to run against anything:
 
 ```sh
-cargo run --release -p formiga-battle                              # the sample colony
+cargo run --release -p formiga-battle -- --sample                  # the sample colony
 cargo run --release -p formiga-battle -- --from-save <colony.json> # a colony, read and never written
 ```
 
