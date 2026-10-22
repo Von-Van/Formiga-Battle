@@ -310,8 +310,9 @@ Exhibition matches were won at the beacon in about 7 turns.
 
 The Millpond's rising water washes a creature on a bank onto the free ground beside it, never
 onto the jetty. When every such tile is taken, by someone of either team or a twig, it stays where
-it stands, off balance, the one creature on the water until the banks come up again at the end of
-the turn; nobody else can step onto the water meanwhile. This happens in about 0.4% of matches and
+it stands, off balance, on the water until the banks come up again at the end of the turn. More
+than one can be caught this way when the bank is crowded enough; nobody else can step onto the
+water meanwhile. This happens in about 0.4% of matches and
 is left so on purpose: the bank was crowded, and the creature caught there loses the rest of its
 turn just as one washed off would.
 
