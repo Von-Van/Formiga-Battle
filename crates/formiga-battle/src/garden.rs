@@ -157,6 +157,8 @@ type Points = Vec<(i32, i32)>;
 
 /// The garden, painted once for an arena.
 pub struct Garden {
+    /// The arena it was painted for.
+    pub arena: String,
     /// The ground, the yard's paving, the back of the garden and its shadows: everything behind
     /// whoever stands on the board.
     pub ground: Canvas,
@@ -327,6 +329,7 @@ impl Garden {
         }
         let paddle = millpond::paddle(&water);
         Self {
+            arena: arena.id.clone(),
             ground,
             pieces,
             gates,
