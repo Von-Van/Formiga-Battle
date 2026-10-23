@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- A prototype of playbooks in the match core: a Handler's plan for a match in one to three stages
+  (secure the beacon, put pressure on, draw them out, counter their holders, fetch, work the
+  board), compiled each turn to the same three orders a Handler could give by hand, one stage at a
+  time or all at once. Every turn says which stage ran and why it moved on or played otherwise.
+  Nothing in the window uses it yet. `cargo run --release -p formiga-battle-core --example
+  playbook_compare` plays the sample playbooks against the coaches and each other. See
+  docs/PLAYBOOK.md.
 - Orders can be given from the keyboard alone: the arrow keys move a square cursor over the board
   from the middle of the yard, and Space gives the order in hand there as a click would
   (Shift+Space as a right click). The mouse over the board puts the cursor away. The keys are
