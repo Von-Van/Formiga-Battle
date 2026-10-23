@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Four coaching styles for a Handler who is not a person, each a way of playing the Exhibition
+  coach's book: the Aggressor presses first and sends everyone, the Defender holds the yard and
+  shuts the board, the Tactician goes round the sides and behind, and the Opportunist plays for
+  whatever turns up. `--coach aggressor,defender` and the like play them from the command line;
+  nothing in the window uses them yet. The Exhibition coach's matches are unchanged. See
+  docs/RULES.md, "Coaching styles".
 - A match set up part way, as a Field Lesson is, records the board it began from and replays
   from it; a record kept before this reads as before. A ruleset with a zero in it (no ticks, no
   composure, no turns) is refused when a match is set up rather than played into a corner, and

@@ -41,6 +41,7 @@ pub mod replay;
 pub mod rng;
 pub mod ruleset;
 pub mod scenery;
+pub mod style;
 pub mod tournament;
 
 pub use arena::{Arena, Effect, Scenery, TEAM_SIZE};
@@ -53,3 +54,4 @@ pub use order::{Directive, Facing, Order, Orders, PLAN_SIZE, Quarter, Side, Slot
 pub use profile::{Behavior, Bond, Leanings, Nature, Profile, Strength};
 pub use replay::MatchRecord;
 pub use ruleset::{CaptureRule, RULES_VERSION, Ruleset, RulesetError};
+pub use style::{Archetype, Book, STYLE_VERSION};
