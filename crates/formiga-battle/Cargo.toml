@@ -18,7 +18,6 @@ formiga-core.workspace = true
 formiga-expansion-rulebook.workspace = true
 formiga-travel.workspace = true
 getrandom.workspace = true
-png.workspace = true
 rodio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
