@@ -743,10 +743,17 @@ impl BattleApp {
                     (None, None) => name,
                 };
             }
-            None => {
-                names[you.other().index()] = "The visitors".to_owned();
-                tags[you.other().index()] = "From next door".to_owned();
-            }
+            None => match self.table.rival {
+                Some(rival) => {
+                    flags[you.other().index()] = Some(Style::of(&rival.pennant()));
+                    names[you.other().index()] = format!("{}'s three", rival.short);
+                    tags[you.other().index()] = rival.tag();
+                }
+                None => {
+                    names[you.other().index()] = "The visitors".to_owned();
+                    tags[you.other().index()] = "From next door".to_owned();
+                }
+            },
         }
         // As many of the board's own pixels across as most of the board is wide.
         let scale = self.board_scale.max(1.0);
