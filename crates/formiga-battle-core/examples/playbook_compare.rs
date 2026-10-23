@@ -23,10 +23,20 @@ fn main() {
     let rules = Ruleset::default();
 
     let coaches = [Coach::Exhibition, Coach::Generic, Coach::Familiar];
-    let mut pilots: Vec<Pilot> = coaches.iter().map(|c| Pilot::Coach(*c)).collect();
+    let mut pilots: Vec<(String, Pilot)> = coaches
+        .iter()
+        .map(|c| (format!("{c:?}"), Pilot::Coach(*c)))
+        .collect();
     for p in Playbook::samples() {
-        pilots.push(Pilot::Playbook(p.clone()));
-        pilots.push(Pilot::Playbook(p.bundled()));
+        pilots.push((p.name.clone(), Pilot::Playbook(p.clone())));
+        pilots.push((
+            format!("{} (turns only)", p.name),
+            Pilot::Playbook(p.clone().untriggered()),
+        ));
+        pilots.push((
+            format!("{} (bundled)", p.name),
+            Pilot::Playbook(p.bundled()),
+        ));
     }
     let opponents = [
         Pilot::Coach(Coach::Exhibition),
@@ -36,10 +46,10 @@ fn main() {
     for arena in &arenas {
         println!("\n## {} ({} matches a row)\n", arena.name, pairings * 2);
         println!(
-            "| Pilot | vs Exhibition | vs Familiar | turns | as asked | past last stage | reworded | met | ran out |"
+            "| Pilot | vs Exhibition | vs Familiar | turns | as asked | past last stage | reworded | met | ran out | brought in |"
         );
-        println!("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
-        for pilot in &pilots {
+        println!("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+        for (label, pilot) in &pilots {
             let rows: Vec<FaceOff> = opponents
                 .iter()
                 .map(|o| face_off(arena, rules, seed, pairings, [pilot, o]))
@@ -64,8 +74,8 @@ fn main() {
                 )
             };
             println!(
-                "| {} | {:.1}% | {:.1}% | {:.1} | {} | {} | {} | {} | {} |",
-                pilot.label(),
+                "| {} | {:.1}% | {:.1}% | {:.1} | {} | {} | {} | {} | {} | {} |",
+                label,
                 100.0 * rows[0].record.score(),
                 100.0 * rows[1].record.score(),
                 f64::from(all(|r| r.turns)) / f64::from(all(|r| r.record.played).max(1)),
@@ -81,6 +91,11 @@ fn main() {
                     String::new()
                 } else {
                     all(|r| r.ran_out).to_string()
+                },
+                if compiled == 0 {
+                    String::new()
+                } else {
+                    all(|r| r.triggered).to_string()
                 },
             );
         }

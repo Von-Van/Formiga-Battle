@@ -6,7 +6,7 @@ use formiga_battle_core::ai::Coach;
 use formiga_battle_core::muster;
 use formiga_battle_core::playbook::{
     self, Advance, Deviation, Fallback, Intent, Pilot, Playbook, PlaybookError, Runner, Stage,
-    Timing,
+    Timing, Trigger,
 };
 use formiga_battle_core::tournament::{self, drawn_creature};
 use formiga_battle_core::*;
@@ -22,7 +22,7 @@ fn rosters(seed: u64) -> [Vec<Profile>; 2] {
 fn every_playbook() -> Vec<Playbook> {
     Playbook::samples()
         .into_iter()
-        .flat_map(|p| [p.clone(), p.bundled()])
+        .flat_map(|p| [p.clone(), p.clone().bundled(), p.untriggered()])
         .chain(Intent::ALL.map(|i| Playbook::new(i.label(), &[Stage::new(i)])))
         .collect()
 }
@@ -157,11 +157,17 @@ fn every_turn_says_which_stage_ran_and_why_it_moved_on() {
                     }
                     for a in &c.advanced {
                         let from = match a {
-                            Advance::Met { stage } | Advance::RanOut { stage, .. } => *stage,
+                            Advance::Met { stage } | Advance::RanOut { stage, .. } => Some(*stage),
+                            Advance::Triggered { from, to, trigger } => {
+                                let stage = book.stages[*to as usize];
+                                assert_eq!(stage.when, Some(*trigger));
+                                assert_ne!(Some(*to), *from, "a stage never brings itself in");
+                                *from
+                            }
                         };
-                        assert_eq!(Some(from), last, "{c:?}");
-                        if let Advance::RanOut { fallback, .. } = a {
-                            assert_eq!(*fallback, book.stages[from as usize].fallback);
+                        assert_eq!(from, last, "{c:?}");
+                        if let Advance::RanOut { stage, fallback } = a {
+                            assert_eq!(*fallback, book.stages[*stage as usize].fallback);
                         }
                     }
                     let line = c.line(&book);
@@ -237,4 +243,101 @@ fn a_comparison_counts_every_match_from_the_playbooks_side() {
     assert_eq!(mirror.record.played, 8);
     assert_eq!(mirror.compiled, 0, "a coach keeps no playbook record");
     assert!(f.record.won + f.record.drawn <= f.record.played);
+}
+
+#[test]
+fn the_board_brings_a_stage_in_whatever_stage_the_team_is_on() {
+    // Secure for four turns, with Counter brought in the moment they hold the beacon: against a
+    // team that digs in on it, Counter comes in on the second turn, not after the fourth.
+    let book = Playbook::new(
+        "Answer them",
+        &[
+            Stage::new(Intent::Secure).turns(4),
+            Stage::new(Intent::Counter).when(Trigger::TheyHoldBeacon),
+        ],
+    );
+    let (_, _, runner) = play_checked(&Arena::backyard(), 2, &book, Coach::Turtle);
+    let first = runner
+        .log
+        .iter()
+        .find(|c| !c.advanced.is_empty())
+        .expect("the stage changes");
+    assert_eq!(
+        first.advanced,
+        vec![Advance::Triggered {
+            from: Some(0),
+            to: 1,
+            trigger: Trigger::TheyHoldBeacon
+        }]
+    );
+    assert!(
+        first.turn < 5,
+        "brought in before Secure ran out: {first:?}"
+    );
+    assert_eq!(first.ran[0].intent, Intent::Counter);
+    assert!(
+        first
+            .line(&book)
+            .contains("came in as they hold the beacon")
+    );
+    // The same playbook with no trigger stays on Secure until it gets its goal or its turns.
+    let (_, _, plain) = play_checked(&Arena::backyard(), 2, &book.untriggered(), Coach::Turtle);
+    assert!(plain.log.iter().take(4).all(|c| c.ran[0].stage == Some(0)));
+}
+
+#[test]
+fn the_handler_can_change_any_of_a_playbooks_orders() {
+    let book = Playbook::samples()[0].clone();
+    let rosters = rosters(4);
+    let mut m = Match::new(Arena::backyard(), Ruleset::default(), 4, rosters).unwrap();
+    let mut runner = Runner::new(book.clone(), Side::Left);
+    // Turn one as given; turn two with the Handler's own orders; turn three half kept.
+    let mut sent_plans = Vec::new();
+    for turn in 1..=3u8 {
+        let proposed = runner.plan(&m);
+        let sent = match turn {
+            1 => proposed.clone(),
+            2 => vec![Directive::Hold {
+                squares: vec![m.arena.zone_centre()],
+                facing: Facing::East,
+            }],
+            _ => {
+                let mut p: TeamPlan = proposed
+                    .iter()
+                    .filter(|d| d.tactical())
+                    .take(1)
+                    .cloned()
+                    .collect();
+                // A HOLD the playbook did not give.
+                let own = Facing::ALL
+                    .into_iter()
+                    .map(|facing| Directive::Hold {
+                        squares: vec![m.arena.zone_centre()],
+                        facing,
+                    })
+                    .find(|d| !proposed.contains(d))
+                    .expect("one facing it did not give");
+                p.push(own);
+                p
+            }
+        };
+        runner.sent(&sent);
+        sent_plans.push(sent.clone());
+        m.resolve_turn([sent, Coach::Exhibition.plan(&m, Side::Right)]);
+    }
+    let log = &runner.log;
+    assert_eq!(log[0].sent, None, "kept as given");
+    assert_eq!(log[0].sent_plan(), &log[0].plan);
+    let two = log[1].sent.as_ref().expect("changed");
+    assert_eq!(two.plan, sent_plans[1]);
+    assert!(log[1].line(&book).contains("their own orders"));
+    let three = log[2].sent.as_ref().expect("changed");
+    assert_eq!((three.kept, three.added), (1, 1));
+    assert_eq!(log[2].sent_plan(), &sent_plans[2]);
+    // The match was played from what was sent, and replays from it.
+    for (record, sent) in m.history.iter().zip(&sent_plans) {
+        assert_eq!(&record.submitted[0], sent);
+    }
+    let (again, _) = m.record().replay().expect("replays");
+    assert_eq!(again.hash(), m.hash());
 }

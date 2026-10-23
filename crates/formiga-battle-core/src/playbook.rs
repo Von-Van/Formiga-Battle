@@ -168,6 +168,71 @@ pub enum Fallback {
     First,
 }
 
+/// Something on the board a Handler can see that brings a stage in, whatever stage the team is on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Trigger {
+    /// One of theirs is holding a square of the beacon.
+    TheyHoldBeacon,
+    /// None of theirs is on the beacon.
+    BeaconClear,
+    /// Their beacon is further up than ours.
+    Behind,
+    /// Ours is further up than theirs.
+    Ahead,
+    /// Something lies or glints within reach of one of ours with empty paws.
+    SomethingNear,
+    /// The tap is ready and would soak more of theirs than ours.
+    TapOnThem,
+    /// One of ours has been knocked out.
+    OneOfOursOut,
+    /// One of theirs has been knocked out.
+    OneOfTheirsOut,
+}
+
+impl Trigger {
+    pub const ALL: [Self; 8] = [
+        Self::TheyHoldBeacon,
+        Self::BeaconClear,
+        Self::Behind,
+        Self::Ahead,
+        Self::SomethingNear,
+        Self::TapOnThem,
+        Self::OneOfOursOut,
+        Self::OneOfTheirsOut,
+    ];
+
+    /// How a Handler reads it, after "when".
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::TheyHoldBeacon => "they hold the beacon",
+            Self::BeaconClear => "the beacon is clear of them",
+            Self::Behind => "we are behind",
+            Self::Ahead => "we are ahead",
+            Self::SomethingNear => "something turns up nearby",
+            Self::TapOnThem => "the tap would soak them",
+            Self::OneOfOursOut => "one of ours is out",
+            Self::OneOfTheirsOut => "one of theirs is out",
+        }
+    }
+
+    /// Whether the board shows it for `side`, from what a Handler can see.
+    pub fn holds(self, m: &Match, side: Side) -> bool {
+        let o = side.other();
+        let capture = |sd: Side| m.board.capture[sd.index()];
+        match self {
+            Self::TheyHoldBeacon => in_zone(m, o).into_iter().any(|e| muster::holds(m, e)),
+            Self::BeaconClear => in_zone(m, o).is_empty(),
+            Self::Behind => capture(o) > capture(side),
+            Self::Ahead => capture(side) > capture(o),
+            Self::SomethingNear => !things_near(m, side).is_empty(),
+            Self::TapOnThem => tap_on_them(m, side).is_some(),
+            Self::OneOfOursOut => m.team(side).count() < m.team_all(side).count(),
+            Self::OneOfTheirsOut => m.team(o).count() < m.team_all(o).count(),
+        }
+    }
+}
+
 /// One stage of a playbook.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Stage {
@@ -178,6 +243,11 @@ pub struct Stage {
     /// How many turns it is given to get its goal, 1 to `MAX_STAGE_TURNS`.
     pub turns: u8,
     pub fallback: Fallback,
+    /// Brings this stage in, from whatever stage the team is on, when the board shows it; played
+    /// all at once, the stage plays only while the board shows it. `None` is a stage reached only
+    /// in its turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<Trigger>,
 }
 
 impl Stage {
@@ -191,7 +261,13 @@ impl Stage {
             facing: FacingHint::Them,
             turns: 2,
             fallback: Fallback::Next,
+            when: None,
         }
+    }
+
+    pub const fn when(mut self, trigger: Trigger) -> Self {
+        self.when = Some(trigger);
+        self
     }
 
     pub const fn aim(mut self, aim: Aim) -> Self {
@@ -286,26 +362,30 @@ impl Playbook {
     /// A few playbooks of the kind a Handler might write, for trying the compiler out.
     pub fn samples() -> Vec<Self> {
         use Intent::*;
+        use Trigger::*;
         vec![
             Self::new(
                 "Take and keep",
                 &[
                     Stage::new(Secure).turns(3),
                     Stage::new(DrawOut).posture(Posture::Guarded).turns(3),
-                    Stage::new(Counter).fallback(Fallback::First),
+                    Stage::new(Counter)
+                        .when(TheyHoldBeacon)
+                        .fallback(Fallback::First),
                 ],
             ),
             Self::new(
                 "Early pressure",
                 &[
                     Stage::new(Pressure).aim(Aim::Near).posture(Posture::AllIn),
-                    Stage::new(Secure).turns(3).fallback(Fallback::First),
+                    Stage::new(Secure).turns(3).fallback(Fallback::Again),
+                    Stage::new(Counter).when(TheyHoldBeacon),
                 ],
             ),
             Self::new(
                 "Finders keepers",
                 &[
-                    Stage::new(Fetch).aim(Aim::Near),
+                    Stage::new(Fetch).aim(Aim::Near).when(SomethingNear),
                     Stage::new(Pressure),
                     Stage::new(Secure).turns(3).fallback(Fallback::Again),
                 ],
@@ -313,20 +393,33 @@ impl Playbook {
             Self::new(
                 "Tap and take",
                 &[
-                    Stage::new(Work).aim(Aim::Far),
+                    Stage::new(Work).aim(Aim::Far).when(TapOnThem),
                     Stage::new(Secure).posture(Posture::AllIn).turns(3),
-                    Stage::new(Counter).fallback(Fallback::Again),
+                    Stage::new(Counter)
+                        .when(TheyHoldBeacon)
+                        .fallback(Fallback::Again),
                 ],
             ),
             Self::new(
                 "Sit and sting",
                 &[
                     Stage::new(DrawOut).posture(Posture::Guarded).turns(3),
-                    Stage::new(Counter),
-                    Stage::new(Secure).turns(3).fallback(Fallback::First),
+                    Stage::new(Counter).when(TheyHoldBeacon),
+                    Stage::new(Secure)
+                        .when(Behind)
+                        .turns(3)
+                        .fallback(Fallback::First),
                 ],
             ),
         ]
+    }
+
+    /// The same playbook with no stage brought in by the board: each reached only in its turn.
+    pub fn untriggered(mut self) -> Self {
+        for stage in &mut self.stages {
+            stage.when = None;
+        }
+        self
     }
 }
 
@@ -352,6 +445,12 @@ pub enum Advance {
     Met { stage: u8 },
     /// The stage ran out of turns without it, and its fallback was taken.
     RanOut { stage: u8, fallback: Fallback },
+    /// The board showed what brings stage `to` in. `from` is `None` after the last stage.
+    Triggered {
+        from: Option<u8>,
+        to: u8,
+        trigger: Trigger,
+    },
 }
 
 /// One stage's part in a turn.
@@ -385,8 +484,29 @@ pub struct Compiled {
     pub advanced: Vec<Advance>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reworded: Option<Reworded>,
-    /// The team plan it compiled to: what the match was sent.
+    /// The team plan it compiled to.
     pub plan: TeamPlan,
+    /// What the Handler sent instead, when they changed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sent: Option<Changed>,
+}
+
+/// How much of a playbook's plan the Handler changed before the turn was locked.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Changed {
+    /// The playbook's tactical orders the Handler kept.
+    pub kept: u8,
+    /// Tactical orders the Handler gave that the playbook had not.
+    pub added: u8,
+    /// The plan sent.
+    pub plan: TeamPlan,
+}
+
+impl Compiled {
+    /// The plan the match was sent: the Handler's, if they changed it, else the playbook's.
+    pub fn sent_plan(&self) -> &TeamPlan {
+        self.sent.as_ref().map_or(&self.plan, |c| &c.plan)
+    }
 }
 
 impl Compiled {
@@ -396,6 +516,9 @@ impl Compiled {
         for a in &self.advanced {
             parts.push(match a {
                 Advance::Met { stage } => format!("stage {} got its goal", stage + 1),
+                Advance::Triggered { to, trigger, .. } => {
+                    format!("stage {} came in as {}", to + 1, trigger.label())
+                }
                 Advance::RanOut { stage, fallback } => format!(
                     "stage {} ran out of turns, so {}",
                     stage + 1,
@@ -436,6 +559,13 @@ impl Compiled {
                 "; worded for this trio, {} of them on it rather than {}",
                 r.given, r.plain
             ));
+        }
+        if let Some(c) = &self.sent {
+            line.push_str(&match (c.kept, c.added) {
+                (0, _) => "; the Handler gave their own orders instead".to_owned(),
+                (k, 0) => format!("; the Handler kept {k} of its orders and dropped the rest"),
+                (k, a) => format!("; the Handler kept {k} of its orders and gave {a} of their own"),
+            });
         }
         line.push('.');
         line
@@ -538,6 +668,36 @@ impl Runner {
         (self.stage < self.playbook.stages.len()).then_some(self.stage)
     }
 
+    /// Says what the Handler sent for the turn just planned, when they changed the playbook's
+    /// plan. Changing it costs nothing: the stage carries on, its turn counts, and the next turn
+    /// is compiled from the board as usual.
+    pub fn sent(&mut self, plan: &TeamPlan) {
+        let Some(last) = self.log.last_mut() else {
+            return;
+        };
+        if *plan == last.plan {
+            last.sent = None;
+            return;
+        }
+        // Matched one for one, so an order named twice is kept twice only if sent twice.
+        let mut ours: Vec<&Directive> = last.plan.iter().filter(|d| d.tactical()).collect();
+        let (mut kept, mut added) = (0u8, 0u8);
+        for d in plan.iter().filter(|d| d.tactical()) {
+            match ours.iter().position(|o| *o == d) {
+                Some(i) => {
+                    ours.remove(i);
+                    kept += 1;
+                }
+                None => added += 1,
+            }
+        }
+        last.sent = Some(Changed {
+            kept,
+            added,
+            plan: plan.clone(),
+        });
+    }
+
     /// This turn's plan, recorded in `log`.
     pub fn plan(&mut self, m: &Match) -> TeamPlan {
         let compiled = match self.playbook.timing {
@@ -556,8 +716,27 @@ impl Runner {
         let mut advanced = Vec::new();
         // Each stage plays at least the turn it began; from then on it is checked for its goal and
         // its turns before each turn, and a stage taken up plays that turn whatever the board says.
-        if let Some(stage) = stages.get(self.stage) {
-            let mark = *self.mark.get_or_insert_with(|| Mark::of(m, side, turn));
+        let mark = *self.mark.get_or_insert_with(|| Mark::of(m, side, turn));
+        // A stage the board brings in, other than the one the team is on, first, once the stage
+        // it is on has played the turn it began.
+        let triggered = (turn != mark.turn)
+            .then(|| {
+                stages.iter().enumerate().find_map(|(i, s)| {
+                    s.when
+                        .filter(|t| i != self.stage && t.holds(m, side))
+                        .map(|t| (i, t))
+                })
+            })
+            .flatten();
+        if let Some((to, trigger)) = triggered {
+            advanced.push(Advance::Triggered {
+                from: (self.stage < stages.len()).then_some(self.stage as u8),
+                to: to as u8,
+                trigger,
+            });
+            self.stage = to;
+            self.mark = Some(Mark::of(m, side, turn));
+        } else if let Some(stage) = stages.get(self.stage) {
             let index = self.stage as u8;
             let moved = if turn == mark.turn {
                 false
@@ -608,6 +787,7 @@ impl Runner {
             advanced,
             reworded,
             plan,
+            sent: None,
         }
     }
 }
@@ -622,15 +802,22 @@ fn bundled(playbook: &Playbook, m: &Match, side: Side) -> Compiled {
     let first = playbook.stages.first().copied().unwrap_or(CLOSING);
     let mut built = Build::new(m, side, first.posture.kept(), first.facing);
     let hands = built.free_hands();
-    let n = playbook.stages.len().max(1);
+    // A stage with a trigger plays only while the board shows it.
+    let active: Vec<(usize, &Stage)> = playbook
+        .stages
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.when.is_none_or(|t| t.holds(m, side)))
+        .collect();
+    let n = active.len().max(1);
     let mut ran = Vec::new();
-    for (i, stage) in playbook.stages.iter().enumerate() {
-        let share = hands / n + usize::from(i < hands % n);
+    for (k, (i, stage)) in active.into_iter().enumerate() {
+        let share = hands / n + usize::from(k < hands % n);
         if share == 0 {
             continue;
         }
         let mut deviation = built.add(*stage, share);
-        if i > 0 && deviation == Some(Deviation::Shorthanded) {
+        if k > 0 && deviation == Some(Deviation::Shorthanded) {
             deviation = None;
         }
         ran.push(Ran {
@@ -649,6 +836,7 @@ fn bundled(playbook: &Playbook, m: &Match, side: Side) -> Compiled {
         advanced: Vec::new(),
         reworded,
         plan,
+        sent: None,
     }
 }
 
@@ -889,30 +1077,16 @@ impl<'a> Build<'a> {
                 ])
             }
             Intent::Fetch => {
-                let empty: Vec<Slot> = m
+                let empty = m
                     .team(side)
                     .filter(|s| m.fighter(*s).carrying.is_none())
-                    .collect();
-                let walk: Vec<(Slot, Vec<Option<u8>>)> =
-                    empty.iter().map(|s| (*s, ai::walks(m, *s))).collect();
-                let w = m.arena.width as usize;
-                let near = |t: Tile| {
-                    walk.iter()
-                        .filter_map(|(_, d)| d[t.y as usize * w + t.x as usize])
-                        .min()
-                };
-                let mut things: Vec<(Tile, u8)> = m
-                    .board
-                    .ground
-                    .iter()
-                    .chain(m.board.glint.iter())
-                    .map(|(t, _)| *t)
-                    .filter(|t| !self.named.contains(t))
-                    .filter_map(|t| near(t).filter(|d| *d <= FETCH_REACH).map(|d| (t, d)))
+                    .count();
+                let mut things: Vec<(Tile, u8)> = things_near(m, side)
+                    .into_iter()
+                    .filter(|(t, _)| !self.named.contains(t))
                     .collect();
                 things.sort_by_key(|(t, d)| (*d, aim(*t)));
-                things.dedup();
-                things.truncate(hands.min(empty.len()));
+                things.truncate(hands.min(empty));
                 if things.is_empty() {
                     return None;
                 }
@@ -1118,6 +1292,33 @@ fn aim_key(m: &Match, side: Side, aim: Aim, t: Tile) -> (i32, i32, i8) {
     }
 }
 
+/// Found things lying or glinting within `FETCH_REACH` steps of one of ours with empty paws, each
+/// with the fewest steps any of them would walk to it.
+fn things_near(m: &Match, side: Side) -> Vec<(Tile, u8)> {
+    let walk: Vec<Vec<Option<u8>>> = m
+        .team(side)
+        .filter(|s| m.fighter(*s).carrying.is_none())
+        .map(|s| ai::walks(m, s))
+        .collect();
+    let w = m.arena.width as usize;
+    let near = |t: Tile| {
+        walk.iter()
+            .filter_map(|d| d[t.y as usize * w + t.x as usize])
+            .min()
+    };
+    let mut things: Vec<(Tile, u8)> = m
+        .board
+        .ground
+        .iter()
+        .chain(m.board.glint.iter())
+        .map(|(t, _)| *t)
+        .filter_map(|t| near(t).filter(|d| *d <= FETCH_REACH).map(|d| (t, d)))
+        .collect();
+    things.sort();
+    things.dedup();
+    things
+}
+
 /// A switch ready to turn whose map event would catch more of theirs than of ours.
 fn tap_on_them(m: &Match, side: Side) -> Option<Tile> {
     if !m.switch_ready() {
@@ -1213,6 +1414,7 @@ pub struct FaceOff {
     pub reworded: u32,
     pub met: u32,
     pub ran_out: u32,
+    pub triggered: u32,
 }
 
 impl FaceOff {
@@ -1281,6 +1483,7 @@ pub fn face_off(
                     match a {
                         Advance::Met { .. } => result.met += 1,
                         Advance::RanOut { .. } => result.ran_out += 1,
+                        Advance::Triggered { .. } => result.triggered += 1,
                     }
                 }
             }
