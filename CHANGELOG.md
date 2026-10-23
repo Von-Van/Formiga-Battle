@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Orders can be given from the keyboard alone: the arrow keys move a square cursor over the board
+  from the middle of the yard, and Space gives the order in hand there as a click would
+  (Shift+Space as a right click). The mouse over the board puts the cursor away. The keys are
+  listed on the Settings page.
+- Each creature's ring carries a small mark that says its team by shape as well as by colour: an
+  arrowhead for the left team and a diamond for the right, so the teams can be told apart without
+  telling the two colours apart.
 - Seasons at the Battleground. Each season is four events on the places open to the colony, moving
   round a place each season: an Open of four, a Spring and a Summer Regional of eight, and a
   Championship of the four with most season points, where last season's champion defends their
