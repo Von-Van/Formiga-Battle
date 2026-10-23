@@ -420,10 +420,14 @@ recap says in words.
 ## Replay and desync
 
 A `MatchRecord` is the rules version, ruleset, arena, seed, both rosters and every turn's orders as
-sent, with the board's hash after each turn. Replaying it plays the match again and stops at the
+sent, with the board's hash after each turn, and the board the first turn began from when a match
+was set up part way (a Field Lesson, a test) rather than from the arena's start tiles. Replaying
+it plays the match again, from that board if there is one, and stops at the
 first turn whose board differs. Every chance the rules take is a hash of the seed and where in the
 match it is asked, and every value a profile contributes is a whole number, so the same record
-replays the same on every machine.
+replays the same on every machine. `tests/golden.rs` pins the board thirty-six seeded matches end
+on, across every arena and coach, and the default ruleset's own words and hash: a change there
+without a `RULES_VERSION` bump is a rule changed by accident.
 
 ## Fairness
 

@@ -416,10 +416,12 @@ fn run_tournament(mut args: Args) -> Result<()> {
         s.matches, arena.name
     );
     println!(
-        "  by capture {:.0}%, by knockout {:.0}%, at the turn cap {:.0}%, drawn {:.0}%",
+        "  by capture {:.0}%, by knockout {:.0}%, at the turn cap {:.0}%, by forfeit {:.0}%, \
+         drawn {:.0}%",
         pct(s.by_capture),
         pct(s.by_knockout),
         pct(s.at_cap),
+        pct(s.by_forfeit),
         pct(s.draws)
     );
     println!(

@@ -7,27 +7,28 @@ use formiga_battle_core::tournament::{drawn_creature, run};
 use formiga_battle_core::*;
 
 #[test]
-fn neither_side_of_the_board_and_no_kind_of_creature_wins_consistently_more() {
-    let s = run(
-        &Arena::backyard(),
-        Ruleset::default(),
-        3,
-        150,
-        [Coach::Exhibition; 2],
-    );
-    assert_eq!(s.matches, 300);
-    assert!(
-        (0.42..=0.58).contains(&s.left.score()),
-        "left {:.3}",
-        s.left.score()
-    );
-    for (kind, record) in &s.by_kind {
+fn on_every_arena_neither_side_of_the_board_and_no_kind_of_creature_wins_consistently_more() {
+    let arenas = Arena::built_in();
+    assert_eq!(arenas.len(), 4);
+    for arena in &arenas {
+        let s = run(arena, Ruleset::default(), 3, 150, [Coach::Exhibition; 2]);
+        assert_eq!(s.matches, 300);
+        assert_eq!(s.by_forfeit, 0, "nobody gives up without a room");
         assert!(
-            (0.35..=0.65).contains(&record.score()),
-            "{kind} scores {:.3} over {}",
-            record.score(),
-            record.played
+            (0.42..=0.58).contains(&s.left.score()),
+            "{}: left {:.3}",
+            arena.name,
+            s.left.score()
         );
+        for (kind, record) in &s.by_kind {
+            assert!(
+                (0.35..=0.65).contains(&record.score()),
+                "{}: {kind} scores {:.3} over {}",
+                arena.name,
+                record.score(),
+                record.played
+            );
+        }
     }
 }
 

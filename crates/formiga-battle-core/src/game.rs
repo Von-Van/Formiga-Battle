@@ -244,6 +244,8 @@ pub enum MatchError {
     RosterSize,
     #[error("the same creature cannot be on the board twice")]
     Duplicate,
+    #[error("the rules cannot be played: {0}")]
+    Rules(#[from] crate::ruleset::RulesetError),
 }
 
 #[derive(Clone, Debug)]
@@ -257,6 +259,9 @@ pub struct Match {
     pub history: Vec<TurnRecord>,
     /// Each team's plan for the turn being resolved, to think again from.
     pub(crate) plans: [TeamPlan; 2],
+    /// The board as it was when the first turn began, kept so a match set up part way (a
+    /// lesson, a test) can be recorded and replayed from where it started.
+    pub(crate) start: Option<Board>,
 }
 
 impl Match {
@@ -266,6 +271,7 @@ impl Match {
         seed: u64,
         rosters: [Vec<Profile>; 2],
     ) -> Result<Self, MatchError> {
+        ruleset.validate()?;
         let [left, right] = rosters;
         let left: [Profile; TEAM_SIZE] = left.try_into().map_err(|_| MatchError::RosterSize)?;
         let right: [Profile; TEAM_SIZE] = right.try_into().map_err(|_| MatchError::RosterSize)?;
@@ -280,11 +286,28 @@ impl Match {
             left.clone().map(|p| p.behavior()),
             right.clone().map(|p| p.behavior()),
         ];
+        let board = Self::starting_board(&arena, &ruleset);
+        Ok(Self {
+            arena,
+            ruleset,
+            seed,
+            rosters: [left, right],
+            behaviors,
+            board,
+            history: Vec::new(),
+            plans: [Vec::new(), Vec::new()],
+            start: None,
+        })
+    }
+
+    /// The board as every match on this arena begins: both teams on the arena's start tiles,
+    /// facing across, full composure, the gates as the arena has them, nothing lying about.
+    pub fn starting_board(arena: &Arena, ruleset: &Ruleset) -> Board {
         let fighters = Side::BOTH.map(|side| {
             arena.starts[side.index()]
                 .map(|tile| Fighter::new(tile, ruleset.composure, Facing::across(side)))
         });
-        let board = Board {
+        Board {
             turn: 0,
             fighters,
             gates_open: arena.gates_open.clone(),
@@ -303,17 +326,7 @@ impl Match {
             closed: Vec::new(),
             rafts: Vec::new(),
             honey: Vec::new(),
-        };
-        Ok(Self {
-            arena,
-            ruleset,
-            seed,
-            rosters: [left, right],
-            behaviors,
-            board,
-            history: Vec::new(),
-            plans: [Vec::new(), Vec::new()],
-        })
+        }
     }
 
     pub fn fighter(&self, slot: Slot) -> &Fighter {
@@ -496,6 +509,9 @@ impl Match {
                 events,
                 hash: self.hash(),
             };
+        }
+        if self.history.is_empty() && self.start.is_none() {
+            self.start = Some(self.board.clone());
         }
         self.board.turn += 1;
         let turn = self.board.turn;
