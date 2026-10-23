@@ -1266,7 +1266,7 @@ impl BattleApp {
                     ));
                     let other = color(TEAM[self.table.you.other().index()].light);
                     let (word, colour) = match &self.table.friend {
-                        None => ("Visitors ready".to_owned(), other),
+                        None => (format!("{} ready", self.table.other_short()), other),
                         Some(f) if f.opponent_away => {
                             (format!("{} is away", self.table.other_short()), ink::DEBOSS)
                         }
@@ -3253,24 +3253,35 @@ impl BattleApp {
                 "Time ran out level on the beacon and on composure, with more of them standing."
             }
         };
-        let (title, why) = match (outcome.winner, outcome.victory) {
+        // The other team is a rival's, by name, or the visitors.
+        let (them, wins, dizzy_them) = match self.table.rival {
+            Some(rival) => (
+                rival.short.to_owned(),
+                "wins",
+                format!("{}'s three are all sitting out, dizzy.", rival.short),
+            ),
+            None => (
+                "The visitors".to_owned(),
+                "win",
+                "The visitors are all sitting out, dizzy.".to_owned(),
+            ),
+        };
+        let beacon_them = format!("{them} lit the beacon");
+        let knockout_them = format!("{them} {wins}");
+        let tally_them = format!("{them} {wins} on the tally");
+        let (title, why): (&str, &str) = match (outcome.winner, outcome.victory) {
             (Some(side), Some(Victory::Capture)) if side == you => (
                 "You lit the beacon!",
                 "Your team held the yard long enough.",
             ),
-            (Some(side), Some(Victory::Knockout)) if side == you => {
-                ("You win!", "The visitors are all sitting out, dizzy.")
-            }
+            (Some(side), Some(Victory::Knockout)) if side == you => ("You win!", &dizzy_them),
             (Some(side), _) if side == you => ("You win on the tally", ahead_you),
-            (Some(_), Some(Victory::Capture)) => (
-                "The visitors lit the beacon",
-                "They held the yard long enough.",
-            ),
+            (Some(_), Some(Victory::Capture)) => (&beacon_them, "They held the yard long enough."),
             (Some(_), Some(Victory::Knockout)) => (
-                "The visitors win",
+                &knockout_them,
                 "Your team are all sitting out, dizzy, and none the worse for it.",
             ),
-            (Some(_), _) => ("The visitors win on the tally", ahead_them),
+            (Some(_), _) => (&tally_them, ahead_them),
             (None, _) => ("A draw", "Nobody could be split."),
         };
         let award = match outcome.winner {
@@ -3302,6 +3313,9 @@ impl BattleApp {
         }
         if let Some(reason) = &self.table.ended_because {
             ui.label(RichText::new(reason).size(13.0).color(ink::MUTED));
+        }
+        if let Some(meeting) = &self.table.meeting {
+            ui.label(RichText::new(meeting).size(12.5).color(ink::FOREST));
         }
         ui.label(
             RichText::new(format!("After {} turns", outcome.turn))

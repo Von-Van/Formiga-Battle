@@ -3,6 +3,7 @@
 
 mod announce;
 mod app;
+mod career;
 mod chrome;
 mod cli;
 mod feel;
@@ -21,6 +22,7 @@ mod masthead;
 mod pennant;
 mod playback;
 mod rewards;
+mod rival;
 mod scene;
 mod settings;
 mod sound;
@@ -228,7 +230,16 @@ fn window(args: Vec<String>) -> Result<()> {
             .map_or(1, |d| d.as_nanos() as u64)
     });
     let (host, roster) = host::open(args.source)?;
+    // The colony's career against the rivals is Battle's own to keep, for a colony Desktop sent.
+    let career = match (&host, settings::folder()) {
+        (host::Host::Visit { .. }, Some(data)) => Some((
+            career::folder(&data),
+            career::Career::load(&career::folder(&data), &roster.colony_id),
+        )),
+        _ => None,
+    };
     let mut table = table::Table::new(roster, sample::visitors(args.visitors), seed);
+    table.career = career;
     if let Some(id) = &args.arena {
         table.arena = formiga_battle_core::Arena::by_id(id)
             .with_context(|| format!("there is no arena called {id:?}"))?;

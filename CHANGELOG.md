@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- The visitors close to home are four named Handlers, each with a club, a pennant, a way of
+  playing and a trio of their own: Hazel Thorne of Bramble Club presses first and sends everyone,
+  Tam Rook of Sluice Gate holds the yard and shuts the board, Ivy Larkspur of the Glade Walkers
+  goes round the sides and behind, and Bram Driftwood of Driftwood Cove plays for whatever turns
+  up. Each arena's own Handler comes first, then each of the others in turn. The introduction
+  flies their pennant and names them, the result card names them and says how the meetings stand
+  ("Third meeting with Hazel Thorne: you lead 2 to 0"), and cups are won exactly as before.
+- Battle keeps the colony's record against the rivals in a small file of its own, one per colony
+  (`careers/<colony>.json` beside `settings.json`), counting each match once by the id Desktop
+  counts it by. Cups, points, the notebook and trios stay with Desktop. A rehearsal keeps none.
 - Four coaching styles for a Handler who is not a person, each a way of playing the Exhibition
   coach's book: the Aggressor presses first and sends everyone, the Defender holds the yard and
   shuts the board, the Tactician goes round the sides and behind, and the Opportunist plays for

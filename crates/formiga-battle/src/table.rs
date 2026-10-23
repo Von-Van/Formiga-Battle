@@ -3,10 +3,12 @@
 //! asks this what to show and tells it what was clicked, so tests drive the same code.
 
 use crate::announce::Callout;
+use crate::career::{self, Career};
 use crate::friend::{Ask, Line, Told};
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
 use crate::rewards;
+use crate::rival::{self, Rival};
 use crate::scene::{Choice, Marks, PlanKind, PlanMark};
 use formiga_battle_contract::{BattleRecord, BattleResult};
 use formiga_battle_contract::{BattleSnapshot, Contender};
@@ -238,6 +240,13 @@ pub struct Table {
     pub board_teams: [Vec<Contender>; 2],
     /// The other side's name in recaps.
     pub other_name: String,
+    /// The rival Handler whose team the visitors are, in a match against them.
+    pub rival: Option<&'static Rival>,
+    /// The colony's career against the rivals, and where it is kept: Battle's own file, only for
+    /// a colony Desktop sent.
+    pub career: Option<(PathBuf, Career)>,
+    /// How the match being shown stands between the Handler and the rival, as the result says it.
+    pub meeting: Option<String>,
     pub friend: Option<Friend>,
     /// Where friend matches go: the site's relay, unless development points elsewhere.
     pub relay: String,
@@ -302,6 +311,9 @@ impl Table {
             you: Side::Left,
             board_teams: [Vec::new(), Vec::new()],
             other_name: "The visiting team".to_owned(),
+            rival: None,
+            career: None,
+            meeting: None,
             friend: None,
             relay: relay_base(),
             desktop_version: roster.desktop_version.clone(),
@@ -400,6 +412,7 @@ impl Table {
         let earned = rewards::for_reader(earned, self.desktop_reads);
         self.record.apply(&earned.result);
         self.earned = earned.lines;
+        self.remember_meeting(&earned.result.id);
         if let Some(trio) = earned
             .result
             .rewards
@@ -417,6 +430,27 @@ impl Table {
             session.result.matches.push(earned.result);
         }
         self.write_session("What this match earned");
+    }
+
+    /// Counts a match against a rival on the colony's career, once by its id, and keeps the file.
+    fn remember_meeting(&mut self, match_id: &str) {
+        let (Some(rival), Some(m), Some((folder, career))) =
+            (self.rival, &self.m, &mut self.career)
+        else {
+            return;
+        };
+        let won = m.outcome().and_then(|o| o.winner).map(|w| w == self.you);
+        let when = time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default();
+        if career.apply(match_id, rival.id, &self.arena.id, won, &when)
+            && let Err(error) = career.save(folder)
+        {
+            self.notice = Some(format!(
+                "Your meeting with {} could not be kept: {error}",
+                rival.name
+            ));
+        }
     }
 
     /// Writes the session's answer for Desktop again, whole, with the Handler card and trios as
@@ -492,13 +526,14 @@ impl Table {
         }
     }
 
-    /// Three of the visitors, chosen by the seed.
+    /// Three of the visitors, chosen by the seed; a rival's three are always the same three.
     fn opponents(&self) -> Vec<usize> {
+        let seed = self.rival.map_or(self.seed, |r| r.trio_seed);
         let mut pool: Vec<usize> = (0..self.away.len()).collect();
         let mut chosen = Vec::new();
         let mut k = 0;
         while chosen.len() < TEAM_SIZE && !pool.is_empty() {
-            let i = (rng::roll(self.seed, Purpose::Roster, &[k, 7]) as usize) % pool.len();
+            let i = (rng::roll(seed, Purpose::Roster, &[k, 7]) as usize) % pool.len();
             chosen.push(pool.remove(i));
             k += 1;
         }
@@ -525,6 +560,23 @@ impl Table {
         {
             self.arena = Arena::backyard();
         }
+        // The visitors are a rival Handler's team: the arena's own first, then each in turn. A
+        // lesson's visitors are nobody's.
+        self.rival = (lesson.is_none()).then(|| {
+            let meetings = self
+                .career
+                .as_ref()
+                .map_or(self.seed as u32, |(_, c)| c.meetings());
+            rival::visiting(&self.arena.id, meetings)
+        });
+        self.meeting = self.rival.map(|r| {
+            let before = self
+                .career
+                .as_ref()
+                .map(|(_, c)| c.against(r.id))
+                .unwrap_or_default();
+            career::meeting_words(&before, r.name, r.short)
+        });
         let away = self.opponents();
         anyhow::ensure!(
             away.len() == TEAM_SIZE,
@@ -567,7 +619,10 @@ impl Table {
         ];
         self.teams = [self.picked.clone(), away];
         self.you = Side::Left;
-        self.other_name = "The visiting team".to_owned();
+        self.other_name = match self.rival {
+            Some(r) => format!("{}'s team", r.short),
+            None => "The visiting team".to_owned(),
+        };
         self.friend = None;
         self.begin_match(m, now);
         self.lesson = lesson.map(|lesson| LessonRun {
@@ -985,9 +1040,10 @@ impl Table {
 
     /// What the other side is called in a few words: the visitors, or the friend's name.
     pub fn other_short(&self) -> String {
-        match &self.friend {
-            Some(f) => f.handlers[self.you.other().index()].clone(),
-            None => "Visitors".to_owned(),
+        match (&self.friend, self.rival) {
+            (Some(f), _) => f.handlers[self.you.other().index()].clone(),
+            (None, Some(rival)) => rival.short.to_owned(),
+            (None, None) => "Visitors".to_owned(),
         }
     }
 
@@ -1521,9 +1577,10 @@ impl Table {
             self.put_down();
             return;
         }
-        let away = match &self.lesson {
-            Some(run) => run.lesson.visitors(m),
-            None => Coach::Exhibition.plan(m, self.you.other()),
+        let away = match (&self.lesson, self.rival) {
+            (Some(run), _) => run.lesson.visitors(m),
+            (None, Some(rival)) => Coach::Styled(rival.archetype).plan(m, self.you.other()),
+            (None, None) => Coach::Exhibition.plan(m, self.you.other()),
         };
         let plans = match self.you {
             Side::Left => [ours.clone(), away],
