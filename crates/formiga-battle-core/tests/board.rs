@@ -24,6 +24,21 @@ fn holding_the_beacon_alone_for_three_ticks_wins_by_capture() {
 }
 
 #[test]
+fn a_capture_as_long_as_the_counter_allows_fills_it_rather_than_overflowing() {
+    // The counter is a byte: at a capture of 255 ticks, a tick of progress at 254 fills it, and
+    // a hold and a breakthrough together cannot carry it past.
+    let mut m = board(&[(L0, (4, 0)), (R0, (0, 4))]);
+    m.ruleset.capture_ticks = 255;
+    m.board.capture = [254, 0];
+    m.resolve_orders(orders(&[(L0, hold(6, 0)), (R0, hold(0, 4))]));
+    assert_eq!(m.board.capture, [255, 0]);
+    assert_eq!(
+        m.outcome().map(|o| (o.winner, o.victory)),
+        Some((Some(Side::Left), Some(Victory::Capture)))
+    );
+}
+
+#[test]
 fn anyone_of_the_other_team_in_the_zone_pauses_the_beacon() {
     let arena = Arena::backyard();
     let mut m = board_on(arena, &[(L0, (4, 3)), (R0, (5, 3))]);

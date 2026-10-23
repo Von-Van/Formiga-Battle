@@ -21,6 +21,21 @@
   key. The notice of what a friend match shares, and `docs/FRIENDS.md`, now list it. Relay
   protocol 4: a friend match needs both Handlers on a Battle that speaks it, and the site's relay
   must speak it too. Recognising a returning friend, rematches and rivalries come later.
+- The result of a match with a friend names them: "Sam lit the beacon", "Sam wins on the tally",
+  rather than calling a friend the visitors. A match that ended by forfeit says so, in place of
+  "on the tally" and a reason about time running out.
+- After a match with a friend, "Play again" and "Back to the station" leave its room once what it
+  earned is settled, so the next room opens without waiting on the relay. A room still being
+  closed can be left from the friend's room page, where before it only said so.
+- What a match with a friend earned can no longer be dropped while the relay is still comparing
+  the two boards: opening another room or taking the train to the visitors waits until it is
+  settled, and says why.
+- History says what it holds: every match with a friend. Matches against the visitors count
+  toward their cups and never had a line there.
+- `--capture-ticks` and `--turn-cap` past 255 are refused rather than wrapped round, and a
+  capture as long as the counter allows fills it rather than overflowing it.
+- RULES.md says three Exhibition matches in five go to the cap, as its own table does, and the
+  found things' notes in the rules code speak of presses and tricks rather than contests.
 
 ## [0.67.14] - 2026-10-17
 
