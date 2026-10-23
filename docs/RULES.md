@@ -580,6 +580,32 @@ stops anyone from standing in the zone too and is flanked turn after turn. Under
 (`majority`, no flanking) the turtle beat the Exhibition coach 99.9% of the time and the familiar
 coach 83%.
 
+## Coaching styles
+
+A styled coach (`style.rs`: an `Archetype` and its `Book`, `Coach::Styled`) plays the Exhibition coach's opening book with its
+chances set to make a different Handler of it. Every number is a whole number and every chance is
+rolled from the match seed, so a styled coach's match replays like any other; the Exhibition
+coach's own book is unchanged, and its matches are the same as they were before there were
+styles. A style changes which orders a coach gives, never what an order does, and the team shares
+the plan out by itself exactly as it would a Handler's. `STYLE_VERSION` is 1.
+
+| Style | Plays | Flank, trick, press a loose one | Keeps a second at home | With what is left | Uses what it carries |
+|---|---|---|---|---|---|
+| Exhibition (the measure) | as it always has | 60%, 75%, 80% | 70% | the tap from 60, something near below 35, a chaser below 45, the lever from 85 | 75% |
+| Aggressor | presses first and sends everyone | 90%, 85%, 95% | 20% | tap from 85, near below 15, chaser below 75, lever from 95 | 90% |
+| Defender | holds the yard and shuts the board; one hand never leaves the anchor | 25%, 35%, 40% | 95% | tap from 35, near below 20, chaser below 5, lever from 55 | 60% |
+| Tactician | goes round the sides and behind: tricks a holder before it thinks of flanking | 55%, 55%, 15% | 60% | tap from 65, near below 30, chaser below 10, lever from 80 | 70% |
+| Opportunist | plays for whatever turns up | 35%, 55%, 90% | 40% | tap from 25, near below 85, chaser below 90, lever from 70 | 100% |
+
+`tests/styles.rs` tells them apart by the jobs their plans give a team over eight matches against
+the Exhibition coach on Backyard: the Aggressor's creatures flank a quarter of the time (23% of
+jobs) and are seldom tricking; the Defender's claim and guard (42% and 30%) and never chase; the
+Tactician's trick most (15%) and flank least; the Opportunist's oust and fetch most. The nearest
+two mixes are 0.15 apart, where 0.08 is the least the test allows. Each style against each
+other, 50 matches a pair with the sides swapped, no style beats every other: the Tactician
+scores 0.67 against the Aggressor and 0.56 against the Defender but 0.48 against the
+Opportunist; the Aggressor, who sends everyone, scores lowest (0.40 to 0.48).
+
 ## Knowing your creatures
 
 The `familiar` and `generic` coaches (`plan.rs`) think each turn through the same way: for each of

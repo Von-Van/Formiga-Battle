@@ -32,7 +32,8 @@ MATCH:
     --seed <N>           Match seed (default 1)
     --left <i,j,k>       Roster places for the left team (default 0,1,2)
     --right <i,j,k>      Roster places for the right team (default: three drawn visitors)
-    --coach <a>,<b>      exhibition, familiar, generic, turtle or absent, for left and right (default
+    --coach <a>,<b>      exhibition, familiar, generic, turtle, absent, or a style (aggressor,
+                         defender, tactician, opportunist), for left and right (default
                          exhibition,exhibition). familiar and generic think each turn ahead;
                          only familiar knows how its own creatures carry out orders
     --board              Draw the board after every turn
@@ -243,6 +244,10 @@ fn coaches(args: &mut Args) -> Result<[Coach; 2]> {
         "familiar" => Ok(Coach::Familiar),
         "generic" => Ok(Coach::Generic),
         "turtle" => Ok(Coach::Turtle),
+        "aggressor" => Ok(Coach::Styled(Archetype::Aggressor)),
+        "defender" => Ok(Coach::Styled(Archetype::Defender)),
+        "tactician" => Ok(Coach::Styled(Archetype::Tactician)),
+        "opportunist" => Ok(Coach::Styled(Archetype::Opportunist)),
         other => bail!("unknown coach {other:?}"),
     };
     let parts: Vec<&str> = text.split(',').collect();
