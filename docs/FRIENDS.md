@@ -23,11 +23,27 @@ development points elsewhere (`FORMIGA_BATTLE_RELAY`).
 
 | | |
 |---|---|
-| Sent to the relay and on to the friend | The Handler's display name as typed, with their club, pennant and standing (their title on the Open Circuit, and whether every cup is won); the name and pennant of their trio, if the three are one; their three companions as Desktop's roster has them (name, look and size, what each wears, how it moves, temperament, traits, habits and learned leanings, the number Desktop knows each by, when each was born, its parent's number for a little one, and how the three get on); each turn's orders; a hash of the board after each turn; Battle's version, the version of the Desktop that opened it, and the SHA-256 of Battle's program file (the same for everyone with that copy) |
-| Never sent | Anything else from the colony: the other companions, the journal, finds, homes, Desktop's settings. No account, email, device or computer identifier |
+| Sent to the relay and on to the friend | The Handler's display name as typed, with their club, pennant and standing (their title on the Open Circuit, and whether every cup is won); the name and pennant of their trio, if the three are one; their anonymous Handler key (below); their three companions as Desktop's roster has them (name, look and size, what each wears, how it moves, temperament, traits, habits and learned leanings, the number Desktop knows each by, when each was born, its parent's number for a little one, and how the three get on); each turn's orders; a hash of the board after each turn; Battle's version, the version of the Desktop that opened it, and the SHA-256 of Battle's program file (the same for everyone with that copy) |
+| Never sent | Anything else from the colony: the other companions, the journal, finds, homes, Desktop's settings. No account, email, device or computer identifier: the Handler key is none of these |
 | Kept by the relay | Only while the room is open. Deleted when both sides have seen the end, after 15 minutes if nobody joins, after 5 minutes with nobody asking, after 2 minutes once over, and after 2 hours whatever happens. A seat's key is kept only as its SHA-256 digest. Nothing is logged about a room |
 | Kept by the site's host | Its usual short-lived request logs, as for any visit to formigaworld.com |
 | Kept on this computer | What the match earned, written to the colony through Desktop when Battle closes |
+
+## The Handler key
+
+So that a friend's Battle can know the same Handler again from one match to the next, each entrant
+carries an anonymous Handler key: 32 hex digits (128 bits) that Formiga Desktop draws from the
+computer's own source of randomness the first time a colony goes to Battle, and keeps with that
+colony's Battle record. It follows the colony, not the computer: a colony restored from a backup
+keeps its key, and a second colony on the same computer has a different one.
+
+| | |
+|---|---|
+| What it is made from | Nothing: it is random, not worked out from the colony, its seed, the Handler's name, the computer or anything else, so nothing can be learned from it or turned back into any of those |
+| Who sees it | The relay, while the room is open, and the friend's Battle. Like everything else the relay keeps, it goes when the room does |
+| Who can change it | Only Desktop, which makes it once and never changes it. Battle reads it from the snapshot and sends nothing back about it |
+| A rehearsal | Has none, and sends none |
+| What it is used for | Nothing yet: it reaches the friend's window with the rest of the entrant for the match, and is read only through a check that it is a key. Recognising a returning friend, rematches and rivalries (`docs/HANDLER.md`, phase 3) will be built on it |
 
 ## Only matching, unaltered copies
 
