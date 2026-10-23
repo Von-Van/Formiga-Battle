@@ -1,0 +1,3 @@
+{
+  "placeholder": "No recorded matches yet. This file is written by the recorded_matches test from the current rules, on purpose only: FORMIGA_BATTLE_WRITE_FIXTURE=1 cargo test -p formiga-battle-core --test recorded_matches. Commit what it writes; the test refuses this placeholder."
+}

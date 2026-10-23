@@ -73,12 +73,27 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+One test replays matches that were recorded by an earlier build and kept in
+`crates/formiga-battle-core/tests/fixtures/recorded_matches.json`: one on each built-in arena,
+with every turn's plans, the board's hash after each turn and how it ended. The other
+determinism tests play both sides of their comparison in the same build, so this is the one that
+fails when how something resolves changes without `RULES_VERSION` moving. It is only ever
+rewritten on purpose:
+
+```sh
+FORMIGA_BATTLE_WRITE_FIXTURE=1 cargo test -p formiga-battle-core --test recorded_matches
+```
+
+Commit what it writes in the same change as the `RULES_VERSION` bump that needed it. Never edit
+the file by hand, and never regenerate it to make the test agree with a change you did not mean
+to make to the rules.
+
 ### Changing things safely
 
 - **Rules.** Anything that changes how a turn resolves needs `RULES_VERSION` moved in
   `crates/formiga-battle-core/src/ruleset.rs`, so a friend on another version is told rather than
-  quietly playing different rules. Run `tournament --pairings 5000` before and after, and update
-  [docs/RULES.md](docs/RULES.md) with what it says.
+  quietly playing different rules. Run `tournament --pairings 5000` before and after, update
+  [docs/RULES.md](docs/RULES.md) with what it says, and regenerate the recorded matches (above).
 - **The relay.** A change to what is sent or answered moves `RELAY_VERSION`, and
   [docs/RELAY.md](docs/RELAY.md) changes with it. The relay on the site has to change in step. It
   also hands out a copy of `Ruleset::default()`, which each window checks against its own, so a
