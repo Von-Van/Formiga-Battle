@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Seasons at the Battleground. Each season is four events on the places open to the colony, moving
+  round a place each season: an Open of four, a Spring and a Summer Regional of eight, and a
+  Championship of the four with most season points, where last season's champion defends their
+  title. Season points come from how far each Handler went (8 for winning, 5 for the final, 3 for
+  a semi-final, 1 for a quarter-final), the rivals' as well as the colony's, and a Championship the
+  colony did not reach is played out under the same rules. Four more rivals join for the
+  eight-Handler events: Wren Ashby of Thistledown, Otto Pell of the Weir Keepers, Sorrel Vane of
+  Mossbank and Kit Tidewell of Shingle Club, each playing one of the four styles; one of the eight
+  sits each season out in turn.
+- The Circuit page shows the season's events and points, the Hall of Champions (every season's
+  champion, rivals' too), the colony's standing (Newcomer, Contender, Champion, Season Champion,
+  Legend of the Battleground, each saying how the next is earned, none earned by playing more),
+  and what the Battleground has noticed, each backed by the matches that show it: a first win over
+  a rival, an upset over a higher seed, a rivalry of five meetings, an event won, a title won,
+  defended, lost or won back.
 - Events at the Battleground. The Handler's notebook has a new page, the Circuit, where a colony
   enters an Open at a place whose cup is open to it: four Handlers, the three rivals who come to
   that place most and the colony itself, drawn as fourth seed against the first. The colony plays

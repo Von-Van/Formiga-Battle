@@ -465,7 +465,7 @@ impl BattleApp {
             }
             Some(Review::Settings) => app.open_journal(Outing::Home, Step::Settings),
             Some(Review::Circuit) => {
-                app.table.enter_event();
+                app.table.begin_next_event();
                 app.open_journal(Outing::Home, Step::Circuit);
             }
             Some(Review::Handler) => {
