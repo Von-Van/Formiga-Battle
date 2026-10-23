@@ -104,6 +104,9 @@ pub struct Summary {
     pub by_capture: u32,
     pub by_knockout: u32,
     pub at_cap: u32,
+    /// Matches a side gave up, which only a room can bring about: none in a tournament here,
+    /// counted apart from the cap so a bracket can tell them apart.
+    pub by_forfeit: u32,
     pub draws: u32,
     pub turns: u32,
     pub knockouts: u32,
@@ -180,7 +183,8 @@ pub fn run(
             match outcome.victory {
                 Some(Victory::Capture) => summary.by_capture += 1,
                 Some(Victory::Knockout) => summary.by_knockout += 1,
-                Some(Victory::TurnCap | Victory::Forfeit) => summary.at_cap += 1,
+                Some(Victory::TurnCap) => summary.at_cap += 1,
+                Some(Victory::Forfeit) => summary.by_forfeit += 1,
                 None => summary.draws += 1,
             }
             let mut progress = [0u8; 2];

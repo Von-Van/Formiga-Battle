@@ -52,4 +52,4 @@ pub use muster::{Because, Role, Task, Why};
 pub use order::{Directive, Facing, Order, Orders, PLAN_SIZE, Quarter, Side, Slot, TeamPlan};
 pub use profile::{Behavior, Bond, Leanings, Nature, Profile, Strength};
 pub use replay::MatchRecord;
-pub use ruleset::{CaptureRule, RULES_VERSION, Ruleset};
+pub use ruleset::{CaptureRule, RULES_VERSION, Ruleset, RulesetError};

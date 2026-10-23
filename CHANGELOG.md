@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- A match set up part way, as a Field Lesson is, records the board it began from and replays
+  from it; a record kept before this reads as before. A ruleset with a zero in it (no ticks, no
+  composure, no turns) is refused when a match is set up rather than played into a corner, and
+  `tournament` counts forfeits apart from matches that reached the cap. Thirty-six seeded
+  matches across every arena and coach now pin the board they end on, and the fairness check runs
+  on all four arenas.
+
 - Battle opened by itself, from Applications or the Start menu rather than from Formiga, says
   where your own companions come from before anything else: a card over the Battleground says
   Battle plays with your own colony when it comes by train from Formiga, and to choose "Play
