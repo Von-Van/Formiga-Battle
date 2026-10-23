@@ -6,6 +6,7 @@
 //! applied once, by the same id Desktop applies it by, so a crash between the two writes never
 //! counts a match twice. A rehearsal, with no Desktop behind it, keeps no career.
 
+use formiga_battle_world::Bracket;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -36,6 +37,24 @@ pub struct Meeting {
     pub won: Option<bool>,
 }
 
+/// An event the colony has entered: its bracket, where it is played, and what it is called.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Entered {
+    pub name: String,
+    pub arena: String,
+    pub bracket: Bracket,
+}
+
+/// An event the colony won.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Title {
+    pub event: String,
+    pub arena: String,
+    /// The final's match.
+    pub match_id: String,
+    pub when_utc: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Career {
@@ -45,6 +64,12 @@ pub struct Career {
     pub rivals: BTreeMap<String, HeadToHead>,
     /// Match ids applied, oldest first.
     pub applied: Vec<String>,
+    /// The event being played, or the last one finished.
+    pub event: Option<Entered>,
+    /// Events entered, in all.
+    pub events_entered: u32,
+    /// Events won, oldest first.
+    pub titles: Vec<Title>,
 }
 
 impl Default for Career {
@@ -54,6 +79,9 @@ impl Default for Career {
             colony_id: String::new(),
             rivals: BTreeMap::new(),
             applied: Vec::new(),
+            event: None,
+            events_entered: 0,
+            titles: Vec::new(),
         }
     }
 }

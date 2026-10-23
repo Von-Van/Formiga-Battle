@@ -40,7 +40,7 @@ impl BattleApp {
     /// The pages the notebook is turning through: an outing's, or the Handler's own.
     pub(super) fn steps(&self) -> &'static [Step] {
         if self.own_pages() {
-            &[Step::Handler, Step::History, Step::Settings]
+            &[Step::Handler, Step::Circuit, Step::History, Step::Settings]
         } else {
             self.outing.steps()
         }
@@ -48,7 +48,10 @@ impl BattleApp {
 
     /// The notebook is open at the Handler's own pages, not on the way anywhere.
     pub(super) fn own_pages(&self) -> bool {
-        matches!(self.step, Step::Handler | Step::History | Step::Settings)
+        matches!(
+            self.step,
+            Step::Handler | Step::Circuit | Step::History | Step::Settings
+        )
     }
 
     /// Opens the notebook at a page of getting ready for an outing, or at the Handler's own
@@ -82,6 +85,8 @@ impl BattleApp {
     /// Back to the station. From the notebook, the train is waiting with everyone aboard; after a
     /// match, it comes in again for them, as it did the first time.
     pub(super) fn back_to_station(&mut self) {
+        // An event fixture not yet played waits on the Circuit page.
+        self.table.event_fixture = None;
         let now = self.clock;
         let after_match = self.stage == Stage::Playing;
         if let Some(station) = &mut self.station {
@@ -242,6 +247,10 @@ impl BattleApp {
             Step::Handler => {
                 "Sign your name, choose your pennant, and look after your trios.".to_owned()
             }
+            Step::Circuit => match self.table.next_event_fixture() {
+                Some((_, round, rival)) => format!("Your {round} against {} is next.", rival.name),
+                None => "Enter an event, or see how you stand against each rival.".to_owned(),
+            },
             Step::History => "Every match your colony has played, newest first.".to_owned(),
             Step::Settings => "Settings are kept for next time.".to_owned(),
         }
@@ -666,6 +675,16 @@ impl BattleApp {
                     .auto_shrink([false, false])
                     .show(ui, |ui| self.handler_page(ui, ctx, u));
             }
+            Step::Circuit => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "The Circuit",
+                    "The Handlers who come to the Battleground, the events you enter against them, and how you stand. An event match counts toward the place's cup like any other.",
+                );
+                ui.add_space(u * 6.0);
+                self.event_board(ui, u);
+            }
             Step::History => {
                 chrome::page_heading(
                     ui,
@@ -701,6 +720,7 @@ impl BattleApp {
                     Step::Who => self.lineup(ui, ctx, u),
                     Step::Room => self.shared(ui, ctx, u),
                     Step::Handler => self.standing_and_trios(ui, ctx, u),
+                    Step::Circuit => self.standing_against_rivals(ui, u),
                     Step::History => self.totals(ui, u),
                     Step::Settings => self.keys_and_about(ui, u),
                 }
@@ -730,6 +750,7 @@ impl BattleApp {
             Some(Step::Lessons) => "Lessons",
             Some(Step::Who) => "Who goes",
             Some(Step::Handler) => "Your Handler",
+            Some(Step::Circuit) => "The Circuit",
             Some(Step::History) => "History",
             Some(_) => "Back",
         })
@@ -1261,8 +1282,14 @@ impl BattleApp {
             Outing::Home => {
                 let open = self.arena_open(&self.table.arena.id);
                 let ready = short == 0 && open;
+                let fixture = self
+                    .table
+                    .event_fixture
+                    .and_then(|_| self.table.next_event_fixture());
                 let label = if !open {
                     format!("Win the {} first", locked_behind(&self.table.arena.id))
+                } else if let (true, Some((_, round, rival))) = (ready, fixture) {
+                    format!("Play your {round} against {}", rival.name)
                 } else if ready {
                     "Play the visiting team".to_owned()
                 } else {

@@ -81,3 +81,9 @@ Desktop contract carries it. Each match is counted once, by the same match id De
 by; a file for another colony, or one that cannot be read, is a fresh career rather than a refused
 match. A rehearsal keeps none. The career earns nothing and changes nothing about how a match is
 played.
+
+Events are kept there too: the Open under way or last finished, as a bracket
+(`crates/formiga-battle-world`), how many have been entered, and the titles won. An event's
+fixtures against the colony are ordinary matches against the visitors, earning toward the place's
+cup as any other; the rivals' own fixtures are played out under the same rules and earn nothing.
+A fixture is recorded once, by its match id, so a crash never plays it twice.

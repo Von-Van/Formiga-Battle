@@ -67,6 +67,10 @@ pub const RIVALS: [Rival; 4] = [
 ];
 
 impl Rival {
+    pub fn by_id(id: &str) -> Option<&'static Rival> {
+        RIVALS.iter().find(|r| r.id == id)
+    }
+
     pub fn pennant(&self) -> Pennant {
         let (shape, field, symbol, trim) = self.pennant;
         Pennant {
@@ -86,6 +90,11 @@ impl Rival {
             self.archetype.tendency()
         )
     }
+}
+
+/// The rival with this id.
+pub fn by_id(id: &str) -> Option<&'static Rival> {
+    Rival::by_id(id)
 }
 
 /// Who comes to `arena` for the colony's `meetings`-th match against the visitors: the arena's

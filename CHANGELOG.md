@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Events at the Battleground. The Handler's notebook has a new page, the Circuit, where a colony
+  enters an Open at a place whose cup is open to it: four Handlers, the three rivals who come to
+  that place most and the colony itself, drawn as fourth seed against the first. The colony plays
+  its semi-final and, if it gets through, the final; the rivals' own fixtures are played out under
+  the same rules, each with its own coach and three. A draw is settled by a toss, the same on
+  every machine. The result says how the event stands ("Through to the final against Tam Rook"),
+  and an event won is kept as a title. The Circuit page also shows the titles won and the record
+  against each rival. An event match counts toward the place's cup like any other.
 - The visitors close to home are four named Handlers, each with a club, a pennant, a way of
   playing and a trio of their own: Hazel Thorne of Bramble Club presses first and sends everyone,
   Tam Rook of Sluice Gate holds the yard and shuts the board, Ivy Larkspur of the Glade Walkers
