@@ -22,6 +22,7 @@ mod pennant;
 mod playback;
 mod rewards;
 mod scene;
+mod settings;
 mod sound;
 mod station;
 mod still;
@@ -37,11 +38,14 @@ const USAGE: &str = "\
 Formiga Battle
 
 USAGE:
-    formiga-battle [OPTIONS]              Open the window and play against the visitors
+    formiga-battle [OPTIONS]              Open the window and play against the visitors. With
+                                          nothing to say whose colony, the sample colony's
+                                          companions under a card saying where your own come
+                                          from
     formiga-battle <COMMAND> [OPTIONS]    A headless command (below)
 
 WINDOW:
-    --sample                 The sample colony's companions (the default)
+    --sample                 The sample colony's companions, with no welcome card
     --from-save <FILE>       A Desktop colony.json, read and never written
     --snapshot <FILE>        A Battle roster snapshot
     --formiga-battle <DIR>   A session Desktop opened (how Desktop starts Battle)
@@ -64,6 +68,8 @@ WINDOW:
                              at a local one from `formiga-battle relay`) or account (as
                              playing, with the whole match open) or lessons (choosing a Field
                              Lesson) or lesson (the lesson on flanks, orders not yet given)
+                             or welcome (the station under the card Battle opened by itself
+                             shows)
     --render-window <PNG>    A picture of the window as --snap takes it (at 2 pixels to the point),
                              made without opening one: --review, --at and --window as for --snap
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
@@ -121,6 +127,9 @@ struct Parsed {
     scale: u32,
     /// The window's size, in points, for a review picture at a size of its own.
     window: Option<(f32, f32)>,
+    /// Opened by itself, with nothing to say whose colony and nothing to picture: the sample
+    /// colony comes with the welcome card, saying where a player's own companions come from.
+    welcome: bool,
 }
 
 fn parse(args: Vec<String>) -> Result<Parsed> {
@@ -138,10 +147,27 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
         into: None,
         scale: 3,
         window: None,
+        welcome: false,
     };
+    // Anything asked for at all, a colony, a session or a picture, is someone who knows what
+    // they want, and gets it without the welcome.
+    let mut asked = false;
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
+        if matches!(
+            arg.as_str(),
+            "--sample"
+                | "--from-save"
+                | "--snapshot"
+                | "--review"
+                | "--snap"
+                | "--render-board"
+                | "--render-window"
+        ) || arg == LAUNCH_ARGUMENT
+        {
+            asked = true;
+        }
         match arg.as_str() {
             "--sample" => parsed.source = host::Source::Sample,
             "--from-save" => parsed.source = host::Source::Save(value()?.into()),
@@ -169,6 +195,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "account" => app::Review::Account,
                     "lessons" => app::Review::Lessons,
                     "lesson" => app::Review::Lesson,
+                    "welcome" => app::Review::Welcome,
                     other => bail!("unknown stage {other:?}"),
                 }
             }
@@ -189,6 +216,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
             other => bail!("unknown option {other:?}; see --help"),
         }
     }
+    parsed.welcome = !asked;
     Ok(parsed)
 }
 
@@ -246,9 +274,26 @@ fn window(args: Vec<String>) -> Result<()> {
     });
     let review = snap.as_ref().map(|_| args.review);
     let reviewing = review.is_some();
+    // How Battle looked and sounded last time. A window opened for its picture reads and keeps
+    // none of it, so a review looks the same on every machine.
+    let keeper = if reviewing {
+        None
+    } else {
+        settings::folder().map(settings::Keeper::open)
+    };
+    let kept = keeper.as_ref().map(settings::Keeper::settings);
+    if let Some(reduce) = kept.and_then(|k| k.reduce_motion) {
+        table.reduce_motion = reduce;
+    }
+    let size = args
+        .window
+        .map(|(w, h)| [w, h])
+        .or(kept.and_then(|k| k.window))
+        .unwrap_or([1280.0, 780.0]);
+    let welcome = args.welcome;
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title("Formiga Battle")
-        .with_inner_size(args.window.map_or([1280.0, 780.0], |(w, h)| [w, h]))
+        .with_inner_size(size)
         .with_min_inner_size([1024.0, 640.0])
         .with_icon(icon::window());
     if reviewing {
@@ -268,11 +313,17 @@ fn window(args: Vec<String>) -> Result<()> {
             let sound = if reviewing {
                 sound::Sound::silent()
             } else {
-                sound::Sound::open()
+                let mut sound = sound::Sound::open();
+                if let Some(kept) = kept {
+                    sound.set_levels(kept.levels());
+                }
+                sound
             };
-            Ok(Box::new(app::BattleApp::new(
-                host, table, review, snap, sound,
-            )))
+            let mut app = app::BattleApp::new(host, table, review, snap, sound);
+            if let Some(keeper) = keeper {
+                app.keep(keeper);
+            }
+            Ok(Box::new(if welcome { app.welcoming() } else { app }))
         }),
     )
     .map_err(|error| anyhow::anyhow!("the window could not open: {error}"))
@@ -350,4 +401,50 @@ pub(crate) fn write_png(path: &Path, canvas: &Canvas, scale: u32) -> Result<()> 
     encoder.set_depth(png::BitDepth::Eight);
     encoder.write_header()?.write_image_data(&bytes)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parsed(args: &[&str]) -> Parsed {
+        parse(args.iter().map(|a| (*a).to_owned()).collect()).expect("arguments Battle reads")
+    }
+
+    #[test]
+    fn opened_by_itself_battle_welcomes_the_player_over_the_sample_colony() {
+        let opened = parsed(&[]);
+        assert!(opened.welcome);
+        assert!(matches!(opened.source, host::Source::Sample));
+        // Choosing the place or the seed still says nothing of whose colony.
+        assert!(parsed(&["--arena", "woodland", "--seed", "4"]).welcome);
+    }
+
+    #[test]
+    fn the_sample_asked_for_comes_without_the_welcome() {
+        let sample = parsed(&["--sample"]);
+        assert!(!sample.welcome);
+        assert!(matches!(sample.source, host::Source::Sample));
+    }
+
+    #[test]
+    fn opened_by_formiga_there_is_no_welcome() {
+        let visit = parsed(&[LAUNCH_ARGUMENT, "/tmp/0123456789abcdef0123456789abcdef"]);
+        assert!(!visit.welcome);
+        assert!(matches!(visit.source, host::Source::Session(_)));
+    }
+
+    #[test]
+    fn a_colony_or_a_picture_asked_for_comes_without_the_welcome() {
+        for args in [
+            &["--from-save", "colony.json"][..],
+            &["--snapshot", "roster.json"],
+            &["--review", "station", "--render-window", "a.png"],
+            &["--render-window", "a.png"],
+            &["--snap", "a.png"],
+            &["--render-board", "a.png"],
+        ] {
+            assert!(!parsed(args).welcome, "{args:?}");
+        }
+    }
 }

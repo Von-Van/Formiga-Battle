@@ -243,7 +243,7 @@ impl BattleApp {
                 "Sign your name, choose your pennant, and look after your trios.".to_owned()
             }
             Step::History => "Every match your colony has played, newest first.".to_owned(),
-            Step::Settings => "Settings last for this sitting.".to_owned(),
+            Step::Settings => "Settings are kept for next time.".to_owned(),
         }
     }
 
@@ -681,7 +681,7 @@ impl BattleApp {
                     ui,
                     &line,
                     "Settings",
-                    "How Battle looks and sounds. Battle keeps no files, so these last for this sitting.",
+                    "How Battle looks and sounds. Battle keeps these on this computer for next time.",
                 );
                 ui.add_space(u * 6.0);
                 self.settings(ui, u);
@@ -753,9 +753,7 @@ impl BattleApp {
 
     /// The chosen place, as a picture pasted onto the page with a caption under it.
     fn arena_picture(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
-        let garden = self
-            .garden
-            .get_or_insert_with(|| Garden::new(&self.table.arena, &self.view));
+        let garden = super::garden_for(&mut self.garden, &mut self.view, &self.table.arena);
         let key = format!("preview-{}", self.table.arena.id);
         let fresh = !matches!(&self.preview, Some((k, _)) if *k == key);
         let picture = if fresh { Some(garden.picture()) } else { None };

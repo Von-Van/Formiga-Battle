@@ -18,6 +18,7 @@
 mod handler;
 mod menus;
 mod registry;
+mod welcome;
 
 use crate::announce::{Callout, Style};
 use crate::chrome::{self, Kind, ink, label_job};
@@ -159,6 +160,8 @@ pub enum Review {
     Lessons,
     /// A Field Lesson on the board, its orders not yet given: the lesson on flanks.
     Lesson,
+    /// The Battleground with the welcome card over it, as Battle opened by itself shows it.
+    Welcome,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -194,6 +197,9 @@ pub struct BattleApp {
     stage: Stage,
     view: View,
     board: Option<egui::TextureHandle>,
+    /// The board's pixels as last sent to its texture, filled again in place each frame once
+    /// the texture has taken the last ones.
+    board_pixels: std::sync::Arc<egui::ColorImage>,
     garden: Option<Garden>,
     cover: Cover,
     portraits: HashMap<(u64, String), egui::TextureHandle>,
@@ -210,8 +216,8 @@ pub struct BattleApp {
     /// Each pennant's picture, painted once.
     flags: HashMap<crate::identity::Style, egui::TextureHandle>,
     /// The Handler's painted pictures (tiles, plates, rosettes, team pictures, banners), each
-    /// painted once under its key.
-    art: HashMap<String, egui::TextureHandle>,
+    /// painted once under its key and kept while it is shown.
+    art: Kept,
     /// The ruled page's lines, in points: where the first is on the screen, and how far apart
     /// they are, for writing that sits on them.
     rules: (f32, f32),
@@ -222,6 +228,8 @@ pub struct BattleApp {
     join_code: String,
     /// The Handler has read what a friend match shares, this time.
     understood: bool,
+    /// The welcome card is up: Battle was opened by itself, not by Formiga.
+    welcome: bool,
     /// Every turn's orders come from the AI coach and lock at once: for review pictures.
     autoplay: bool,
     snap: Option<Snap>,
@@ -284,6 +292,8 @@ pub struct BattleApp {
     learned: Vec<Lesson>,
     /// How far the mouse wheel has turned over the board since it last turned a HOLD, in points.
     wheel: f32,
+    /// Keeps how Battle looks and sounds for next time; none for a window opened for its picture.
+    kept: Option<crate::settings::Keeper>,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -352,6 +362,7 @@ impl BattleApp {
             stage: Stage::Station,
             view,
             board: None,
+            board_pixels: std::sync::Arc::default(),
             garden: None,
             cover: Cover::default(),
             portraits: HashMap::new(),
@@ -365,12 +376,13 @@ impl BattleApp {
                 .unwrap_or_default(),
             draft_style: crate::identity::Style::default(),
             flags: HashMap::new(),
-            art: HashMap::new(),
+            art: Kept::default(),
             rules: (0.0, 21.0),
             trio_draft: String::new(),
             renaming: None,
             join_code: String::new(),
             understood: false,
+            welcome: false,
             autoplay: matches!(review, Some(Review::Playing | Review::Account)),
             snap,
             clock: 0.0,
@@ -409,6 +421,7 @@ impl BattleApp {
             lesson: Lesson::Beacon,
             learned: Vec::new(),
             wheel: 0.0,
+            kept: None,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -476,9 +489,17 @@ impl BattleApp {
                 app.outing = Outing::Lessons;
                 app.begin_lesson();
             }
+            Some(Review::Welcome) => app.welcome = true,
             Some(Review::Station) | None => {}
         }
         app
+    }
+
+    /// With the welcome card up, for Battle opened by itself: the sample colony is there to look
+    /// around with, but a player's own companions come from Formiga.
+    pub fn welcoming(mut self) -> Self {
+        self.welcome = true;
+        self
     }
 
     /// Plays what was felt last frame. A companion chosen or taken out is heard as that, not
@@ -571,7 +592,10 @@ impl BattleApp {
                 .as_ref()
                 .is_some_and(|m| f.sent(m.board.turn + 1))
         });
-        let can = self.table.shown.is_none() && self.table.outcome().is_none() && !sent;
+        let can = self.table.shown.is_none()
+            && self.table.outcome().is_none()
+            && !sent
+            && !self.table.room_gone();
         if can {
             self.table.lock(now);
         }
@@ -845,6 +869,11 @@ impl BattleApp {
         );
     }
 
+    /// Keeps the sound, motion and window size as they change, for the next sitting.
+    pub fn keep(&mut self, keeper: crate::settings::Keeper) {
+        self.kept = Some(keeper);
+    }
+
     pub(crate) fn frame(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         if !self.styled {
@@ -852,6 +881,18 @@ impl BattleApp {
             self.styled = true;
         }
         self.clock = ctx.input(|input| input.time) as f32;
+        if let Some(keeper) = &mut self.kept {
+            let (closing, inner) = ctx.input(|input| {
+                let viewport = input.viewport();
+                (viewport.close_requested(), viewport.inner_rect)
+            });
+            let window = inner.map(|rect| [rect.width(), rect.height()]);
+            keeper.note(self.sound.levels(), window, self.clock, closing);
+        }
+        // Pictures not shown for a while are let go, outside the context's lock.
+        let shown = ctx.cumulative_frame_nr();
+        drop(self.art.sweep(shown));
+        drop(ctx.data_mut(|d| d.get_temp_mut_or_default::<Kept>(kept_id()).sweep(shown)));
         crate::feel::set_still(&ctx, self.table.reduce_motion);
         let mut felt = std::mem::take(&mut self.felt);
         felt.extend(crate::feel::take(&ctx));
@@ -864,6 +905,10 @@ impl BattleApp {
             self.stage = Stage::Playing;
             self.notebook_open = false;
             self.turned = now;
+            // The room plays the opener's place: the joiner's board, name and cup follow it.
+            if let Some(arena) = self.table.m.as_ref().map(|m| m.arena.clone()) {
+                self.choose_arena(arena);
+            }
             self.fresh_match();
             self.ready_up();
         }
@@ -950,6 +995,9 @@ impl BattleApp {
             if !chrome::turn_leaf(&painter, turn, now, layout.left, layout.right, layout.unit) {
                 self.turn = None;
             }
+        }
+        if self.welcome {
+            self.welcome_card(&ctx, layout.full, layout.unit);
         }
         self.take_snap(&ctx);
     }
@@ -1444,6 +1492,9 @@ impl BattleApp {
             return;
         };
         self.paused = frame.paused;
+        // The match's own place: a friend's room plays the opener's, whatever was chosen here.
+        let m = self.table.m.as_ref().expect("a match is on");
+        garden_for(&mut self.garden, &mut self.view, &m.arena);
         let mut marks = self.table.marks(self.hover, now);
         // The board's scale is known before it is painted: it is drawn as large as the page
         // allows, by whole screen pixels.
@@ -1475,9 +1526,7 @@ impl BattleApp {
         }
         marks.pokes = self.pokes.iter().map(|(t, at)| (*t, now - at)).collect();
         let m = self.table.m.as_ref().expect("a match is on");
-        let garden = self
-            .garden
-            .get_or_insert_with(|| Garden::new(&m.arena, &self.view));
+        let garden = garden_for(&mut self.garden, &mut self.view, &m.arena);
         let canvas = scene::paint(
             &m.arena,
             garden,
@@ -1501,10 +1550,8 @@ impl BattleApp {
         let min = area.center() - size / 2.0;
         let min = pos2((min.x * ppp).round() / ppp, (min.y * ppp).round() / ppp);
         let rect = Rect::from_min_size(min, size);
-        let image = egui::ColorImage::from_rgba_unmultiplied(
-            [canvas.width() as usize, canvas.height() as usize],
-            &canvas.rgba_bytes(),
-        );
+        into_image(&canvas, std::sync::Arc::make_mut(&mut self.board_pixels));
+        let image = std::sync::Arc::clone(&self.board_pixels);
         match &mut self.board {
             Some(texture) => texture.set(image, egui::TextureOptions::NEAREST),
             None => {
@@ -2477,6 +2524,10 @@ impl BattleApp {
             self.result(ui, u);
             return;
         }
+        if self.table.room_gone() {
+            self.room_gone(ui, u);
+            return;
+        }
         let you = self.table.you;
         let sent = self.table.friend.as_ref().is_some_and(|f| {
             self.table
@@ -2812,6 +2863,36 @@ impl BattleApp {
             self.lesson_notes(ui, u);
         } else {
             self.field_guide(ui, ctx, u);
+        }
+    }
+
+    /// A match with a friend whose room closed partway through: it cannot go on, earns nothing,
+    /// and the way out is back to the station.
+    fn room_gone(&mut self, ui: &mut egui::Ui, u: f32) {
+        chrome::kicker(ui, "The room has closed");
+        ui.add_space(u * 2.0);
+        if let Some(notice) = self.table.notice.clone() {
+            sticky(ui, &notice, u);
+            ui.add_space(u * 3.0);
+        }
+        ui.label(
+            RichText::new(format!(
+                "The match with {} cannot go on without it, so it ended here and earned nothing.",
+                self.table.other_short()
+            ))
+            .size(13.0),
+        );
+        ui.add_space(u * 5.0);
+        if chrome::button(ui, "Back to the station", Kind::Back, false, true, None, u)
+            .on_hover_text("Choose again where your companions are off to")
+            .clicked()
+        {
+            self.table.leave_room();
+            self.table.shown = None;
+            self.portraits.clear();
+            self.fresh_match();
+            self.notebook_open = false;
+            self.back_to_station();
         }
     }
 
@@ -3417,6 +3498,20 @@ impl eframe::App for BattleApp {
 /// a hair under `HEADLINE_SECS` from it in floating point, and asking again whether that line is
 /// too close would step to the same moment for ever. Two lines born in the same frame did just
 /// that, and the window stopped answering.
+/// The garden painted for `arena`, kept until another place is shown: when the one kept is of
+/// another place, it is painted afresh with a view to match.
+pub(super) fn garden_for<'a>(
+    garden: &'a mut Option<Garden>,
+    view: &mut View,
+    arena: &formiga_battle_core::Arena,
+) -> &'a mut Garden {
+    if garden.as_ref().is_none_or(|g| g.arena != arena.id) {
+        *view = View::new(arena.width, arena.height);
+        *garden = Some(Garden::new(arena, view));
+    }
+    garden.as_mut().expect("just painted")
+}
+
 fn headline_moment(born: f32, placed: &[f32]) -> f32 {
     let mut placed = placed.to_vec();
     placed.sort_by(f32::total_cmp);
@@ -3742,13 +3837,70 @@ fn kept_picture(
     key: &str,
     paint: impl FnOnce() -> Canvas,
 ) -> egui::TextureHandle {
-    let id = Id::new(("kept-picture", key));
-    if let Some(t) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(id)) {
+    let shown = ctx.cumulative_frame_nr();
+    let id = kept_id();
+    if let Some(t) = ctx.data_mut(|d| d.get_temp_mut_or_default::<Kept>(id).get(key, shown)) {
         return t;
     }
+    // Painted, and made a texture, outside the context's lock.
     let t = texture(ctx, key, &paint());
-    ctx.data_mut(|d| d.insert_temp(id, t.clone()));
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<Kept>(id)
+            .keep(key.to_owned(), t.clone(), shown);
+    });
     t
+}
+
+fn kept_id() -> Id {
+    Id::new("kept-pictures")
+}
+
+/// Painted pictures kept as textures under their keys, each let go once it has gone unshown for
+/// a while. Pictures sized to the window are painted again for every width it is dragged
+/// through, and the old widths are never shown again.
+#[derive(Clone, Default)]
+pub(crate) struct Kept {
+    /// Each picture, and the last frame it was shown in.
+    pictures: HashMap<String, (egui::TextureHandle, u64)>,
+}
+
+impl Kept {
+    /// Frames a picture can go unshown before it is let go: a few seconds of a running window.
+    const UNSHOWN_FRAMES: u64 = 600;
+
+    /// The picture under `key`, shown in frame `shown`, if it is kept.
+    pub(crate) fn get(&mut self, key: &str, shown: u64) -> Option<egui::TextureHandle> {
+        self.pictures.get_mut(key).map(|(t, last)| {
+            *last = shown;
+            t.clone()
+        })
+    }
+
+    pub(crate) fn keep(&mut self, key: String, texture: egui::TextureHandle, shown: u64) {
+        self.pictures.insert(key, (texture, shown));
+    }
+
+    /// Lets go of the pictures not shown for a while, handing them back to be dropped where no
+    /// lock is held.
+    #[must_use]
+    pub(crate) fn sweep(&mut self, now: u64) -> Vec<egui::TextureHandle> {
+        let stale: Vec<String> = self
+            .pictures
+            .iter()
+            .filter(|(_, (_, last))| now.saturating_sub(*last) > Self::UNSHOWN_FRAMES)
+            .map(|(key, _)| key.clone())
+            .collect();
+        stale
+            .iter()
+            .filter_map(|key| self.pictures.remove(key))
+            .map(|(t, _)| t)
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.pictures.len()
+    }
 }
 
 /// Composure as three pips: filled in the team's colour, empty as rings.
@@ -4287,6 +4439,21 @@ fn shrunk(canvas: &Canvas, by: u32) -> Canvas {
     out
 }
 
+/// A canvas as an image for a texture, written over `image` in place: the same pixels as
+/// `ColorImage::from_rgba_unmultiplied`, without two fresh copies of the board each frame.
+fn into_image(canvas: &Canvas, image: &mut egui::ColorImage) {
+    let size = [canvas.width() as usize, canvas.height() as usize];
+    image.size = size;
+    image.source_size = vec2(size[0] as f32, size[1] as f32);
+    image.pixels.clear();
+    image.pixels.extend(
+        canvas
+            .pixels()
+            .iter()
+            .map(|p| Color32::from_rgba_unmultiplied(p.r, p.g, p.b, p.a)),
+    );
+}
+
 fn texture(ctx: &egui::Context, name: &str, canvas: &Canvas) -> egui::TextureHandle {
     let image = egui::ColorImage::from_rgba_unmultiplied(
         [canvas.width() as usize, canvas.height() as usize],
@@ -4307,6 +4474,8 @@ mod tests {
         app: BattleApp,
         time: f64,
         drawn: Vec<(String, Rect)>,
+        /// The app asked for the window to close.
+        closed: bool,
     }
 
     impl Headless {
@@ -4320,6 +4489,7 @@ mod tests {
                 app: BattleApp::new(host, table, None, None, Sound::silent()),
                 time: 0.0,
                 drawn: Vec::new(),
+                closed: false,
             }
         }
 
@@ -4333,6 +4503,11 @@ mod tests {
             let app = &mut self.app;
             let mut output = self.ctx.run_ui(input, |ui| app.frame(ui));
             output.textures_delta.clear();
+            self.closed |= output.viewport_output.values().any(|v| {
+                v.commands
+                    .iter()
+                    .any(|c| matches!(c, egui::ViewportCommand::Close))
+            });
             self.drawn.clear();
             for clipped in &output.shapes {
                 words(&clipped.shape, &mut self.drawn);
@@ -4378,6 +4553,119 @@ mod tests {
             egui::epaint::Shape::Vec(shapes) => shapes.iter().for_each(|s| words(s, out)),
             _ => {}
         }
+    }
+
+    fn says(h: &Headless, words: &str) -> bool {
+        h.drawn.iter().any(|(w, _)| w.eq_ignore_ascii_case(words))
+    }
+
+    #[test]
+    fn battle_opened_by_itself_welcomes_the_player_until_they_look_around() {
+        let mut h = Headless::new();
+        h.app = BattleApp::new(
+            Host::Rehearsal {
+                from: "the sample colony".to_owned(),
+            },
+            Table::new(sample::snapshot(), sample::visitors(9), 5),
+            None,
+            None,
+            Sound::silent(),
+        )
+        .welcoming();
+        h.frames(4);
+        assert!(says(&h, welcome::TITLE));
+        assert!(says(&h, &welcome::how_to_open()));
+        assert!(says(&h, "formigaworld.com"));
+        h.click(welcome::LOOK_AROUND, 0);
+        h.frames(2);
+        assert!(!says(&h, welcome::TITLE));
+        assert!(!h.closed);
+        // The rehearsal carries on at the Battleground, as it would have without the card.
+        assert_eq!(h.app.stage, Stage::Station);
+    }
+
+    #[test]
+    fn the_welcome_takes_the_clicks_meant_for_the_station_under_it() {
+        let mut h = Headless::new();
+        h.app.welcome = true;
+        h.frames(2);
+        // The train in, and the way on from the station dropped onto its page, under the card.
+        let now = h.app.clock;
+        h.app.station.as_mut().expect("the station").skip(now);
+        h.frames(40);
+        h.click("Field Lessons", 0);
+        h.frames(2);
+        assert_eq!(h.app.stage, Stage::Station, "the card took the click");
+        assert!(says(&h, welcome::TITLE));
+    }
+
+    #[test]
+    fn closing_the_welcome_closes_battle() {
+        let mut h = Headless::new();
+        h.app.welcome = true;
+        h.frames(4);
+        h.click(welcome::CLOSE, 0);
+        assert!(h.closed);
+    }
+
+    #[test]
+    fn battle_opened_with_a_colony_has_no_welcome() {
+        let mut h = Headless::new();
+        h.frames(4);
+        assert!(!says(&h, welcome::TITLE));
+    }
+
+    #[test]
+    fn pictures_left_behind_while_resizing_are_let_go() {
+        let ctx = egui::Context::default();
+        let picture = |w| texture(&ctx, &format!("sign-{w}"), &Canvas::new(w, 4));
+        let mut kept = Kept::default();
+        // Dragged through three widths, then left at the last.
+        for (frame, w) in [(1, 100), (2, 101), (3, 102)] {
+            kept.keep(format!("sign-{w}"), picture(w), frame);
+        }
+        for frame in 4..=Kept::UNSHOWN_FRAMES + 1 {
+            assert!(kept.get("sign-102", frame).is_some());
+            assert!(kept.sweep(frame).is_empty(), "none goes too soon");
+        }
+        assert_eq!(kept.sweep(Kept::UNSHOWN_FRAMES + 3).len(), 2);
+        assert_eq!(kept.len(), 1);
+        assert!(kept.get("sign-102", Kept::UNSHOWN_FRAMES + 5).is_some());
+    }
+
+    #[test]
+    fn the_board_goes_to_its_texture_exactly_as_egui_would_convert_it() {
+        let arena = formiga_battle_core::Arena::backyard();
+        let view = View::new(arena.width, arena.height);
+        let garden = Garden::new(&arena, &view);
+        // Filled in place over a smaller picture's pixels, as when the window changes place.
+        let mut image = egui::ColorImage::filled([3, 2], Color32::RED);
+        for canvas in [garden.picture(), garden.ground.clone()] {
+            into_image(&canvas, &mut image);
+            let expected = egui::ColorImage::from_rgba_unmultiplied(
+                [canvas.width() as usize, canvas.height() as usize],
+                &canvas.rgba_bytes(),
+            );
+            assert!(image == expected);
+        }
+    }
+
+    #[test]
+    fn the_board_is_painted_for_the_matchs_own_place_not_the_one_last_shown() {
+        // A friend's room plays the opener's place, though the joiner last looked at another.
+        let backyard = formiga_battle_core::Arena::backyard();
+        let other = formiga_battle_core::Arena::built_in()
+            .into_iter()
+            .find(|a| a.id != backyard.id)
+            .expect("more than one place");
+        let mut view = View::new(backyard.width, backyard.height);
+        let mut garden = Some(Garden::new(&backyard, &view));
+        let painted = garden_for(&mut garden, &mut view, &other);
+        assert_eq!(painted.arena, other.id);
+        let fresh = Garden::new(&other, &View::new(other.width, other.height));
+        assert_eq!(painted.pieces.len(), fresh.pieces.len());
+        assert!(painted.ground.rgba_bytes() == fresh.ground.rgba_bytes());
+        assert_eq!(view, View::new(other.width, other.height));
     }
 
     #[test]

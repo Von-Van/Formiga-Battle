@@ -60,6 +60,8 @@ pub struct Friend {
     pub code: Option<String>,
     /// The match has begun and is on the board.
     pub seated: bool,
+    /// The room closed partway through the match: no more turns will come, and it earns nothing.
+    pub gone: bool,
     /// Both Handlers' names, left then right.
     pub handlers: [String; 2],
     /// What each Handler shows of themselves besides their name, left then right, cleaned again
@@ -644,6 +646,7 @@ impl Table {
             opponent_away: false,
             deadline: 0.0,
             held: None,
+            gone: false,
         });
     }
 
@@ -694,9 +697,13 @@ impl Table {
                         "The room closed before both boards could be checked, so this match \
                          earned nothing.",
                     );
+                    // A match the room closed under stays on the board, ended here, until the
+                    // Handler leaves it: no more turns can come, and it earns nothing.
                     let playing = self.friend.as_ref().is_some_and(|f| f.seated);
                     if !playing || self.outcome().is_some() {
                         self.friend = None;
+                    } else if let Some(friend) = &mut self.friend {
+                        friend.gone = true;
                     }
                     break;
                 }
@@ -706,6 +713,7 @@ impl Table {
         // Orders not sent by the time the turn locks are sent at the last moment.
         if let Some(friend) = &self.friend
             && friend.seated
+            && !friend.gone
             && self.shown.is_none()
             && self.outcome().is_none()
             && self
@@ -981,6 +989,11 @@ impl Table {
             Some(f) => f.handlers[self.you.other().index()].clone(),
             None => "Visitors".to_owned(),
         }
+    }
+
+    /// The room closed partway through a match with a friend, which cannot go on.
+    pub fn room_gone(&self) -> bool {
+        self.friend.as_ref().is_some_and(|f| f.gone)
     }
 
     /// Seconds left on the timer: the room's, against a friend.
@@ -1499,7 +1512,7 @@ impl Table {
         }
         if let Some(friend) = &mut self.friend {
             let turn = m.board.turn + 1;
-            if !friend.seated || friend.sent(turn) {
+            if !friend.seated || friend.gone || friend.sent(turn) {
                 return;
             }
             friend.line.ask(Ask::Orders { turn, orders: ours });
@@ -2295,6 +2308,42 @@ mod tests {
         if let Some(relay) = local {
             relay.stop();
         }
+    }
+
+    #[test]
+    fn a_room_that_closes_mid_match_ends_it_here_earning_nothing() {
+        let mut t = table();
+        let (line, asked, tell) = crate::friend::Line::fake();
+        t.friend = Some(Friend {
+            line,
+            code: Some("ABCDEF".to_owned()),
+            seated: true,
+            gone: false,
+            handlers: ["Jake".to_owned(), "Friend".to_owned()],
+            cards: [None, None],
+            view: None,
+            sent_turn: None,
+            opponent_ready: false,
+            opponent_away: false,
+            deadline: 30.0,
+            held: None,
+        });
+        tell.send(Told::Gone("The room has closed.".to_owned()))
+            .unwrap();
+        assert!(!t.poll(1.0));
+        assert!(t.room_gone(), "the match stays on the board, ended");
+        assert_eq!(t.notice.as_deref(), Some("The room has closed."));
+        // Nothing more goes to the relay: not orders given, nor the last-moment send at the lock.
+        t.coach_orders();
+        t.lock(2.0);
+        t.poll(29.5);
+        assert!(asked.try_recv().is_err());
+        assert!(t.outcome().is_none());
+        assert!(t.earned.is_empty());
+        // Leaving it lets the line go.
+        t.leave_room();
+        assert!(t.friend.is_none());
+        assert!(!t.room_gone());
     }
 
     #[test]

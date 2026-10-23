@@ -47,8 +47,16 @@ with "Play Formiga Battle…"; Battle's side of that hand-off is `--formiga-batt
    where Formiga Desktop looks for it, or a portable zip, which runs without installing but which
    Desktop does not look for.
 2. In Formiga Desktop (0.67.9 or later), choose "Play Formiga Battle…" from the tray. Battle opens
-   with your companions. Opened by itself, it plays with a sample colony and keeps nothing.
+   with your companions. Opened by itself, it says where your own companions come from and
+   offers a look around with a sample colony, which keeps nothing.
 3. To play a friend, both of you need the same Battle, opened by the same Desktop.
+
+Battle remembers how it looks and sounds (the music and sound volumes, the mute, reduced motion
+and the window's size) in one small file of its own, `settings.json`, in its folder under
+Application Support on macOS (`com.Formiga.Formiga-Battle`) and under `%APPDATA%` on Windows
+(`Formiga\Formiga Battle\data`). Nothing about a colony or a match goes there: Desktop keeps the
+record ([docs/REWARDS.md](docs/REWARDS.md)). Reduced motion follows Desktop's setting until you
+change it in Battle's own settings. Delete the file to go back to the usual settings.
 
 The downloads are not signed yet. On macOS, open the app the first time with Control-click → Open;
 on Windows, SmartScreen may ask before it runs. To build it yourself, install
@@ -58,7 +66,8 @@ the rest.
 ## Commands
 
 ```bash
-cargo run --release -p formiga-battle                                    # the window, on the sample colony
+cargo run --release -p formiga-battle                                    # the window, as opened by itself
+cargo run --release -p formiga-battle -- --sample                        # on the sample colony, no welcome card
 cargo run --release -p formiga-battle -- --from-save <colony.json>       # on a colony, read and never written
 cargo run --release -p formiga-battle -- --help
 cargo run --release -p formiga-battle -- roster                          # the sample colony's companions
@@ -84,9 +93,10 @@ opens the whole match turn by turn.
 
 Review pictures, without touching the screen: `--render-board <png>` draws the board with no
 window (`--turns`, `--into`, `--scale`); `--render-window <png> --review
-station|where|who|friend|orders|playing --at <s>` pictures the whole window, as a Retina screen
+station|welcome|where|who|friend|orders|playing --at <s>` pictures the whole window, as a Retina screen
 shows it, without opening one; `--snap <png>` with the same options opens the window behind
-everything, pictures it and closes. Each takes `--arena backyard|woodland|millpond|cove`. Look at them after changing anything
+everything, pictures it and closes. None of them reads or writes Battle's settings, so a picture
+looks the same on every machine. Each takes `--arena backyard|woodland|millpond|cove`. Look at them after changing anything
 visual.
 
 The gate, run locally (Battle has no GitHub Actions, so nothing runs on GitHub):
@@ -141,11 +151,12 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the Battleground the
   train brings the companions to), `feel` (how every control answers a touch), `ticket` (the station's two choices, painted as
   railway tickets), `masthead` (the painted scene heading the station's page), `app` (the egui window; `app/menus` the station and the
-  notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns) and `cli` (the headless commands).
+  notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios), `settings` (the volumes, mute, motion and window size Battle keeps for next time), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns) and `cli` (the headless commands).
 
 `formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
 by one release tag (`v0.67.14`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
-authoritative for the colony; Battle never writes a colony file.
+authoritative for the colony; Battle never writes a colony file, and the only file it keeps is
+its own `settings.json`.
 
 ## License
 
