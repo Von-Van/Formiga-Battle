@@ -45,14 +45,22 @@ TOURNAMENT:
     --seed <N>           Tournament seed (default 1)
     --coach <a>,<b>      As for match
     --trios <N>          How many best and worst trios to list (default 5)
+    --sweep              Play every variant of the arena that changes one part, and report
+                         each one's side and kind balance instead
+
+VARIANT (match, tournament, arena):
+    --variant <v>        drawn (by the match seed, as the app does), or start,finds[,condition]
+                         by id; without it, the arena as its file has it
 
 RULES (match, tournament):
     --capture <rule>     uncontested (the default) or majority
     --capture-ticks <N>  Ticks of holding that light the beacon (default 3)
     --turn-cap <N>       The last turn (default 12)
 
-ARENA:
+ARENA (match, tournament, arena):
+    --arena <id>         A built-in arena: backyard, woodland, millpond or cove
     --file <FILE>        An arena file (default: Backyard)
+    --variants           (arena) List the starts, finds and conditions the arena can be set up in
 ";
 
 struct Args(Vec<String>);
@@ -150,9 +158,19 @@ pub fn run(mut args: Vec<String>) -> Result<()> {
             Ok(())
         }
         "arena" => {
-            let arena = load_arena(args.value("--file")?)?;
+            let arena = load_arena(&mut args)?;
+            let list = args.flag("--variants");
+            let arena = varied(&mut args, arena, 0)?;
             args.done()?;
             println!("{} ({} by {})", arena.name, arena.width, arena.height);
+            if let Some(variant) = &arena.variant {
+                for told in variant.told(&arena) {
+                    println!("  {}: {}", told.name, told.line);
+                }
+            }
+            if list {
+                list_variants(&arena);
+            }
             let m = Match::new(arena, Ruleset::default(), 0, visitors(0, 0))?;
             print!("{}", draw(&m));
             Ok(())
@@ -161,13 +179,72 @@ pub fn run(mut args: Vec<String>) -> Result<()> {
     }
 }
 
-fn load_arena(file: Option<String>) -> Result<Arena> {
-    match file {
+fn load_arena(args: &mut Args) -> Result<Arena> {
+    if let Some(id) = args.value("--arena")? {
+        return Arena::by_id(&id).with_context(|| format!("there is no arena called {id:?}"));
+    }
+    match args.value("--file")? {
         Some(path) => {
             let text = std::fs::read_to_string(&path).with_context(|| format!("reading {path}"))?;
             Ok(Arena::parse(&text).with_context(|| format!("reading the arena in {path}"))?)
         }
         None => Ok(Arena::backyard()),
+    }
+}
+
+/// The arena as `--variant` sets it up: unchanged without it, drawn by the seed, or by ids.
+fn varied(args: &mut Args, arena: Arena, seed: u64) -> Result<Arena> {
+    let Some(text) = args.value("--variant")? else {
+        return Ok(arena);
+    };
+    let variant = if text == "drawn" {
+        Variant::drawn(&arena, seed)
+    } else {
+        let parts: Vec<&str> = text.split(',').map(str::trim).collect();
+        match parts.as_slice() {
+            [start, finds] | [start, finds, ""] => Variant {
+                start: (*start).to_owned(),
+                finds: (*finds).to_owned(),
+                condition: None,
+            },
+            [start, finds, condition] => Variant {
+                start: (*start).to_owned(),
+                finds: (*finds).to_owned(),
+                condition: Some((*condition).to_owned()),
+            },
+            _ => bail!("--variant takes drawn, or start,finds[,condition]"),
+        }
+    };
+    Ok(variant.apply(&arena)?)
+}
+
+/// Every part this arena can be set up with, by id, name and what it does.
+fn list_variants(arena: &Arena) {
+    let id = arena.id.as_str();
+    println!("Starts:");
+    for start in Variant::starts(id) {
+        println!("  {:<14} {:<18} {}", start.id, start.name, start.line);
+    }
+    println!("Finds:");
+    for finds in Variant::finds(id) {
+        let told = Variant {
+            finds: finds.id.to_owned(),
+            ..Variant::standard()
+        }
+        .told(arena);
+        println!("  {:<14} {:<18} {}", finds.id, finds.name, told[1].line);
+    }
+    println!("Conditions:");
+    for condition in Variant::conditions(id) {
+        let told = Variant {
+            condition: Some(condition.id.to_owned()),
+            ..Variant::standard()
+        }
+        .told(arena);
+        println!(
+            "  {:<14} {:<18} {}",
+            condition.id, told[2].name, told[2].line
+        );
     }
 }
 
@@ -304,7 +381,8 @@ fn play_match(mut args: Args) -> Result<()> {
     let board = args.flag("--board");
     let json = args.flag("--json");
     let record = args.value("--record")?;
-    let arena = load_arena(args.value("--file")?)?;
+    let arena = load_arena(&mut args)?;
+    let arena = varied(&mut args, arena, seed)?;
     args.done()?;
     let pick = |text: Option<String>, default: Vec<Profile>| -> Result<Vec<Profile>> {
         match text {
@@ -330,6 +408,11 @@ fn play_match(mut args: Args) -> Result<()> {
     let right = pick(right, visit_right)?;
     let mut m = Match::new(arena, rules, seed, [left, right])?;
     if !json {
+        if let Some(variant) = &m.arena.variant {
+            for told in variant.told(&m.arena) {
+                println!("{}: {}", told.name, told.line);
+            }
+        }
         for side in Side::BOTH {
             let team: Vec<String> = m.rosters[side.index()]
                 .iter()
@@ -412,8 +495,13 @@ fn run_tournament(mut args: Args) -> Result<()> {
     let trios = args.number("--trios", 5)? as usize;
     let coaches = coaches(&mut args)?;
     let rules = ruleset(&mut args)?;
-    let arena = load_arena(args.value("--file")?)?;
+    let sweep = args.flag("--sweep");
+    let arena = load_arena(&mut args)?;
+    let arena = varied(&mut args, arena, seed)?;
     args.done()?;
+    if sweep {
+        return run_sweep(&arena, rules, seed, pairings, coaches);
+    }
     let s = tournament::run(&arena, rules, seed, pairings, coaches);
     let pct = |n: u32| 100.0 * f64::from(n) / f64::from(s.matches.max(1));
     println!(
@@ -477,6 +565,49 @@ fn run_tournament(mut args: Args) -> Result<()> {
         for (trio, r) in trio_list.iter().rev().take(trios).rev() {
             println!("  worst {:.3}  {trio} ({})", r.score(), r.played);
         }
+    }
+    Ok(())
+}
+
+/// Every variant of the arena that changes one part, each played as a tournament of its own:
+/// how far the left side's score and the kinds' scores move from even.
+fn run_sweep(
+    arena: &Arena,
+    rules: Ruleset,
+    seed: u64,
+    pairings: u32,
+    coaches: [Coach; 2],
+) -> Result<()> {
+    anyhow::ensure!(
+        arena.variant.is_none(),
+        "--sweep plays every variant itself; leave out --variant"
+    );
+    println!(
+        "{}: {pairings} pairings a variant, each played from both sides",
+        arena.name
+    );
+    println!(
+        "  {:<34} {:>6} {:>8} {:>8} {:>7}",
+        "variant", "left", "low kind", "top kind", "turns"
+    );
+    for variant in Variant::singles(&arena.id) {
+        let varied = variant.apply(arena)?;
+        let s = tournament::run(&varied, rules, seed, pairings, coaches);
+        let scores: Vec<f64> = s.by_kind.values().map(|r| r.score()).collect();
+        let low = scores.iter().copied().fold(1.0, f64::min);
+        let top = scores.iter().copied().fold(0.0, f64::max);
+        let name = match variant.headline(arena) {
+            words if words.is_empty() => "standard".to_owned(),
+            words => words,
+        };
+        println!(
+            "  {:<34} {:>6.3} {:>8.3} {:>8.3} {:>7.1}",
+            name,
+            s.left.score(),
+            low,
+            top,
+            s.average_turns()
+        );
     }
     Ok(())
 }

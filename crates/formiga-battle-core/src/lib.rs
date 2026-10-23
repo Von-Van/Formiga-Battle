@@ -22,6 +22,7 @@
 //! - [`notebook`]: the Handler's Notebook: what each creature was seen to do, in plain words.
 //! - [`replay`]: a whole match as data, and replaying it.
 //! - [`tournament`]: many matches at once, for the fairness checks.
+//! - [`variant`]: the same arena set up a little differently: starts, finds and conditions.
 
 pub mod ai;
 pub mod arena;
@@ -43,6 +44,7 @@ pub mod ruleset;
 pub mod scenery;
 pub mod style;
 pub mod tournament;
+pub mod variant;
 
 pub use arena::{Arena, Effect, Scenery, TEAM_SIZE};
 pub use event::{Blown, Event, EventKind, Outcome, Reason, Victory};
@@ -55,3 +57,4 @@ pub use profile::{Behavior, Bond, Leanings, Nature, Profile, Strength};
 pub use replay::MatchRecord;
 pub use ruleset::{CaptureRule, RULES_VERSION, Ruleset, RulesetError};
 pub use style::{Archetype, Book, STYLE_VERSION};
+pub use variant::Variant;

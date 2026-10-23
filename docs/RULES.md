@@ -369,6 +369,77 @@ Before rules version 4 the yard was the whole 3 by 3 square. With all six creatu
 holders could always be found to keep it contested, and a flank could rarely push anyone out:
 in 3,000 Exhibition matches on the square, 14% were won by capture, and Wallflowers scored 0.413.
 
+## Match variants
+
+A match against the visitors or a friend is set up in a variant of its arena, so one match's
+opening is not the last one's. A variant has three parts, each compiled in beside the arenas
+(`crates/formiga-battle-core/src/variant.rs`) and naming the arenas it fits:
+
+- a **start**: where each team's three stand;
+- **finds**: which item spots are live, which found things turn up and how often;
+- at most one **condition**: the map event's timing, how long a switch rests, or a gate's
+  starting state.
+
+Every part is set out for the left team only and the right team's half is its mirror image, so a
+variant cannot favour a side by how it is written. The match seed draws each part on its own,
+every start and every finds equally likely and no condition as likely as each one, so both
+windows of a friend match draw the same variant without a word more through the relay, and a
+replay does too. Field Lessons are always the Backyard as its file has it. The Where page says how
+the next match against the visitors is set up, and the match introduction names every part that
+is not the arena's own before the first order.
+
+| Start | What it is | Arenas |
+|---|---|---|
+| Usual starts | Each team along its own edge, as the arena file has it | All |
+| A step in | One column in from the edge, closer to the beacon | All but Sandy Cove |
+| Bunched far | Three together in the far corner | All |
+| Spread wide | Corner to corner along the edge | All |
+
+| Finds | What it is | Arenas |
+|---|---|---|
+| Usual finds | From turn 2, every third turn, the usual mix | All |
+| Few finds | From turn 3, every fourth turn | All |
+| Plenty of finds | From turn 2, every other turn | All |
+| Light finds | Only puffs (36), twigs (34) and leaf umbrellas (30) | All |
+| One pair of spots | One pair of item spots live: the far corners (Backyard, Millpond), the near corners (Woodland Glade), the rocks by the sandbar (Sandy Cove) | All |
+
+| Condition | Backyard | Woodland Glade | Millpond | Sandy Cove |
+|---|---|---|---|---|
+| Early | Early sprinkler: turns 2, 6, 10 | Early breeze: turns 2, 6, 10 | Early flood: turns 2, 7, 12 | Early tide: turns 2, 5, 8, 11 |
+| Restless | Restless sprinkler: turns 3, 6, 9, 12 | Gusty: turns 3, 6, 9, 12 | High water: turns 3, 6, 9, 12 | |
+| Calm | Sprinkler off | Still air | Still pond | Slack tide |
+| Slow switches | Stiff taps | Settled trees | Stiff sluices | Quiet shells |
+| Gate open | Gate left open | | Footbridge down | |
+
+Calm leaves the map event to the switches alone; slow switches rest 4 whole turns after setting it
+off, not 2. A variant changes only data the arena already has (its start tiles, item spots, the
+map event's timing, the gates' starting state) and the found things' rhythm, which every arena
+plays at the usual one: how a turn resolves is unchanged, so `RULES_VERSION` does not move. The
+arena a match is played on, variant and all, is what its `MatchRecord` keeps, so a variant match
+replays exactly; a record kept before variants reads as the usual rhythm. `--variant` sets one up
+from the command line, `arena --variants` lists an arena's parts, and `tournament --sweep` plays
+each one.
+
+Every variant that changes one part is held to the arena's own fairness check in
+`tests/variants.rs`: 150 pairings played from both sides, the left side within 0.42 to 0.58 and
+every temperament kind within 0.35 to 0.65, besides being checked as each start's mirror and the
+same number of steps from the beacon. Over 3,000 Exhibition-coached matches
+a variant (`tournament --sweep --pairings 1500 --seed 7`), every one of them stays within a couple
+of hundredths of even for the left side, and its kinds within the arena's own usual spread:
+
+| Arena | Left, usual | Kinds, usual | Variants | Left, variants | Lowest kind | Highest kind |
+|---|---|---|---|---|---|---|
+| Backyard | 0.508 | 0.458 to 0.529 | 12 | 0.496 to 0.516 | 0.434 (Early sprinkler) | 0.538 (Light finds) |
+| Woodland Glade | 0.493 | 0.409 to 0.522 | 11 | 0.493 to 0.512 | 0.399 (Early breeze) | 0.567 (Bunched far) |
+| Millpond | 0.504 | 0.444 to 0.523 | 12 | 0.495 to 0.514 | 0.402 (Spread wide) | 0.545 (Still pond) |
+| Sandy Cove | 0.500 | 0.432 to 0.537 | 9 | 0.496 to 0.516 | 0.409 (Bunched far) | 0.539 (Bunched far) |
+
+A step in was cut from Sandy Cove: so close to the rocks the teams meet by turn 2, and Wallflowers
+fell to 0.368 there (0.432 from the usual starts). Bunched far on the Cove is the shortest variant,
+4.7 turns a match against 7.0, and Early flood on the Millpond 9.1 against 10.4. The Exhibition
+coach seldom turns the same switch twice, so slow switches play out as the usual board in these
+numbers; they change how often a Handler can set the event off.
+
 ## How a creature walks
 
 A creature never chooses whether to obey: its order sets where it is going and what it does there.
