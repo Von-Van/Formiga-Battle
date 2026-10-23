@@ -34,7 +34,7 @@ own `settings.json` (volumes, mute, motion and window size); set `FORMIGA_BATTLE
 it somewhere else while you work:
 
 ```sh
-cargo run --release -p formiga-battle                              # the sample colony
+cargo run --release -p formiga-battle -- --sample                  # the sample colony
 cargo run --release -p formiga-battle -- --from-save <colony.json> # a colony, read and never written
 ```
 

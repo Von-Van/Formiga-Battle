@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Battle opened by itself, from Applications or the Start menu rather than from Formiga, says
+  where your own companions come from before anything else: a card over the Battleground says
+  Battle plays with your own colony when it comes by train from Formiga, and to choose "Play
+  Formiga Battle…" from the Formiga icon in the menu bar (the notification area on Windows), with
+  formigaworld.com for anyone without Formiga yet. "Look around with the sample colony" puts the
+  card away and leaves the rehearsal as it was, and "Close" closes Battle. `--sample` opens on the
+  sample colony with no card, as before, and `--review welcome` pictures the card.
 - Battle remembers its settings between launches: the music and sound volumes, the mute, reduced
   motion and the window's size, in one small file of its own (`settings.json`, under Application
   Support on macOS and `%APPDATA%` on Windows). Reduced motion follows Desktop's setting until it
