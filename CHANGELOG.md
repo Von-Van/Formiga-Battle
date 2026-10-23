@@ -9,6 +9,11 @@
   formigaworld.com for anyone without Formiga yet. "Look around with the sample colony" puts the
   card away and leaves the rehearsal as it was, and "Close" closes Battle. `--sample` opens on the
   sample colony with no card, as before, and `--review welcome` pictures the card.
+- Battle remembers its settings between launches: the music and sound volumes, the mute, reduced
+  motion and the window's size, in one small file of its own (`settings.json`, under Application
+  Support on macOS and `%APPDATA%` on Windows). Reduced motion follows Desktop's setting until it
+  is changed in Battle. Only how Battle looks and sounds is kept there; Desktop still keeps the
+  colony's record. Review pictures read and keep none of it.
 
 ## [0.67.14] - 2026-10-17
 

@@ -243,7 +243,7 @@ impl BattleApp {
                 "Sign your name, choose your pennant, and look after your trios.".to_owned()
             }
             Step::History => "Every match your colony has played, newest first.".to_owned(),
-            Step::Settings => "Settings last for this sitting.".to_owned(),
+            Step::Settings => "Settings are kept for next time.".to_owned(),
         }
     }
 
@@ -681,7 +681,7 @@ impl BattleApp {
                     ui,
                     &line,
                     "Settings",
-                    "How Battle looks and sounds. Battle keeps no files, so these last for this sitting.",
+                    "How Battle looks and sounds. Battle keeps these on this computer for next time.",
                 );
                 ui.add_space(u * 6.0);
                 self.settings(ui, u);

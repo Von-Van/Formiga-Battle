@@ -22,6 +22,7 @@ mod pennant;
 mod playback;
 mod rewards;
 mod scene;
+mod settings;
 mod sound;
 mod station;
 mod still;
@@ -273,10 +274,26 @@ fn window(args: Vec<String>) -> Result<()> {
     });
     let review = snap.as_ref().map(|_| args.review);
     let reviewing = review.is_some();
+    // How Battle looked and sounded last time. A window opened for its picture reads and keeps
+    // none of it, so a review looks the same on every machine.
+    let keeper = if reviewing {
+        None
+    } else {
+        settings::folder().map(settings::Keeper::open)
+    };
+    let kept = keeper.as_ref().map(settings::Keeper::settings);
+    if let Some(reduce) = kept.and_then(|k| k.reduce_motion) {
+        table.reduce_motion = reduce;
+    }
+    let size = args
+        .window
+        .map(|(w, h)| [w, h])
+        .or(kept.and_then(|k| k.window))
+        .unwrap_or([1280.0, 780.0]);
     let welcome = args.welcome;
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title("Formiga Battle")
-        .with_inner_size(args.window.map_or([1280.0, 780.0], |(w, h)| [w, h]))
+        .with_inner_size(size)
         .with_min_inner_size([1024.0, 640.0])
         .with_icon(icon::window());
     if reviewing {
@@ -296,9 +313,16 @@ fn window(args: Vec<String>) -> Result<()> {
             let sound = if reviewing {
                 sound::Sound::silent()
             } else {
-                sound::Sound::open()
+                let mut sound = sound::Sound::open();
+                if let Some(kept) = kept {
+                    sound.set_levels(kept.levels());
+                }
+                sound
             };
-            let app = app::BattleApp::new(host, table, review, snap, sound);
+            let mut app = app::BattleApp::new(host, table, review, snap, sound);
+            if let Some(keeper) = keeper {
+                app.keep(keeper);
+            }
             Ok(Box::new(if welcome { app.welcoming() } else { app }))
         }),
     )

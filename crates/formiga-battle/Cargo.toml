@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+directories.workspace = true
 eframe.workspace = true
 formiga-art.workspace = true
 formiga-battle-contract.workspace = true
