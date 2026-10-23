@@ -69,7 +69,7 @@ WINDOW:
                              playing, with the whole match open) or lessons (choosing a Field
                              Lesson) or lesson (the lesson on flanks, orders not yet given)
                              or welcome (the station under the card Battle opened by itself
-                             shows)
+                             shows) or handler (the Handler's page: standing and trios)
     --render-window <PNG>    A picture of the window as --snap takes it (at 2 pixels to the point),
                              made without opening one: --review, --at and --window as for --snap
     --render-board <PNG>     Draw the board without a window, after --turns turns of AI play
@@ -396,10 +396,7 @@ pub(crate) fn write_png(path: &Path, canvas: &Canvas, scale: u32) -> Result<()> 
     }
     let file = std::fs::File::create(path)
         .with_context(|| format!("could not write {}", path.display()))?;
-    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), width, height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.write_header()?.write_image_data(&bytes)?;
+    formiga_art::write_png(std::io::BufWriter::new(file), width, height, &bytes)?;
     Ok(())
 }
 

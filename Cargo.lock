@@ -1301,7 +1301,6 @@ dependencies = [
  "formiga-expansion-rulebook",
  "formiga-travel",
  "getrandom 0.4.3",
- "png",
  "rodio",
  "serde",
  "serde_json",

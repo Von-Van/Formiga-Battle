@@ -193,13 +193,13 @@ pub fn at(size: u32) -> Canvas {
 /// A picture as PNG bytes.
 fn png(picture: &Canvas) -> Vec<u8> {
     let mut out = Vec::new();
-    let mut encoder = png::Encoder::new(&mut out, picture.width(), picture.height());
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder
-        .write_header()
-        .and_then(|mut writer| writer.write_image_data(&picture.rgba_bytes()))
-        .expect("a PNG written to memory");
+    formiga_art::write_png(
+        &mut out,
+        picture.width(),
+        picture.height(),
+        &picture.rgba_bytes(),
+    )
+    .expect("a PNG written to memory");
     out
 }
 

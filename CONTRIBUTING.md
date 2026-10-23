@@ -95,7 +95,8 @@ cargo test --workspace
   to take the same picture). Each takes `--arena`.
 - **Releases.** Battle's version follows Formiga Desktop's. `scripts/set-version.sh X.Y.Z vX.Y.Z`
   moves it and Desktop's tag everywhere they appear, and `scripts/set-version.sh --check` says
-  whether they agree. Add what changed under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md).
+  whether they agree. Add what changed under the coming version's `## [X.Y.Z] - date` section in
+  [CHANGELOG.md](CHANGELOG.md); the release scripts look for that heading.
 
 Formiga intentionally avoids accounts, telemetry and anything that identifies a computer, and a
 friend match keeps nothing once it is over. Forks are encouraged to preserve those defaults and to
