@@ -6,5 +6,7 @@
 
 pub mod bracket;
 pub mod fixture;
+pub mod season;
 
 pub use bracket::{Bracket, BracketError, Decided, Fixture, FixtureResult};
+pub use season::{Kind, Season, Stage};

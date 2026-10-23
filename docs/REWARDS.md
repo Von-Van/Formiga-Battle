@@ -87,3 +87,11 @@ Events are kept there too: the Open under way or last finished, as a bracket
 fixtures against the colony are ordinary matches against the visitors, earning toward the place's
 cup as any other; the rivals' own fixtures are played out under the same rules and earn nothing.
 A fixture is recorded once, by its match id, so a crash never plays it twice.
+
+A season (`formiga-battle-world`'s `season.rs`) is an Open of four, a Spring and a Summer Regional
+of eight, and a Championship of the four with most season points, with last season's champion
+defending. Season points (8, 5, 3 and 1 for winning, the final, a semi-final and a quarter-final)
+decide only seeding and who reaches the Championship, and start from nothing each season. The
+career keeps the season, every season's champion for the Hall of Champions, and what the
+Battleground noticed, each with the match ids that show it. The colony's standing comes from what
+it has won, never from how much it has played.

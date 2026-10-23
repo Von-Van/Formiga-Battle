@@ -6,7 +6,7 @@
 //! applied once, by the same id Desktop applies it by, so a crash between the two writes never
 //! counts a match twice. A rehearsal, with no Desktop behind it, keeps no career.
 
-use formiga_battle_world::Bracket;
+use formiga_battle_world::{Bracket, Season};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -70,6 +70,109 @@ pub struct Career {
     pub events_entered: u32,
     /// Events won, oldest first.
     pub titles: Vec<Title>,
+    /// The season under way, or the last finished.
+    pub season: Option<Season>,
+    /// Every season's champion, oldest first: rivals and the colony alike.
+    pub hall: Vec<Champion>,
+    /// What the Battleground has noticed about the colony, oldest first, each with the matches
+    /// that show it.
+    pub recognition: Vec<Recognition>,
+}
+
+/// A season's champion, for the Hall of Champions.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Champion {
+    pub season: u32,
+    /// "you" for the colony, or a rival's id.
+    pub who: String,
+    pub event: String,
+}
+
+/// Something the Battleground noticed, backed by the matches that show it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Noticed {
+    /// The first win over a rival.
+    FirstWin { rival: String },
+    /// A win over a rival seeded above the colony in an event.
+    Upset {
+        rival: String,
+        event: String,
+        season: u32,
+    },
+    /// A fifth meeting with the same rival.
+    Rivalry { rival: String },
+    /// An event won.
+    EventWon { event: String, season: u32 },
+    /// The season's Championship won for the first time.
+    SeasonChampion { season: u32 },
+    /// The Championship won again by its holder.
+    TitleDefended { season: u32 },
+    /// The Championship lost by its holder.
+    TitleLost { season: u32, to: String },
+    /// The Championship won back after losing it.
+    TitleReclaimed { season: u32 },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Recognition {
+    #[serde(flatten)]
+    pub noticed: Noticed,
+    /// The matches that show it.
+    pub evidence: Vec<String>,
+    pub when_utc: String,
+}
+
+/// Recognition kept; the oldest are let go, the Hall and titles keep the rest.
+const NOTICED_KEPT: usize = 64;
+
+/// The colony's standing at the Battleground, from what it has done, never from how much it has
+/// played, with how the next is earned.
+pub fn standing(career: &Career) -> (&'static str, &'static str) {
+    let championships = career.hall.iter().filter(|c| c.who == "you").count();
+    let reached_final = !career.titles.is_empty()
+        || career
+            .recognition
+            .iter()
+            .any(|r| matches!(r.noticed, Noticed::TitleLost { .. }))
+        || career.event.as_ref().is_some_and(|e| {
+            let b = &e.bracket;
+            b.entrants
+                .iter()
+                .position(|x| x == "you")
+                .is_some_and(|you| b.reached(you).0 + 1 == b.rounds())
+        });
+    if championships >= 3 {
+        ("Legend of the Battleground", "Three Championships won")
+    } else if championships >= 1 {
+        ("Season Champion", "Win three Championships to be a Legend")
+    } else if !career.titles.is_empty() {
+        (
+            "Champion",
+            "Win a season's Championship to be Season Champion",
+        )
+    } else if reached_final {
+        ("Contender", "Win an event to be a Champion")
+    } else {
+        ("Newcomer", "Reach a final to be a Contender")
+    }
+}
+
+impl Career {
+    /// Notes something the Battleground noticed, once: the same notice twice is kept once.
+    pub fn notice(&mut self, noticed: Noticed, evidence: Vec<String>, when_utc: &str) {
+        if self.recognition.iter().any(|r| r.noticed == noticed) {
+            return;
+        }
+        self.recognition.push(Recognition {
+            noticed,
+            evidence,
+            when_utc: when_utc.to_owned(),
+        });
+        if self.recognition.len() > NOTICED_KEPT {
+            self.recognition.remove(0);
+        }
+    }
 }
 
 impl Default for Career {
@@ -82,6 +185,9 @@ impl Default for Career {
             event: None,
             events_entered: 0,
             titles: Vec::new(),
+            season: None,
+            hall: Vec::new(),
+            recognition: Vec::new(),
         }
     }
 }
