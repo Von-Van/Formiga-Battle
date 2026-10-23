@@ -15,6 +15,7 @@
 //! sets up (`formiga_battle_core::lesson`): the lesson's goal and notes take the field guide's
 //! place, the timer waits, and nothing is kept.
 
+mod circuit;
 mod handler;
 mod menus;
 mod registry;
@@ -115,6 +116,9 @@ pub enum Step {
     /// The Handler's own pages, opened from the station rather than on the way anywhere: who
     /// they are and their trios, the history, and the settings.
     Handler,
+    /// The Handler's place at the Battleground: the event under way, titles won, and how they
+    /// stand against each rival.
+    Circuit,
     History,
     Settings,
 }
@@ -127,6 +131,7 @@ impl Step {
             Self::Who => "Who",
             Self::Room => "Friend",
             Self::Handler => "Handler",
+            Self::Circuit => "Circuit",
             Self::History => "History",
             Self::Settings => "Settings",
         }
@@ -145,6 +150,8 @@ pub enum Review {
     Friend,
     /// The Handler's registry: their card and pennant, standing and trios.
     Handler,
+    /// The Circuit page, with an event entered and its first semi-final played.
+    Circuit,
     /// The sample colony's history, and its settings.
     History,
     Settings,
@@ -457,6 +464,10 @@ impl BattleApp {
                 app.open_journal(Outing::Home, Step::History);
             }
             Some(Review::Settings) => app.open_journal(Outing::Home, Step::Settings),
+            Some(Review::Circuit) => {
+                app.table.enter_event();
+                app.open_journal(Outing::Home, Step::Circuit);
+            }
             Some(Review::Handler) => {
                 app.table.record = formiga_battle_contract::sample::record();
                 app.handler = "Jo".to_owned();
@@ -752,7 +763,16 @@ impl BattleApp {
         );
         let mut tabs = Vec::new();
         let words = self.tab_words();
-        let mut x = right.min.x + unit * 4.0;
+        // The tabs start over the right page, or further left if they would otherwise run into
+        // the sound control at its top right.
+        let widths: f32 = words
+            .iter()
+            .map(|w| snap(measure(w, chrome::LABEL) + unit * 12.0) + unit * 3.0)
+            .sum();
+        let sound = measure("Muted", chrome::LABEL) + unit * 27.0;
+        let mut x = (right.min.x + unit * 4.0)
+            .min(snap(right.max.x - sound - widths))
+            .max(left.min.x);
         for word in &words {
             let w = snap(measure(word, chrome::LABEL) + unit * 12.0);
             tabs.push(Rect::from_min_size(
@@ -3316,6 +3336,9 @@ impl BattleApp {
         }
         if let Some(meeting) = &self.table.meeting {
             ui.label(RichText::new(meeting).size(12.5).color(ink::FOREST));
+        }
+        if let Some(event) = &self.table.event_line {
+            ui.label(RichText::new(event).size(13.0).strong().color(ink::FOREST));
         }
         ui.label(
             RichText::new(format!("After {} turns", outcome.turn))

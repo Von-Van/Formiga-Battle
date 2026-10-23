@@ -3,6 +3,7 @@ members = [
     "crates/formiga-battle",
     "crates/formiga-battle-core",
     "crates/formiga-battle-room",
+    "crates/formiga-battle-world",
 ]
 resolver = "2"
 
@@ -28,6 +29,7 @@ formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "76
 
 formiga-battle-core = { path = "crates/formiga-battle-core" }
 formiga-battle-room = { path = "crates/formiga-battle-room" }
+formiga-battle-world = { path = "crates/formiga-battle-world" }
 
 anyhow = "1.0.104"
 directories = "5.0.1"
