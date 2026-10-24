@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Playbooks: a trio's plan for a match, in up to three stages (secure the beacon, put pressure
+  on, draw them out, counter their holders, fetch, work the board), written on a new Playbooks
+  page among the Handler's own. A stage can come in whenever the board shows something, such as
+  "they hold the beacon" or "we are behind". Against the visitors, the playbook the trio plays by,
+  chosen on the Who page, fills in each turn's orders, and you change any of them before locking
+  in; the whole match says what the playbook made of each turn. A friend match or a Field Lesson
+  never uses one. Playbooks are kept with the career in Battle's own file. `--review playbooks`
+  and `--review planned` picture them. See docs/PLAYBOOK.md.
 - Orders can be given from the keyboard alone: the arrow keys move a square cursor over the board
   from the middle of the yard, and Space gives the order in hand there as a click would
   (Shift+Space as a right click). The mouse over the board puts the cursor away. The keys are

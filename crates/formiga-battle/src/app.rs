@@ -18,6 +18,7 @@
 mod circuit;
 mod handler;
 mod menus;
+mod playbooks;
 mod registry;
 mod welcome;
 
@@ -116,6 +117,8 @@ pub enum Step {
     /// The Handler's own pages, opened from the station rather than on the way anywhere: who
     /// they are and their trios, the history, and the settings.
     Handler,
+    /// Each trio's playbooks: its plans for a match, in stages.
+    Playbooks,
     /// The Handler's place at the Battleground: the event under way, titles won, and how they
     /// stand against each rival.
     Circuit,
@@ -131,6 +134,7 @@ impl Step {
             Self::Who => "Who",
             Self::Room => "Friend",
             Self::Handler => "Handler",
+            Self::Playbooks => "Playbooks",
             Self::Circuit => "Circuit",
             Self::History => "History",
             Self::Settings => "Settings",
@@ -169,6 +173,10 @@ pub enum Review {
     Lesson,
     /// The Battleground with the welcome card over it, as Battle opened by itself shows it.
     Welcome,
+    /// A trio's playbooks, one open at its second stage.
+    Playbooks,
+    /// A match against the visitors with the trio's playbook filling in the orders.
+    Planned,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -234,6 +242,13 @@ pub struct BattleApp {
     trio_draft: String,
     /// A trio being renamed.
     renaming: Option<registry::Renaming>,
+    /// The trio the Playbooks page is open at, by id.
+    shelf_trio: Option<String>,
+    /// Which of its playbooks is open, and which stage of it.
+    shelf_book: usize,
+    shelf_stage: usize,
+    /// "Remove this playbook" was pressed once: the next press removes it.
+    shelf_removing: bool,
     join_code: String,
     /// The Handler has read what a friend match shares, this time.
     understood: bool,
@@ -390,6 +405,10 @@ impl BattleApp {
             rules: (0.0, 21.0),
             trio_draft: String::new(),
             renaming: None,
+            shelf_trio: None,
+            shelf_book: 0,
+            shelf_stage: 0,
+            shelf_removing: false,
             join_code: String::new(),
             understood: false,
             welcome: false,
@@ -481,6 +500,17 @@ impl BattleApp {
                 // A colony with a trio, its three picked.
                 app.table.record = formiga_battle_contract::sample::record();
                 app.open_journal(Outing::Home, Step::Who);
+            }
+            Some(Review::Playbooks) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.sample_playbooks();
+                app.shelf_stage = 1;
+                app.open_journal(Outing::Home, Step::Playbooks);
+            }
+            Some(Review::Planned) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.sample_playbooks();
+                app.begin();
             }
             Some(Review::Friend) => {
                 app.open_journal(Outing::World, Step::Room);
@@ -2627,6 +2657,10 @@ impl BattleApp {
                 &format!("{}\nTurn {turn} of {}", lesson.goal(), lesson.turns()),
                 u,
             );
+            ui.add_space(u * 3.0);
+        }
+        if let Some((name, words)) = self.table.playbook_words() {
+            sticky(ui, &format!("Playbook: {name}\n{words}"), u);
             ui.add_space(u * 3.0);
         }
         chrome::kicker(

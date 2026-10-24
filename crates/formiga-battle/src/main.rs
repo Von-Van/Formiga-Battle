@@ -189,6 +189,8 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "friend" => app::Review::Friend,
                     "history" => app::Review::History,
                     "circuit" => app::Review::Circuit,
+                    "playbooks" => app::Review::Playbooks,
+                    "planned" => app::Review::Planned,
                     "handler" => app::Review::Handler,
                     "settings" => app::Review::Settings,
                     "orders" => app::Review::Orders,
