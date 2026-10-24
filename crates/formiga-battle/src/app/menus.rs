@@ -779,7 +779,8 @@ impl BattleApp {
         let fresh = !matches!(&self.preview, Some((k, _)) if *k == key);
         let picture = if fresh { Some(garden.picture()) } else { None };
         let (w, h) = (garden.ground.width() as f32, garden.ground.height() as f32);
-        let caption_h = 86.0;
+        // The sign and its words, and under them how this match is set up.
+        let caption_h = 86.0 + 22.0 + 44.0 * 3.0;
         let area = ui.available_rect_before_wrap();
         let room = Rect::from_min_max(area.min, pos2(area.max.x, area.max.y - caption_h));
         let ppp = ctx.pixels_per_point();
@@ -890,6 +891,45 @@ impl BattleApp {
                 });
             }
         });
+        ui.add_space(u * 4.0);
+        self.setup(ui, &arena, u);
+    }
+
+    /// How the match here is set up, under the place's caption: where the teams start, what turns
+    /// up, and anything the place does differently, drawn from the match seed so it is the same
+    /// as the board the match opens on. A friend's room draws its own when both are in.
+    fn setup(&self, ui: &mut egui::Ui, arena: &formiga_battle_core::Arena, u: f32) {
+        if self.outing == Outing::World {
+            ui.label(
+                RichText::new(
+                    "Every match is set up a little differently: where the teams start, what turns \
+                     up and how the place behaves. You both see it before the first order.",
+                )
+                .size(12.0)
+                .italics()
+                .color(ink::MUTED),
+            );
+            return;
+        }
+        ui.label(
+            RichText::new("How this match is set up:")
+                .size(12.5)
+                .italics()
+                .color(ink::MUTED),
+        );
+        ui.add_space(u * 2.0);
+        for told in self.table.variant().told(arena) {
+            // The part's name lettered as the page's labels are, what it does under it; a part
+            // that leaves the place as it always is in the quieter ink.
+            let ink = if told.standard {
+                ink::MUTED
+            } else {
+                ink::FOREST
+            };
+            ui.label(label_job(&told.name, chrome::LABEL, ink));
+            ui.label(RichText::new(&told.line).size(12.5).color(ink::PAGE));
+            ui.add_space(u * 2.0);
+        }
     }
 
     /// Every place to play, on a card with its little picture, and the page's way on.

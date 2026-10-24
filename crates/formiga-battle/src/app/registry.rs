@@ -803,9 +803,10 @@ impl BattleApp {
             0.55,
         );
         // A paper tag hung under each cane.
+        let pad = vec2(u * 4.0, u * 2.0);
+        let mut below = rect.max.y;
         for (i, tag) in tags.iter().enumerate() {
             let galley = painter.layout_no_wrap(tag.clone(), FontId::proportional(11.0), ink::PAGE);
-            let pad = vec2(u * 4.0, u * 2.0);
             let tag_size = galley.size() + pad * 2.0;
             let x = if i == 0 {
                 rect.min.x + u * 2.0
@@ -815,6 +816,26 @@ impl BattleApp {
             let tag_rect = Rect::from_min_size(pos2(x, rect.max.y + u * 2.0), tag_size);
             chrome::card(&painter, tag_rect, u, ink::CARD, ink::LINE);
             painter.galley(tag_rect.min + pad, galley, ink::PAGE);
+            below = below.max(tag_rect.max.y);
+        }
+        // How this match is set up, when it is not the place as it always is: said once, here,
+        // before the first order, on a card of its own under the middle of the ribbon.
+        let setup = self
+            .table
+            .m
+            .as_ref()
+            .filter(|_| self.table.lesson.is_none())
+            .and_then(|m| m.arena.variant.as_ref().map(|v| v.headline(&m.arena)))
+            .unwrap_or_default();
+        if !setup.is_empty() {
+            let galley = painter.layout_no_wrap(setup, FontId::proportional(12.0), ink::FOREST);
+            let size = galley.size() + pad * 2.0;
+            let card = Rect::from_min_size(
+                pos2((rect.center().x - size.x / 2.0).round(), below + u * 3.0),
+                size,
+            );
+            chrome::card(&painter, card, u, ink::CARD, ink::LINE);
+            painter.galley(card.min + pad, galley, ink::FOREST);
         }
     }
 
