@@ -40,7 +40,13 @@ impl BattleApp {
     /// The pages the notebook is turning through: an outing's, or the Handler's own.
     pub(super) fn steps(&self) -> &'static [Step] {
         if self.own_pages() {
-            &[Step::Handler, Step::Circuit, Step::History, Step::Settings]
+            &[
+                Step::Handler,
+                Step::Playbooks,
+                Step::Circuit,
+                Step::History,
+                Step::Settings,
+            ]
         } else {
             self.outing.steps()
         }
@@ -50,7 +56,7 @@ impl BattleApp {
     pub(super) fn own_pages(&self) -> bool {
         matches!(
             self.step,
-            Step::Handler | Step::Circuit | Step::History | Step::Settings
+            Step::Handler | Step::Playbooks | Step::Circuit | Step::History | Step::Settings
         )
     }
 
@@ -246,6 +252,10 @@ impl BattleApp {
             },
             Step::Handler => {
                 "Sign your name, choose your pennant, and look after your trios.".to_owned()
+            }
+            Step::Playbooks => {
+                "Write each trio's plans in stages; the one it plays by fills in its orders."
+                    .to_owned()
             }
             Step::Circuit => match self.table.next_event_fixture() {
                 Some((_, round, rival)) => format!("Your {round} against {} is next.", rival.name),
@@ -675,6 +685,19 @@ impl BattleApp {
                     .auto_shrink([false, false])
                     .show(ui, |ui| self.handler_page(ui, ctx, u));
             }
+            Step::Playbooks => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "Playbooks",
+                    "A plan for a whole match, in up to three stages. Against the visitors, the one a trio plays by fills in its orders each turn, and you change any of them before you lock in.",
+                );
+                ui.add_space(u * 6.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("playbooks-left")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| self.shelf_left(ui, u));
+            }
             Step::Circuit => {
                 chrome::page_heading(
                     ui,
@@ -720,6 +743,7 @@ impl BattleApp {
                     Step::Who => self.lineup(ui, ctx, u),
                     Step::Room => self.shared(ui, ctx, u),
                     Step::Handler => self.standing_and_trios(ui, ctx, u),
+                    Step::Playbooks => self.shelf_right(ui, u),
                     Step::Circuit => self.standing_against_rivals(ui, u),
                     Step::History => self.totals(ui, u),
                     Step::Settings => self.keys_and_about(ui, u),
@@ -750,6 +774,7 @@ impl BattleApp {
             Some(Step::Lessons) => "Lessons",
             Some(Step::Who) => "Who goes",
             Some(Step::Handler) => "Your Handler",
+            Some(Step::Playbooks) => "Playbooks",
             Some(Step::Circuit) => "The Circuit",
             Some(Step::History) => "History",
             Some(_) => "Back",
