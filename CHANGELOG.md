@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Playbooks: a trio's plan for a match, in up to three stages (secure the beacon, put pressure
+  on, draw them out, counter their holders, fetch, work the board), written on a new Playbooks
+  page among the Handler's own. A stage can come in whenever the board shows something, such as
+  "they hold the beacon" or "we are behind". Against the visitors, the playbook the trio plays by,
+  chosen on the Who page, fills in each turn's orders, and you change any of them before locking
+  in; the whole match says what the playbook made of each turn. A friend match or a Field Lesson
+  never uses one. Playbooks are kept with the career in Battle's own file. `--review playbooks`
+  and `--review planned` picture them. See docs/PLAYBOOK.md.
+- Orders can be given from the keyboard alone: the arrow keys move a square cursor over the board
+  from the middle of the yard, and Space gives the order in hand there as a click would
+  (Shift+Space as a right click). The mouse over the board puts the cursor away. The keys are
+  listed on the Settings page.
+- Each creature's ring carries a small mark that says its team by shape as well as by colour: an
+  arrowhead for the left team and a diamond for the right, so the teams can be told apart without
+  telling the two colours apart.
 - Seasons at the Battleground. Each season is four events on the places open to the colony, moving
   round a place each season: an Open of four, a Spring and a Summer Regional of eight, and a
   Championship of the four with most season points, where last season's champion defends their

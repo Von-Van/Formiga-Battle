@@ -18,6 +18,7 @@
 mod circuit;
 mod handler;
 mod menus;
+mod playbooks;
 mod registry;
 mod welcome;
 
@@ -116,6 +117,8 @@ pub enum Step {
     /// The Handler's own pages, opened from the station rather than on the way anywhere: who
     /// they are and their trios, the history, and the settings.
     Handler,
+    /// Each trio's playbooks: its plans for a match, in stages.
+    Playbooks,
     /// The Handler's place at the Battleground: the event under way, titles won, and how they
     /// stand against each rival.
     Circuit,
@@ -131,6 +134,7 @@ impl Step {
             Self::Who => "Who",
             Self::Room => "Friend",
             Self::Handler => "Handler",
+            Self::Playbooks => "Playbooks",
             Self::Circuit => "Circuit",
             Self::History => "History",
             Self::Settings => "Settings",
@@ -169,6 +173,10 @@ pub enum Review {
     Lesson,
     /// The Battleground with the welcome card over it, as Battle opened by itself shows it.
     Welcome,
+    /// A trio's playbooks, one open at its second stage.
+    Playbooks,
+    /// A match against the visitors with the trio's playbook filling in the orders.
+    Planned,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -211,6 +219,8 @@ pub struct BattleApp {
     cover: Cover,
     portraits: HashMap<(u64, String), egui::TextureHandle>,
     hover: Option<formiga_battle_core::Tile>,
+    /// The square the arrow keys have moved to, for giving orders without a mouse.
+    cursor: Option<formiga_battle_core::Tile>,
     error: Option<String>,
     /// The side page shows the Handler's Notebook instead of the orders.
     notebook_open: bool,
@@ -232,6 +242,13 @@ pub struct BattleApp {
     trio_draft: String,
     /// A trio being renamed.
     renaming: Option<registry::Renaming>,
+    /// The trio the Playbooks page is open at, by id.
+    shelf_trio: Option<String>,
+    /// Which of its playbooks is open, and which stage of it.
+    shelf_book: usize,
+    shelf_stage: usize,
+    /// "Remove this playbook" was pressed once: the next press removes it.
+    shelf_removing: bool,
     join_code: String,
     /// The Handler has read what a friend match shares, this time.
     understood: bool,
@@ -374,6 +391,7 @@ impl BattleApp {
             cover: Cover::default(),
             portraits: HashMap::new(),
             hover: None,
+            cursor: None,
             error: None,
             notebook_open: false,
             handler: card.as_ref().map(|c| c.name.clone()).unwrap_or_default(),
@@ -387,6 +405,10 @@ impl BattleApp {
             rules: (0.0, 21.0),
             trio_draft: String::new(),
             renaming: None,
+            shelf_trio: None,
+            shelf_book: 0,
+            shelf_stage: 0,
+            shelf_removing: false,
             join_code: String::new(),
             understood: false,
             welcome: false,
@@ -478,6 +500,17 @@ impl BattleApp {
                 // A colony with a trio, its three picked.
                 app.table.record = formiga_battle_contract::sample::record();
                 app.open_journal(Outing::Home, Step::Who);
+            }
+            Some(Review::Playbooks) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.sample_playbooks();
+                app.shelf_stage = 1;
+                app.open_journal(Outing::Home, Step::Playbooks);
+            }
+            Some(Review::Planned) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.sample_playbooks();
+                app.begin();
             }
             Some(Review::Friend) => {
                 app.open_journal(Outing::World, Step::Room);
@@ -1070,6 +1103,39 @@ impl BattleApp {
         if pressed(egui::Key::Enter) {
             self.lock_in(self.clock);
         }
+        // The arrow keys move a square cursor over the board, from the yard's middle; Space gives
+        // the order in hand there, as a click would, and Shift+Space holds it, as a right click.
+        if let Some(m) = &self.table.m {
+            let (w, h) = (m.arena.width as i8, m.arena.height as i8);
+            let centre = m.arena.zone_centre();
+            for (key, dx, dy) in [
+                (egui::Key::ArrowLeft, -1, 0),
+                (egui::Key::ArrowRight, 1, 0),
+                (egui::Key::ArrowUp, 0, -1),
+                (egui::Key::ArrowDown, 0, 1),
+            ] {
+                if pressed(key) {
+                    let from = self.cursor.unwrap_or(centre);
+                    let to = if self.cursor.is_none() {
+                        centre
+                    } else {
+                        formiga_battle_core::Tile::new(
+                            (from.x + dx).clamp(0, w - 1),
+                            (from.y + dy).clamp(0, h - 1),
+                        )
+                    };
+                    self.cursor = Some(to);
+                }
+            }
+        }
+        if pressed(egui::Key::Space)
+            && let Some(tile) = self.cursor
+            && self.table.outcome().is_none()
+        {
+            let hold = ctx.input(|i| i.modifiers.shift);
+            let now = self.clock;
+            self.press_tile(tile, hold, now);
+        }
         for (key, index) in [
             (egui::Key::Num1, 0),
             (egui::Key::Num2, 1),
@@ -1081,6 +1147,28 @@ impl BattleApp {
                     self.sound.play(Cue::Select);
                 }
             }
+        }
+    }
+
+    /// A square chosen while giving orders, by a click or by Space at the keys' cursor: `hold` for
+    /// a right click or Shift+Space.
+    fn press_tile(&mut self, tile: formiga_battle_core::Tile, hold: bool, now: f32) {
+        if self.table.shown.is_some() || self.table.outcome().is_some() {
+            return;
+        }
+        // An order picked by its button or key is let go by a right click, as before.
+        if hold && self.table.verb.is_some() {
+            self.table.put_down();
+            self.sound.play(Cue::Cancel);
+            return;
+        }
+        match self.table.press(tile, hold) {
+            Aim::Give(_) => {
+                self.pokes.push((tile, now));
+                self.sound.play(Cue::Order);
+            }
+            Aim::Carrier(_) => self.sound.play(Cue::Select),
+            Aim::Nothing => {}
         }
     }
 
@@ -1586,11 +1674,19 @@ impl BattleApp {
             Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
             Color32::WHITE,
         );
-        let to_tile = |pos: egui::Pos2| {
+        // A copy of the view, so a square can be found while the Handler's choice changes the app.
+        let view = self.view;
+        let to_tile = move |pos: egui::Pos2| {
             let local = (pos - rect.min) / scale;
-            self.view.tile_at(local.x, local.y)
+            view.tile_at(local.x, local.y)
         };
-        self.hover = response.hover_pos().and_then(to_tile);
+        // The mouse over the board puts the arrow keys' cursor away; otherwise it shows where
+        // the keys have got to.
+        let pointed = response.hover_pos().and_then(to_tile);
+        if pointed.is_some() && ctx.input(|i| i.pointer.delta() != egui::Vec2::ZERO) {
+            self.cursor = None;
+        }
+        self.hover = pointed.or(self.cursor);
         let giving = self.table.shown.is_none() && self.table.outcome().is_none();
         let aims = self
             .hover
@@ -1613,20 +1709,7 @@ impl BattleApp {
             && let Some(hold) = pressed
             && let Some(tile) = response.interact_pointer_pos().and_then(to_tile)
         {
-            // An order picked by its button or key is let go by a right click, as before.
-            if hold && self.table.verb.is_some() {
-                self.table.put_down();
-                self.sound.play(Cue::Cancel);
-            } else {
-                match self.table.press(tile, hold) {
-                    Aim::Give(_) => {
-                        self.pokes.push((tile, now));
-                        self.sound.play(Cue::Order);
-                    }
-                    Aim::Carrier(_) => self.sound.play(Cue::Select),
-                    Aim::Nothing => {}
-                }
-            }
+            self.press_tile(tile, hold, now);
         }
         // The mouse wheel over the board turns the HOLD in hand, or the one last given: a notch
         // a quarter turn, up clockwise and down back.
@@ -2574,6 +2657,10 @@ impl BattleApp {
                 &format!("{}\nTurn {turn} of {}", lesson.goal(), lesson.turns()),
                 u,
             );
+            ui.add_space(u * 3.0);
+        }
+        if let Some((name, words)) = self.table.playbook_words() {
+            sticky(ui, &format!("Playbook: {name}\n{words}"), u);
             ui.add_space(u * 3.0);
         }
         chrome::kicker(
@@ -4751,6 +4838,50 @@ mod tests {
         h.click("Back to the station", 0);
         h.frames(2);
         assert_eq!(h.app.stage, Stage::Station);
+    }
+
+    #[test]
+    fn orders_can_be_given_from_the_keyboard_alone() {
+        let mut h = Headless::new();
+        h.frames(2);
+        h.app.begin();
+        // Past the ready-up, with orders to give.
+        h.time += f64::from(READY_SECS) + 1.0;
+        h.frames(2);
+        let key = |key| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::default(),
+        };
+        let centre = h.app.table.m.as_ref().unwrap().arena.zone_centre();
+        // The first arrow puts the cursor in the middle of the yard; the next moves it.
+        h.frame(vec![key(egui::Key::ArrowUp)]);
+        assert_eq!(h.app.cursor, Some(centre));
+        h.frame(vec![key(egui::Key::ArrowDown)]);
+        h.frame(vec![key(egui::Key::ArrowUp)]);
+        assert_eq!(h.app.cursor, Some(centre));
+        // P picks up a PRESS; Space gives it at the cursor.
+        h.frame(vec![key(egui::Key::P)]);
+        h.frame(vec![key(egui::Key::Space)]);
+        let given = h
+            .app
+            .table
+            .orders
+            .iter()
+            .flatten()
+            .any(|o| matches!(o, Directive::Press { squares } if squares.contains(&centre)));
+        assert!(
+            given,
+            "a PRESS on the middle of the yard: {:?}",
+            h.app.table.orders
+        );
+        // The cursor never leaves the board.
+        for _ in 0..20 {
+            h.frame(vec![key(egui::Key::ArrowLeft)]);
+        }
+        assert_eq!(h.app.cursor.map(|t| t.x), Some(0));
     }
 
     /// Frames until something says `label`, or panics.

@@ -18,6 +18,7 @@
 //! - [`interpret`]: how a creature carries out its order, and why.
 //! - [`ai`]: the fallback for a missing order, and the coaches of AI matches.
 //! - [`plan`]: coaches that think a turn ahead, knowing their creatures or not.
+//! - [`playbook`]: a Handler's plan for a match in stages, compiled to ordinary orders each turn.
 //! - [`recap`]: a turn told in sentences.
 //! - [`notebook`]: the Handler's Notebook: what each creature was seen to do, in plain words.
 //! - [`replay`]: a whole match as data, and replaying it.
@@ -35,6 +36,7 @@ pub mod muster;
 pub mod notebook;
 pub mod order;
 pub mod plan;
+pub mod playbook;
 pub mod profile;
 pub mod recap;
 pub mod replay;

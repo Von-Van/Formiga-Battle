@@ -625,6 +625,10 @@ impl BattleApp {
                 self.rules,
                 hand(&identity::record_words(&trio), 12.5, ink::MUTED, false),
             );
+            if self.outing == super::Outing::Home {
+                ui.add_space(u * 6.0);
+                self.playbook_chooser(ui, &trio.id, u);
+            }
             return;
         }
         let swaps: Vec<Trio> = identity::swaps(&self.table.record, &ids)

@@ -3,7 +3,7 @@
 //! asks this what to show and tells it what was clicked, so tests drive the same code.
 
 use crate::announce::Callout;
-use crate::career::{self, Career};
+use crate::career::{self, Career, Shelf};
 use crate::friend::{Ask, Line, Told};
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
@@ -17,6 +17,7 @@ use formiga_battle_core::ai::Coach;
 use formiga_battle_core::lesson::{Lesson, Verdict};
 use formiga_battle_core::muster::checked;
 use formiga_battle_core::notebook::Page;
+use formiga_battle_core::playbook::{Deviation, Runner};
 use formiga_battle_core::recap::recap_naming;
 use formiga_battle_core::rng::{self, Purpose};
 use formiga_battle_core::{
@@ -265,6 +266,11 @@ pub struct Table {
     pub ended_because: Option<String>,
     /// The Field Lesson being played, if the match is one.
     pub lesson: Option<LessonRun>,
+    /// The playbook the Handler's trio plays by in this match, filling in each turn's orders:
+    /// against the visitors only, never a friend or a lesson.
+    pub playbook: Option<Runner>,
+    /// The playbook for the match being set up, taken up when it begins.
+    pending_playbook: Option<Runner>,
 }
 
 impl Table {
@@ -329,7 +335,47 @@ impl Table {
             notice: None,
             ended_because: None,
             lesson: None,
+            playbook: None,
+            pending_playbook: None,
         }
+    }
+
+    /// The trio the three picked are, if they are one still flying.
+    pub fn picked_trio(&self) -> Option<&formiga_battle_contract::Trio> {
+        let ids: Vec<u64> = self
+            .picked
+            .iter()
+            .filter_map(|&i| self.home.get(i))
+            .map(|(c, _)| c.traveler.id.0)
+            .collect();
+        crate::identity::trio_of(&self.record, &ids)
+    }
+
+    /// The playbook in play this match, in words for the orders page: its name, and the stage
+    /// filling in this turn's orders.
+    pub fn playbook_words(&self) -> Option<(String, String)> {
+        let runner = self.playbook.as_ref()?;
+        let book = &runner.playbook;
+        let compiled = runner.log.last()?;
+        let ran = compiled.ran.first()?;
+        let stage = match ran.stage {
+            Some(i) => format!(
+                "Stage {} of {}: {}",
+                i + 1,
+                book.stages.len(),
+                ran.intent.label()
+            ),
+            None => format!("Past its last stage: {}", ran.intent.label()),
+        };
+        let why = match ran.deviation {
+            Some(Deviation::NoTarget) => " Nothing to aim it at just now, so the beacon instead.",
+            Some(Deviation::Shorthanded) => " Short of hands, so one comes off the beacon for it.",
+            _ => "",
+        };
+        Some((
+            book.name.clone(),
+            format!("{stage}.{why} Its orders are in: change any before you lock in."),
+        ))
     }
 
     /// A companion's notebook page, if it has played a friend: read from what Desktop keeps.
@@ -480,12 +526,13 @@ impl Table {
         self.keep_career();
     }
 
-    fn keep_career(&mut self) {
+    /// Keeps the career, playbooks and all, if this colony keeps one: a rehearsal keeps nothing.
+    pub fn keep_career(&mut self) {
         if let Some(folder) = &self.career_folder
             && let Err(error) = self.career.save(folder)
         {
             self.notice = Some(format!(
-                "Your record against the rivals could not be kept: {error}"
+                "Your record against the rivals and your playbooks could not be kept: {error}"
             ));
         }
     }
@@ -998,6 +1045,16 @@ impl Table {
             None => "The visiting team".to_owned(),
         };
         self.friend = None;
+        // The trio's playbook fills in its orders against the visitors, never in a lesson.
+        self.pending_playbook = match lesson {
+            Some(_) => None,
+            None => self
+                .picked_trio()
+                .and_then(|t| self.career.playbooks.get(&t.id))
+                .and_then(Shelf::in_play)
+                .cloned()
+                .map(|book| Runner::new(book, self.you)),
+        };
         self.begin_match(m, now);
         self.lesson = lesson.map(|lesson| LessonRun {
             lesson,
@@ -1011,6 +1068,7 @@ impl Table {
         self.facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
         self.m = Some(m);
         self.shown = None;
+        self.playbook = self.pending_playbook.take();
         self.begin_orders(now);
         self.log.clear();
         self.told.clear();
@@ -1400,6 +1458,27 @@ impl Table {
         self.turning = None;
         self.turn_began = now;
         self.selected = Some(0);
+        // A playbook fills in the orders, for the Handler to change as they like.
+        if let (Some(runner), Some(m)) = (&mut self.playbook, &self.m)
+            && m.outcome().is_none()
+        {
+            let plan = runner.plan(m);
+            self.fill_orders(&plan);
+        }
+    }
+
+    /// Puts a whole team plan in hand: its orders in their places, and each USE ITEM.
+    fn fill_orders(&mut self, plan: &TeamPlan) {
+        let mut tactical = plan.iter().filter(|d| d.tactical()).cloned();
+        self.orders = [(); PLAN_SIZE].map(|_| tactical.next());
+        self.uses = [None; TEAM_SIZE];
+        for d in plan {
+            if let Directive::UseItem { by, at } = d
+                && let Some(using) = self.uses.get_mut(usize::from(*by))
+            {
+                *using = Some(*at);
+            }
+        }
     }
 
     /// Puts down whatever order is in hand, and the creature a USE ITEM was for.
@@ -1951,6 +2030,9 @@ impl Table {
             self.put_down();
             return;
         }
+        if let Some(runner) = &mut self.playbook {
+            runner.sent(&ours);
+        }
         let away = match (&self.lesson, self.rival) {
             (Some(run), _) => run.lesson.visitors(m),
             (None, Some(rival)) => Coach::Styled(rival.archetype).plan(m, self.you.other()),
@@ -1978,6 +2060,13 @@ impl Table {
             }
         }
         self.show_turn(before, report, now);
+        // The whole-match log says what the playbook made of the turn, and what was changed.
+        if let Some(runner) = &self.playbook
+            && let Some(compiled) = runner.log.last()
+            && let Some((_, lines)) = self.log.last_mut()
+        {
+            lines.insert(0, compiled.line(&runner.playbook));
+        }
     }
 
     /// Plays `turns` turns with the AI coach giving the Handler's orders too, each shown through
@@ -1997,16 +2086,7 @@ impl Table {
     pub fn coach_orders(&mut self) {
         if let Some(m) = &self.m {
             let plan = Coach::Exhibition.plan(m, self.you);
-            let mut tactical = plan.iter().filter(|d| d.tactical()).cloned();
-            self.orders = [(); PLAN_SIZE].map(|_| tactical.next());
-            self.uses = [None; TEAM_SIZE];
-            for d in &plan {
-                if let Directive::UseItem { by, at } = d
-                    && let Some(using) = self.uses.get_mut(usize::from(*by))
-                {
-                    *using = Some(*at);
-                }
-            }
+            self.fill_orders(&plan);
         }
     }
 
@@ -2077,6 +2157,57 @@ mod tests {
         let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
         t.start(0.0).unwrap();
         t
+    }
+
+    #[test]
+    fn a_trios_playbook_fills_in_its_orders_and_the_handler_can_change_them() {
+        use formiga_battle_core::playbook::Playbook;
+        let mut t = Table::new(sample::snapshot_with_record(), sample::visitors(9), 5);
+        let trio = t.record.trios[0].clone();
+        t.picked = trio
+            .members
+            .iter()
+            .filter_map(|id| t.home.iter().position(|(c, _)| c.traveler.id.0 == *id))
+            .collect();
+        assert_eq!(
+            t.picked.len(),
+            TEAM_SIZE,
+            "the sample's trio is in its colony"
+        );
+        let book = Playbook::samples()[0].clone();
+        t.career.playbooks.insert(
+            trio.id.clone(),
+            Shelf {
+                books: vec![book.clone()],
+                playing: Some(0),
+            },
+        );
+        t.start(0.0).unwrap();
+        let proposed = t.playbook.as_ref().expect("plays by it").log[0]
+            .plan
+            .clone();
+        assert_eq!(t.plan(), proposed, "its orders are filled in");
+        assert_eq!(t.playbook_words().unwrap().0, book.name);
+        // The Handler takes one out before locking in.
+        t.clear_order(0);
+        t.lock(0.0);
+        let first = &t.playbook.as_ref().unwrap().log[0];
+        assert!(first.sent.is_some(), "the change is recorded");
+        assert!(
+            t.log.last().unwrap().1[0].starts_with(&format!("Turn 1: {}", book.name)),
+            "the whole match says what the playbook made of the turn"
+        );
+        // Once the turn has been shown, the next turn's orders are filled in again.
+        t.frame(1.0e6);
+        assert_eq!(t.playbook.as_ref().unwrap().log.len(), 2);
+        assert!(t.orders.iter().any(Option::is_some));
+    }
+
+    #[test]
+    fn three_who_are_not_a_trio_play_by_no_playbook() {
+        let t = table();
+        assert!(t.playbook.is_none());
+        assert!(t.playbook_words().is_none());
     }
 
     fn yard(t: &Table) -> Tile {
