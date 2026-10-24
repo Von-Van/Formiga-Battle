@@ -1,3 +1,5110 @@
 {
-  "placeholder": "No recorded matches yet. This file is written by the recorded_matches test from the current rules, on purpose only: FORMIGA_BATTLE_WRITE_FIXTURE=1 cargo test -p formiga-battle-core --test recorded_matches. Commit what it writes; the test refuses this placeholder."
+  "about": "Matches recorded by formiga-battle-core at rules version 9, replayed by tests/recorded_matches.rs. Never edit by hand; rewrite on purpose with `FORMIGA_BATTLE_WRITE_FIXTURE=1 cargo test -p formiga-battle-core --test recorded_matches` and commit the result with the RULES_VERSION bump that needed it.",
+  "rules_version": 9,
+  "matches": [
+    {
+      "record": {
+        "rules_version": 9,
+        "ruleset": {
+          "composure": 3,
+          "ticks_per_turn": 3,
+          "capture_ticks": 3,
+          "capture_rule": "uncontested",
+          "capture_decays": false,
+          "turn_cap": 12,
+          "damage_cap": 2,
+          "detour_budget": 2,
+          "turn_seconds": 40
+        },
+        "arena": {
+          "id": "backyard",
+          "name": "Backyard",
+          "width": 9,
+          "height": 7,
+          "terrain": [
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "gate",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "lever",
+            "open",
+            "open",
+            "obstacle",
+            "open"
+          ],
+          "zone": [
+            {
+              "x": 4,
+              "y": 2
+            },
+            {
+              "x": 3,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 3
+            },
+            {
+              "x": 5,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 4
+            }
+          ],
+          "gates": [
+            {
+              "x": 4,
+              "y": 0
+            }
+          ],
+          "gates_open": [
+            false
+          ],
+          "levers": [
+            {
+              "x": 4,
+              "y": 6
+            }
+          ],
+          "lever": {
+            "swing_ticks": 1,
+            "cooldown_turns": 1
+          },
+          "starts": [
+            [
+              {
+                "x": 0,
+                "y": 1
+              },
+              {
+                "x": 0,
+                "y": 3
+              },
+              {
+                "x": 0,
+                "y": 5
+              }
+            ],
+            [
+              {
+                "x": 8,
+                "y": 1
+              },
+              {
+                "x": 8,
+                "y": 3
+              },
+              {
+                "x": 8,
+                "y": 5
+              }
+            ]
+          ],
+          "scenery": {
+            "effect": "soak",
+            "name": "sprinkler",
+            "tiles": [
+              {
+                "x": 4,
+                "y": 2
+              },
+              {
+                "x": 3,
+                "y": 3
+              },
+              {
+                "x": 4,
+                "y": 3
+              },
+              {
+                "x": 5,
+                "y": 3
+              },
+              {
+                "x": 4,
+                "y": 4
+              }
+            ],
+            "around": false,
+            "first": 4,
+            "every": 4,
+            "rest": 2
+          },
+          "switches": [
+            {
+              "x": 1,
+              "y": 6
+            },
+            {
+              "x": 7,
+              "y": 6
+            }
+          ],
+          "item_spots": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 8,
+              "y": 0
+            },
+            {
+              "x": 2,
+              "y": 5
+            },
+            {
+              "x": 6,
+              "y": 5
+            }
+          ],
+          "water": false
+        },
+        "seed": 23,
+        "rosters": [
+          [
+            {
+              "creature_id": 1,
+              "name": "Pip",
+              "kind": "Troublemaker",
+              "nature": {
+                "social": 735,
+                "energy": 739,
+                "boldness": 785,
+                "playfulness": 900,
+                "curiosity": 573,
+                "feistiness": 551,
+                "impulsiveness": 990,
+                "suspicion": 196,
+                "affection": 340
+              },
+              "leanings": {
+                "cursor_trust": 8,
+                "sociability": 36,
+                "climbing": 46,
+                "sleep_security": 31,
+                "exploration": 31,
+                "play": 37,
+                "home_affinity": 20,
+                "routine": -10
+              }
+            },
+            {
+              "creature_id": 2,
+              "name": "Mallow",
+              "kind": "Sweetheart",
+              "nature": {
+                "social": 748,
+                "energy": 586,
+                "boldness": 353,
+                "playfulness": 593,
+                "curiosity": 55,
+                "feistiness": 197,
+                "impulsiveness": 476,
+                "suspicion": 258,
+                "affection": 753
+              },
+              "leanings": {
+                "cursor_trust": 1,
+                "sociability": 32,
+                "climbing": 24,
+                "sleep_security": 9,
+                "exploration": -60,
+                "play": 36,
+                "home_affinity": 40,
+                "routine": 26
+              }
+            },
+            {
+              "creature_id": 3,
+              "name": "Clover",
+              "kind": "Troublemaker",
+              "nature": {
+                "social": 706,
+                "energy": 514,
+                "boldness": 958,
+                "playfulness": 911,
+                "curiosity": 603,
+                "feistiness": 567,
+                "impulsiveness": 1000,
+                "suspicion": 188,
+                "affection": 447
+              },
+              "leanings": {
+                "cursor_trust": 6,
+                "sociability": 40,
+                "climbing": 19,
+                "sleep_security": 41,
+                "exploration": -15,
+                "play": 19,
+                "home_affinity": 7,
+                "routine": -57
+              }
+            }
+          ],
+          [
+            {
+              "creature_id": 4,
+              "name": "Mochi",
+              "kind": "Explorer",
+              "nature": {
+                "social": 482,
+                "energy": 813,
+                "boldness": 724,
+                "playfulness": 577,
+                "curiosity": 928,
+                "feistiness": 309,
+                "impulsiveness": 642,
+                "suspicion": 335,
+                "affection": 300
+              },
+              "leanings": {
+                "cursor_trust": 29,
+                "sociability": 7,
+                "climbing": 11,
+                "sleep_security": -1,
+                "exploration": 3,
+                "play": 35,
+                "home_affinity": -4,
+                "routine": -36
+              }
+            },
+            {
+              "creature_id": 5,
+              "name": "Pebble",
+              "kind": "Lazybones",
+              "nature": {
+                "social": 477,
+                "energy": 36,
+                "boldness": 391,
+                "playfulness": 288,
+                "curiosity": 230,
+                "feistiness": 372,
+                "impulsiveness": 224,
+                "suspicion": 250,
+                "affection": 777
+              },
+              "leanings": {
+                "cursor_trust": 15,
+                "sociability": 23,
+                "climbing": -17,
+                "sleep_security": -6,
+                "exploration": 0,
+                "play": 11,
+                "home_affinity": 48,
+                "routine": -3
+              }
+            },
+            {
+              "creature_id": 6,
+              "name": "Noodle",
+              "kind": "Sweetheart",
+              "nature": {
+                "social": 744,
+                "energy": 589,
+                "boldness": 493,
+                "playfulness": 673,
+                "curiosity": 464,
+                "feistiness": 94,
+                "impulsiveness": 37,
+                "suspicion": 13,
+                "affection": 893
+              },
+              "leanings": {
+                "cursor_trust": 70,
+                "sociability": 15,
+                "climbing": 4,
+                "sleep_security": 14,
+                "exploration": 7,
+                "play": 40,
+                "home_affinity": 13,
+                "routine": 22
+              }
+            }
+          ]
+        ],
+        "turns": [
+          {
+            "submitted": [
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 15160252004086775799
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 2371991336837212919
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 8,
+                    "y": 0
+                  }
+                }
+              ]
+            ],
+            "hash": 5893087643357395988
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                }
+              ]
+            ],
+            "hash": 6990740743667170555
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 6,
+                    "y": 5
+                  }
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "use_item",
+                  "by": 2,
+                  "at": {
+                    "x": 6,
+                    "y": 3
+                  }
+                }
+              ]
+            ],
+            "hash": 4782928777361389211
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "use_item",
+                  "by": 1,
+                  "at": {
+                    "x": 5,
+                    "y": 4
+                  }
+                }
+              ]
+            ],
+            "hash": 18382154366005308057
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                }
+              ]
+            ],
+            "hash": 881815664358071277
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                }
+              ]
+            ],
+            "hash": 11245783882790097360
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                }
+              ]
+            ],
+            "hash": 12533755526855985997
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 4,
+                    "y": 6
+                  }
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "use_item",
+                  "by": 2,
+                  "at": {
+                    "x": 2,
+                    "y": 3
+                  }
+                }
+              ]
+            ],
+            "hash": 4162893108260957185
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 4,
+                    "y": 6
+                  }
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                }
+              ]
+            ],
+            "hash": 10379566339041262748
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 6,
+                    "y": 5
+                  }
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "use_item",
+                  "by": 2,
+                  "at": {
+                    "x": 5,
+                    "y": 4
+                  }
+                }
+              ]
+            ],
+            "hash": 16982909082690673015
+          }
+        ],
+        "outcome": {
+          "winner": "left",
+          "victory": "capture",
+          "turn": 12
+        }
+      },
+      "reports_digest": "6b7c3b851260cfad",
+      "final_board": {
+        "turn": 12,
+        "fighters": [
+          [
+            {
+              "at": {
+                "x": 4,
+                "y": 2
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 2
+                },
+                "facing": "south"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "south",
+              "task": {
+                "directive": 0,
+                "role": "claim",
+                "at": {
+                  "x": 4,
+                  "y": 2
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 3,
+                "y": 3
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 3,
+                  "y": 3
+                },
+                "facing": "south"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "south",
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 4,
+                  "y": 2
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 4,
+                "y": 4
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "trick",
+                "target": {
+                  "side": "right",
+                  "index": 0
+                }
+              },
+              "holding": false,
+              "spent": true,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "west",
+              "task": {
+                "directive": 1,
+                "role": "trick",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            }
+          ],
+          [
+            {
+              "at": {
+                "x": 4,
+                "y": 3
+              },
+              "composure": 0,
+              "out": true,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                },
+                "facing": "north"
+              },
+              "holding": false,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "north",
+              "broken": true,
+              "task": {
+                "directive": 0,
+                "role": "claim",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 3,
+                "y": 4
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 3,
+                  "y": 4
+                },
+                "facing": "north"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "north",
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 4,
+                "y": 5
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 5,
+                  "y": 4
+                },
+                "facing": "north"
+              },
+              "holding": false,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "west",
+              "pause": true,
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            }
+          ]
+        ],
+        "gates_open": [
+          false
+        ],
+        "swing_at": null,
+        "lever_ready_turn": 1,
+        "capture": [
+          3,
+          0
+        ],
+        "outcome": {
+          "winner": "left",
+          "victory": "capture",
+          "turn": 12
+        },
+        "event_at": 38,
+        "switch_ready_turn": 13,
+        "ground": [
+          [
+            {
+              "x": 0,
+              "y": 0
+            },
+            "twig"
+          ],
+          [
+            {
+              "x": 6,
+              "y": 5
+            },
+            "twig"
+          ]
+        ],
+        "twigs": [
+          [
+            {
+              "x": 2,
+              "y": 3
+            },
+            39
+          ]
+        ],
+        "pending": [
+          {
+            "at": 38,
+            "by": {
+              "side": "right",
+              "index": 2
+            },
+            "item": "twig",
+            "from": {
+              "x": 4,
+              "y": 5
+            },
+            "target": {
+              "x": 5,
+              "y": 4
+            }
+          }
+        ],
+        "event_tiles": [
+          {
+            "x": 4,
+            "y": 2
+          },
+          {
+            "x": 3,
+            "y": 3
+          },
+          {
+            "x": 4,
+            "y": 3
+          },
+          {
+            "x": 5,
+            "y": 3
+          },
+          {
+            "x": 4,
+            "y": 4
+          }
+        ]
+      }
+    },
+    {
+      "record": {
+        "rules_version": 9,
+        "ruleset": {
+          "composure": 3,
+          "ticks_per_turn": 3,
+          "capture_ticks": 3,
+          "capture_rule": "uncontested",
+          "capture_decays": false,
+          "turn_cap": 12,
+          "damage_cap": 2,
+          "detour_budget": 2,
+          "turn_seconds": 40
+        },
+        "arena": {
+          "id": "woodland",
+          "name": "Woodland Glade",
+          "width": 9,
+          "height": 7,
+          "terrain": [
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open"
+          ],
+          "zone": [
+            {
+              "x": 4,
+              "y": 2
+            },
+            {
+              "x": 3,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 3
+            },
+            {
+              "x": 5,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 4
+            }
+          ],
+          "gates": [],
+          "gates_open": [],
+          "levers": [],
+          "lever": {
+            "swing_ticks": 1,
+            "cooldown_turns": 1
+          },
+          "starts": [
+            [
+              {
+                "x": 0,
+                "y": 1
+              },
+              {
+                "x": 0,
+                "y": 3
+              },
+              {
+                "x": 0,
+                "y": 5
+              }
+            ],
+            [
+              {
+                "x": 8,
+                "y": 1
+              },
+              {
+                "x": 8,
+                "y": 3
+              },
+              {
+                "x": 8,
+                "y": 5
+              }
+            ]
+          ],
+          "scenery": {
+            "effect": "soak",
+            "name": "tree",
+            "tiles": [],
+            "around": true,
+            "first": 4,
+            "every": 4,
+            "rest": 2
+          },
+          "switches": [
+            {
+              "x": 1,
+              "y": 2
+            },
+            {
+              "x": 7,
+              "y": 2
+            },
+            {
+              "x": 1,
+              "y": 4
+            },
+            {
+              "x": 7,
+              "y": 4
+            }
+          ],
+          "item_spots": [
+            {
+              "x": 2,
+              "y": 5
+            },
+            {
+              "x": 6,
+              "y": 5
+            },
+            {
+              "x": 0,
+              "y": 6
+            },
+            {
+              "x": 8,
+              "y": 6
+            }
+          ],
+          "water": false
+        },
+        "seed": 24,
+        "rosters": [
+          [
+            {
+              "creature_id": 1,
+              "name": "Pip",
+              "kind": "Grump",
+              "nature": {
+                "social": 285,
+                "energy": 623,
+                "boldness": 124,
+                "playfulness": 313,
+                "curiosity": 704,
+                "feistiness": 678,
+                "impulsiveness": 191,
+                "suspicion": 916,
+                "affection": 63
+              },
+              "leanings": {
+                "cursor_trust": -34,
+                "sociability": 0,
+                "climbing": -5,
+                "sleep_security": -32,
+                "exploration": 41,
+                "play": -6,
+                "home_affinity": -6,
+                "routine": 7
+              }
+            },
+            {
+              "creature_id": 2,
+              "name": "Mallow",
+              "kind": "Sweetheart",
+              "nature": {
+                "social": 797,
+                "energy": 833,
+                "boldness": 162,
+                "playfulness": 545,
+                "curiosity": 429,
+                "feistiness": 652,
+                "impulsiveness": 700,
+                "suspicion": 262,
+                "affection": 864
+              },
+              "leanings": {
+                "cursor_trust": -2,
+                "sociability": -9,
+                "climbing": 9,
+                "sleep_security": -3,
+                "exploration": 1,
+                "play": -22,
+                "home_affinity": 9,
+                "routine": -13
+              }
+            },
+            {
+              "creature_id": 3,
+              "name": "Clover",
+              "kind": "Scholar",
+              "nature": {
+                "social": 381,
+                "energy": 319,
+                "boldness": 614,
+                "playfulness": 301,
+                "curiosity": 911,
+                "feistiness": 433,
+                "impulsiveness": 279,
+                "suspicion": 435,
+                "affection": 433
+              },
+              "leanings": {
+                "cursor_trust": 6,
+                "sociability": -13,
+                "climbing": -25,
+                "sleep_security": -11,
+                "exploration": 55,
+                "play": -21,
+                "home_affinity": -10,
+                "routine": 14
+              }
+            }
+          ],
+          [
+            {
+              "creature_id": 4,
+              "name": "Mochi",
+              "kind": "Scholar",
+              "nature": {
+                "social": 291,
+                "energy": 456,
+                "boldness": 424,
+                "playfulness": 160,
+                "curiosity": 481,
+                "feistiness": 245,
+                "impulsiveness": 286,
+                "suspicion": 493,
+                "affection": 393
+              },
+              "leanings": {
+                "cursor_trust": -32,
+                "sociability": -8,
+                "climbing": -4,
+                "sleep_security": -21,
+                "exploration": -24,
+                "play": -42,
+                "home_affinity": -10,
+                "routine": 7
+              }
+            },
+            {
+              "creature_id": 5,
+              "name": "Pebble",
+              "kind": "Sweetheart",
+              "nature": {
+                "social": 668,
+                "energy": 688,
+                "boldness": 813,
+                "playfulness": 180,
+                "curiosity": 683,
+                "feistiness": 540,
+                "impulsiveness": 809,
+                "suspicion": 105,
+                "affection": 910
+              },
+              "leanings": {
+                "cursor_trust": 37,
+                "sociability": 40,
+                "climbing": 26,
+                "sleep_security": 23,
+                "exploration": 19,
+                "play": -17,
+                "home_affinity": -6,
+                "routine": -51
+              }
+            },
+            {
+              "creature_id": 6,
+              "name": "Noodle",
+              "kind": "Grump",
+              "tension": "GrumpyButAffectionate",
+              "nature": {
+                "social": 176,
+                "energy": 239,
+                "boldness": 684,
+                "playfulness": 244,
+                "curiosity": 461,
+                "feistiness": 1000,
+                "impulsiveness": 81,
+                "suspicion": 566,
+                "affection": 680
+              },
+              "leanings": {
+                "cursor_trust": 8,
+                "sociability": -27,
+                "climbing": 15,
+                "sleep_security": 32,
+                "exploration": 12,
+                "play": -9,
+                "home_affinity": 24,
+                "routine": 19
+              }
+            }
+          ]
+        ],
+        "turns": [
+          {
+            "submitted": [
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 8474308783938966407
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                }
+              ]
+            ],
+            "hash": 2033681914609994722
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "north"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 7666412256346981849
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "use_item",
+                  "by": 2,
+                  "at": {
+                    "x": 2,
+                    "y": 4
+                  }
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 6,
+                    "y": 5
+                  }
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 5274621145422045093
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 9103667378236924749
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 15997860774151695531
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 2
+                    }
+                  ]
+                }
+              ]
+            ],
+            "hash": 12395806146127741362
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ],
+                  "facing": "north"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 1869707978674359657
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ]
+            ],
+            "hash": 17487961209456924210
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 2,
+                    "y": 5
+                  }
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ]
+            ],
+            "hash": 10806765931431824121
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ]
+            ],
+            "hash": 10908160481838259184
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ],
+                  "facing": "north"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "south"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "south"
+                }
+              ]
+            ],
+            "hash": 3291622798613176263
+          }
+        ],
+        "outcome": {
+          "winner": "right",
+          "victory": "turn_cap",
+          "turn": 12
+        }
+      },
+      "reports_digest": "c55ebedbde7bd6f7",
+      "final_board": {
+        "turn": 12,
+        "fighters": [
+          [
+            {
+              "at": {
+                "x": 2,
+                "y": 1
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 3,
+                  "y": 3
+                },
+                "facing": "east"
+              },
+              "holding": false,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 1,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "east",
+              "task": {
+                "directive": 1,
+                "role": "claim",
+                "at": {
+                  "x": 3,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 3,
+                "y": 3
+              },
+              "composure": 0,
+              "out": true,
+              "order": null,
+              "holding": false,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "east",
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 4,
+                "y": 4
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 4
+                },
+                "facing": "north"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "north",
+              "task": {
+                "directive": 0,
+                "role": "claim",
+                "at": {
+                  "x": 4,
+                  "y": 4
+                }
+              },
+              "stuck": false
+            }
+          ],
+          [
+            {
+              "at": {
+                "x": 5,
+                "y": 2
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 5,
+                  "y": 2
+                },
+                "facing": "south"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "south",
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 3,
+                "y": 2
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 3,
+                  "y": 2
+                },
+                "facing": "south"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "south",
+              "carrying": "leaf",
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 4,
+                "y": 3
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                },
+                "facing": "south"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "south",
+              "task": {
+                "directive": 0,
+                "role": "claim",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            }
+          ]
+        ],
+        "gates_open": [],
+        "swing_at": null,
+        "lever_ready_turn": 1,
+        "capture": [
+          0,
+          0
+        ],
+        "outcome": {
+          "winner": "right",
+          "victory": "turn_cap",
+          "turn": 12
+        },
+        "switch_ready_turn": 13,
+        "ground": [
+          [
+            {
+              "x": 1,
+              "y": 3
+            },
+            "twig"
+          ],
+          [
+            {
+              "x": 7,
+              "y": 3
+            },
+            "twig"
+          ],
+          [
+            {
+              "x": 0,
+              "y": 6
+            },
+            "puff"
+          ],
+          [
+            {
+              "x": 8,
+              "y": 6
+            },
+            "puff"
+          ],
+          [
+            {
+              "x": 2,
+              "y": 5
+            },
+            "bell"
+          ],
+          [
+            {
+              "x": 6,
+              "y": 5
+            },
+            "bell"
+          ],
+          [
+            {
+              "x": 0,
+              "y": 4
+            },
+            "twig"
+          ],
+          [
+            {
+              "x": 8,
+              "y": 4
+            },
+            "twig"
+          ],
+          [
+            {
+              "x": 2,
+              "y": 4
+            },
+            "twig"
+          ],
+          [
+            {
+              "x": 6,
+              "y": 4
+            },
+            "twig"
+          ]
+        ]
+      }
+    },
+    {
+      "record": {
+        "rules_version": 9,
+        "ruleset": {
+          "composure": 3,
+          "ticks_per_turn": 3,
+          "capture_ticks": 3,
+          "capture_rule": "uncontested",
+          "capture_decays": false,
+          "turn_cap": 12,
+          "damage_cap": 2,
+          "detour_budget": 2,
+          "turn_seconds": 40
+        },
+        "arena": {
+          "id": "millpond",
+          "name": "Millpond",
+          "width": 9,
+          "height": 7,
+          "terrain": [
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "obstacle",
+            "gate",
+            "obstacle",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "obstacle",
+            "lever",
+            "obstacle",
+            "open",
+            "obstacle",
+            "open"
+          ],
+          "zone": [
+            {
+              "x": 3,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 3
+            },
+            {
+              "x": 5,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 4
+            }
+          ],
+          "gates": [
+            {
+              "x": 4,
+              "y": 1
+            }
+          ],
+          "gates_open": [
+            false
+          ],
+          "levers": [
+            {
+              "x": 4,
+              "y": 6
+            }
+          ],
+          "lever": {
+            "swing_ticks": 1,
+            "cooldown_turns": 1
+          },
+          "starts": [
+            [
+              {
+                "x": 0,
+                "y": 1
+              },
+              {
+                "x": 0,
+                "y": 3
+              },
+              {
+                "x": 0,
+                "y": 5
+              }
+            ],
+            [
+              {
+                "x": 8,
+                "y": 1
+              },
+              {
+                "x": 8,
+                "y": 3
+              },
+              {
+                "x": 8,
+                "y": 5
+              }
+            ]
+          ],
+          "scenery": {
+            "effect": "close",
+            "name": "pond",
+            "tiles": [
+              {
+                "x": 3,
+                "y": 2
+              },
+              {
+                "x": 5,
+                "y": 2
+              },
+              {
+                "x": 3,
+                "y": 4
+              },
+              {
+                "x": 5,
+                "y": 4
+              }
+            ],
+            "around": false,
+            "first": 5,
+            "every": 5,
+            "rest": 2
+          },
+          "switches": [
+            {
+              "x": 1,
+              "y": 6
+            },
+            {
+              "x": 7,
+              "y": 6
+            }
+          ],
+          "item_spots": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 8,
+              "y": 0
+            },
+            {
+              "x": 2,
+              "y": 5
+            },
+            {
+              "x": 6,
+              "y": 5
+            }
+          ],
+          "water": true
+        },
+        "seed": 25,
+        "rosters": [
+          [
+            {
+              "creature_id": 1,
+              "name": "Pip",
+              "kind": "Wallflower",
+              "nature": {
+                "social": 213,
+                "energy": 418,
+                "boldness": 115,
+                "playfulness": 423,
+                "curiosity": 560,
+                "feistiness": 281,
+                "impulsiveness": 208,
+                "suspicion": 570,
+                "affection": 537
+              },
+              "leanings": {
+                "cursor_trust": -1,
+                "sociability": -29,
+                "climbing": 6,
+                "sleep_security": -3,
+                "exploration": -3,
+                "play": -10,
+                "home_affinity": 9,
+                "routine": 45
+              }
+            },
+            {
+              "creature_id": 2,
+              "name": "Mallow",
+              "kind": "Grump",
+              "nature": {
+                "social": 188,
+                "energy": 726,
+                "boldness": 549,
+                "playfulness": 212,
+                "curiosity": 288,
+                "feistiness": 997,
+                "impulsiveness": 336,
+                "suspicion": 620,
+                "affection": 343
+              },
+              "leanings": {
+                "cursor_trust": 9,
+                "sociability": -14,
+                "climbing": -7,
+                "sleep_security": 1,
+                "exploration": -25,
+                "play": 4,
+                "home_affinity": 18,
+                "routine": 18
+              }
+            },
+            {
+              "creature_id": 3,
+              "name": "Clover",
+              "kind": "Lazybones",
+              "nature": {
+                "social": 545,
+                "energy": 197,
+                "boldness": 245,
+                "playfulness": 341,
+                "curiosity": 199,
+                "feistiness": 417,
+                "impulsiveness": 122,
+                "suspicion": 197,
+                "affection": 556
+              },
+              "leanings": {
+                "cursor_trust": -5,
+                "sociability": 12,
+                "climbing": -3,
+                "sleep_security": 40,
+                "exploration": -21,
+                "play": -11,
+                "home_affinity": -15,
+                "routine": 14
+              }
+            }
+          ],
+          [
+            {
+              "creature_id": 4,
+              "name": "Mochi",
+              "kind": "Guardian",
+              "nature": {
+                "social": 464,
+                "energy": 642,
+                "boldness": 843,
+                "playfulness": 251,
+                "curiosity": 419,
+                "feistiness": 462,
+                "impulsiveness": 211,
+                "suspicion": 995,
+                "affection": 113
+              },
+              "leanings": {
+                "cursor_trust": -57,
+                "sociability": -9,
+                "climbing": 41,
+                "sleep_security": -28,
+                "exploration": 13,
+                "play": -39,
+                "home_affinity": -33,
+                "routine": 38
+              }
+            },
+            {
+              "creature_id": 5,
+              "name": "Pebble",
+              "kind": "Scholar",
+              "nature": {
+                "social": 468,
+                "energy": 150,
+                "boldness": 532,
+                "playfulness": 81,
+                "curiosity": 717,
+                "feistiness": 463,
+                "impulsiveness": 70,
+                "suspicion": 537,
+                "affection": 612
+              },
+              "leanings": {
+                "cursor_trust": 1,
+                "sociability": -15,
+                "climbing": -6,
+                "sleep_security": -8,
+                "exploration": 29,
+                "play": -39,
+                "home_affinity": 24,
+                "routine": 35
+              }
+            },
+            {
+              "creature_id": 6,
+              "name": "Noodle",
+              "kind": "Sweetheart",
+              "nature": {
+                "social": 784,
+                "energy": 449,
+                "boldness": 524,
+                "playfulness": 510,
+                "curiosity": 423,
+                "feistiness": 142,
+                "impulsiveness": 338,
+                "suspicion": 290,
+                "affection": 791
+              },
+              "leanings": {
+                "cursor_trust": 36,
+                "sociability": 12,
+                "climbing": 3,
+                "sleep_security": 14,
+                "exploration": -23,
+                "play": -14,
+                "home_affinity": 44,
+                "routine": 36
+              }
+            }
+          ]
+        ],
+        "turns": [
+          {
+            "submitted": [
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 11074142491105696587
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 6,
+                      "y": 2
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 5982302173926369529
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 5972414807503202595
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 13659656002313523823
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 2,
+                    "y": 5
+                  }
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 6,
+                    "y": 5
+                  }
+                }
+              ]
+            ],
+            "hash": 2276038951606125481
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 4,
+                    "y": 6
+                  }
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 4085134291766181791
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 6413629058261838729
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 1,
+                    "y": 6
+                  }
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 2,
+                    "y": 5
+                  }
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 13325133007092395614
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 4
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 12008525893465836593
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 8253456910115192383
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                }
+              ]
+            ],
+            "hash": 15507796691833645581
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                },
+                {
+                  "order": "trick",
+                  "squares": [
+                    {
+                      "x": 3,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 5,
+                      "y": 3
+                    }
+                  ]
+                }
+              ]
+            ],
+            "hash": 2613079140465037610
+          }
+        ],
+        "outcome": {
+          "winner": "left",
+          "victory": "turn_cap",
+          "turn": 12
+        }
+      },
+      "reports_digest": "7f4cef42c1a776f4",
+      "final_board": {
+        "turn": 12,
+        "fighters": [
+          [
+            {
+              "at": {
+                "x": 3,
+                "y": 3
+              },
+              "composure": 2,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 3,
+                  "y": 3
+                },
+                "facing": "east"
+              },
+              "holding": false,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "east",
+              "broken": true,
+              "task": {
+                "directive": 0,
+                "role": "claim",
+                "at": {
+                  "x": 3,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 4,
+                "y": 4
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 4
+                },
+                "facing": "east"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "east",
+              "carrying": "leaf",
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 3,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 2,
+                "y": 4
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 2,
+                  "y": 4
+                },
+                "facing": "east"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "east",
+              "carrying": "leaf",
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 3,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            }
+          ],
+          [
+            {
+              "at": {
+                "x": 4,
+                "y": 3
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                },
+                "facing": "west"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "west",
+              "task": {
+                "directive": 0,
+                "role": "claim",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 3,
+                "y": 2
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "trick",
+                "target": {
+                  "side": "left",
+                  "index": 0
+                }
+              },
+              "holding": false,
+              "spent": true,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "west",
+              "task": {
+                "directive": 1,
+                "role": "trick",
+                "at": {
+                  "x": 3,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 5,
+                "y": 3
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 5,
+                  "y": 3
+                },
+                "facing": "west"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "west",
+              "task": {
+                "directive": 2,
+                "role": "claim",
+                "at": {
+                  "x": 5,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            }
+          ]
+        ],
+        "gates_open": [
+          true
+        ],
+        "swing_at": null,
+        "lever_ready_turn": 8,
+        "capture": [
+          1,
+          0
+        ],
+        "outcome": {
+          "winner": "left",
+          "victory": "turn_cap",
+          "turn": 12
+        },
+        "switch_ready_turn": 11,
+        "ground": [
+          [
+            {
+              "x": 0,
+              "y": 0
+            },
+            "twig"
+          ],
+          [
+            {
+              "x": 8,
+              "y": 0
+            },
+            "twig"
+          ],
+          [
+            {
+              "x": 6,
+              "y": 5
+            },
+            "leaf"
+          ],
+          [
+            {
+              "x": 6,
+              "y": 4
+            },
+            "leaf"
+          ]
+        ]
+      }
+    },
+    {
+      "record": {
+        "rules_version": 9,
+        "ruleset": {
+          "composure": 3,
+          "ticks_per_turn": 3,
+          "capture_ticks": 3,
+          "capture_rule": "uncontested",
+          "capture_decays": false,
+          "turn_cap": 12,
+          "damage_cap": 2,
+          "detour_budget": 2,
+          "turn_seconds": 40
+        },
+        "arena": {
+          "id": "cove",
+          "name": "Sandy Cove",
+          "width": 9,
+          "height": 7,
+          "terrain": [
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "obstacle",
+            "open",
+            "open",
+            "obstacle",
+            "open"
+          ],
+          "zone": [
+            {
+              "x": 4,
+              "y": 1
+            },
+            {
+              "x": 4,
+              "y": 2
+            },
+            {
+              "x": 4,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 4
+            },
+            {
+              "x": 4,
+              "y": 5
+            }
+          ],
+          "gates": [],
+          "gates_open": [],
+          "levers": [],
+          "lever": {
+            "swing_ticks": 1,
+            "cooldown_turns": 1
+          },
+          "starts": [
+            [
+              {
+                "x": 0,
+                "y": 1
+              },
+              {
+                "x": 0,
+                "y": 3
+              },
+              {
+                "x": 0,
+                "y": 5
+              }
+            ],
+            [
+              {
+                "x": 8,
+                "y": 1
+              },
+              {
+                "x": 8,
+                "y": 3
+              },
+              {
+                "x": 8,
+                "y": 5
+              }
+            ]
+          ],
+          "scenery": {
+            "effect": "wash",
+            "name": "wave",
+            "tiles": [
+              {
+                "x": 3,
+                "y": 1
+              },
+              {
+                "x": 4,
+                "y": 1
+              },
+              {
+                "x": 5,
+                "y": 1
+              },
+              {
+                "x": 3,
+                "y": 5
+              },
+              {
+                "x": 4,
+                "y": 5
+              },
+              {
+                "x": 5,
+                "y": 5
+              }
+            ],
+            "around": false,
+            "first": 3,
+            "every": 3,
+            "rest": 2
+          },
+          "switches": [
+            {
+              "x": 1,
+              "y": 6
+            },
+            {
+              "x": 7,
+              "y": 6
+            }
+          ],
+          "item_spots": [
+            {
+              "x": 1,
+              "y": 2
+            },
+            {
+              "x": 7,
+              "y": 2
+            },
+            {
+              "x": 3,
+              "y": 6
+            },
+            {
+              "x": 5,
+              "y": 6
+            }
+          ],
+          "water": false
+        },
+        "seed": 26,
+        "rosters": [
+          [
+            {
+              "creature_id": 1,
+              "name": "Pip",
+              "kind": "Grump",
+              "tension": "GrumpyButAffectionate",
+              "nature": {
+                "social": 389,
+                "energy": 330,
+                "boldness": 735,
+                "playfulness": 15,
+                "curiosity": 287,
+                "feistiness": 792,
+                "impulsiveness": 372,
+                "suspicion": 743,
+                "affection": 680
+              },
+              "leanings": {
+                "cursor_trust": 14,
+                "sociability": -35,
+                "climbing": 10,
+                "sleep_security": -27,
+                "exploration": -7,
+                "play": -12,
+                "home_affinity": 22,
+                "routine": -8
+              }
+            },
+            {
+              "creature_id": 2,
+              "name": "Mallow",
+              "kind": "Showoff",
+              "tension": "DramaticButCowardly",
+              "nature": {
+                "social": 827,
+                "energy": 767,
+                "boldness": 240,
+                "playfulness": 501,
+                "curiosity": 493,
+                "feistiness": 50,
+                "impulsiveness": 883,
+                "suspicion": 234,
+                "affection": 339
+              },
+              "leanings": {
+                "cursor_trust": 27,
+                "sociability": 48,
+                "climbing": 4,
+                "sleep_security": -27,
+                "exploration": -5,
+                "play": 19,
+                "home_affinity": -11,
+                "routine": -11
+              }
+            },
+            {
+              "creature_id": 3,
+              "name": "Clover",
+              "kind": "Troublemaker",
+              "nature": {
+                "social": 626,
+                "energy": 603,
+                "boldness": 773,
+                "playfulness": 801,
+                "curiosity": 594,
+                "feistiness": 723,
+                "impulsiveness": 805,
+                "suspicion": 790,
+                "affection": 673
+              },
+              "leanings": {
+                "cursor_trust": -22,
+                "sociability": 20,
+                "climbing": 18,
+                "sleep_security": -8,
+                "exploration": -5,
+                "play": 10,
+                "home_affinity": 23,
+                "routine": 2
+              }
+            }
+          ],
+          [
+            {
+              "creature_id": 4,
+              "name": "Mochi",
+              "kind": "Guardian",
+              "tension": "BraveButNervous",
+              "nature": {
+                "social": 359,
+                "energy": 600,
+                "boldness": 1000,
+                "playfulness": 90,
+                "curiosity": 597,
+                "feistiness": 511,
+                "impulsiveness": 144,
+                "suspicion": 795,
+                "affection": 839
+              },
+              "leanings": {
+                "cursor_trust": -28,
+                "sociability": -15,
+                "climbing": -4,
+                "sleep_security": 3,
+                "exploration": 35,
+                "play": -18,
+                "home_affinity": 14,
+                "routine": 48
+              }
+            },
+            {
+              "creature_id": 5,
+              "name": "Pebble",
+              "kind": "Lazybones",
+              "tension": "GentleButStubborn",
+              "nature": {
+                "social": 50,
+                "energy": 331,
+                "boldness": 444,
+                "playfulness": 2,
+                "curiosity": 239,
+                "feistiness": 320,
+                "impulsiveness": 300,
+                "suspicion": 537,
+                "affection": 565
+              },
+              "leanings": {
+                "cursor_trust": 25,
+                "sociability": -18,
+                "climbing": 7,
+                "sleep_security": 23,
+                "exploration": 6,
+                "play": -57,
+                "home_affinity": -6,
+                "routine": 28
+              }
+            },
+            {
+              "creature_id": 6,
+              "name": "Noodle",
+              "kind": "Grump",
+              "tension": "GentleButStubborn",
+              "nature": {
+                "social": 448,
+                "energy": 472,
+                "boldness": 560,
+                "playfulness": 96,
+                "curiosity": 357,
+                "feistiness": 320,
+                "impulsiveness": 300,
+                "suspicion": 603,
+                "affection": 573
+              },
+              "leanings": {
+                "cursor_trust": -15,
+                "sociability": -28,
+                "climbing": 1,
+                "sleep_security": -32,
+                "exploration": -26,
+                "play": -22,
+                "home_affinity": 4,
+                "routine": 43
+              }
+            }
+          ]
+        ],
+        "turns": [
+          {
+            "submitted": [
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "east"
+                }
+              ],
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 1
+                    }
+                  ]
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 3278377470129587682
+          },
+          {
+            "submitted": [
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 1
+                    }
+                  ]
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 3,
+                    "y": 6
+                  }
+                }
+              ],
+              [
+                {
+                  "order": "press",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ]
+                },
+                {
+                  "order": "interact",
+                  "at": {
+                    "x": 5,
+                    "y": 6
+                  }
+                },
+                {
+                  "order": "hold",
+                  "squares": [
+                    {
+                      "x": 4,
+                      "y": 3
+                    }
+                  ],
+                  "facing": "west"
+                }
+              ]
+            ],
+            "hash": 226154203321499525
+          }
+        ],
+        "outcome": {
+          "winner": "left",
+          "victory": "capture",
+          "turn": 2
+        }
+      },
+      "reports_digest": "77e89bc91ab69d65",
+      "final_board": {
+        "turn": 2,
+        "fighters": [
+          [
+            {
+              "at": {
+                "x": 4,
+                "y": 1
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 1
+                },
+                "facing": "east"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "east",
+              "task": {
+                "directive": 1,
+                "role": "claim",
+                "at": {
+                  "x": 4,
+                  "y": 1
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 4,
+                "y": 3
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                },
+                "facing": "east"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "east",
+              "task": {
+                "directive": 0,
+                "role": "claim",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 3,
+                "y": 4
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 3,
+                  "y": 4
+                },
+                "facing": "east"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "east",
+              "carrying": "puff",
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "rethought": true,
+              "stuck": false
+            }
+          ],
+          [
+            {
+              "at": {
+                "x": 5,
+                "y": 2
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 5,
+                  "y": 2
+                },
+                "facing": "west"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "west",
+              "task": {
+                "directive": 0,
+                "role": "guard",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 5,
+                "y": 3
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                },
+                "facing": "west"
+              },
+              "holding": true,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": true,
+              "turned_away": false,
+              "facing": "west",
+              "task": {
+                "directive": 0,
+                "role": "claim",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "stuck": false
+            },
+            {
+              "at": {
+                "x": 5,
+                "y": 4
+              },
+              "composure": 3,
+              "out": false,
+              "order": {
+                "order": "hold",
+                "at": {
+                  "x": 4,
+                  "y": 4
+                },
+                "facing": "north"
+              },
+              "holding": false,
+              "spent": false,
+              "interrupted": false,
+              "arrived": false,
+              "followed_up": false,
+              "detours_left": 2,
+              "hung_back": false,
+              "bumped": false,
+              "turned_away": false,
+              "facing": "west",
+              "carrying": "puff",
+              "task": {
+                "directive": 0,
+                "role": "flank",
+                "at": {
+                  "x": 4,
+                  "y": 3
+                }
+              },
+              "rethought": true,
+              "stuck": false
+            }
+          ]
+        ],
+        "gates_open": [],
+        "swing_at": null,
+        "lever_ready_turn": 1,
+        "capture": [
+          3,
+          0
+        ],
+        "outcome": {
+          "winner": "left",
+          "victory": "capture",
+          "turn": 2
+        },
+        "switch_ready_turn": 0
+      }
+    }
+  ]
 }
