@@ -223,6 +223,7 @@ impl BattleApp {
             Step::Lessons => {
                 "Choose a lesson, then turn the page to choose who plays it.".to_owned()
             }
+            Step::Where if self.outing == Outing::Home => self.circuit_hint(),
             Step::Where => match self.outing {
                 Outing::Home | Outing::Lessons => {
                     "Choose where to play the visiting team, then turn the page."
@@ -629,6 +630,7 @@ impl BattleApp {
             steps.len()
         );
         match self.step {
+            Step::Where if self.outing == Outing::Home => self.circuit_page(ui, ctx, u),
             Step::Where => {
                 let observation = match self.outing {
                     Outing::Home | Outing::Lessons => {
@@ -738,6 +740,7 @@ impl BattleApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 match self.step {
+                    Step::Where if self.outing == Outing::Home => self.circuit_notes(ui, u),
                     Step::Where => self.places(ui, u),
                     Step::Lessons => self.lessons(ui, u),
                     Step::Who => self.lineup(ui, ctx, u),

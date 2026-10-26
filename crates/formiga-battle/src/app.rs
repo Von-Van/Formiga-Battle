@@ -21,6 +21,7 @@ mod menus;
 mod playbooks;
 mod registry;
 mod welcome;
+mod where_to;
 
 use crate::announce::{Callout, Style};
 use crate::chrome::{self, Kind, hand_job, ink, label_job};
@@ -314,6 +315,8 @@ pub struct BattleApp {
     /// The Field Lesson chosen, and the ones learned this sitting.
     lesson: Lesson,
     learned: Vec<Lesson>,
+    /// The friends played, opened out on the Circuit page.
+    friends_open: bool,
     /// How far the mouse wheel has turned over the board since it last turned a HOLD, in points.
     wheel: f32,
     /// Keeps how Battle looks and sounds for next time; none for a window opened for its picture.
@@ -449,6 +452,7 @@ impl BattleApp {
             orders_heard: 0.0,
             lesson: Lesson::Beacon,
             learned: Vec::new(),
+            friends_open: false,
             wheel: 0.0,
             kept: None,
         };
@@ -4912,6 +4916,20 @@ mod tests {
         }
         h.time = f64::from(now) + 1.0;
         h.frames(4);
+    }
+
+    #[test]
+    fn the_circuit_names_the_rival_coming_next_and_turns_to_who_goes() {
+        let mut h = Headless::new();
+        h.frames(2);
+        h.app.open_journal(Outing::Home, Step::Where);
+        h.frames(20);
+        let (rival, _) = h.app.table.next_visitors();
+        assert!(says(&h, &format!("vs. {}!", rival.short)));
+        assert!(says(&h, "The Backyard Cup"));
+        h.click("Who's going? ›", 0);
+        h.frames(20);
+        assert_eq!(h.app.step, Step::Who);
     }
 
     #[test]
