@@ -47,7 +47,7 @@ impl BattleApp {
         let history: Vec<MatchSummary> = self.table.record.history.iter().rev().cloned().collect();
         if history.is_empty() {
             ui.label(
-                RichText::new("No matches yet. Take the train out to play one.")
+                RichText::new("No matches yet! Let's hop on the train and play one.")
                     .size(16.0)
                     .italics()
                     .color(ink::MUTED),
@@ -288,20 +288,25 @@ fn switch_row(ui: &mut egui::Ui, name: &str, does: &str, on: &mut bool, u: f32) 
     });
 }
 
-/// A match's result as a rubber stamp: won in green, lost in red, drawn in grey.
+/// A match's result as a rubber stamp, pressed on a little askew: won in green, lost in red,
+/// drawn in grey.
 fn stamp(ui: &mut egui::Ui, won: Option<bool>, u: f32) {
     let (word, colour) = match won {
         Some(true) => ("Won", ink::FOREST),
         Some(false) => ("Lost", ink::STAMP),
         None => ("Drawn", ink::MUTED),
     };
-    let galley = ui.painter().layout_job(hand_job(word, 11.0, colour));
-    let size = egui::vec2(u * 32.0, galley.size().y + u * 6.0);
-    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-    let painter = ui.painter();
-    chrome::stepped(painter, rect, u, colour);
-    chrome::stepped(painter, rect.shrink(u * 2.0), u, colour.gamma_multiply(0.5));
-    painter.galley(rect.center() - galley.size() / 2.0, galley, colour);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(u * 34.0, u * 20.0), egui::Sense::hover());
+    chrome::stamp(
+        ui.painter(),
+        rect.center(),
+        word,
+        chrome::HAND,
+        colour,
+        None,
+        (-4f32).to_radians(),
+        u,
+    );
 }
 
 /// The day a match finished, as a notebook dates it: 15 Oct 2026.

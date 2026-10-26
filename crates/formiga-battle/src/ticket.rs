@@ -295,7 +295,8 @@ fn cottage(canvas: &mut Canvas, (cx, cy): (i32, i32), s: i32) {
 }
 
 /// The ticket as a button, painted for its size and how it is pointed at, and lettered on top:
-/// who it admits, where it goes, and the word stamped beneath.
+/// who it admits, where it goes, the word stamped beneath, and how the Handler is getting on
+/// there.
 #[allow(clippy::too_many_arguments)]
 pub fn ticket(
     ui: &mut egui::Ui,
@@ -303,6 +304,7 @@ pub fn ticket(
     id: egui::Id,
     title: &str,
     small: &str,
+    status: &str,
     to: Destination,
     unit: f32,
 ) -> egui::Response {
@@ -371,9 +373,15 @@ pub fn ticket(
         }
         let little = painter.layout_job(label_job(small, chrome::LABEL, ink::STAMP));
         let stamp_size = little.size() + egui::vec2(unit * 8.0, unit * 4.0);
-        let gap = unit * 4.0;
+        let gap = unit * 3.0;
         let big_size = big.size();
-        let total = big_size.y + gap + stamp_size.y;
+        let note = painter.layout_no_wrap(
+            status.to_owned(),
+            formiga_pencil::hand_bold(chrome::HAND),
+            ink::FOREST,
+        );
+        let note_size = note.size();
+        let total = big_size.y + gap + stamp_size.y + gap + note_size.y;
         let top = body.center().y - total / 2.0 + unit * 3.0;
         painter.galley(
             egui::pos2(body.center().x - big_size.x / 2.0, top),
@@ -390,6 +398,12 @@ pub fn ticket(
         );
         chrome::stepped(painter, stamp, unit, ink::STAMP.gamma_multiply(0.8));
         painter.galley(stamp.center() - little.size() / 2.0, little, ink::STAMP);
+        // How the Handler is getting on there, jotted under it.
+        painter.galley(
+            egui::pos2(body.center().x - note_size.x / 2.0, stamp.bottom() + gap),
+            note,
+            ink::FOREST,
+        );
     });
     if let Some(through) = press.sparkle {
         crate::feel::sparkle(ui.painter(), face, through, unit);

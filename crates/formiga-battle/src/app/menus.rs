@@ -501,12 +501,27 @@ impl BattleApp {
         let stopped = station.stopped(now);
         let since = station.stopped_at();
         let observation = if leaving {
-            "Off they go…"
+            "Off we go!"
         } else if stopped {
-            "All aboard! Where are they off to?"
+            "All aboard! Where are we off to?"
         } else {
-            "Your companions are coming in on the train. Click the picture to hurry it along."
+            "Coming in now! Click the picture to hurry it along."
         };
+        let record = &self.table.record;
+        let world_status = match record.circuit_points {
+            0 => "No points yet!".to_owned(),
+            points => format!("{points} points so far"),
+        };
+        let home_status = crate::rewards::CUPS
+            .iter()
+            .find(|c| record.cup_wins(c.id) < crate::rewards::CUP_WINS)
+            .map_or_else(
+                || "Champion of the Circuit!".to_owned(),
+                |c| match record.cup_wins(c.id) {
+                    0 => format!("The {} awaits!", c.name),
+                    wins => format!("{}: {wins} of {}!", c.name, crate::rewards::CUP_WINS),
+                },
+            );
         self.masthead(ui, u, now);
         ui.add_space(u * 2.0);
         ui.vertical_centered(|ui| {
@@ -514,15 +529,16 @@ impl BattleApp {
         });
         ui.add_space(u * 6.0);
         let width = ui.available_width();
-        let h = 96.0;
+        let h = 108.0;
         let mut chosen = None;
         let mut notes = false;
         let ready = stopped && !leaving;
-        for (i, (outing, title, small, to, hint)) in [
+        for (i, (outing, title, small, status, to, hint)) in [
             (
                 Outing::World,
                 "Out in the World",
                 "Online",
+                world_status,
                 Destination::World,
                 "Play a friend: open a room and give them its code, or join theirs.",
             ),
@@ -530,6 +546,7 @@ impl BattleApp {
                 Outing::Home,
                 "Close to Home",
                 "Offline",
+                home_status,
                 Destination::Home,
                 "Play the visiting team on this computer. Wins fill each place's cup.",
             ),
@@ -546,6 +563,7 @@ impl BattleApp {
                         Id::new(("destination", i)),
                         title,
                         small,
+                        &status,
                         to,
                         u,
                     )
@@ -567,7 +585,7 @@ impl BattleApp {
                 // A colony that has never played is told where to begin.
                 if self.table.record.applied.is_empty() {
                     ui.label(
-                        RichText::new("New here? Field Lessons show how a match works.")
+                        RichText::new("New here? Field Lessons show how a match works!")
                             .size(15.0)
                             .italics()
                             .color(ink::MUTED),
@@ -590,7 +608,7 @@ impl BattleApp {
                 ui.add_space(u * 3.0);
                 notes = chrome::button(
                     ui,
-                    "Your Handler & history",
+                    "My Handler page & history",
                     Kind::Plain,
                     false,
                     true,
@@ -637,7 +655,7 @@ impl BattleApp {
                         "Pick a place for the match. Each has a cup to win against the visiting team, and winning one opens the next."
                     }
                     Outing::World => {
-                        "Pick a place for the match. Every place is open for friends. If you join a friend's room instead, you play where they chose."
+                        "Pick a place for the match! Every place is open for friends. If I join a friend's room instead, we play where they chose."
                     }
                 };
                 chrome::page_heading(ui, &line, "Where to?", observation);
@@ -649,7 +667,7 @@ impl BattleApp {
                     ui,
                     &line,
                     "Field Lessons",
-                    "Short situations on the Backyard, under the real rules, that show how a match works. Play them in any order, as often as you like. Nothing is kept.",
+                    "Little situations on the Backyard, under the real rules, that show how a match works. Any order, as often as I like. Nothing's kept!",
                 );
                 ui.add_space(u * 6.0);
                 self.lesson_page(ui, u);
@@ -659,7 +677,7 @@ impl BattleApp {
                     ui,
                     &line,
                     "Who goes?",
-                    "Choose three of your companions. They take the field in the order you choose them.",
+                    "I pick three of my companions, and they take the field in the order I pick them.",
                 );
                 ui.add_space(u * 6.0);
                 self.companions(ui, ctx, u);
@@ -669,7 +687,7 @@ impl BattleApp {
                     ui,
                     &line,
                     "Your friend's room",
-                    "Open a room and give your friend its code, or join theirs with the code they give you.",
+                    "I open a room and give my friend its code, or join theirs with the code they give me.",
                 );
                 ui.add_space(u * 6.0);
                 self.room(ui, u);
@@ -678,8 +696,8 @@ impl BattleApp {
                 chrome::page_heading(
                     ui,
                     &line,
-                    "Your Handler",
-                    "Who you are when your companions play: your name, your club and your pennant. Friends see them beside your team.",
+                    "My Handler page",
+                    "Who I am when my companions play: my name, my club and my pennant. Friends see them beside my team!",
                 );
                 ui.add_space(u * 6.0);
                 egui::ScrollArea::vertical()
@@ -715,7 +733,7 @@ impl BattleApp {
                     ui,
                     &line,
                     "History",
-                    "Every match your colony has played, newest first, and who went.",
+                    "Every match we've played, newest first, and who went.",
                 );
                 ui.add_space(u * 6.0);
                 self.history(ui, ctx, u);
@@ -776,7 +794,7 @@ impl BattleApp {
             Some(Step::Where) => "Where to",
             Some(Step::Lessons) => "Lessons",
             Some(Step::Who) => "Who goes",
-            Some(Step::Handler) => "Your Handler",
+            Some(Step::Handler) => "My Handler page",
             Some(Step::Playbooks) => "Playbooks",
             Some(Step::Circuit) => "The Circuit",
             Some(Step::History) => "History",
