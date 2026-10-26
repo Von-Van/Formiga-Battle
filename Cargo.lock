@@ -1393,7 +1393,7 @@ dependencies = [
 [[package]]
 name = "formiga-pencil"
 version = "0.67.14"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-pencil-notebook#4580fa60a38018fa33b3f45b2c9bf9383df0b9ab"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-pencil-notebook#07b804313eacc32089a3fb8841022e5c4137024c"
 dependencies = [
  "egui",
  "skrifa",
