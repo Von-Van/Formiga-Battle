@@ -677,6 +677,64 @@ other, 50 matches a pair with the sides swapped, no style beats every other: the
 scores 0.67 against the Aggressor and 0.56 against the Defender but 0.48 against the
 Opportunist; the Aggressor, who sends everyone, scores lowest (0.40 to 0.48).
 
+### The adaptive style
+
+`Archetype::Adaptive` reads how the other Handler has played and answers it. For its first three
+turns it plays the Exhibition coach's book. From then on it counts the orders the other team sent
+over its last three turns, which both Handlers see as each turn plays, and when one kind is more
+than half of them it plays the book that answers it, by the circle of orders: against PRESS, the Defender's (a HOLD turns a
+press away); against HOLD, the Tactician's (a TRICK breaks a hold); against TRICK, the
+Aggressor's (a PRESS catches a trickster); against INTERACT and USE ITEM, the Opportunist's. Without
+so clear a habit it keeps its own book: answering every lean of the last three turns made it
+beat every other style on the Millpond. It never reads the other team's leanings.
+`STYLE_VERSION` is 2.
+
+### Rivals' tiers
+
+A rival plays the same style at every event, more strongly as the competition rises:
+
+| Where | Coach | How it plans |
+|---|---|---|
+| Cup matches and an Open | `Coach::Styled` | Its style's book: the Exhibition coach's moves with its own chances |
+| A Regional | `Coach::Thinking` | Thinks each turn through as the generic coach does, starting from its style's book and valuing the board by its style's weights; every creature imagined plain |
+| A Championship | `Coach::Scouted` | The same, knowing its own team as they are; the other team still imagined plain |
+
+| Style | Weights after a turn it imagines (beacon, composure, standing, holding, carrying) |
+|---|---|
+| Plain (familiar and generic coaches) | 300, 80, 200, 40, 25 |
+| Aggressor | 300, 130, 280, 20, 25 |
+| Defender | 340, 70, 200, 110, 25 |
+| Tactician | 330, 110, 200, 30, 25 |
+| Opportunist | 300, 80, 200, 40, 90 |
+| Adaptive | the weights of the style it is answering with |
+
+No tier reads the other team's leanings or orders before they are sent, so it plays by the same
+rules and the same information as a Handler.
+
+### Balance
+
+`cargo run --release -p formiga-battle-core --example balance -- [pairings]` plays every style,
+tier and sample playbook against each other with random trios, each pairing from both sides. With
+12 pairings (24 matches a cell, about 0.1 either way by chance):
+
+| | Against Exhibition | Against generic |
+|---|---|---|
+| Book rivals (cups, Opens) | 0.29 to 0.67 | 0.00 to 0.21 |
+| Thinking rivals (Regionals) | 0.88 to 0.96 | 0.42 to 0.60 |
+| Scouted rivals (Championships) | 0.96 to 1.00 | 0.62 to 0.71 |
+
+So the ladder climbs: a book rival is about as hard as the visitors were, a Regional rival about
+as hard as the generic coach, a Championship rival harder still. Among book rivals and among
+thinking rivals no style beats every other on any arena; no thinking style scores 0.6 or more
+against every other (the Defender, 0.50 to 0.60, comes closest). `tests/styles.rs` checks that no style beats every other on any
+of the four arenas.
+
+The sample playbooks beat book rivals (0.58 to 0.96, except Finders keepers) and lose to thinking
+rivals (0.04 to 0.52): a good plan wins the cups and the Opens, and is not enough at a Regional.
+Finders keepers loses to every rival (0.04 to 0.42): fetching first gives the beacon away.
+`tests/playbook.rs` checks that no sample playbook beats every thinking rival. Over 16 events of
+eight rivals across the four places, no style wins half of them (`table.rs`).
+
 ## Knowing your creatures
 
 The `familiar` and `generic` coaches (`plan.rs`) think each turn through the same way: for each of

@@ -636,7 +636,7 @@ impl Table {
                 bracket.seed,
                 i,
                 [self.rival_team(ra), self.rival_team(rb)],
-                [Coach::Styled(ra.archetype), Coach::Styled(rb.archetype)],
+                [self.rival_coach(ra, true), self.rival_coach(rb, true)],
             );
             if bracket
                 .record(
@@ -859,6 +859,24 @@ impl Table {
             }
             (false, None) => format!("Out{toss} in the {round}"),
         })
+    }
+
+    /// How a rival coaches: from their style's book in a cup match and an Open; thinking each
+    /// turn through at a Regional; and knowing their own team as well at a Championship. Every
+    /// tier imagines the other team as plain, as a Handler must.
+    fn rival_coach(&self, rival: &Rival, in_event: bool) -> Coach {
+        let stage = self
+            .career
+            .season
+            .as_ref()
+            .and_then(formiga_battle_world::Season::next_stage)
+            .map(|s| s.kind)
+            .filter(|_| in_event);
+        match stage {
+            Some(formiga_battle_world::Kind::Regional) => Coach::Thinking(rival.archetype),
+            Some(formiga_battle_world::Kind::Championship) => Coach::Scouted(rival.archetype),
+            _ => Coach::Styled(rival.archetype),
+        }
     }
 
     /// A rival's three, as they always field them.
@@ -2025,6 +2043,9 @@ impl Table {
     /// against a friend, sends them to the room, which resolves the turn when both are in.
     pub fn lock(&mut self, now: f32) {
         let ours = self.plan();
+        let visiting = self
+            .rival
+            .map(|rival| self.rival_coach(rival, self.event_fixture.is_some()));
         let Some(m) = &mut self.m else {
             return;
         };
@@ -2045,9 +2066,9 @@ impl Table {
         if let Some(runner) = &mut self.playbook {
             runner.sent(&ours);
         }
-        let away = match (&self.lesson, self.rival) {
+        let away = match (&self.lesson, visiting) {
             (Some(run), _) => run.lesson.visitors(m),
-            (None, Some(rival)) => Coach::Styled(rival.archetype).plan(m, self.you.other()),
+            (None, Some(coach)) => coach.plan(m, self.you.other()),
             (None, None) => Coach::Exhibition.plan(m, self.you.other()),
         };
         let plans = match self.you {
@@ -2612,6 +2633,42 @@ mod tests {
             t.m.as_ref().unwrap().arena.variant,
             None,
             "lessons are never varied"
+        );
+    }
+
+    #[test]
+    fn no_way_of_playing_wins_most_of_the_rivals_own_events() {
+        // Eight rivals, every way of playing among them, in event after event on every place:
+        // whoever wins should not be settled by how they play.
+        let t = Table::new(sample::snapshot(), sample::visitors(9), 3);
+        let mut by_style: std::collections::BTreeMap<&str, u32> = Default::default();
+        let mut events = 0;
+        for (k, arena) in Arena::built_in().into_iter().enumerate() {
+            for n in 0..4u64 {
+                let entrants: Vec<String> = (0..8)
+                    .map(|i| {
+                        rival::visiting(&arena.id, i + n as u32 + k as u32)
+                            .id
+                            .to_owned()
+                    })
+                    .collect();
+                let mut b =
+                    formiga_battle_world::Bracket::new("rivals", 100 + n * 7 + k as u64, entrants)
+                        .expect("eight rivals, each once");
+                t.play_out_rivals(&mut b, &arena);
+                let champion = b.champion().expect("played out");
+                let style = rival::by_id(&b.entrants[champion])
+                    .unwrap()
+                    .archetype
+                    .label();
+                *by_style.entry(style).or_default() += 1;
+                events += 1;
+            }
+        }
+        let most = by_style.values().copied().max().unwrap_or(0);
+        assert!(
+            most * 2 <= events,
+            "one way of playing won {most} of {events}: {by_style:?}"
         );
     }
 

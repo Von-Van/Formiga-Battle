@@ -5,8 +5,8 @@
 use formiga_battle_core::ai::Coach;
 use formiga_battle_core::muster;
 use formiga_battle_core::playbook::{
-    self, Advance, Deviation, Fallback, Intent, Pilot, Playbook, PlaybookError, Runner, Stage,
-    Timing, Trigger,
+    self, Advance, Deviation, FacingHint, Fallback, Intent, Pilot, Playbook, PlaybookError, Runner,
+    Stage, Timing, Trigger,
 };
 use formiga_battle_core::tournament::{self, drawn_creature};
 use formiga_battle_core::*;
@@ -340,4 +340,74 @@ fn the_handler_can_change_any_of_a_playbooks_orders() {
     }
     let (again, _) = m.record().replay().expect("replays");
     assert_eq!(again.hash(), m.hash());
+}
+
+#[test]
+fn no_sample_playbook_beats_every_thinking_rival() {
+    // A playbook is a way of saying what the team wants, not a stronger team: none should beat
+    // every style of rival a Handler meets at a Regional, where rivals think each turn through.
+    // (Against the book-playing rivals of the cups and the Opens, a good plan should win.)
+    let styles = [
+        Archetype::Aggressor,
+        Archetype::Defender,
+        Archetype::Tactician,
+        Archetype::Opportunist,
+        Archetype::Adaptive,
+    ];
+    let mut report = String::new();
+    let mut dominant = Vec::new();
+    for book in Playbook::samples() {
+        let pilot = Pilot::Playbook(book.clone());
+        let mut beats_all = true;
+        for style in styles {
+            let coach = Pilot::Coach(Coach::Thinking(style));
+            let f = playbook::face_off(
+                &Arena::backyard(),
+                Ruleset::default(),
+                6,
+                8,
+                [&pilot, &coach],
+            );
+            let score = f.record.score();
+            report.push_str(&format!("{} v {}: {score:.3}\n", book.name, style.label()));
+            beats_all &= score > 0.62;
+        }
+        if beats_all {
+            dominant.push(book.name.clone());
+        }
+    }
+    eprintln!("{report}");
+    assert!(
+        dominant.is_empty(),
+        "{dominant:?} beat every style:\n{report}"
+    );
+}
+
+#[test]
+fn a_secure_stage_facing_across_keeps_that_facing_on_squares_already_ours() {
+    // One of ours already stands on the beacon's middle. Asked to face across the board, the
+    // stage holds that square facing across, never presses onto it (which would face it toward
+    // the nearest of theirs instead).
+    let mut m = Match::new(Arena::backyard(), Ruleset::default(), 3, rosters(3)).unwrap();
+    let centre = m.arena.zone_centre();
+    m.board.fighters[0][0].at = centre;
+    let book = Playbook::new(
+        "Across",
+        &[Stage::new(Intent::Secure).facing(FacingHint::Across)],
+    );
+    let mut runner = Runner::new(book, Side::Left);
+    let plan = runner.plan(&m);
+    assert!(
+        !plan
+            .iter()
+            .any(|d| matches!(d, Directive::Press { squares } if squares.contains(&centre))),
+        "no PRESS onto a square of ours: {plan:?}"
+    );
+    assert!(
+        plan.iter().any(|d| matches!(
+            d,
+            Directive::Hold { squares, facing } if squares.contains(&centre) && *facing == Facing::across(Side::Left)
+        )),
+        "the square of ours is held facing across: {plan:?}"
+    );
 }

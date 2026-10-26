@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- A fifth coaching style, the Adaptive, reads what the other Handler has ordered over the last
+  three turns and answers it by the circle of orders, and a ninth rival plays it: Morrow Quill of
+  The Weathervane. Seven rivals play each season, the rest sitting it out in turn.
+- Rivals grow stronger as the competition rises: they play their style's book in cup matches and
+  Opens, think each turn through with their style's priorities at a Regional, and also know their
+  own team at a Championship. None reads the other team's leanings. A good playbook wins the cups
+  and the Opens; a Regional needs more. See docs/RULES.md, "Rivals' tiers" and "Balance", and the
+  new `balance` example that measures it all.
+- A Secure stage set to hold facing across the board keeps that facing on the squares the team
+  already holds, instead of pressing onto them and facing the nearest of the other team.
+- The relay Battle keeps for tests never confirms a forfeited match, and once a finished match's
+  boards are both in, a later report cannot change what the two windows were told, as the site's
+  relay now does.
 - A match opens on a painted card. Each side's panel slides in from its edge in its team's
   colours, its pennant flown large, its name on a ribbon, its Handler on a brass plate, its club
   on a cloth tab and a stitched badge saying how it plays, and a red burst with VS on it punches

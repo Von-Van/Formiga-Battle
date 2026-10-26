@@ -58,5 +58,5 @@ pub use order::{Directive, Facing, Order, Orders, PLAN_SIZE, Quarter, Side, Slot
 pub use profile::{Behavior, Bond, Leanings, Nature, Profile, Strength};
 pub use replay::MatchRecord;
 pub use ruleset::{CaptureRule, RULES_VERSION, Ruleset, RulesetError};
-pub use style::{Archetype, Book, STYLE_VERSION};
+pub use style::{Archetype, Book, STYLE_VERSION, Weights};
 pub use variant::Variant;

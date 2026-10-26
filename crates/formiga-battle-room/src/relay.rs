@@ -399,9 +399,12 @@ impl Room {
             .all(|b| b.is_some_and(|(turn, ..)| usize::from(turn) == last))
     }
 
-    /// The match is over and both windows came to the same board after every turn.
+    /// The match is over on the board and both windows came to the same board after every turn.
+    /// A forfeit is never confirmed, even with both boards in for the turns before it: it has no
+    /// last board to wait for.
     fn confirmed(&self) -> bool {
         self.stage == Stage::Over
+            && !self.ending.as_ref().is_some_and(|e| e.forfeited.is_some())
             && !self.out_of_step
             && self.both_reported()
             && self.boards[0].map(|b| b.1) == self.boards[1].map(|b| b.1)
@@ -625,6 +628,12 @@ impl Relay {
             } => self.with_seat(&code, &seat, now, |room, side, now| {
                 if turn == 0 || turn as usize > room.locked.len() {
                     return Err(Refusal::NotThisTurn);
+                }
+                // Once the match is over and both boards after its last turn are in, how they
+                // came out has been told and stays as told: a later report changes nothing, so
+                // the two windows cannot be told different things.
+                if room.stage == Stage::Over && room.both_reported() {
+                    return Ok(());
                 }
                 room.boards[side.index()] = Some((turn, hash, finished));
                 if let [Some(a), Some(b)] = room.boards
