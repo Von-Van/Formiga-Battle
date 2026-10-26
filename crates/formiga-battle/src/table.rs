@@ -56,6 +56,10 @@ fn handler_name(raw: &str) -> String {
     }
 }
 
+/// Why nothing new can begin while the relay is still comparing the last match's boards.
+const STILL_CHECKING: &str =
+    "Your last match is still being checked against your friend's board; give it a moment.";
+
 /// A match with a friend, through the relay.
 pub struct Friend {
     pub line: Line,
@@ -253,6 +257,9 @@ pub struct Table {
     pub event_line: Option<String>,
     /// How the match being shown stands between the Handler and the rival, as the result says it.
     pub meeting: Option<String>,
+    /// The friend whose team the other side is, by name, for as long as the match is shown: the
+    /// room may have closed by the time the result is read. None against the visitors.
+    pub other_handler: Option<String>,
     pub friend: Option<Friend>,
     /// Where friend matches go: the site's relay, unless development points elsewhere.
     pub relay: String,
@@ -328,6 +335,7 @@ impl Table {
             event_fixture: None,
             event_line: None,
             meeting: None,
+            other_handler: None,
             friend: None,
             relay: relay_base(),
             desktop_version: roster.desktop_version.clone(),
@@ -461,9 +469,14 @@ impl Table {
         }
     }
 
-    /// Applies what a match earned to the record here and writes it for Desktop.
+    /// Applies what a match earned to the record here and writes it for Desktop. Only a session
+    /// Desktop opened is cut to what that Desktop reads: a rehearsal writes nothing for one.
     fn keep(&mut self, earned: rewards::Earned) {
-        let earned = rewards::for_reader(earned, self.desktop_reads);
+        let earned = if self.session.is_some() {
+            rewards::for_reader(earned, self.desktop_reads)
+        } else {
+            earned
+        };
         self.record.apply(&earned.result);
         self.earned = earned.lines;
         self.remember_meeting(&earned.result.id);
@@ -636,7 +649,7 @@ impl Table {
                 bracket.seed,
                 i,
                 [self.rival_team(ra), self.rival_team(rb)],
-                [Coach::Styled(ra.archetype), Coach::Styled(rb.archetype)],
+                [self.rival_coach(ra, true), self.rival_coach(rb, true)],
             );
             if bracket
                 .record(
@@ -861,6 +874,24 @@ impl Table {
         })
     }
 
+    /// How a rival coaches: from their style's book in a cup match and an Open; thinking each
+    /// turn through at a Regional; and knowing their own team as well at a Championship. Every
+    /// tier imagines the other team as plain, as a Handler must.
+    fn rival_coach(&self, rival: &Rival, in_event: bool) -> Coach {
+        let stage = self
+            .career
+            .season
+            .as_ref()
+            .and_then(formiga_battle_world::Season::next_stage)
+            .map(|s| s.kind)
+            .filter(|_| in_event);
+        match stage {
+            Some(formiga_battle_world::Kind::Regional) => Coach::Thinking(rival.archetype),
+            Some(formiga_battle_world::Kind::Championship) => Coach::Scouted(rival.archetype),
+            _ => Coach::Styled(rival.archetype),
+        }
+    }
+
     /// A rival's three, as they always field them.
     fn rival_team(&self, rival: &Rival) -> Vec<formiga_battle_core::Profile> {
         self.drawn(rival.trio_seed)
@@ -971,6 +1002,13 @@ impl Table {
         chosen
     }
 
+    /// The variant the next match against the visitors is set up in: drawn by its seed for the
+    /// place chosen, the same one the Where page shows. Field Lessons are always the Backyard as
+    /// its file has it.
+    pub fn variant(&self) -> formiga_battle_core::Variant {
+        formiga_battle_core::Variant::drawn(&self.arena, self.seed)
+    }
+
     /// Puts both teams on the board. Fails only if a look cannot be drawn.
     pub fn start(&mut self, now: f32) -> anyhow::Result<()> {
         self.field(now, None)
@@ -984,6 +1022,7 @@ impl Table {
 
     fn field(&mut self, now: f32, lesson: Option<Lesson>) -> anyhow::Result<()> {
         anyhow::ensure!(self.picked.len() == TEAM_SIZE, "pick three");
+        anyhow::ensure!(!self.checking_board(), "{STILL_CHECKING}");
         // The visitors play only on arenas whose cup is open; anywhere else, the Backyard. Every
         // lesson is on the Backyard.
         if lesson.is_some()
@@ -1030,7 +1069,12 @@ impl Table {
         }
         let m = match lesson {
             Some(lesson) => lesson.stage(self.ruleset, self.seed, rosters)?,
-            None => Match::new(self.arena.clone(), self.ruleset, self.seed, rosters)?,
+            None => Match::new(
+                self.variant().apply(&self.arena)?,
+                self.ruleset,
+                self.seed,
+                rosters,
+            )?,
         };
         let look = |pool: &[(Contender, Profile)], picks: &[usize]| -> anyhow::Result<Vec<Look>> {
             picks
@@ -1055,6 +1099,7 @@ impl Table {
             Some(r) => format!("{}'s team", r.short),
             None => "The visiting team".to_owned(),
         };
+        self.other_handler = None;
         self.friend = None;
         // The trio's playbook fills in its orders against the visitors, never in a lesson.
         self.pending_playbook = match lesson {
@@ -1114,6 +1159,10 @@ impl Table {
             self.notice = Some("Choose three first.".to_owned());
             return;
         }
+        if self.checking_board() {
+            self.notice = Some(STILL_CHECKING.to_owned());
+            return;
+        }
         let (team, bonds) = self.picked_team();
         // The name signed here is the Handler's from now on.
         if let Some(card) = crate::identity::card_with_name(&self.record, handler)
@@ -1168,6 +1217,25 @@ impl Table {
     pub fn leave_room(&mut self) {
         if let Some(friend) = self.friend.take() {
             friend.line.ask(Ask::Leave);
+        }
+    }
+
+    /// Whether what the last match with a friend earned is still waiting on the relay to say
+    /// both boards came out the same. Opening another room or taking on the visitors would
+    /// drop it, so both wait.
+    pub fn checking_board(&self) -> bool {
+        self.friend.as_ref().is_some_and(|f| f.held.is_some())
+    }
+
+    /// Leaves the room once a match with a friend is over and what it earned is settled, so the
+    /// next room can be opened without waiting for the relay to close this one. A room whose
+    /// boards are still being checked is kept, and the earnings with it.
+    pub fn leave_when_settled(&mut self) {
+        if self.outcome().is_some()
+            && self.friend.as_ref().is_some_and(|f| f.seated)
+            && !self.checking_board()
+        {
+            self.leave_room();
         }
     }
 
@@ -1411,6 +1479,7 @@ impl Table {
         }
         self.you = you;
         self.other_name = format!("{}'s team", handlers[you.other().index()]);
+        self.other_handler = Some(handlers[you.other().index()].clone());
         self.board_teams = teams;
         self.begin_match(m, now);
     }
@@ -2024,6 +2093,9 @@ impl Table {
     /// against a friend, sends them to the room, which resolves the turn when both are in.
     pub fn lock(&mut self, now: f32) {
         let ours = self.plan();
+        let visiting = self
+            .rival
+            .map(|rival| self.rival_coach(rival, self.event_fixture.is_some()));
         let Some(m) = &mut self.m else {
             return;
         };
@@ -2044,9 +2116,9 @@ impl Table {
         if let Some(runner) = &mut self.playbook {
             runner.sent(&ours);
         }
-        let away = match (&self.lesson, self.rival) {
+        let away = match (&self.lesson, visiting) {
             (Some(run), _) => run.lesson.visitors(m),
-            (None, Some(rival)) => Coach::Styled(rival.archetype).plan(m, self.you.other()),
+            (None, Some(coach)) => coach.plan(m, self.you.other()),
             (None, None) => Coach::Exhibition.plan(m, self.you.other()),
         };
         let plans = match self.you {
@@ -2600,6 +2672,57 @@ mod tests {
     }
 
     #[test]
+    fn a_match_against_the_visitors_is_set_up_in_the_variant_the_where_page_shows() {
+        let mut t = table();
+        let shown = t.variant();
+        assert_eq!(t.m.as_ref().unwrap().arena.variant.as_ref(), Some(&shown));
+        // The place chosen stays the arena as its file has it; only the match's copy is varied.
+        assert_eq!(t.arena.variant, None);
+        t.start_lesson(Lesson::Flank, 0.0).unwrap();
+        assert_eq!(
+            t.m.as_ref().unwrap().arena.variant,
+            None,
+            "lessons are never varied"
+        );
+    }
+
+    #[test]
+    fn no_way_of_playing_wins_most_of_the_rivals_own_events() {
+        // Eight rivals, every way of playing among them, in event after event on every place:
+        // whoever wins should not be settled by how they play.
+        let t = Table::new(sample::snapshot(), sample::visitors(9), 3);
+        let mut by_style: std::collections::BTreeMap<&str, u32> = Default::default();
+        let mut events = 0;
+        for (k, arena) in Arena::built_in().into_iter().enumerate() {
+            for n in 0..4u64 {
+                let entrants: Vec<String> = (0..8)
+                    .map(|i| {
+                        rival::visiting(&arena.id, i + n as u32 + k as u32)
+                            .id
+                            .to_owned()
+                    })
+                    .collect();
+                let mut b =
+                    formiga_battle_world::Bracket::new("rivals", 100 + n * 7 + k as u64, entrants)
+                        .expect("eight rivals, each once");
+                t.play_out_rivals(&mut b, &arena);
+                let champion = b.champion().expect("played out");
+                let style = rival::by_id(&b.entrants[champion])
+                    .unwrap()
+                    .archetype
+                    .label();
+                *by_style.entry(style).or_default() += 1;
+                events += 1;
+            }
+        }
+        let most = by_style.values().copied().max().unwrap_or(0);
+        assert!(
+            most * 2 <= events,
+            "one way of playing won {most} of {events}: {by_style:?}"
+        );
+    }
+
+    #[test]
     fn a_visitor_with_one_of_your_names_is_told_apart() {
         let mut t = table();
         let ours = t.m.as_ref().unwrap().rosters[0][0].name.clone();
@@ -2918,6 +3041,8 @@ mod tests {
         assert_eq!(host.you, Side::Left);
         assert_eq!(guest.you, Side::Right);
         assert_eq!(host.other_short(), "Friend");
+        assert_eq!(host.other_handler.as_deref(), Some("Friend"));
+        assert_eq!(guest.other_handler.as_deref(), Some("Jake"));
         let mut rounds = 0;
         while !(host.finished(now) && guest.finished(now)) {
             for t in [&mut host, &mut guest] {
@@ -2944,6 +3069,14 @@ mod tests {
         assert!(a.outcome().is_some());
         // What it earned is kept once the relay has confirmed both boards.
         let held = |t: &Table| t.friend.as_ref().is_some_and(|f| f.held.is_some());
+        // While they are being checked, nothing that would drop them can begin.
+        if held(&host) {
+            assert!(host.checking_board());
+            host.open_room("Jake", None);
+            assert_eq!(host.notice.as_deref(), Some(STILL_CHECKING));
+            assert!(host.start(now).is_err(), "the visitors wait too");
+            assert!(held(&host), "and the earnings are still held");
+        }
         while held(&host) || held(&guest) {
             std::thread::sleep(std::time::Duration::from_millis(50));
             now += 1.0;
@@ -2952,12 +3085,16 @@ mod tests {
             rounds += 1;
             assert!(rounds < 700, "the boards are confirmed");
         }
-        for t in [&host, &guest] {
+        for t in [&mut host, &mut guest] {
             assert!(
                 t.earned.iter().any(|l| l.contains("Open Circuit points")),
                 "{:?}",
                 t.earned
             );
+            assert!(!t.checking_board());
+            // Settled, the room is left behind so the next one can be opened.
+            t.leave_when_settled();
+            assert!(t.friend.is_none());
         }
         if let Some(relay) = local {
             relay.stop();

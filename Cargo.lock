@@ -1303,7 +1303,6 @@ dependencies = [
  "formiga-pencil",
  "formiga-travel",
  "getrandom 0.4.3",
- "png",
  "rodio",
  "serde",
  "serde_json",
@@ -1393,7 +1392,7 @@ dependencies = [
 [[package]]
 name = "formiga-pencil"
 version = "0.67.14"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-pencil-notebook#9bf41bb588e806d96bcd11c1bc316030eb2159b8"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-pencil-notebook#07b804313eacc32089a3fb8841022e5c4137024c"
 dependencies = [
  "egui",
  "skrifa",

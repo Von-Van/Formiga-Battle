@@ -970,14 +970,37 @@ impl<'a> Build<'a> {
                 }
                 let facing = self.face(squares[0]);
                 Some(if stage.intent == Intent::Secure {
+                    // A square already ours, with the stage facing across the board, is held that
+                    // way rather than pressed onto: a PRESS on a square of ours becomes a HOLD
+                    // facing the nearest of theirs, which would lose the facing asked for.
+                    let keep = |t: &Tile| self.facing == FacingHint::Across && ours_on(*t);
+                    let (held, free): (Vec<Tile>, Vec<Tile>) =
+                        squares.iter().partition(|t| keep(t));
+                    let mut together = Vec::new();
+                    if !free.is_empty() {
+                        together.push(Directive::Press { squares: free });
+                    }
+                    if !held.is_empty() {
+                        together.push(Directive::Hold {
+                            squares: held,
+                            facing,
+                        });
+                    }
                     vec![
                         squares
                             .iter()
-                            .map(|t| Directive::Press { squares: vec![*t] })
+                            .map(|t| {
+                                if keep(t) {
+                                    Directive::Hold {
+                                        squares: vec![*t],
+                                        facing: self.face(*t),
+                                    }
+                                } else {
+                                    Directive::Press { squares: vec![*t] }
+                                }
+                            })
                             .collect(),
-                        vec![Directive::Press {
-                            squares: squares.clone(),
-                        }],
+                        together,
                         vec![Directive::Hold {
                             squares: squares.clone(),
                             facing,

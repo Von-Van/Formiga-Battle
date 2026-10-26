@@ -43,7 +43,7 @@ impl BattleApp {
             &[
                 Step::Handler,
                 Step::Playbooks,
-                Step::Circuit,
+                Step::Season,
                 Step::History,
                 Step::Settings,
             ]
@@ -56,7 +56,7 @@ impl BattleApp {
     pub(super) fn own_pages(&self) -> bool {
         matches!(
             self.step,
-            Step::Handler | Step::Playbooks | Step::Circuit | Step::History | Step::Settings
+            Step::Handler | Step::Playbooks | Step::Season | Step::History | Step::Settings
         )
     }
 
@@ -91,7 +91,7 @@ impl BattleApp {
     /// Back to the station. From the notebook, the train is waiting with everyone aboard; after a
     /// match, it comes in again for them, as it did the first time.
     pub(super) fn back_to_station(&mut self) {
-        // An event fixture not yet played waits on the Circuit page.
+        // An event fixture not yet played waits on the Season page.
         self.table.event_fixture = None;
         let now = self.clock;
         let after_match = self.stage == Stage::Playing;
@@ -252,11 +252,11 @@ impl BattleApp {
                 "Write each trio's plans in stages; the one it plays by fills in its orders."
                     .to_owned()
             }
-            Step::Circuit => match self.table.next_event_fixture() {
+            Step::Season => match self.table.next_event_fixture() {
                 Some((_, round, rival)) => format!("Your {round} against {} is next.", rival.name),
                 None => "Enter an event, or see how you stand against each rival.".to_owned(),
             },
-            Step::History => "Every match we've played, newest first.".to_owned(),
+            Step::History => "Every match we've played with a friend, newest first.".to_owned(),
             Step::Settings => "Settings are kept for next time.".to_owned(),
         }
     }
@@ -712,14 +712,8 @@ impl BattleApp {
                     .auto_shrink([false, false])
                     .show(ui, |ui| self.shelf_left(ui, u));
             }
-            Step::Circuit => {
-                chrome::page_heading(
-                    ui,
-                    &line,
-                    "The Circuit",
-                    "The Handlers who come to the Battleground, the events you enter against them, and how you stand. An event match counts toward the place's cup like any other.",
-                );
-                ui.add_space(u * 6.0);
+            Step::Season => {
+                let _ = &line;
                 self.event_board(ui, u);
             }
             Step::History => {
@@ -727,7 +721,7 @@ impl BattleApp {
                     ui,
                     &line,
                     "History",
-                    "Every match we've played, newest first, and who went.",
+                    "Every match we've played with a friend, newest first, and who went.",
                 );
                 ui.add_space(u * 6.0);
                 self.history(ui, ctx, u);
@@ -759,7 +753,7 @@ impl BattleApp {
                     Step::Room => self.shared(ui, ctx, u),
                     Step::Handler => self.standing_and_trios(ui, ctx, u),
                     Step::Playbooks => self.shelf_right(ui, u),
-                    Step::Circuit => self.standing_against_rivals(ui, u),
+                    Step::Season => self.standing_against_rivals(ui, u),
                     Step::History => self.totals(ui, u),
                     Step::Settings => self.keys_and_about(ui, u),
                 }
@@ -790,7 +784,7 @@ impl BattleApp {
             Some(Step::Who) => "Who goes",
             Some(Step::Handler) => "My Handler page",
             Some(Step::Playbooks) => "Playbooks",
-            Some(Step::Circuit) => "The Circuit",
+            Some(Step::Season) => "The Season",
             Some(Step::History) => "History",
             Some(_) => "Back",
         })
@@ -819,7 +813,8 @@ impl BattleApp {
         let fresh = !matches!(&self.preview, Some((k, _)) if *k == key);
         let picture = if fresh { Some(garden.picture()) } else { None };
         let (w, h) = (garden.ground.width() as f32, garden.ground.height() as f32);
-        let caption_h = 86.0;
+        // The sign and its words, and under them how this match is set up.
+        let caption_h = 86.0 + 22.0 + 44.0 * 3.0;
         let area = ui.available_rect_before_wrap();
         let room = Rect::from_min_max(area.min, pos2(area.max.x, area.max.y - caption_h));
         let ppp = ctx.pixels_per_point();
@@ -930,6 +925,45 @@ impl BattleApp {
                 });
             }
         });
+        ui.add_space(u * 4.0);
+        self.setup(ui, &arena, u);
+    }
+
+    /// How the match here is set up, under the place's caption: where the teams start, what turns
+    /// up, and anything the place does differently, drawn from the match seed so it is the same
+    /// as the board the match opens on. A friend's room draws its own when both are in.
+    fn setup(&self, ui: &mut egui::Ui, arena: &formiga_battle_core::Arena, u: f32) {
+        if self.outing == Outing::World {
+            ui.label(
+                RichText::new(
+                    "Every match is set up a little differently: where the teams start, what turns \
+                     up and how the place behaves. You both see it before the first order.",
+                )
+                .size(12.0)
+                .italics()
+                .color(ink::MUTED),
+            );
+            return;
+        }
+        ui.label(
+            RichText::new("How this match is set up:")
+                .size(12.5)
+                .italics()
+                .color(ink::MUTED),
+        );
+        ui.add_space(u * 2.0);
+        for told in self.table.variant().told(arena) {
+            // The part's name lettered as the page's labels are, what it does under it; a part
+            // that leaves the place as it always is in the quieter ink.
+            let ink = if told.standard {
+                ink::MUTED
+            } else {
+                ink::FOREST
+            };
+            ui.label(label_job(&told.name, chrome::LABEL, ink));
+            ui.label(RichText::new(&told.line).size(12.5).color(ink::PAGE));
+            ui.add_space(u * 2.0);
+        }
     }
 
     /// Every place to play, on a card with its little picture, and the page's way on.
@@ -1377,15 +1411,27 @@ impl BattleApp {
     /// its code, to read out or copy.
     fn room(&mut self, ui: &mut egui::Ui, u: f32) {
         let now = self.clock;
-        if let Some(friend) = &self.table.friend {
-            if friend.seated {
-                ui.label(
-                    RichText::new("My last match is still closing on the relay…")
-                        .size(15.0)
-                        .color(ink::MUTED),
-                );
-                return;
+        // The last match's room, still open: kept while the relay compares the two boards, and
+        // otherwise left here rather than waited on.
+        if self.table.friend.as_ref().is_some_and(|f| f.seated) {
+            let checking = self.table.checking_board();
+            let words = if checking {
+                "My last match is being checked against my friend's board…"
+            } else {
+                "My last match is still closing on the relay…"
+            };
+            ui.label(RichText::new(words).size(15.0).color(ink::MUTED));
+            if !checking {
+                ui.add_space(u * 4.0);
+                if chrome::button(ui, "Leave the room", Kind::Back, false, true, None, u).clicked()
+                {
+                    self.table.leave_room();
+                    self.joining = false;
+                }
             }
+            return;
+        }
+        if let Some(friend) = &self.table.friend {
             match friend.code.clone() {
                 Some(code) if !self.joining => {
                     chrome::kicker(ui, "Give my friend this code");

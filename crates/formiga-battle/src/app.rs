@@ -15,11 +15,11 @@
 //! sets up (`formiga_battle_core::lesson`): the lesson's goal and notes take the field guide's
 //! place, the timer waits, and nothing is kept.
 
-mod circuit;
 mod handler;
 mod menus;
 mod playbooks;
 mod registry;
+mod season;
 mod welcome;
 mod where_to;
 
@@ -122,7 +122,7 @@ pub enum Step {
     Playbooks,
     /// The Handler's place at the Battleground: the event under way, titles won, and how they
     /// stand against each rival.
-    Circuit,
+    Season,
     History,
     Settings,
 }
@@ -136,7 +136,7 @@ impl Step {
             Self::Room => "Friend",
             Self::Handler => "Handler",
             Self::Playbooks => "Playbooks",
-            Self::Circuit => "Circuit",
+            Self::Season => "Season",
             Self::History => "History",
             Self::Settings => "Settings",
         }
@@ -155,8 +155,8 @@ pub enum Review {
     Friend,
     /// The Handler's registry: their card and pennant, standing and trios.
     Handler,
-    /// The Circuit page, with an event entered and its first semi-final played.
-    Circuit,
+    /// The Season page, with an event entered and its first semi-final played.
+    Season,
     /// The sample colony's history, and its settings.
     History,
     Settings,
@@ -490,9 +490,9 @@ impl BattleApp {
                 app.open_journal(Outing::Home, Step::History);
             }
             Some(Review::Settings) => app.open_journal(Outing::Home, Step::Settings),
-            Some(Review::Circuit) => {
+            Some(Review::Season) => {
                 app.table.begin_next_event();
-                app.open_journal(Outing::Home, Step::Circuit);
+                app.open_journal(Outing::Home, Step::Season);
             }
             Some(Review::Handler) => {
                 app.table.record = formiga_battle_contract::sample::record();
@@ -3386,14 +3386,18 @@ impl BattleApp {
                 "Time ran out level on the beacon and on composure, with more of them standing."
             }
         };
-        // The other team is a rival's, by name, or the visitors.
-        let (them, wins, dizzy_them) = match self.table.rival {
-            Some(rival) => (
+        // The other team is a rival's, by name, a friend's, named, or the visitors.
+        let (them, wins, dizzy_them) = match (self.table.rival, self.table.other_handler.clone()) {
+            (Some(rival), _) => (
                 rival.short.to_owned(),
                 "wins",
                 format!("{}'s three are all sitting out, dizzy.", rival.short),
             ),
-            None => (
+            (None, Some(name)) => {
+                let dizzy = format!("{name}'s three are all sitting out, dizzy.");
+                (name, "wins", dizzy)
+            }
+            (None, None) => (
                 "The visitors".to_owned(),
                 "win",
                 "The visitors are all sitting out, dizzy.".to_owned(),
@@ -3401,18 +3405,26 @@ impl BattleApp {
         };
         let beacon_them = format!("{them} lit the beacon");
         let knockout_them = format!("{them} {wins}");
+        let forfeit_them = format!("{them} {wins} by forfeit");
         let tally_them = format!("{them} {wins} on the tally");
         let (title, why): (&str, &str) = match (outcome.winner, outcome.victory) {
             (Some(side), Some(Victory::Capture)) if side == you => {
                 ("We lit the beacon!", "My team held the yard long enough!")
             }
             (Some(side), Some(Victory::Knockout)) if side == you => ("We win!", &dizzy_them),
+            (Some(side), Some(Victory::Forfeit)) if side == you => (
+                "We win by forfeit!",
+                "My friend left the match, or was away from it too long.",
+            ),
             (Some(side), _) if side == you => ("We win on the tally!", ahead_you),
             (Some(_), Some(Victory::Capture)) => (&beacon_them, "They held the yard long enough."),
             (Some(_), Some(Victory::Knockout)) => (
                 &knockout_them,
                 "My three are all sitting out, dizzy, and none the worse for it.",
             ),
+            (Some(_), Some(Victory::Forfeit)) => {
+                (&forfeit_them, "The relay lost touch with me for too long.")
+            }
             (Some(_), _) => (&tally_them, ahead_them),
             (None, _) => ("A draw!", "Nobody could be split."),
         };
@@ -3446,11 +3458,68 @@ impl BattleApp {
         if let Some(reason) = &self.table.ended_because {
             ui.label(RichText::new(reason).size(15.0).color(ink::MUTED));
         }
-        if let Some(meeting) = &self.table.meeting {
-            ui.label(RichText::new(meeting).size(15.0).color(ink::FOREST));
+        // The rival met, by their pennant, and how the meetings stand.
+        if let (Some(rival), Some(meeting)) = (self.table.rival, self.table.meeting.clone()) {
+            let ctx = ui.ctx().clone();
+            let flag = self.flag(&ctx, crate::identity::Style::of(&rival.pennant()));
+            ui.horizontal(|ui| {
+                let fh = u * 12.0;
+                let size = vec2(flag.size_vec2().x * fh / flag.size_vec2().y, fh);
+                let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                ui.painter().image(
+                    flag.id(),
+                    rect,
+                    Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+                ui.label(
+                    RichText::new(meeting)
+                        .font(formiga_pencil::hand(15.0))
+                        .color(ink::FOREST),
+                );
+            });
         }
-        if let Some(event) = &self.table.event_line {
-            ui.label(RichText::new(event).size(15.0).strong().color(ink::FOREST));
+        // How the event stands, stamped.
+        if let Some(event) = self.table.event_line.clone() {
+            let (word, colour) = if event.starts_with("You won")
+                || event.starts_with("You defended")
+                || event.starts_with("You are the")
+            {
+                ("Champion!", ink::FOREST)
+            } else if event.starts_with("Through") {
+                ("Through!", ink::FOREST)
+            } else if event.starts_with("Out") || event.contains("took your title") {
+                ("Out", ink::STAMP)
+            } else {
+                ("Event", ink::MUTED)
+            };
+            let width = ui.available_width();
+            let (row, _) = ui.allocate_exact_size(vec2(width, u * 22.0), Sense::hover());
+            let painter = ui.painter().clone();
+            let stamped = chrome::stamp(
+                &painter,
+                pos2(row.left() + u * 26.0, row.center().y),
+                word,
+                chrome::HAND,
+                colour,
+                Some(ink::CARD.gamma_multiply(0.9)),
+                (-5f32).to_radians(),
+                u,
+            );
+            let text = painter.layout(
+                event,
+                formiga_pencil::hand_bold(15.0),
+                ink::PAGE,
+                row.right() - stamped.right() - u * 6.0,
+            );
+            painter.galley(
+                pos2(
+                    stamped.right() + u * 6.0,
+                    row.center().y - text.size().y / 2.0,
+                ),
+                text,
+                ink::PAGE,
+            );
         }
         ui.label(
             RichText::new(format!("After {} turns", outcome.turn))
@@ -3475,6 +3544,7 @@ impl BattleApp {
                 .seed
                 .wrapping_mul(6364136223846793005)
                 .wrapping_add(1442695040888963407);
+            self.table.leave_when_settled();
             self.table.shown = None;
             self.portraits.clear();
             self.fresh_match();
@@ -3496,6 +3566,7 @@ impl BattleApp {
         .on_hover_text("Choose again where your companions are off to")
         .clicked()
         {
+            self.table.leave_when_settled();
             self.table.shown = None;
             self.portraits.clear();
             self.fresh_match();

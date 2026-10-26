@@ -90,7 +90,9 @@ pub fn team_profiles(team: &[Contender], bonds: &[TravelRelationship]) -> Vec<Pr
 }
 
 /// The match two teams play, as the room and both clients build it: the same seed, rules, arena
-/// and profiles give the same match on every machine.
+/// and profiles give the same match on every machine. The arena is set up in the variant the seed
+/// draws, so both windows open on the same starts, finds and conditions without a word more
+/// through the relay: both play the same Battle, which every room checks.
 pub fn room_match(
     arena: formiga_battle_core::Arena,
     ruleset: formiga_battle_core::Ruleset,
@@ -98,6 +100,7 @@ pub fn room_match(
     teams: [&[Contender]; 2],
     bonds: [&[TravelRelationship]; 2],
 ) -> Result<formiga_battle_core::Match, formiga_battle_core::game::MatchError> {
+    let arena = formiga_battle_core::Variant::drawn(&arena, seed).apply(&arena)?;
     formiga_battle_core::Match::new(
         arena,
         ruleset,

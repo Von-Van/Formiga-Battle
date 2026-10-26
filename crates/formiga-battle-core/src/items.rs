@@ -7,8 +7,8 @@
 //! |---|---|---|
 //! | Dandelion puff | Everyone on the tile and the two either side of it, across the way it is blown, is pushed one tile on and knocked off balance. Two holders side by side brace each other and are not moved. Twigs there blow over | Lands and is gone |
 //! | Twig | Wedged into an empty tile: nobody can stand there, and a gate cannot close on it | Two turns |
-//! | Leaf umbrella | Opened over a teammate, or itself: the map event cannot soak or wash it and a contest cannot catch it on the move. A puff carries it two tiles instead of one | The rest of this turn and the next |
-//! | Pebble bell | Rung: everyone of the other team within two tiles who has not yet settled a contest this turn loses it. Rung beside a switch, it sets the map event off | Lands and is gone |
+//! | Leaf umbrella | Opened over a teammate, or itself: the map event cannot soak or wash it, and a press against it while it is not holding bounces off. A puff carries it two tiles instead of one | The rest of this turn and the next |
+//! | Pebble bell | Rung: everyone of the other team within two tiles who has not yet settled its press, trick or interaction this turn loses it. Rung beside a switch that is ready, it sets the map event off | Lands and is gone |
 //! | Honey drop | The tile and the four round it go sticky: whoever steps in stops there for the turn, and can still hold. A pushed creature sticks on the first honey it is pushed onto, and a twig will not stand in it | Two turns |
 //! | Springy seed | Its user hops onto the tile, up to two away, over anyone or a twig in between, never over a wall or water | Lands and is gone |
 //!
@@ -27,7 +27,7 @@ pub enum Item {
     Twig,
     /// Shield: keeps a teammate dry and on its feet.
     Leaf,
-    /// Interrupt: rung, it spoils the other team's contests nearby.
+    /// Interrupt: rung, it spoils the other team's presses, tricks and interactions nearby.
     Bell,
     /// Terrain: sticky ground that stops whoever steps in.
     Honey,
@@ -79,9 +79,61 @@ impl Item {
 }
 
 /// Turns, from the start of the match, the first items turn up in; and how many turns apart after
-/// that. Each is glinted a whole turn before.
+/// that. Each is glinted a whole turn before. A match variant can change both (`Finds`).
 pub const FIRST_TURN: u8 = 2;
 pub const EVERY: u8 = 3;
+
+/// When found things turn up in a match, and how likely each is to be the one: the arena's own
+/// rhythm, which a match variant may change. Every arena plays the standard one unless a variant
+/// says otherwise, and a record of a match played before variants reads as it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Finds {
+    /// The first turn found things turn up in. Never the first turn, which has no turn before it
+    /// to glint in.
+    pub first: u8,
+    /// Turns between finds after that; at least 1.
+    pub every: u8,
+    /// How likely each found thing is, against the others, in `Item::ALL`'s order. A zero never
+    /// turns up.
+    pub weights: [u8; 6],
+}
+
+impl Default for Finds {
+    fn default() -> Self {
+        Self {
+            first: FIRST_TURN,
+            every: EVERY,
+            weights: Item::ALL.map(|i| i.weight() as u8),
+        }
+    }
+}
+
+impl Finds {
+    /// Whether this is the rhythm every arena has without a variant.
+    pub fn is_standard(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Whether found things turn up in this turn.
+    pub fn due(&self, turn: u8) -> bool {
+        self.every > 0 && turn >= self.first && (turn - self.first).is_multiple_of(self.every)
+    }
+
+    /// How likely this found thing is, against the others.
+    pub fn weight(&self, item: Item) -> u64 {
+        let at = Item::ALL
+            .iter()
+            .position(|i| *i == item)
+            .expect("every item is listed");
+        u64::from(self.weights[at])
+    }
+
+    /// Whether a match can be played by it: found things come round, from the second turn on, and
+    /// at least one of them can turn up.
+    pub fn playable(&self) -> bool {
+        self.first >= 2 && self.every >= 1 && self.weights.iter().any(|w| *w > 0)
+    }
+}
 
 /// Whole turns a twig stays wedged, or honey sticky.
 pub const TWIG_TURNS: u8 = 2;

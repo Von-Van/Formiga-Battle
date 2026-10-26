@@ -72,6 +72,11 @@ for any other version. Then:
   opener's (`null` and a version differ).
 - A joiner whose digest differs from the opener's is refused `build`, unless the version has
   released builds (both digests are then among them).
+- An entrant whose Battle version has released builds, and which a newer release has succeeded,
+  is refused `version`, opening or joining, whatever relay version it speaks: friend matches need
+  the newest Battle out. A version with no release (a development build) plays its own copies as
+  before. The relay on the site knows the released builds; the reference served locally knows
+  none, so it never refuses this way.
 
 The site keeps the released builds in its own repository, in `lib/battle-builds.mjs` (`{"0.2.0":
 ["<digest>", …]}`), changed by a pull request when a Battle release's digests are known; the
@@ -94,13 +99,13 @@ digits, because JavaScript numbers lose anything past 53 bits.
 | 400 | `{"refused": "malformed"}` | The body is not the shape above, too large or nested too deep |
 | 415 | `{"refused": "malformed"}` | A `POST` whose body is not said to be JSON |
 | 404 | `{"refused": "no_such_room"}` | No room under that code, or a seat that is not one of its two (the same answer, so a seat cannot be guessed at) |
-| 409 | `{"refused": "version", "relay": 4, "rules_version": n}` | Another protocol, or a joiner playing by other rules than the opener (`n` is the opener's) |
+| 409 | `{"refused": "version", "relay": 4, "rules_version": n}` | Another protocol, a released Battle that a newer release has succeeded, or a joiner playing by other rules than the opener (`n` is the opener's) |
 | 409 | `{"refused": "mismatch", "battle": "…", "desktop": "…" or null}` | A joiner with another Battle or Desktop than the opener's (these are the opener's) |
 | 409 | `{"refused": "build"}` | A copy of Battle the relay does not admit, or not the opener's copy |
 | 409 | `{"refused": "room_full"}` | Joining a room that already has two |
 | 409 | `{"refused": "not_this_turn"}` | Orders for a turn that is not the one being played; a board for a turn not yet locked |
 | 422 | `{"refused": "team", "reason": "…"}` | Not three companions |
-| 503 | `{"refused": "busy"}` | 500 rooms open already |
+| 503 | `{"refused": "busy"}` | 500 rooms open already, or one address opening more than 30 rooms or trying more than 60 joins in ten minutes (the site's relay only; the address is kept as a digest for the window and nothing more) |
 
 ## A room
 
