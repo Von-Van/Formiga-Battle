@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The rules are checked against matches recorded by an earlier build, one on each arena, kept as
+  a file beside the core's tests. A change to how a turn resolves now fails that test until
+  `RULES_VERSION` moves and the file is rewritten on purpose
+  (`FORMIGA_BATTLE_WRITE_FIXTURE=1`). Nothing in the window or the rules changed.
 - Battle opened by itself, from Applications or the Start menu rather than from Formiga, says
   where your own companions come from before anything else: a card over the Battleground says
   Battle plays with your own colony when it comes by train from Formiga, and to choose "Play
