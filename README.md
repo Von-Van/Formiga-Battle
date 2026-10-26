@@ -144,8 +144,7 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   uses, and a local relay), `code` (invite codes) and `roster` (a team of Desktop's companions
   read as match profiles, the same on every machine).
 - **`formiga-battle`**: the app. `host` (Desktop's session, or a rehearsal), `friend` (the line to the relay, on a thread of
-  its own), `roster` (a
-  contender read as a match profile), `table` (one sitting
+  its own), `table` (one sitting
   at the board without the window: picking, orders, locking, the turn being shown), `playback`
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
   `formiga-art`'s tools at pixel scale, and the marks laid over it), `garden` (each arena as a
@@ -153,10 +152,10 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the Battleground the
   train brings the companions to), `feel` (how every control answers a touch), `ticket` (the station's two choices, painted as
   railway tickets), `masthead` (the painted scene heading the station's page), `app` (the egui window; `app/menus` the station and the
-  notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios), `settings` (the volumes, mute, motion and window size Battle keeps for next time), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns) and `cli` (the headless commands).
+  notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios), `settings` (the volumes, mute, motion and window size Battle keeps for next time), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns), `cli` (the headless commands), and the smaller `announce`, `found`, `heraldry`, `keepsake`, `lettering`, `still`, `sound` and `icon`.
 
-`formiga-core`, `formiga-art`, `formiga-travel` and `formiga-expansion-rulebook` come from Desktop
-by one release tag (`v0.67.14`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
+`formiga-core`, `formiga-art`, `formiga-travel`, `formiga-expansion-rulebook` and
+`formiga-battle-contract` come from Desktop by one release tag (`v0.67.14`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
 authoritative for the colony; Battle never writes a colony file, and the only file it keeps is
 its own `settings.json`.
 

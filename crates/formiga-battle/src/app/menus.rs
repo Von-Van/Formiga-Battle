@@ -262,7 +262,9 @@ impl BattleApp {
                 Some((_, round, rival)) => format!("Your {round} against {} is next.", rival.name),
                 None => "Enter an event, or see how you stand against each rival.".to_owned(),
             },
-            Step::History => "Every match your colony has played, newest first.".to_owned(),
+            Step::History => {
+                "Every match your colony has played with a friend, newest first.".to_owned()
+            }
             Step::Settings => "Settings are kept for next time.".to_owned(),
         }
     }
@@ -709,7 +711,7 @@ impl BattleApp {
                     ui,
                     &line,
                     "History",
-                    "Every match your colony has played, newest first, and who went.",
+                    "Every match your colony has played with a friend, newest first, and who went.",
                 );
                 ui.add_space(u * 6.0);
                 self.history(ui, ctx, u);
@@ -1399,15 +1401,27 @@ impl BattleApp {
     /// its code, to read out or copy.
     fn room(&mut self, ui: &mut egui::Ui, u: f32) {
         let now = self.clock;
-        if let Some(friend) = &self.table.friend {
-            if friend.seated {
-                ui.label(
-                    RichText::new("Your last match is still closing on the relay…")
-                        .size(15.0)
-                        .color(ink::MUTED),
-                );
-                return;
+        // The last match's room, still open: kept while the relay compares the two boards, and
+        // otherwise left here rather than waited on.
+        if self.table.friend.as_ref().is_some_and(|f| f.seated) {
+            let checking = self.table.checking_board();
+            let words = if checking {
+                "Your last match is being checked against your friend's board…"
+            } else {
+                "Your last match is still closing on the relay…"
+            };
+            ui.label(RichText::new(words).size(15.0).color(ink::MUTED));
+            if !checking {
+                ui.add_space(u * 4.0);
+                if chrome::button(ui, "Leave the room", Kind::Back, false, true, None, u).clicked()
+                {
+                    self.table.leave_room();
+                    self.joining = false;
+                }
             }
+            return;
+        }
+        if let Some(friend) = &self.table.friend {
             match friend.code.clone() {
                 Some(code) if !self.joining => {
                     chrome::kicker(ui, "Give your friend this code");

@@ -94,6 +94,12 @@ impl Args {
             .map(|v| v.unwrap_or(default))
     }
 
+    /// A small whole number, as the rules keep them: refused rather than wrapped round.
+    fn small(&mut self, name: &str, default: u8) -> Result<u8> {
+        let n = self.number(name, u64::from(default))?;
+        u8::try_from(n).map_err(|_| anyhow::anyhow!("{name} must be between 0 and 255, not {n}"))
+    }
+
     fn done(self) -> Result<()> {
         if let Some(extra) = self.0.first() {
             bail!("unexpected argument {extra:?}; see --help");
@@ -306,8 +312,8 @@ fn ruleset(args: &mut Args) -> Result<Ruleset> {
             other => bail!("unknown capture rule {other:?}"),
         };
     }
-    rules.capture_ticks = args.number("--capture-ticks", u64::from(rules.capture_ticks))? as u8;
-    rules.turn_cap = args.number("--turn-cap", u64::from(rules.turn_cap))? as u8;
+    rules.capture_ticks = args.small("--capture-ticks", rules.capture_ticks)?;
+    rules.turn_cap = args.small("--turn-cap", rules.turn_cap)?;
     Ok(rules)
 }
 
@@ -686,4 +692,20 @@ fn draw(m: &Match) -> String {
         m.ruleset.capture_ticks
     ));
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_rules_number_past_255_is_refused_rather_than_wrapped_round() {
+        let mut args = Args(vec!["--capture-ticks".to_owned(), "256".to_owned()]);
+        let refused = args.small("--capture-ticks", 3).unwrap_err().to_string();
+        assert!(refused.contains("between 0 and 255"), "{refused}");
+        let mut args = Args(vec!["--turn-cap".to_owned(), "255".to_owned()]);
+        assert_eq!(args.small("--turn-cap", 12).unwrap(), 255);
+        let mut args = Args(Vec::new());
+        assert_eq!(args.small("--turn-cap", 12).unwrap(), 12);
+    }
 }
