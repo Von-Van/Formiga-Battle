@@ -403,9 +403,14 @@ impl Table {
         }
     }
 
-    /// Applies what a match earned to the record here and writes it for Desktop.
+    /// Applies what a match earned to the record here and writes it for Desktop. Only a session
+    /// Desktop opened is cut to what that Desktop reads: a rehearsal writes nothing for one.
     fn keep(&mut self, earned: rewards::Earned) {
-        let earned = rewards::for_reader(earned, self.desktop_reads);
+        let earned = if self.session.is_some() {
+            rewards::for_reader(earned, self.desktop_reads)
+        } else {
+            earned
+        };
         self.record.apply(&earned.result);
         self.earned = earned.lines;
         if let Some(trio) = earned

@@ -178,7 +178,13 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                 parsed.visitors = value()?.parse().context("--visitors takes 0 to 255")?
             }
             "--snap" => parsed.snap = Some(value()?.into()),
-            "--at" => parsed.at = value()?.parse().context("--at takes seconds")?,
+            "--at" => {
+                parsed.at = value()?
+                    .parse()
+                    .ok()
+                    .filter(|at: &f32| at.is_finite())
+                    .context("--at takes seconds")?
+            }
             "--review" => {
                 parsed.review = match value()?.as_str() {
                     "station" => app::Review::Station,

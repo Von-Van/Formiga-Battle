@@ -475,7 +475,7 @@ pub fn ribbon_in(canvas: &mut Canvas, (x, y, w, h): Area, cloth: Ramp) {
             }
         }
     }
-    paint::bevel(canvas, x, y, w, h, RIBBON);
+    paint::bevel(canvas, x, y, w, h, cloth);
     for py in y + 2..y + h - 2 {
         for px in x + 2..x + w - 2 {
             if (px + py) % 2 == 0 {
