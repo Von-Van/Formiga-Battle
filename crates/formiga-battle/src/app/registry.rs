@@ -4,7 +4,7 @@
 //! kept by Desktop with the colony's Battle record, and none of it changes how a match is played.
 
 use super::{BattleApp, Kind, sticky, texture};
-use crate::chrome::{self, ink, label_job};
+use crate::chrome::{self, hand_job, ink};
 use crate::heraldry::{self, Part};
 use crate::identity::{self, FIELDS, SHAPES, SYMBOLS, Standing, Style, TRIMS};
 use crate::look::Look;
@@ -219,7 +219,7 @@ impl BattleApp {
                         ui.allocate_exact_size(vec2(u * 34.0, TILE_ROW * u), Sense::hover());
                     let galley =
                         ui.painter()
-                            .layout_job(label_job(label, chrome::LABEL - 0.5, ink::MUTED));
+                            .layout_job(hand_job(label, chrome::LABEL - 0.5, ink::MUTED));
                     ui.painter().galley(
                         pos2(slot.min.x, slot.center().y - galley.size().y / 2.0 - u),
                         galley,
@@ -249,7 +249,7 @@ impl BattleApp {
                     "{}. It flies beside your team in every match, and your friends see it.",
                     capitalised(&style.words())
                 ))
-                .size(12.0)
+                .size(15.0)
                 .italics()
                 .color(ink::MUTED),
             );
@@ -345,7 +345,7 @@ impl BattleApp {
         let standing = Standing::of(&self.table.record);
         let _ = ctx;
         let rules = self.rules;
-        on_rules(ui, rules, label_job("Standing", chrome::LABEL, ink::FOREST));
+        on_rules(ui, rules, hand_job("Standing", chrome::LABEL, ink::FOREST));
         on_rules(
             ui,
             rules,
@@ -366,7 +366,7 @@ impl BattleApp {
         on_rules(
             ui,
             rules,
-            label_job("Your trios", chrome::LABEL, ink::FOREST),
+            hand_job("Your trios", chrome::LABEL, ink::FOREST),
         );
         let trios: Vec<Trio> = self.table.record.trios.iter().rev().cloned().collect();
         if trios.is_empty() {
@@ -499,7 +499,7 @@ impl BattleApp {
                 let y = ui.cursor().min.y;
                 let rule = rule_below(rules, y + rules.1);
                 ui.add_space((rule - rules.1 * 0.85 - y).max(0.0));
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = u * 3.0;
                     if !renaming
                         && chrome::button(ui, "rename", Kind::Quiet, false, true, None, u).clicked()
@@ -674,7 +674,7 @@ impl BattleApp {
         ui.horizontal(|ui| {
             let edit = ui.add(
                 egui::TextEdit::singleline(&mut self.trio_draft)
-                    .font(FontId::proportional(14.0))
+                    .font(FontId::proportional(16.0))
                     .char_limit(identity::TRIO_CHARS)
                     .hint_text("Name these three")
                     .desired_width((ui.available_width() - 90.0).max(120.0)),
@@ -702,7 +702,7 @@ impl BattleApp {
             }
         });
         if let Err(why) = can {
-            ui.label(RichText::new(why).size(11.5).italics().color(ink::MUTED));
+            ui.label(RichText::new(why).size(15.0).italics().color(ink::MUTED));
         }
     }
 
@@ -808,7 +808,7 @@ impl BattleApp {
         );
         // A paper tag hung under each cane.
         for (i, tag) in tags.iter().enumerate() {
-            let galley = painter.layout_no_wrap(tag.clone(), FontId::proportional(11.0), ink::PAGE);
+            let galley = painter.layout_no_wrap(tag.clone(), FontId::proportional(15.0), ink::PAGE);
             let pad = vec2(u * 4.0, u * 2.0);
             let tag_size = galley.size() + pad * 2.0;
             let x = if i == 0 {
@@ -1008,10 +1008,10 @@ fn letter_left(
 /// Words lettered in the notebook's printed capitals, as large as `area` holds, centred on it.
 pub(super) fn letter(painter: &egui::Painter, area: Rect, text: &str, colour: Color32, fill: f32) {
     let mut size = (area.height() * fill).clamp(8.0, 16.0);
-    let mut galley = painter.layout_job(label_job(text, size, colour));
+    let mut galley = painter.layout_job(hand_job(text, size, colour));
     while galley.size().x > area.width() * 0.92 && size > 7.0 {
         size -= 0.5;
-        galley = painter.layout_job(label_job(text, size, colour));
+        galley = painter.layout_job(hand_job(text, size, colour));
     }
     painter.galley(area.center() - galley.size() / 2.0, galley, colour);
 }

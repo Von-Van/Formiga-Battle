@@ -75,7 +75,7 @@ impl BattleApp {
                         "{} \u{b7} {size} \u{b7} {state}",
                         stage.name(&place, season.number)
                     ))
-                    .size(12.5)
+                    .size(15.0)
                     .color(if i == season.played {
                         ink::PAGE
                     } else {
@@ -86,7 +86,7 @@ impl BattleApp {
             if let Some(defending) = &season.defending {
                 ui.label(
                     RichText::new(format!("Defending champion: {}", who(defending)))
-                        .size(12.5)
+                        .size(15.0)
                         .color(ink::FOREST),
                 );
             }
@@ -106,7 +106,7 @@ impl BattleApp {
                 for round in 0..b.rounds() {
                     ui.label(
                         RichText::new(b.round_name(round))
-                            .size(13.0)
+                            .size(15.0)
                             .strong()
                             .color(ink::PAGE),
                     );
@@ -122,8 +122,8 @@ impl BattleApp {
                             None if f.ready() => "To play".to_owned(),
                             None => "Waiting on the round before".to_owned(),
                         };
-                        ui.label(RichText::new(line).size(14.0).color(ink::PAGE));
-                        ui.label(RichText::new(after).size(12.5).color(ink::MUTED));
+                        ui.label(RichText::new(line).size(16.0).color(ink::PAGE));
+                        ui.label(RichText::new(after).size(15.0).color(ink::MUTED));
                         ui.add_space(u * 2.0);
                     }
                     ui.add_space(u * 3.0);
@@ -131,7 +131,7 @@ impl BattleApp {
                 if let Some(champion) = b.champion() {
                     ui.label(
                         RichText::new(format!("Champion: {}", name(Some(champion))))
-                            .size(14.0)
+                            .size(16.0)
                             .strong()
                             .color(ink::FOREST),
                     );
@@ -143,7 +143,7 @@ impl BattleApp {
                     RichText::new(
                         "No season begun yet. A season is an Open of four, two Regionals of eight, and a Championship of the four with most season points. Your first event is an Open: the three Handlers who come to its place most, and you, drawn against the first seed.",
                     )
-                    .size(13.0)
+                    .size(15.0)
                     .italics()
                     .color(ink::MUTED),
                 );
@@ -206,7 +206,7 @@ impl BattleApp {
         chrome::kicker(ui, "Your standing");
         ui.add_space(u * 2.0);
         ui.label(RichText::new(title).size(15.0).strong().color(ink::FOREST));
-        ui.label(RichText::new(how).size(12.0).italics().color(ink::MUTED));
+        ui.label(RichText::new(how).size(15.0).italics().color(ink::MUTED));
         ui.add_space(u * 6.0);
         if let Some(season) = &career.season
             && !season.points.is_empty()
@@ -216,9 +216,9 @@ impl BattleApp {
             for (id, points) in season.table() {
                 ui.horizontal(|ui| {
                     let colour = if id == "you" { ink::FOREST } else { ink::PAGE };
-                    ui.label(RichText::new(who(&id)).size(12.5).color(colour));
+                    ui.label(RichText::new(who(&id)).size(15.0).color(colour));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(points.to_string()).size(12.5).color(colour));
+                        ui.label(RichText::new(points.to_string()).size(15.0).color(colour));
                     });
                 });
             }
@@ -230,7 +230,7 @@ impl BattleApp {
             for c in career.hall.iter().rev() {
                 ui.label(
                     RichText::new(format!("Season {}: {}", c.season, who(&c.who)))
-                        .size(13.0)
+                        .size(15.0)
                         .color(if c.who == "you" {
                             ink::FOREST
                         } else {
@@ -246,7 +246,7 @@ impl BattleApp {
             for r in career.recognition.iter().rev().take(6) {
                 ui.label(
                     RichText::new(noticed_words(&r.noticed))
-                        .size(12.5)
+                        .size(15.0)
                         .color(ink::PAGE),
                 );
             }
@@ -257,13 +257,13 @@ impl BattleApp {
         if career.titles.is_empty() {
             ui.label(
                 RichText::new("None yet.")
-                    .size(13.0)
+                    .size(15.0)
                     .italics()
                     .color(ink::MUTED),
             );
         }
         for title in career.titles.iter().rev() {
-            ui.label(RichText::new(&title.event).size(13.5).color(ink::FOREST));
+            ui.label(RichText::new(&title.event).size(16.0).color(ink::FOREST));
         }
         ui.add_space(u * 6.0);
         chrome::kicker(ui, "Against the rivals");
@@ -272,7 +272,7 @@ impl BattleApp {
             let h = career.against(r.id);
             ui.label(
                 RichText::new(format!("{} \u{b7} {}", r.name, r.club))
-                    .size(13.5)
+                    .size(16.0)
                     .color(ink::PAGE),
             );
             let record = if h.played == 0 {
@@ -287,7 +287,7 @@ impl BattleApp {
                     capitalised(r.archetype.tendency())
                 )
             };
-            ui.label(RichText::new(record).size(12.5).color(ink::MUTED));
+            ui.label(RichText::new(record).size(15.0).color(ink::MUTED));
             ui.add_space(u * 2.0);
         }
     }

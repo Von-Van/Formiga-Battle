@@ -40,8 +40,8 @@ pub mod ink {
     pub const PAGE: Color32 = Color32::from_rgb(35, 54, 47);
     /// Headings, and the accent the notebook is built round.
     pub const FOREST: Color32 = Color32::from_rgb(28, 65, 55);
-    /// Present, but not asking for attention.
-    pub const MUTED: Color32 = Color32::from_rgb(110, 119, 108);
+    /// Present, but not asking for attention: the pencil's grey, at better than 4.5:1 on paper.
+    pub const MUTED: Color32 = Color32::from_rgb(80, 90, 79);
     /// Whatever is chosen.
     pub const MINT: Color32 = Color32::from_rgb(174, 221, 186);
     /// The notebook's outlines: plum, as the creatures are outlined.
@@ -345,7 +345,28 @@ fn tab_slip(canvas: &mut Canvas, tab: &Tab) {
 /// The size every printed label is set at, as Home's notebook sets them.
 pub const LABEL: f32 = 10.5;
 
-/// A printed label: small spaced capitals.
+/// The smallest the pencil hand is written: kickers, buttons and anything jotted in passing.
+pub const HAND: f32 = 15.0;
+
+/// Something the Handler jots down as a heading: the pencil hand's bold capitals, spaced a
+/// little, never under [`HAND`].
+pub fn hand_job(text: &str, size: f32, color: Color32) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        &text.to_uppercase(),
+        0.0,
+        egui::TextFormat {
+            font_id: formiga_pencil::hand_bold(size.max(HAND)),
+            color,
+            extra_letter_spacing: 1.0,
+            ..Default::default()
+        },
+    );
+    job
+}
+
+/// A printed label, for what really is printed (the brass plate, tab numbers, a room's code):
+/// small spaced capitals in monospace.
 pub fn label_job(text: &str, size: f32, color: Color32) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     job.append(
@@ -363,7 +384,7 @@ pub fn label_job(text: &str, size: f32, color: Color32) -> egui::text::LayoutJob
 
 /// A section's printed label on a page.
 pub fn kicker(ui: &mut egui::Ui, text: &str) {
-    ui.label(label_job(text, LABEL, ink::FOREST));
+    ui.label(hand_job(text, HAND, ink::FOREST));
 }
 
 /// A one-unit outline round `rect` with its corners left out: the notebook's stepped edge.
@@ -406,10 +427,10 @@ pub enum Kind {
 /// much clear for it before laying out what goes beside it.
 pub fn button_size(ui: &egui::Ui, text: &str, kind: Kind, unit: f32) -> egui::Vec2 {
     let size = match kind {
-        Kind::Primary => 13.0,
-        _ => LABEL,
+        Kind::Primary => 17.0,
+        _ => HAND,
     };
-    let galley = ui.painter().layout_job(label_job(text, size, ink::PAGE));
+    let galley = ui.painter().layout_job(hand_job(text, size, ink::PAGE));
     natural_size(galley.size(), kind, unit)
 }
 
@@ -422,7 +443,7 @@ fn natural_size(lettering: egui::Vec2, kind: Kind, unit: f32) -> egui::Vec2 {
     lettering + pad * 2.0 + egui::vec2(0.0, unit)
 }
 
-/// A button in the notebook's way, after Hill's: printed capitals on a slip of card with a
+/// A button in the notebook's way, after Hill's: pencilled capitals on a slip of card with a
 /// stepped edge and a lip along its foot, mint when pointed at or chosen; pressing it takes the
 /// lip away and sinks the lettering a unit, so it feels pressed.
 pub fn button(
@@ -435,15 +456,15 @@ pub fn button(
     unit: f32,
 ) -> egui::Response {
     let size = match kind {
-        Kind::Primary => 13.0,
-        _ => LABEL,
+        Kind::Primary => 17.0,
+        _ => HAND,
     };
     let colour = match kind {
         Kind::Primary => ink::COVER,
         _ if !enabled => ink::MUTED,
         _ => ink::PAGE,
     };
-    let galley = ui.painter().layout_job(label_job(text, size, colour));
+    let galley = ui.painter().layout_job(hand_job(text, size, colour));
     let natural = natural_size(galley.size(), kind, unit);
     let size = egui::vec2(width.unwrap_or(natural.x).max(natural.x), natural.y);
     let sense = if enabled {
@@ -796,19 +817,19 @@ pub fn turn_leaf(
     true
 }
 
-/// A page's heading, as Desktop's journal heads its pages: a printed line saying which page of
-/// the notebook this is, the page's title, and a line on what it is for.
+/// A page's heading, as Desktop's journal heads its pages: a pencilled line saying which page of
+/// the notebook this is, the page's title, and a line on what it is for, all in the Handler's
+/// hand.
 pub fn page_heading(ui: &mut egui::Ui, line: &str, title: &str, observation: &str) {
-    ui.label(label_job(line, LABEL, ink::FOREST));
+    ui.label(hand_job(line, HAND, ink::FOREST));
     ui.label(
         egui::RichText::new(title)
-            .size(26.0)
-            .color(ink::PAGE)
-            .strong(),
+            .font(formiga_pencil::hand_bold(34.0))
+            .color(ink::PAGE),
     );
     ui.label(
         egui::RichText::new(observation)
-            .size(13.5)
+            .size(16.0)
             .color(ink::MUTED),
     );
 }
@@ -816,6 +837,9 @@ pub fn page_heading(ui: &mut egui::Ui, line: &str, title: &str, observation: &st
 /// The page's visuals: ink on paper, mint for whatever is chosen, and the notebook's plum outline
 /// instead of rounded grey boxes. Home's, so a text field or a scroll bar reads the same in both.
 pub fn style(ctx: &egui::Context) {
+    // Everything the Handler writes is in the pencil hand; only what is printed asks for
+    // monospace.
+    formiga_pencil::install(ctx, formiga_pencil::Everywhere::Yes);
     ctx.set_theme(egui::ThemePreference::Light);
     for theme in [egui::Theme::Light, egui::Theme::Dark] {
         ctx.style_mut_of(theme, |style| {
@@ -866,6 +890,16 @@ pub fn style(ctx: &egui::Context) {
             widgets.active.bg_fill = ink::MINT.gamma_multiply(0.85);
             widgets.active.weak_bg_fill = ink::MINT.gamma_multiply(0.85);
             widgets.active.bg_stroke = egui::Stroke::new(1.0, ink::FOREST);
+            for (text_style, size) in [
+                (egui::TextStyle::Body, 15.0),
+                (egui::TextStyle::Button, 15.0),
+                (egui::TextStyle::Small, 15.0),
+                (egui::TextStyle::Heading, 26.0),
+            ] {
+                style
+                    .text_styles
+                    .insert(text_style, egui::FontId::proportional(size));
+            }
             style.spacing.button_padding = egui::vec2(6.0, 2.0);
             style.spacing.item_spacing = egui::vec2(6.0, 4.0);
             style.spacing.scroll.floating = true;

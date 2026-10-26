@@ -23,7 +23,7 @@ mod registry;
 mod welcome;
 
 use crate::announce::{Callout, Style};
-use crate::chrome::{self, Kind, ink, label_job};
+use crate::chrome::{self, Kind, hand_job, ink, label_job};
 use crate::garden::Garden;
 use crate::host::Host;
 use crate::iso::View;
@@ -932,6 +932,10 @@ impl BattleApp {
         if !self.styled {
             chrome::style(&ctx);
             self.styled = true;
+            // The pencil hand's fonts are egui's from its next pass: run that pass at once, so the
+            // first frame shown is already written in it.
+            ctx.request_discard("the pencil hand is installed");
+            return;
         }
         self.clock = ctx.input(|input| input.time) as f32;
         if let Some(keeper) = &mut self.kept {
@@ -1261,7 +1265,7 @@ impl BattleApp {
         if self.stage == Stage::Station {
             ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.label(label_job("The Battleground", chrome::LABEL, ink::COVER));
+                    ui.label(hand_job("The Battleground", chrome::LABEL, ink::COVER));
                 });
             });
             return;
@@ -1289,7 +1293,7 @@ impl BattleApp {
                     .lesson
                     .as_ref()
                     .map(|run| (run.lesson, run.given.len() as u8));
-                ui.label(label_job(
+                ui.label(hand_job(
                     &match lesson {
                         Some((lesson, _)) => format!("Lesson {}", lesson.number()),
                         None => self.table.arena.name.clone(),
@@ -1339,7 +1343,7 @@ impl BattleApp {
                         let w = h * crate::pennant::WIDTH as f32 / crate::pennant::HEIGHT as f32;
                         ui.add(egui::Image::new(flag).fit_to_exact_size(vec2(w, h)));
                     }
-                    ui.label(label_job(&name, chrome::LABEL, color(team.light)));
+                    ui.label(hand_job(&name, chrome::LABEL, color(team.light)));
                     beacon_meter(
                         ui,
                         shown[side.index()],
@@ -1350,12 +1354,12 @@ impl BattleApp {
                         now,
                     );
                     if shown[side.index()] + 1 == m.ruleset.capture_ticks && m.outcome().is_none() {
-                        ui.label(label_job("One tick to go", chrome::LABEL, ink::BRASS_LIGHT));
+                        ui.label(hand_job("One tick to go", chrome::LABEL, ink::BRASS_LIGHT));
                     }
                     ui.add_space(u * 2.0);
                 }
                 if paused && (self.table.reduce_motion || (now * 2.0).sin() > -0.4) {
-                    ui.label(label_job("Held by both", chrome::LABEL, ink::COVER));
+                    ui.label(hand_job("Held by both", chrome::LABEL, ink::COVER));
                 }
                 if self.table.shown.is_none() && m.outcome().is_none() && lesson.is_none() {
                     ui.add_space(u * 3.0);
@@ -1363,7 +1367,7 @@ impl BattleApp {
                     let of = f32::from(self.table.ruleset.turn_seconds).max(left);
                     watch(ui, left, of, u);
                     let warn = left <= 10.0;
-                    ui.label(label_job(
+                    ui.label(hand_job(
                         &format!("{}s", left.ceil() as u32),
                         12.0,
                         if warn {
@@ -1387,7 +1391,7 @@ impl BattleApp {
                         ),
                     };
                     ui.add_space(u * 2.0);
-                    ui.label(label_job(&word, chrome::LABEL, colour));
+                    ui.label(hand_job(&word, chrome::LABEL, colour));
                 }
             });
         });
@@ -1442,7 +1446,7 @@ impl BattleApp {
             colour,
             u,
         );
-        let galley = painter.layout_job(label_job(word, chrome::LABEL, colour));
+        let galley = painter.layout_job(hand_job(word, chrome::LABEL, colour));
         painter.galley(
             pos2(
                 rect.min.x + u * 18.0,
@@ -1501,7 +1505,7 @@ impl BattleApp {
                             ui.horizontal(|ui| {
                                 ui.add_sized(
                                     vec2(56.0, 18.0),
-                                    egui::Label::new(RichText::new(word).size(12.5)),
+                                    egui::Label::new(RichText::new(word).size(15.0)),
                                 );
                                 ui.add(egui::Slider::new(level, 0.0..=1.0).show_value(false));
                             });
@@ -1583,14 +1587,14 @@ impl BattleApp {
             pos2(area.min.x, area.center().y),
             Align2::LEFT_CENTER,
             line,
-            FontId::proportional(13.0),
+            FontId::proportional(15.0),
             ink::COVER,
         );
         painter.text(
             pos2(area.max.x, area.center().y),
             Align2::RIGHT_CENTER,
             self.host.describe(),
-            FontId::proportional(11.5),
+            FontId::proportional(15.0),
             ink::DEBOSS,
         );
     }
@@ -1890,7 +1894,7 @@ impl BattleApp {
             if let (Some(text), Some((ax, ay, _)), true) = (&c.headline, anchor(c), alpha > 0.0) {
                 let size = ctx
                     .fonts_mut(|f| {
-                        f.layout_no_wrap(text.clone(), FontId::proportional(13.0), ink::PAGE)
+                        f.layout_no_wrap(text.clone(), FontId::proportional(15.0), ink::PAGE)
                     })
                     .size();
                 let size = (size + vec2(u * 16.0, u * 6.0)) / scale;
@@ -2090,7 +2094,7 @@ impl BattleApp {
             ));
         }
         let galley =
-            painter.layout_no_wrap(caption.text.clone(), FontId::proportional(13.0), ink::PAGE);
+            painter.layout_no_wrap(caption.text.clone(), FontId::proportional(15.0), ink::PAGE);
         painter.galley(
             pos2(
                 rect.min.x + u * 9.0,
@@ -2218,7 +2222,7 @@ impl BattleApp {
             .map(|(right, text)| {
                 (
                     right,
-                    painter.layout_no_wrap(text, FontId::proportional(12.5), ink::PAGE),
+                    painter.layout_no_wrap(text, FontId::proportional(15.0), ink::PAGE),
                 )
             })
             .collect();
@@ -2281,7 +2285,7 @@ impl BattleApp {
                 vec![(
                     painter.layout(
                         "Nothing yet: the first turn is yours.".to_owned(),
-                        FontId::proportional(12.5),
+                        FontId::proportional(15.0),
                         ink::MUTED,
                         inner,
                     ),
@@ -2295,22 +2299,22 @@ impl BattleApp {
                     .map(|(k, (text, side))| {
                         let colour = if k == 0 { ink::PAGE } else { ink::MUTED };
                         (
-                            painter.layout(text.clone(), FontId::proportional(12.5), colour, inner),
+                            painter.layout(text.clone(), FontId::proportional(15.0), colour, inner),
                             *side,
                         )
                     })
                     .collect()
             };
-        let title = painter.layout_job(label_job("Just now", 9.5, ink::FOREST));
+        let title = painter.layout_job(hand_job("Just now", 9.5, ink::FOREST));
         // While orders are given, what came of each of last turn's, under the headlines.
         let planning = self.table.shown.is_none() && self.table.outcome().is_none();
-        let orders_title = painter.layout_job(label_job("Your orders last turn", 9.0, ink::FOREST));
+        let orders_title = painter.layout_job(hand_job("Your orders last turn", 9.0, ink::FOREST));
         let told: Vec<std::sync::Arc<egui::Galley>> = if planning {
             self.table
                 .told
                 .iter()
                 .map(|line| {
-                    painter.layout(line.clone(), FontId::proportional(11.5), ink::PAGE, inner)
+                    painter.layout(line.clone(), FontId::proportional(15.0), ink::PAGE, inner)
                 })
                 .collect()
         } else {
@@ -2326,7 +2330,7 @@ impl BattleApp {
         } else {
             "The whole match (L)"
         };
-        let link = painter.layout_job(label_job(link_text, 9.0, ink::FOREST));
+        let link = painter.layout_job(hand_job(link_text, 9.0, ink::FOREST));
         let body: f32 = lines.iter().map(|(g, _)| g.size().y + u * 2.0).sum();
         let height = u * 9.0 + title.size().y + body + told_height + link.size().y + u * 6.0;
         let corner = pos2(page.max.x - u * 8.0 - width, page.min.y + u * 6.0);
@@ -2445,7 +2449,7 @@ impl BattleApp {
                                 if self.table.log.is_empty() {
                                     ui.label(
                                         RichText::new("Nothing yet: the first turn is yours.")
-                                            .size(12.5)
+                                            .size(15.0)
                                             .italics()
                                             .color(ink::MUTED),
                                     );
@@ -2462,7 +2466,7 @@ impl BattleApp {
                                         continue;
                                     }
                                     ui.add_space(u);
-                                    ui.label(label_job(
+                                    ui.label(hand_job(
                                         &format!("Turn {turn}"),
                                         chrome::LABEL,
                                         ink::MUTED,
@@ -2470,12 +2474,12 @@ impl BattleApp {
                                     if lines.is_empty() {
                                         ui.label(
                                             RichText::new("· Everyone went where they were told.")
-                                                .size(12.5)
+                                                .size(15.0)
                                                 .color(ink::MUTED),
                                         );
                                     }
                                     for line in lines {
-                                        ui.label(RichText::new(format!("· {line}")).size(12.5));
+                                        ui.label(RichText::new(format!("· {line}")).size(15.0));
                                     }
                                 }
                             });
@@ -2505,7 +2509,7 @@ impl BattleApp {
             let out = ((life - age) / 0.2).clamp(0.0, 1.0);
             ((1.0 - ease) * -14.0 * u, out)
         };
-        let galley = painter.layout_job(label_job(
+        let galley = painter.layout_job(hand_job(
             &format!("Turn {} plays out", m.board.turn),
             13.0,
             registry::ON_RIBBON,
@@ -2549,7 +2553,7 @@ impl BattleApp {
             let out = ((life - age) / 0.3).clamp(0.0, 1.0);
             ((1.0 - (1.0 - t).powi(3)) * 14.0 * u - 14.0 * u, out)
         };
-        let galley = painter.layout_job(label_job(
+        let galley = painter.layout_job(hand_job(
             &format!("Turn {}: your orders", m.board.turn + 1),
             13.0,
             registry::ON_RIBBON,
@@ -2680,7 +2684,7 @@ impl BattleApp {
                 let up = standing[i as usize];
                 ui.label(
                     RichText::new(&contender.traveler.name)
-                        .size(13.0)
+                        .size(15.0)
                         .strong()
                         .color(if up { ink::PAGE } else { ink::MUTED }),
                 );
@@ -2693,9 +2697,9 @@ impl BattleApp {
         if giving {
             let left = self.table.orders.iter().filter(|o| o.is_none()).count();
             ui.horizontal(|ui| {
-                ui.label(label_job("Give an order", chrome::LABEL, ink::FOREST));
+                ui.label(hand_job("Give an order", chrome::LABEL, ink::FOREST));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(label_job(
+                    ui.label(hand_job(
                         &format!("{left} of {PLAN_SIZE} left"),
                         9.0,
                         if left == 0 { ink::STAMP } else { ink::MUTED },
@@ -2789,7 +2793,7 @@ impl BattleApp {
                         ui.vertical(|ui| {
                             ui.set_max_width(room);
                             ui.spacing_mut().item_spacing.y = 0.0;
-                            ui.label(label_job(
+                            ui.label(hand_job(
                                 &title,
                                 chrome::LABEL,
                                 if has_order { ink::PAGE } else { ink::MUTED },
@@ -2800,7 +2804,7 @@ impl BattleApp {
                             let words = words
                                 .strip_prefix(&format!("{title} "))
                                 .map_or(words.clone(), str::to_owned);
-                            ui.label(RichText::new(words).size(12.0).color(if has_order {
+                            ui.label(RichText::new(words).size(15.0).color(if has_order {
                                 ink::PAGE
                             } else {
                                 ink::MUTED
@@ -2889,7 +2893,7 @@ impl BattleApp {
                         ui.vertical(|ui| {
                             ui.set_max_width(room);
                             ui.spacing_mut().item_spacing.y = 0.0;
-                            ui.label(label_job(
+                            ui.label(hand_job(
                                 "USE ITEM · bonus",
                                 chrome::LABEL,
                                 if given.is_some() {
@@ -2898,7 +2902,7 @@ impl BattleApp {
                                     ink::MUTED
                                 },
                             ));
-                            ui.label(RichText::new(words).size(12.0).color(if given.is_some() {
+                            ui.label(RichText::new(words).size(15.0).color(if given.is_some() {
                                 ink::PAGE
                             } else {
                                 ink::MUTED
@@ -2987,7 +2991,7 @@ impl BattleApp {
                 "The match with {} cannot go on without it, so it ended here and earned nothing.",
                 self.table.other_short()
             ))
-            .size(13.0),
+            .size(15.0),
         );
         ui.add_space(u * 5.0);
         if chrome::button(ui, "Back to the station", Kind::Back, false, true, None, u)
@@ -3025,7 +3029,7 @@ impl BattleApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 for note in lesson.notes() {
-                    ui.label(RichText::new(*note).size(12.5).color(ink::PAGE));
+                    ui.label(RichText::new(*note).size(15.0).color(ink::PAGE));
                     ui.add_space(u * 2.0);
                 }
             });
@@ -3074,7 +3078,7 @@ impl BattleApp {
             crate::keepsake::Award::NotYet
         };
         self.award(ui, award, title, u);
-        ui.label(RichText::new(words).size(13.0));
+        ui.label(RichText::new(words).size(15.0));
         ui.add_space(u * 5.0);
         let width = ui.available_width();
         let next = lesson.next().filter(|_| learned);
@@ -3124,13 +3128,13 @@ impl BattleApp {
             ui.add_space(u * 5.0);
             chrome::kicker(ui, "After the lessons");
             for line in AFTER_LESSONS {
-                ui.label(RichText::new(format!("\u{b7} {line}")).size(12.5));
+                ui.label(RichText::new(format!("\u{b7} {line}")).size(15.0));
             }
         }
         ui.add_space(u * 3.0);
         ui.label(
             RichText::new("A lesson: nothing is kept.")
-                .size(11.5)
+                .size(15.0)
                 .italics()
                 .color(ink::MUTED),
         );
@@ -3278,10 +3282,10 @@ impl BattleApp {
                             ui.vertical(|ui| {
                                 ui.spacing_mut().item_spacing.y = 0.0;
                                 ui.label(
-                                    RichText::new(&label).size(13.0).strong().color(ink::PAGE),
+                                    RichText::new(&label).size(15.0).strong().color(ink::PAGE),
                                 );
                                 if !gloss.is_empty() {
-                                    ui.label(RichText::new(&gloss).size(11.5).color(ink::MUTED));
+                                    ui.label(RichText::new(&gloss).size(15.0).color(ink::MUTED));
                                 }
                             });
                         })
@@ -3414,22 +3418,22 @@ impl BattleApp {
                     a.0, b.0, a.1, b.1, a.2, b.2
                 )
             });
-        ui.label(RichText::new(why).size(13.0));
+        ui.label(RichText::new(why).size(15.0));
         if let Some(counts) = counts {
-            ui.label(RichText::new(counts).size(12.5).color(ink::FOREST));
+            ui.label(RichText::new(counts).size(15.0).color(ink::FOREST));
         }
         if let Some(reason) = &self.table.ended_because {
-            ui.label(RichText::new(reason).size(13.0).color(ink::MUTED));
+            ui.label(RichText::new(reason).size(15.0).color(ink::MUTED));
         }
         if let Some(meeting) = &self.table.meeting {
-            ui.label(RichText::new(meeting).size(12.5).color(ink::FOREST));
+            ui.label(RichText::new(meeting).size(15.0).color(ink::FOREST));
         }
         if let Some(event) = &self.table.event_line {
-            ui.label(RichText::new(event).size(13.0).strong().color(ink::FOREST));
+            ui.label(RichText::new(event).size(15.0).strong().color(ink::FOREST));
         }
         ui.label(
             RichText::new(format!("After {} turns", outcome.turn))
-                .size(12.5)
+                .size(15.0)
                 .color(ink::MUTED),
         );
         ui.add_space(u * 5.0);
@@ -3470,7 +3474,7 @@ impl BattleApp {
             } else {
                 "A rehearsal: nothing is kept."
             };
-            ui.label(RichText::new(kept).size(11.5).italics().color(ink::MUTED));
+            ui.label(RichText::new(kept).size(15.0).italics().color(ink::MUTED));
         }
         ui.add_space(u * 4.0);
         let width = ui.available_width();
@@ -3515,7 +3519,7 @@ impl BattleApp {
                                             RichText::new(
                                                 "Nothing noted yet: play a match together.",
                                             )
-                                            .size(12.5)
+                                            .size(15.0)
                                             .color(ink::MUTED),
                                         );
                                         return;
@@ -3525,23 +3529,23 @@ impl BattleApp {
                                     } else {
                                         format!("Played {} times, won {}", page.matches, page.wins)
                                     };
-                                    ui.label(label_job(&played, chrome::LABEL, ink::MUTED));
+                                    ui.label(hand_job(&played, chrome::LABEL, ink::MUTED));
                                     let notes = page.notes();
                                     if notes.is_empty() {
                                         ui.label(
                                             RichText::new("No habits noted yet.")
-                                                .size(12.5)
+                                                .size(15.0)
                                                 .italics()
                                                 .color(ink::MUTED),
                                         );
                                     }
                                     for note in notes.iter().take(4) {
-                                        ui.label(RichText::new(format!("· {note}")).size(12.5));
+                                        ui.label(RichText::new(format!("· {note}")).size(15.0));
                                     }
                                     for moment in page.moments.iter().rev().take(2) {
                                         ui.label(
                                             RichText::new(moment.as_str())
-                                                .size(12.0)
+                                                .size(15.0)
                                                 .italics()
                                                 .color(ink::MUTED),
                                         );
@@ -3856,7 +3860,7 @@ fn sticky(ui: &mut egui::Ui, text: &str, u: f32) {
     let width = ui.available_width();
     let galley = ui.painter().layout(
         text.to_owned(),
-        FontId::proportional(12.5),
+        FontId::proportional(15.0),
         ink::PAGE,
         width - u * 12.0,
     );
@@ -3944,7 +3948,7 @@ fn earned_line(ui: &mut egui::Ui, line: &str, u: f32) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = u * 3.0;
         registry::place(ui, &picture, 1.0, u);
-        ui.add(egui::Label::new(RichText::new(words).size(12.5)).wrap());
+        ui.add(egui::Label::new(RichText::new(words).size(15.0)).wrap());
     });
 }
 
@@ -4202,13 +4206,13 @@ fn name_tag(
     team: formiga_art::paint::Ramp,
     u: f32,
 ) {
-    let galley = painter.layout_no_wrap(name.to_owned(), FontId::proportional(13.0), ink::PAGE);
-    let state = state.map(|s| painter.layout_job(label_job(s, 9.0, ink::MUTED)));
+    let galley = painter.layout_no_wrap(name.to_owned(), FontId::proportional(15.0), ink::PAGE);
+    let state = state.map(|s| painter.layout_job(hand_job(s, 9.0, ink::MUTED)));
     // A note from the notebook, in the notebook's own hand, wrapped narrow.
     let note = note.map(|n| {
         painter.layout(
             format!("\u{201c}{n}\u{201d}"),
-            FontId::proportional(11.0),
+            FontId::proportional(15.0),
             ink::FOREST,
             u * 70.0,
         )
@@ -4336,7 +4340,7 @@ fn token(ui: &mut egui::Ui, order: u8, given: bool, facing: Option<Facing>, u: f
     if given {
         painter.circle_filled(c - vec2(u * 2.0, u * 2.0), u * 1.2, color(ramp.shine));
     }
-    let galley = painter.layout_job(label_job(&format!("{}", order + 1), 11.0, edge));
+    let galley = painter.layout_job(hand_job(&format!("{}", order + 1), 11.0, edge));
     painter.galley(c - galley.size() / 2.0 + vec2(u * 0.3, 0.0), galley, edge);
     if let Some(facing) = facing {
         let (x, y) = scene::screen_way(facing);
@@ -4459,12 +4463,12 @@ fn controls(painter: &egui::Painter, page: Rect, u: f32) {
     let galleys: Vec<_> = rows
         .iter()
         .map(|(_, text)| {
-            painter.layout_no_wrap((*text).to_owned(), FontId::proportional(11.5), ink::PAGE)
+            painter.layout_no_wrap((*text).to_owned(), FontId::proportional(15.0), ink::PAGE)
         })
         .collect();
     let icon = vec2(u * 6.0, u * 9.0);
     let row = galleys.iter().map(|g| g.size().y).fold(icon.y, f32::max) + u * 1.5;
-    let title = painter.layout_job(label_job("Controls", 9.5, ink::FOREST));
+    let title = painter.layout_job(hand_job("Controls", 9.5, ink::FOREST));
     let width = galleys
         .iter()
         .map(|g| g.size().x)
@@ -4934,7 +4938,9 @@ mod tests {
         assert!(
             h.drawn
                 .iter()
-                .any(|(w, _)| w.starts_with(Lesson::Flank.goal()))
+                .any(|(w, _)| w.starts_with(Lesson::Flank.goal())),
+            "{:?}",
+            h.drawn.iter().map(|d| &d.0).collect::<Vec<_>>()
         );
     }
 
