@@ -53,6 +53,10 @@ fn handler_name(raw: &str) -> String {
     }
 }
 
+/// Why nothing new can begin while the relay is still comparing the last match's boards.
+const STILL_CHECKING: &str =
+    "Your last match is still being checked against your friend's board; give it a moment.";
+
 /// A match with a friend, through the relay.
 pub struct Friend {
     pub line: Line,
@@ -238,6 +242,9 @@ pub struct Table {
     pub board_teams: [Vec<Contender>; 2],
     /// The other side's name in recaps.
     pub other_name: String,
+    /// The friend whose team the other side is, by name, for as long as the match is shown: the
+    /// room may have closed by the time the result is read. None against the visitors.
+    pub other_handler: Option<String>,
     pub friend: Option<Friend>,
     /// Where friend matches go: the site's relay, unless development points elsewhere.
     pub relay: String,
@@ -302,6 +309,7 @@ impl Table {
             you: Side::Left,
             board_teams: [Vec::new(), Vec::new()],
             other_name: "The visiting team".to_owned(),
+            other_handler: None,
             friend: None,
             relay: relay_base(),
             desktop_version: roster.desktop_version.clone(),
@@ -523,6 +531,7 @@ impl Table {
 
     fn field(&mut self, now: f32, lesson: Option<Lesson>) -> anyhow::Result<()> {
         anyhow::ensure!(self.picked.len() == TEAM_SIZE, "pick three");
+        anyhow::ensure!(!self.checking_board(), "{STILL_CHECKING}");
         // The visitors play only on arenas whose cup is open; anywhere else, the Backyard. Every
         // lesson is on the Backyard.
         if lesson.is_some()
@@ -573,6 +582,7 @@ impl Table {
         self.teams = [self.picked.clone(), away];
         self.you = Side::Left;
         self.other_name = "The visiting team".to_owned();
+        self.other_handler = None;
         self.friend = None;
         self.begin_match(m, now);
         self.lesson = lesson.map(|lesson| LessonRun {
@@ -619,6 +629,10 @@ impl Table {
         self.notice = None;
         if self.picked.len() != TEAM_SIZE {
             self.notice = Some("Choose three first.".to_owned());
+            return;
+        }
+        if self.checking_board() {
+            self.notice = Some(STILL_CHECKING.to_owned());
             return;
         }
         let (team, bonds) = self.picked_team();
@@ -675,6 +689,25 @@ impl Table {
     pub fn leave_room(&mut self) {
         if let Some(friend) = self.friend.take() {
             friend.line.ask(Ask::Leave);
+        }
+    }
+
+    /// Whether what the last match with a friend earned is still waiting on the relay to say
+    /// both boards came out the same. Opening another room or taking on the visitors would
+    /// drop it, so both wait.
+    pub fn checking_board(&self) -> bool {
+        self.friend.as_ref().is_some_and(|f| f.held.is_some())
+    }
+
+    /// Leaves the room once a match with a friend is over and what it earned is settled, so the
+    /// next room can be opened without waiting for the relay to close this one. A room whose
+    /// boards are still being checked is kept, and the earnings with it.
+    pub fn leave_when_settled(&mut self) {
+        if self.outcome().is_some()
+            && self.friend.as_ref().is_some_and(|f| f.seated)
+            && !self.checking_board()
+        {
+            self.leave_room();
         }
     }
 
@@ -918,6 +951,7 @@ impl Table {
         }
         self.you = you;
         self.other_name = format!("{}'s team", handlers[you.other().index()]);
+        self.other_handler = Some(handlers[you.other().index()].clone());
         self.board_teams = teams;
         self.begin_match(m, now);
     }
@@ -2269,6 +2303,8 @@ mod tests {
         assert_eq!(host.you, Side::Left);
         assert_eq!(guest.you, Side::Right);
         assert_eq!(host.other_short(), "Friend");
+        assert_eq!(host.other_handler.as_deref(), Some("Friend"));
+        assert_eq!(guest.other_handler.as_deref(), Some("Jake"));
         let mut rounds = 0;
         while !(host.finished(now) && guest.finished(now)) {
             for t in [&mut host, &mut guest] {
@@ -2295,6 +2331,14 @@ mod tests {
         assert!(a.outcome().is_some());
         // What it earned is kept once the relay has confirmed both boards.
         let held = |t: &Table| t.friend.as_ref().is_some_and(|f| f.held.is_some());
+        // While they are being checked, nothing that would drop them can begin.
+        if held(&host) {
+            assert!(host.checking_board());
+            host.open_room("Jake", None);
+            assert_eq!(host.notice.as_deref(), Some(STILL_CHECKING));
+            assert!(host.start(now).is_err(), "the visitors wait too");
+            assert!(held(&host), "and the earnings are still held");
+        }
         while held(&host) || held(&guest) {
             std::thread::sleep(std::time::Duration::from_millis(50));
             now += 1.0;
@@ -2303,12 +2347,16 @@ mod tests {
             rounds += 1;
             assert!(rounds < 700, "the boards are confirmed");
         }
-        for t in [&host, &guest] {
+        for t in [&mut host, &mut guest] {
             assert!(
                 t.earned.iter().any(|l| l.contains("Open Circuit points")),
                 "{:?}",
                 t.earned
             );
+            assert!(!t.checking_board());
+            // Settled, the room is left behind so the next one can be opened.
+            t.leave_when_settled();
+            assert!(t.friend.is_none());
         }
         if let Some(relay) = local {
             relay.stop();

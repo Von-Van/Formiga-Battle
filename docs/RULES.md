@@ -536,7 +536,7 @@ coaching kept kinds within 0.037): every way a profile chooses past the first on
 time, and the kinds that lean hardest pay most for it. Jake chose this on 2026-10-16, for about
 one creature in three doing something of its own each turn.
 
-About half of Exhibition matches still go to the turn cap. With good holding on both sides the
+About three Exhibition matches in five still go to the turn cap. With good holding on both sides the
 zone stays contested, and the cap's order (beacon progress, then composure, then creatures
 standing) decides them; flanks are what move the beacon and composure both. Every tie between equal tiles, in the rules and in the coaches,
 is broken from each team's own side of the board, so the board plays the same from both sides.
