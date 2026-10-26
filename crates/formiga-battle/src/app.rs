@@ -15,11 +15,11 @@
 //! sets up (`formiga_battle_core::lesson`): the lesson's goal and notes take the field guide's
 //! place, the timer waits, and nothing is kept.
 
-mod circuit;
 mod handler;
 mod menus;
 mod playbooks;
 mod registry;
+mod season;
 mod welcome;
 
 use crate::announce::{Callout, Style};
@@ -121,7 +121,7 @@ pub enum Step {
     Playbooks,
     /// The Handler's place at the Battleground: the event under way, titles won, and how they
     /// stand against each rival.
-    Circuit,
+    Season,
     History,
     Settings,
 }
@@ -135,7 +135,7 @@ impl Step {
             Self::Room => "Friend",
             Self::Handler => "Handler",
             Self::Playbooks => "Playbooks",
-            Self::Circuit => "Circuit",
+            Self::Season => "Season",
             Self::History => "History",
             Self::Settings => "Settings",
         }
@@ -154,8 +154,8 @@ pub enum Review {
     Friend,
     /// The Handler's registry: their card and pennant, standing and trios.
     Handler,
-    /// The Circuit page, with an event entered and its first semi-final played.
-    Circuit,
+    /// The Season page, with an event entered and its first semi-final played.
+    Season,
     /// The sample colony's history, and its settings.
     History,
     Settings,
@@ -486,9 +486,9 @@ impl BattleApp {
                 app.open_journal(Outing::Home, Step::History);
             }
             Some(Review::Settings) => app.open_journal(Outing::Home, Step::Settings),
-            Some(Review::Circuit) => {
+            Some(Review::Season) => {
                 app.table.begin_next_event();
-                app.open_journal(Outing::Home, Step::Circuit);
+                app.open_journal(Outing::Home, Step::Season);
             }
             Some(Review::Handler) => {
                 app.table.record = formiga_battle_contract::sample::record();

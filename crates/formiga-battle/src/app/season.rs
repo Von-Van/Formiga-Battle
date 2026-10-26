@@ -1,4 +1,4 @@
-//! The Circuit: the Handler's place at the Battleground. On the left, the event under way as a
+//! The Season: the Handler's place at the Battleground. On the left, the event under way as a
 //! bracket, round by round, and the way to play the next fixture; on the right, the titles won
 //! and how the colony stands against each rival. What it shows is the career Battle keeps
 //! (`career.rs`); none of it changes how a match is played.

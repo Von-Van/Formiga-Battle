@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A match opens on a painted card. Each side's panel slides in from its edge in its team's
+  colours, its pennant flown large, its name on a ribbon, its Handler on a brass plate, its club
+  on a cloth tab and a stitched badge saying how it plays, and a red burst with VS on it punches
+  in between them. Under reduced motion the card is simply there. It takes the place of the
+  ribbon and the paper tags.
 - Playbooks: a trio's plan for a match, in up to three stages (secure the beacon, put pressure
   on, draw them out, counter their holders, fetch, work the board), written on a new Playbooks
   page among the Handler's own. A stage can come in whenever the board shows something, such as
@@ -26,19 +31,19 @@
   eight-Handler events: Wren Ashby of Thistledown, Otto Pell of the Weir Keepers, Sorrel Vane of
   Mossbank and Kit Tidewell of Shingle Club, each playing one of the four styles; one of the eight
   sits each season out in turn.
-- The Circuit page shows the season's events and points, the Hall of Champions (every season's
+- The Season page shows the season's events and points, the Hall of Champions (every season's
   champion, rivals' too), the colony's standing (Newcomer, Contender, Champion, Season Champion,
   Legend of the Battleground, each saying how the next is earned, none earned by playing more),
   and what the Battleground has noticed, each backed by the matches that show it: a first win over
   a rival, an upset over a higher seed, a rivalry of five meetings, an event won, a title won,
   defended, lost or won back.
-- Events at the Battleground. The Handler's notebook has a new page, the Circuit, where a colony
+- Events at the Battleground. The Handler's notebook has a new page, the Season, where a colony
   enters an Open at a place whose cup is open to it: four Handlers, the three rivals who come to
   that place most and the colony itself, drawn as fourth seed against the first. The colony plays
   its semi-final and, if it gets through, the final; the rivals' own fixtures are played out under
   the same rules, each with its own coach and three. A draw is settled by a toss, the same on
   every machine. The result says how the event stands ("Through to the final against Tam Rook"),
-  and an event won is kept as a title. The Circuit page also shows the titles won and the record
+  and an event won is kept as a title. The Season page also shows the titles won and the record
   against each rival. An event match counts toward the place's cup like any other.
 - The visitors close to home are four named Handlers, each with a club, a pennant, a way of
   playing and a trio of their own: Hazel Thorne of Bramble Club presses first and sends everyone,

@@ -43,7 +43,7 @@ impl BattleApp {
             &[
                 Step::Handler,
                 Step::Playbooks,
-                Step::Circuit,
+                Step::Season,
                 Step::History,
                 Step::Settings,
             ]
@@ -56,7 +56,7 @@ impl BattleApp {
     pub(super) fn own_pages(&self) -> bool {
         matches!(
             self.step,
-            Step::Handler | Step::Playbooks | Step::Circuit | Step::History | Step::Settings
+            Step::Handler | Step::Playbooks | Step::Season | Step::History | Step::Settings
         )
     }
 
@@ -91,7 +91,7 @@ impl BattleApp {
     /// Back to the station. From the notebook, the train is waiting with everyone aboard; after a
     /// match, it comes in again for them, as it did the first time.
     pub(super) fn back_to_station(&mut self) {
-        // An event fixture not yet played waits on the Circuit page.
+        // An event fixture not yet played waits on the Season page.
         self.table.event_fixture = None;
         let now = self.clock;
         let after_match = self.stage == Stage::Playing;
@@ -257,7 +257,7 @@ impl BattleApp {
                 "Write each trio's plans in stages; the one it plays by fills in its orders."
                     .to_owned()
             }
-            Step::Circuit => match self.table.next_event_fixture() {
+            Step::Season => match self.table.next_event_fixture() {
                 Some((_, round, rival)) => format!("Your {round} against {} is next.", rival.name),
                 None => "Enter an event, or see how you stand against each rival.".to_owned(),
             },
@@ -698,11 +698,11 @@ impl BattleApp {
                     .auto_shrink([false, false])
                     .show(ui, |ui| self.shelf_left(ui, u));
             }
-            Step::Circuit => {
+            Step::Season => {
                 chrome::page_heading(
                     ui,
                     &line,
-                    "The Circuit",
+                    "The Season",
                     "The Handlers who come to the Battleground, the events you enter against them, and how you stand. An event match counts toward the place's cup like any other.",
                 );
                 ui.add_space(u * 6.0);
@@ -744,7 +744,7 @@ impl BattleApp {
                     Step::Room => self.shared(ui, ctx, u),
                     Step::Handler => self.standing_and_trios(ui, ctx, u),
                     Step::Playbooks => self.shelf_right(ui, u),
-                    Step::Circuit => self.standing_against_rivals(ui, u),
+                    Step::Season => self.standing_against_rivals(ui, u),
                     Step::History => self.totals(ui, u),
                     Step::Settings => self.keys_and_about(ui, u),
                 }
@@ -775,7 +775,7 @@ impl BattleApp {
             Some(Step::Who) => "Who goes",
             Some(Step::Handler) => "Your Handler",
             Some(Step::Playbooks) => "Playbooks",
-            Some(Step::Circuit) => "The Circuit",
+            Some(Step::Season) => "The Season",
             Some(Step::History) => "History",
             Some(_) => "Back",
         })
