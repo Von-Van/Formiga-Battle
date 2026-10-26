@@ -145,14 +145,14 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   read as match profiles, the same on every machine).
 - **`formiga-battle`**: the app. `host` (Desktop's session, or a rehearsal), `friend` (the line to the relay, on a thread of
   its own), `table` (one sitting
-  at the board without the window: picking, orders, locking, the turn being shown), `playback`
+  at the board without the window: picking, orders, locking, the turn being shown; `table/relay` a friend's seat in a room on the relay), `playback`
   (a resolved turn at any moment, from its events), `scene` and `iso` (the board painted with
   `formiga-art`'s tools at pixel scale, and the marks laid over it), `garden` (each arena as a
   place: its ground, what stands on it and round it, and what moves there, dressed by the
-  arena's id), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the Battleground the
+  arena's id; `garden/backyard`, `garden/woodland`, `garden/millpond` and `garden/cove` each place's own pieces), `chrome` (the notebook round the window, painted as Home's is), `look` (each creature's own frames), `station` (the Battleground the
   train brings the companions to), `feel` (how every control answers a touch), `ticket` (the station's two choices, painted as
   railway tickets), `masthead` (the painted scene heading the station's page), `app` (the egui window; `app/menus` the station and the
-  notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios), `settings` (the volumes, mute, motion and window size Battle keeps for next time), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns), `cli` (the headless commands), and the smaller `announce`, `found`, `heraldry`, `keepsake`, `lettering`, `still`, `sound` and `icon`.
+  notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios, `app/match_screen` the match on screen, `app/widgets` the little painted pieces the pages share), `settings` (the volumes, mute, motion and window size Battle keeps for next time), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns), `cli` (the headless commands), and the smaller `announce`, `found`, `heraldry`, `keepsake`, `lettering`, `still`, `sound` and `icon`.
 
 `formiga-core`, `formiga-art`, `formiga-travel`, `formiga-expansion-rulebook` and
 `formiga-battle-contract` come from Desktop by one release tag (`v0.67.14`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is

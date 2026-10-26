@@ -139,6 +139,7 @@
   capture as long as the counter allows fills it rather than overflowing it.
 - RULES.md says three Exhibition matches in five go to the cap, as its own table does, and the
   found things' notes in the rules code speak of presses and tricks rather than contests.
+- Code only: the window, the table and the Backyard are split into smaller files; nothing changes.
 
 ## [0.67.14] - 2026-10-17
 
