@@ -174,7 +174,7 @@ impl BattleApp {
                 .color(ink::PAGE),
             );
             ui.add_space(u * 3.0);
-            if chrome::button(ui, "Your Handler", Kind::Plain, false, true, None, u).clicked() {
+            if chrome::button(ui, "My Handler page", Kind::Plain, false, true, None, u).clicked() {
                 let now = self.clock;
                 self.turn_to(Step::Handler, now);
             }
