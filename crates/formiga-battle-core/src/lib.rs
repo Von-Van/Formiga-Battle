@@ -18,10 +18,12 @@
 //! - [`interpret`]: how a creature carries out its order, and why.
 //! - [`ai`]: the fallback for a missing order, and the coaches of AI matches.
 //! - [`plan`]: coaches that think a turn ahead, knowing their creatures or not.
+//! - [`playbook`]: a Handler's plan for a match in stages, compiled to ordinary orders each turn.
 //! - [`recap`]: a turn told in sentences.
 //! - [`notebook`]: the Handler's Notebook: what each creature was seen to do, in plain words.
 //! - [`replay`]: a whole match as data, and replaying it.
 //! - [`tournament`]: many matches at once, for the fairness checks.
+//! - [`variant`]: the same arena set up a little differently: starts, finds and conditions.
 
 pub mod ai;
 pub mod arena;
@@ -35,6 +37,7 @@ pub mod muster;
 pub mod notebook;
 pub mod order;
 pub mod plan;
+pub mod playbook;
 pub mod profile;
 pub mod recap;
 pub mod replay;
@@ -43,6 +46,7 @@ pub mod ruleset;
 pub mod scenery;
 pub mod style;
 pub mod tournament;
+pub mod variant;
 
 pub use arena::{Arena, Effect, Scenery, TEAM_SIZE};
 pub use event::{Blown, Event, EventKind, Outcome, Reason, Victory};
@@ -54,4 +58,5 @@ pub use order::{Directive, Facing, Order, Orders, PLAN_SIZE, Quarter, Side, Slot
 pub use profile::{Behavior, Bond, Leanings, Nature, Profile, Strength};
 pub use replay::MatchRecord;
 pub use ruleset::{CaptureRule, RULES_VERSION, Ruleset, RulesetError};
-pub use style::{Archetype, Book, STYLE_VERSION};
+pub use style::{Archetype, Book, STYLE_VERSION, Weights};
+pub use variant::Variant;
