@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## [0.68.0] - 2026-10-26
+
+Built on Formiga Desktop 0.68.0, released alongside it and Formiga Hill and Home 0.68.0. Battle
+contract version 5 carries the Handler's anonymous key, and relay protocol 4 passes it on to a
+friend; rules version 9 is unchanged. A friend match needs both Handlers on Battle 0.68.0 and
+Formiga Desktop 0.68.0, as the site's relay now asks for the newest Battle.
 
 - The Season page is drawn in the notebook's pencil: its heading says in the Handler's own words
   what is next or how the last event went; the season's four events stand as stations on a line,
