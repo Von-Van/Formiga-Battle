@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The Season page is drawn in the notebook's pencil: its heading says in the Handler's own words
+  what is next or how the last event went; the season's four events stand as stations on a line,
+  stamped with who won each; the event under way is a bracket of cards, each Handler with their
+  pennant, the one who went through in bold with how, an open place naming who could fill it, and
+  the champion stamped. Its right page has the Handler's standing on a card with their pennant,
+  the season's points as bars, the Hall of Champions on brass plates, the newest thing noticed on
+  a sticky note, and every rival with their pennant and how the meetings stand.
+- The result of a match against a rival shows their pennant beside how the meetings stand, and
+  stamps how the event stands ("Through!", "Out", "Champion!") beside the line that says it.
 - A fifth coaching style, the Adaptive, reads what the other Handler has ordered over the last
   three turns and answers it by the circle of orders, and a ninth rival plays it: Morrow Quill of
   The Weathervane. Seven rivals play each season, the rest sitting it out in turn.
