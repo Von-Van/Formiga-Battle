@@ -3253,24 +3253,42 @@ impl BattleApp {
                 "Time ran out level on the beacon and on composure, with more of them standing."
             }
         };
-        let (title, why) = match (outcome.winner, outcome.victory) {
+        // The other team is a friend's, named, or the visitors.
+        let (them, wins, dizzy_them) = match self.table.other_handler.clone() {
+            Some(name) => {
+                let dizzy = format!("{name}'s three are all sitting out, dizzy.");
+                (name, "wins", dizzy)
+            }
+            None => (
+                "The visitors".to_owned(),
+                "win",
+                "The visitors are all sitting out, dizzy.".to_owned(),
+            ),
+        };
+        let beacon_them = format!("{them} lit the beacon");
+        let knockout_them = format!("{them} {wins}");
+        let forfeit_them = format!("{them} {wins} by forfeit");
+        let tally_them = format!("{them} {wins} on the tally");
+        let (title, why): (&str, &str) = match (outcome.winner, outcome.victory) {
             (Some(side), Some(Victory::Capture)) if side == you => (
                 "You lit the beacon!",
                 "Your team held the yard long enough.",
             ),
-            (Some(side), Some(Victory::Knockout)) if side == you => {
-                ("You win!", "The visitors are all sitting out, dizzy.")
-            }
-            (Some(side), _) if side == you => ("You win on the tally", ahead_you),
-            (Some(_), Some(Victory::Capture)) => (
-                "The visitors lit the beacon",
-                "They held the yard long enough.",
+            (Some(side), Some(Victory::Knockout)) if side == you => ("You win!", &dizzy_them),
+            (Some(side), Some(Victory::Forfeit)) if side == you => (
+                "You win by forfeit",
+                "Your friend left the match, or was away from it too long.",
             ),
+            (Some(side), _) if side == you => ("You win on the tally", ahead_you),
+            (Some(_), Some(Victory::Capture)) => (&beacon_them, "They held the yard long enough."),
             (Some(_), Some(Victory::Knockout)) => (
-                "The visitors win",
+                &knockout_them,
                 "Your team are all sitting out, dizzy, and none the worse for it.",
             ),
-            (Some(_), _) => ("The visitors win on the tally", ahead_them),
+            (Some(_), Some(Victory::Forfeit)) => {
+                (&forfeit_them, "The relay lost touch with you for too long.")
+            }
+            (Some(_), _) => (&tally_them, ahead_them),
             (None, _) => ("A draw", "Nobody could be split."),
         };
         let award = match outcome.winner {
@@ -3316,6 +3334,7 @@ impl BattleApp {
                 .seed
                 .wrapping_mul(6364136223846793005)
                 .wrapping_add(1442695040888963407);
+            self.table.leave_when_settled();
             self.table.shown = None;
             self.portraits.clear();
             self.fresh_match();
@@ -3329,6 +3348,7 @@ impl BattleApp {
             .on_hover_text("Choose again where your companions are off to")
             .clicked()
         {
+            self.table.leave_when_settled();
             self.table.shown = None;
             self.portraits.clear();
             self.fresh_match();

@@ -34,15 +34,19 @@ const KEYS: [(&str, &str); 9] = [
 ];
 
 impl BattleApp {
-    /// Every match the colony has played, newest first.
+    /// Every match the colony has played with a friend, newest first. A match against the
+    /// visitors counts toward its cup and leaves no line here.
     pub(super) fn history(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         let history: Vec<MatchSummary> = self.table.record.history.iter().rev().cloned().collect();
         if history.is_empty() {
             ui.label(
-                RichText::new("No matches yet. Take the train out to play one.")
-                    .size(14.0)
-                    .italics()
-                    .color(ink::MUTED),
+                RichText::new(
+                    "No matches with a friend yet. Matches against the visitors count toward their \
+                     cups instead.",
+                )
+                .size(14.0)
+                .italics()
+                .color(ink::MUTED),
             );
             return;
         }
@@ -138,7 +142,7 @@ impl BattleApp {
                 });
             });
         };
-        line(ui, "Matches played", played.to_string());
+        line(ui, "Matches with friends", played.to_string());
         line(ui, "Won", won.to_string());
         line(ui, "Drawn", drawn.to_string());
         line(ui, "Open Circuit points", record.circuit_points.to_string());
