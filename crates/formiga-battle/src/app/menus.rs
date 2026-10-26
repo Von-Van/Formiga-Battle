@@ -220,40 +220,34 @@ impl BattleApp {
     /// What to do next, along the foot, while getting ready.
     pub(super) fn journal_hint(&self) -> String {
         match self.step {
-            Step::Lessons => {
-                "Choose a lesson, then turn the page to choose who plays it.".to_owned()
-            }
+            Step::Lessons => "Pick a lesson, then turn the page to pick who plays it.".to_owned(),
             Step::Where if self.outing == Outing::Home => self.circuit_hint(),
             Step::Where => match self.outing {
                 Outing::Home | Outing::Lessons => {
                     "Choose where to play the visiting team, then turn the page."
                 }
-                Outing::World => "Choose where to play your friend, then turn the page.",
+                Outing::World => "Where shall we play my friend? Pick, then turn the page.",
             }
             .to_owned(),
             Step::Who => match (self.table.picked.len(), self.outing) {
-                (0, _) => {
-                    "You are their Handler: choose three of your companions to go.".to_owned()
-                }
-                (3, Outing::Home) => "Your three are ready: play the visiting team.".to_owned(),
-                (3, Outing::Lessons) => "Your three are ready: begin the lesson.".to_owned(),
+                (0, _) => "I'm their Handler: who's going? I pick three.".to_owned(),
+                (3, Outing::Home) => "My three are ready: let's play the visitors!".to_owned(),
+                (3, Outing::Lessons) => "My three are ready: on with the lesson!".to_owned(),
                 (3, Outing::World) => {
-                    "Your three are ready: turn the page to your friend's room.".to_owned()
+                    "My three are ready: over the page to my friend's room!".to_owned()
                 }
-                (n, _) => format!("Choose {} more.", TEAM_SIZE - n),
+                (n, _) => format!("{} more to pick!", TEAM_SIZE - n),
             },
             Step::Room => match &self.table.friend {
                 Some(f) if f.code.is_some() && !f.seated => {
-                    "Give your friend the code. The match begins when they join.".to_owned()
+                    "I give my friend the code. We begin when they join!".to_owned()
                 }
                 Some(_) => "Waiting for the relay…".to_owned(),
                 None => {
-                    "Sign your name, read what is shared, then open a room or join one.".to_owned()
+                    "I sign my name, read what's shared, then open a room or join one.".to_owned()
                 }
             },
-            Step::Handler => {
-                "Sign your name, choose your pennant, and look after your trios.".to_owned()
-            }
+            Step::Handler => "My name, my pennant, and my trios.".to_owned(),
             Step::Playbooks => {
                 "Write each trio's plans in stages; the one it plays by fills in its orders."
                     .to_owned()
@@ -262,7 +256,7 @@ impl BattleApp {
                 Some((_, round, rival)) => format!("Your {round} against {} is next.", rival.name),
                 None => "Enter an event, or see how you stand against each rival.".to_owned(),
             },
-            Step::History => "Every match your colony has played, newest first.".to_owned(),
+            Step::History => "Every match we've played, newest first.".to_owned(),
             Step::Settings => "Settings are kept for next time.".to_owned(),
         }
     }
@@ -548,7 +542,7 @@ impl BattleApp {
                 "Offline",
                 home_status,
                 Destination::Home,
-                "Play the visiting team on this computer. Wins fill each place's cup.",
+                "Play the visitors on this computer. Wins fill each place's cup!",
             ),
         ]
         .into_iter()
@@ -1227,7 +1221,7 @@ impl BattleApp {
 
     /// The three chosen, in order, with room for whoever is still to be chosen; and the way on.
     fn lineup(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
-        chrome::kicker(ui, "Your three");
+        chrome::kicker(ui, "My three");
         ui.add_space(u * 2.0);
         let waiting = self.room_waiting();
         let mut take_out = None;
@@ -1337,7 +1331,7 @@ impl BattleApp {
                 } else if let (true, Some((_, round, rival))) = (ready, fixture) {
                     format!("Play your {round} against {}", rival.name)
                 } else if ready {
-                    "Play the visiting team".to_owned()
+                    "Play the visitors! ›".to_owned()
                 } else {
                     format!("Choose {short} more")
                 };
@@ -1386,7 +1380,7 @@ impl BattleApp {
         if let Some(friend) = &self.table.friend {
             if friend.seated {
                 ui.label(
-                    RichText::new("Your last match is still closing on the relay…")
+                    RichText::new("My last match is still closing on the relay…")
                         .size(15.0)
                         .color(ink::MUTED),
                 );
@@ -1394,10 +1388,10 @@ impl BattleApp {
             }
             match friend.code.clone() {
                 Some(code) if !self.joining => {
-                    chrome::kicker(ui, "Give your friend this code");
+                    chrome::kicker(ui, "Give my friend this code");
                     ui.add_space(u * 3.0);
                     ui.horizontal(|ui| {
-                        let galley = ui.painter().layout_job(label_job(&code, 34.0, ink::FOREST));
+                        let galley = ui.painter().layout_job(label_job(&code, 40.0, ink::FOREST));
                         let size = galley.size() + vec2(u * 24.0, u * 14.0);
                         let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
                         code_stub(ui.painter(), rect, u);
@@ -1412,7 +1406,7 @@ impl BattleApp {
                             .ctx()
                             .data(|d| d.get_temp::<f32>(id))
                             .is_some_and(|at| now - at < 2.0);
-                        let word = if copied { "Copied" } else { "Copy the code" };
+                        let word = if copied { "Copied!" } else { "Copy the code" };
                         if chrome::button(ui, word, Kind::Plain, copied, true, None, u).clicked() {
                             ui.ctx().copy_text(code.clone());
                             ui.ctx().data_mut(|d| d.insert_temp(id, now));
@@ -1450,7 +1444,8 @@ impl BattleApp {
                 }
             }
             ui.add_space(u * 4.0);
-            if chrome::button(ui, "Close the room", Kind::Back, false, true, None, u).clicked() {
+            if chrome::button(ui, "‹ Close the room", Kind::Back, false, true, None, u).clicked()
+            {
                 self.table.leave_room();
                 self.joining = false;
             }
@@ -1734,22 +1729,19 @@ impl Companion<'_> {
                             )),
                         );
                         ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
                             ui.label(
                                 RichText::new(&self.contender.traveler.name)
-                                    .size(16.0)
-                                    .strong()
+                                    .font(formiga_pencil::hand_bold(20.0))
                                     .color(ink::PAGE),
                             );
+                            // Who it is, with its traits on hover: the card keeps to a line.
                             ui.label(
                                 RichText::new(&self.contender.traveler.character.phrase)
                                     .size(15.0)
                                     .color(ink::MUTED),
-                            );
-                            ui.label(hand_job(
-                                &self.contender.traveler.character.traits.join(" · "),
-                                9.0,
-                                ink::MUTED,
-                            ));
+                            )
+                            .on_hover_text(self.contender.traveler.character.traits.join(" · "));
                             ui.label(
                                 RichText::new(self.note)
                                     .size(15.0)
@@ -1762,7 +1754,7 @@ impl Companion<'_> {
             })
             .inner;
         let response = if self.spare {
-            response.on_hover_text("Your three are chosen: take one out to send this one instead")
+            response.on_hover_text("My three are chosen: take one out to send this one instead")
         } else {
             response
         };
@@ -1774,16 +1766,17 @@ impl Companion<'_> {
             let rect = response.rect;
             let centre = pos2(rect.max.x - u * 9.0, rect.min.y + u * 9.0);
             let painter = ui.painter();
-            // Stamped down as it is chosen: a touch large, then pressed flat.
+            // Stamped down as it is chosen, a touch large, then pressed flat, a little askew.
             let pop = 1.0 + hop / 12.0;
-            painter.circle_filled(centre, u * 6.5 * pop, ink::STAMP);
-            painter.circle_stroke(centre, u * 5.0 * pop, Stroke::new(u * 0.7, ink::CARD));
-            painter.text(
+            chrome::stamp(
+                painter,
                 centre,
-                Align2::CENTER_CENTER,
-                format!("{}", n + 1),
-                FontId::monospace(12.0),
-                ink::CARD,
+                &format!("{}", n + 1),
+                chrome::HAND * pop,
+                ink::STAMP,
+                Some(ink::CARD),
+                (-6f32).to_radians(),
+                u,
             );
         }
         response

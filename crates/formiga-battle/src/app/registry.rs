@@ -130,7 +130,7 @@ impl BattleApp {
         ui.add_space(u * 8.0);
         let mut changed = false;
         crate::feel::dropping(ui, since, 1, u, |ui| {
-            chrome::kicker(ui, "Your name and club");
+            chrome::kicker(ui, "My name and club");
             ui.add_space(u * 2.0);
             let half = ((ui.available_width() - u * 8.0) / 2.0).min(300.0);
             ui.horizontal_top(|ui| {
@@ -206,7 +206,7 @@ impl BattleApp {
         }
         let mut chosen = style;
         crate::feel::dropping(ui, since, 2, u, |ui| {
-            chrome::kicker(ui, "Your pennant");
+            chrome::kicker(ui, "My pennant");
             ui.add_space(u * 3.0);
             for (part, label) in [
                 (Part::Shape, "Cut"),
@@ -345,7 +345,11 @@ impl BattleApp {
         let standing = Standing::of(&self.table.record);
         let _ = ctx;
         let rules = self.rules;
-        on_rules(ui, rules, hand_job("Standing", chrome::LABEL, ink::FOREST));
+        on_rules(
+            ui,
+            rules,
+            hand_job("How I'm doing", chrome::LABEL, ink::FOREST),
+        );
         on_rules(
             ui,
             rules,
@@ -363,11 +367,7 @@ impl BattleApp {
         );
         on_rules(ui, rules, hand(&standing.how(), 12.0, ink::MUTED, false));
         on_rules(ui, rules, hand("", 12.0, ink::MUTED, false));
-        on_rules(
-            ui,
-            rules,
-            hand_job("Your trios", chrome::LABEL, ink::FOREST),
-        );
+        on_rules(ui, rules, hand_job("My trios", chrome::LABEL, ink::FOREST));
         let trios: Vec<Trio> = self.table.record.trios.iter().rev().cloned().collect();
         if trios.is_empty() {
             on_rules(
@@ -841,7 +841,7 @@ impl BattleApp {
         let top = match (identity::trio_of(&self.table.record, &ids), handler) {
             (Some(trio), _) => trio.name.clone(),
             (None, Some(h)) => format!("{}'s three", h.name),
-            (None, None) => "Your three".to_owned(),
+            (None, None) => "My three".to_owned(),
         };
         let style = identity::trio_of(&self.table.record, &ids)
             .map_or_else(|| self.handler_style(), |trio| self.trio_style(trio));

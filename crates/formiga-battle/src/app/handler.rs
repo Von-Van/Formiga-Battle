@@ -136,7 +136,7 @@ impl BattleApp {
             .filter(|m| m.won == Some(true))
             .count();
         let drawn = record.history.iter().filter(|m| m.won.is_none()).count();
-        chrome::kicker(ui, "Totals");
+        chrome::kicker(ui, "So far");
         ui.add_space(u * 2.0);
         let line = |ui: &mut egui::Ui, label: &str, value: String| {
             ui.horizontal(|ui| {

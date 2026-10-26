@@ -2593,7 +2593,7 @@ impl BattleApp {
             (Some(_), _) => "Not yet",
             (None, outcome) => match (outcome.winner, outcome.victory) {
                 (Some(s), Some(Victory::Capture)) if s == you => "Beacon lit!",
-                (Some(s), _) if s == you => "You win!",
+                (Some(s), _) if s == you => "We win!",
                 (Some(_), _) => "Well played",
                 (None, _) => "A draw",
             },
@@ -2674,7 +2674,7 @@ impl BattleApp {
         chrome::kicker(
             ui,
             if giving {
-                "Your orders"
+                "My orders"
             } else {
                 "The turn plays out"
             },
@@ -2704,9 +2704,9 @@ impl BattleApp {
                 ui.label(hand_job("Give an order", chrome::LABEL, ink::FOREST));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(hand_job(
-                        &format!("{left} of {PLAN_SIZE} left"),
-                        9.0,
-                        if left == 0 { ink::STAMP } else { ink::MUTED },
+                        &format!("{left} of {PLAN_SIZE} left!"),
+                        chrome::HAND,
+                        ink::STAMP,
                     ));
                 });
             });
@@ -2767,7 +2767,7 @@ impl BattleApp {
                     order.verb().to_owned(),
                     speak_order(self.table.m.as_ref().expect("on"), you, order),
                 ),
-                None if chosen => ("Now".to_owned(), "Click the board to place it.".to_owned()),
+                None if chosen => ("Now!".to_owned(), "Click the board to place it.".to_owned()),
                 None => ("Empty".to_owned(), "Not given yet.".to_owned()),
             };
             let has_order = order.is_some();
@@ -2943,7 +2943,7 @@ impl BattleApp {
             let width = ui.available_width();
             if chrome::button(
                 ui,
-                "Lock in orders",
+                "Lock in my orders ›",
                 Kind::Primary,
                 false,
                 true,
@@ -2998,9 +2998,17 @@ impl BattleApp {
             .size(15.0),
         );
         ui.add_space(u * 5.0);
-        if chrome::button(ui, "Back to the station", Kind::Back, false, true, None, u)
-            .on_hover_text("Choose again where your companions are off to")
-            .clicked()
+        if chrome::button(
+            ui,
+            "‹ Back to the station",
+            Kind::Back,
+            false,
+            true,
+            None,
+            u,
+        )
+        .on_hover_text("Choose again where your companions are off to")
+        .clicked()
         {
             self.table.leave_room();
             self.table.shown = None;
@@ -3125,7 +3133,17 @@ impl BattleApp {
         {
             to_list = true;
         }
-        if chrome::button(ui, "Back to the station", Kind::Back, false, true, None, u).clicked() {
+        if chrome::button(
+            ui,
+            "‹ Back to the station",
+            Kind::Back,
+            false,
+            true,
+            None,
+            u,
+        )
+        .clicked()
+        {
             to_station = true;
         }
         if learned && next.is_none() {
@@ -3146,7 +3164,7 @@ impl BattleApp {
         let read = if self.account_open {
             "Close the whole match"
         } else {
-            "Read the whole match"
+            "Read the whole match, turn by turn"
         };
         if chrome::button(ui, read, Kind::Plain, false, true, Some(width), u).clicked() {
             self.toggle_account();
@@ -3385,19 +3403,18 @@ impl BattleApp {
         let knockout_them = format!("{them} {wins}");
         let tally_them = format!("{them} {wins} on the tally");
         let (title, why): (&str, &str) = match (outcome.winner, outcome.victory) {
-            (Some(side), Some(Victory::Capture)) if side == you => (
-                "You lit the beacon!",
-                "Your team held the yard long enough.",
-            ),
-            (Some(side), Some(Victory::Knockout)) if side == you => ("You win!", &dizzy_them),
-            (Some(side), _) if side == you => ("You win on the tally", ahead_you),
+            (Some(side), Some(Victory::Capture)) if side == you => {
+                ("We lit the beacon!", "My team held the yard long enough!")
+            }
+            (Some(side), Some(Victory::Knockout)) if side == you => ("We win!", &dizzy_them),
+            (Some(side), _) if side == you => ("We win on the tally!", ahead_you),
             (Some(_), Some(Victory::Capture)) => (&beacon_them, "They held the yard long enough."),
             (Some(_), Some(Victory::Knockout)) => (
                 &knockout_them,
-                "Your team are all sitting out, dizzy, and none the worse for it.",
+                "My three are all sitting out, dizzy, and none the worse for it.",
             ),
             (Some(_), _) => (&tally_them, ahead_them),
-            (None, _) => ("A draw", "Nobody could be split."),
+            (None, _) => ("A draw!", "Nobody could be split."),
         };
         let award = match outcome.winner {
             Some(side) if side == you => crate::keepsake::Award::Won(
@@ -3442,7 +3459,17 @@ impl BattleApp {
         );
         ui.add_space(u * 5.0);
         let width = ui.available_width();
-        if chrome::button(ui, "Play again", Kind::Primary, false, true, Some(width), u).clicked() {
+        if chrome::button(
+            ui,
+            "Play again! ›",
+            Kind::Primary,
+            false,
+            true,
+            Some(width),
+            u,
+        )
+        .clicked()
+        {
             self.table.seed = self
                 .table
                 .seed
@@ -3457,9 +3484,17 @@ impl BattleApp {
             // Back through the notebook to choosing who goes.
             self.leaf(false);
         }
-        if chrome::button(ui, "Back to the station", Kind::Back, false, true, None, u)
-            .on_hover_text("Choose again where your companions are off to")
-            .clicked()
+        if chrome::button(
+            ui,
+            "‹ Back to the station",
+            Kind::Back,
+            false,
+            true,
+            None,
+            u,
+        )
+        .on_hover_text("Choose again where your companions are off to")
+        .clicked()
         {
             self.table.shown = None;
             self.portraits.clear();
@@ -3469,7 +3504,7 @@ impl BattleApp {
         }
         if !self.table.earned.is_empty() {
             ui.add_space(u * 5.0);
-            chrome::kicker(ui, "Earned");
+            chrome::kicker(ui, "Earned!");
             for line in self.table.earned.clone() {
                 earned_line(ui, &line, u);
             }
@@ -3485,7 +3520,7 @@ impl BattleApp {
         let read = if self.account_open {
             "Close the whole match"
         } else {
-            "Read the whole match"
+            "Read the whole match, turn by turn"
         };
         if chrome::button(ui, read, Kind::Plain, false, true, Some(width), u).clicked() {
             self.toggle_account();
@@ -3795,7 +3830,7 @@ fn card<R>(
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 if !up {
-                    ui.multiply_opacity(0.55);
+                    ui.multiply_opacity(0.62);
                 }
                 add(ui)
             })
@@ -4843,7 +4878,7 @@ mod tests {
         }
         h.time = f64::from(now) + 1.0;
         h.frames(4);
-        h.click("Back to the station", 0);
+        h.click("‹ Back to the station", 0);
         h.frames(2);
         assert_eq!(h.app.stage, Stage::Station);
     }
