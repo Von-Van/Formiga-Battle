@@ -9,7 +9,7 @@ use super::{
     BattleApp, Kind, Outing, SHARED, Stage, Step, card, dashed_rule, locked_behind, padlock,
     portrait_mat, rosette, shrunk, sticky, texture,
 };
-use crate::chrome::{self, ink, label_job};
+use crate::chrome::{self, hand_job, ink, label_job};
 use crate::feel::Feedback;
 use crate::garden::Garden;
 use crate::iso::View;
@@ -43,7 +43,7 @@ impl BattleApp {
             &[
                 Step::Handler,
                 Step::Playbooks,
-                Step::Circuit,
+                Step::Season,
                 Step::History,
                 Step::Settings,
             ]
@@ -56,7 +56,7 @@ impl BattleApp {
     pub(super) fn own_pages(&self) -> bool {
         matches!(
             self.step,
-            Step::Handler | Step::Playbooks | Step::Circuit | Step::History | Step::Settings
+            Step::Handler | Step::Playbooks | Step::Season | Step::History | Step::Settings
         )
     }
 
@@ -91,7 +91,7 @@ impl BattleApp {
     /// Back to the station. From the notebook, the train is waiting with everyone aboard; after a
     /// match, it comes in again for them, as it did the first time.
     pub(super) fn back_to_station(&mut self) {
-        // An event fixture not yet played waits on the Circuit page.
+        // An event fixture not yet played waits on the Season page.
         self.table.event_fixture = None;
         let now = self.clock;
         let after_match = self.stage == Stage::Playing;
@@ -172,7 +172,7 @@ impl BattleApp {
                     ink::DEBOSS
                 };
                 let response = ui.add(
-                    egui::Label::new(label_job("‹ The station", chrome::LABEL, colour)).sense(
+                    egui::Label::new(hand_job("‹ The station", chrome::LABEL, colour)).sense(
                         if waiting {
                             Sense::hover()
                         } else {
@@ -194,14 +194,14 @@ impl BattleApp {
                 back = response.clicked() && !waiting;
                 ui.add_space(u * 6.0);
                 if own {
-                    ui.label(label_job(
+                    ui.label(hand_job(
                         "The Handler's notebook",
                         chrome::LABEL,
                         ink::COVER,
                     ));
                 } else {
-                    ui.label(label_job(self.outing.name(), chrome::LABEL, ink::COVER));
-                    ui.label(label_job(
+                    ui.label(hand_job(self.outing.name(), chrome::LABEL, ink::COVER));
+                    ui.label(hand_job(
                         match self.outing {
                             Outing::World => "· online",
                             Outing::Home | Outing::Lessons => "· offline",
@@ -223,6 +223,7 @@ impl BattleApp {
             Step::Lessons => {
                 "Choose a lesson, then turn the page to choose who plays it.".to_owned()
             }
+            Step::Where if self.outing == Outing::Home => self.circuit_hint(),
             Step::Where => match self.outing {
                 Outing::Home | Outing::Lessons => {
                     "Choose where to play the visiting team, then turn the page."
@@ -257,7 +258,7 @@ impl BattleApp {
                 "Write each trio's plans in stages; the one it plays by fills in its orders."
                     .to_owned()
             }
-            Step::Circuit => match self.table.next_event_fixture() {
+            Step::Season => match self.table.next_event_fixture() {
                 Some((_, round, rival)) => format!("Your {round} against {} is next.", rival.name),
                 None => "Enter an event, or see how you stand against each rival.".to_owned(),
             },
@@ -394,10 +395,10 @@ impl BattleApp {
         let board = Rect::from_min_max(at(sx, sy), at(sx + sw, sy + sh));
         let maroon = Color32::from_rgb(0x7a, 0x2c, 0x33);
         let mut letters = (board.height() * 0.42).clamp(8.0, 18.0);
-        let mut lettering = painter.layout_job(label_job(BATTLEGROUND, letters, maroon));
+        let mut lettering = painter.layout_job(hand_job(BATTLEGROUND, letters, maroon));
         while lettering.size().x > board.width() * 0.88 && letters > 7.0 {
             letters -= 0.5;
-            lettering = painter.layout_job(label_job(BATTLEGROUND, letters, maroon));
+            lettering = painter.layout_job(hand_job(BATTLEGROUND, letters, maroon));
         }
         painter.galley(
             board.center() - lettering.size() / 2.0 + vec2(0.0, u * 0.5),
@@ -478,10 +479,10 @@ impl BattleApp {
         );
         let painter = ui.painter();
         let mut size = (ribbon.height() * 0.5).clamp(9.0, 15.0);
-        let mut title = painter.layout_job(label_job(BATTLEGROUND, size, ink::COVER));
+        let mut title = painter.layout_job(hand_job(BATTLEGROUND, size, ink::COVER));
         while title.size().x > ribbon.width() * 0.86 && size > 8.0 {
             size -= 0.5;
-            title = painter.layout_job(label_job(BATTLEGROUND, size, ink::COVER));
+            title = painter.layout_job(hand_job(BATTLEGROUND, size, ink::COVER));
         }
         painter.galley(
             ribbon.center() - title.size() / 2.0 + vec2(0.0, u * 0.5),
@@ -509,7 +510,7 @@ impl BattleApp {
         self.masthead(ui, u, now);
         ui.add_space(u * 2.0);
         ui.vertical_centered(|ui| {
-            ui.label(RichText::new(observation).size(13.5).color(ink::MUTED));
+            ui.label(RichText::new(observation).size(16.0).color(ink::MUTED));
         });
         ui.add_space(u * 6.0);
         let width = ui.available_width();
@@ -567,7 +568,7 @@ impl BattleApp {
                 if self.table.record.applied.is_empty() {
                     ui.label(
                         RichText::new("New here? Field Lessons show how a match works.")
-                            .size(12.5)
+                            .size(15.0)
                             .italics()
                             .color(ink::MUTED),
                     );
@@ -629,6 +630,7 @@ impl BattleApp {
             steps.len()
         );
         match self.step {
+            Step::Where if self.outing == Outing::Home => self.circuit_page(ui, ctx, u),
             Step::Where => {
                 let observation = match self.outing {
                     Outing::Home | Outing::Lessons => {
@@ -698,14 +700,8 @@ impl BattleApp {
                     .auto_shrink([false, false])
                     .show(ui, |ui| self.shelf_left(ui, u));
             }
-            Step::Circuit => {
-                chrome::page_heading(
-                    ui,
-                    &line,
-                    "The Circuit",
-                    "The Handlers who come to the Battleground, the events you enter against them, and how you stand. An event match counts toward the place's cup like any other.",
-                );
-                ui.add_space(u * 6.0);
+            Step::Season => {
+                let _ = &line;
                 self.event_board(ui, u);
             }
             Step::History => {
@@ -738,13 +734,14 @@ impl BattleApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 match self.step {
+                    Step::Where if self.outing == Outing::Home => self.circuit_notes(ui, u),
                     Step::Where => self.places(ui, u),
                     Step::Lessons => self.lessons(ui, u),
                     Step::Who => self.lineup(ui, ctx, u),
                     Step::Room => self.shared(ui, ctx, u),
                     Step::Handler => self.standing_and_trios(ui, ctx, u),
                     Step::Playbooks => self.shelf_right(ui, u),
-                    Step::Circuit => self.standing_against_rivals(ui, u),
+                    Step::Season => self.standing_against_rivals(ui, u),
                     Step::History => self.totals(ui, u),
                     Step::Settings => self.keys_and_about(ui, u),
                 }
@@ -775,7 +772,7 @@ impl BattleApp {
             Some(Step::Who) => "Who goes",
             Some(Step::Handler) => "Your Handler",
             Some(Step::Playbooks) => "Playbooks",
-            Some(Step::Circuit) => "The Circuit",
+            Some(Step::Season) => "The Season",
             Some(Step::History) => "History",
             Some(_) => "Back",
         })
@@ -804,7 +801,8 @@ impl BattleApp {
         let fresh = !matches!(&self.preview, Some((k, _)) if *k == key);
         let picture = if fresh { Some(garden.picture()) } else { None };
         let (w, h) = (garden.ground.width() as f32, garden.ground.height() as f32);
-        let caption_h = 86.0;
+        // The sign and its words, and under them how this match is set up.
+        let caption_h = 86.0 + 22.0 + 44.0 * 3.0;
         let area = ui.available_rect_before_wrap();
         let room = Rect::from_min_max(area.min, pos2(area.max.x, area.max.y - caption_h));
         let ppp = ctx.pixels_per_point();
@@ -872,7 +870,7 @@ impl BattleApp {
             );
             ui.label(
                 RichText::new(crate::garden::Dressing::of(&arena).blurb())
-                    .size(13.0)
+                    .size(15.0)
                     .color(ink::PAGE),
             );
             if let Some(cup) = cup {
@@ -894,7 +892,7 @@ impl BattleApp {
                             locked_behind(&arena.id)
                         )
                     };
-                    let galley = ui.painter().layout_job(label_job(&words, 9.0, ink::MUTED));
+                    let galley = ui.painter().layout_job(hand_job(&words, 9.0, ink::MUTED));
                     let width = galley.size().x
                         + if open {
                             f32::from(crate::rewards::CUP_WINS)
@@ -915,6 +913,45 @@ impl BattleApp {
                 });
             }
         });
+        ui.add_space(u * 4.0);
+        self.setup(ui, &arena, u);
+    }
+
+    /// How the match here is set up, under the place's caption: where the teams start, what turns
+    /// up, and anything the place does differently, drawn from the match seed so it is the same
+    /// as the board the match opens on. A friend's room draws its own when both are in.
+    fn setup(&self, ui: &mut egui::Ui, arena: &formiga_battle_core::Arena, u: f32) {
+        if self.outing == Outing::World {
+            ui.label(
+                RichText::new(
+                    "Every match is set up a little differently: where the teams start, what turns \
+                     up and how the place behaves. You both see it before the first order.",
+                )
+                .size(12.0)
+                .italics()
+                .color(ink::MUTED),
+            );
+            return;
+        }
+        ui.label(
+            RichText::new("How this match is set up:")
+                .size(12.5)
+                .italics()
+                .color(ink::MUTED),
+        );
+        ui.add_space(u * 2.0);
+        for told in self.table.variant().told(arena) {
+            // The part's name lettered as the page's labels are, what it does under it; a part
+            // that leaves the place as it always is in the quieter ink.
+            let ink = if told.standard {
+                ink::MUTED
+            } else {
+                ink::FOREST
+            };
+            ui.label(label_job(&told.name, chrome::LABEL, ink));
+            ui.label(RichText::new(&told.line).size(12.5).color(ink::PAGE));
+            ui.add_space(u * 2.0);
+        }
     }
 
     /// Every place to play, on a card with its little picture, and the page's way on.
@@ -971,7 +1008,7 @@ impl BattleApp {
                                 Color32::WHITE,
                             );
                             ui.vertical(|ui| {
-                                ui.label(label_job(
+                                ui.label(hand_job(
                                     &arena.name,
                                     chrome::LABEL,
                                     if here { ink::FOREST } else { ink::PAGE },
@@ -993,7 +1030,7 @@ impl BattleApp {
                                             u,
                                         );
                                     } else {
-                                        ui.label(label_job("Open for friends", 9.0, ink::MUTED));
+                                        ui.label(hand_job("Open for friends", 9.0, ink::MUTED));
                                     }
                                 });
                             });
@@ -1020,7 +1057,7 @@ impl BattleApp {
         if waiting {
             ui.label(
                 RichText::new(format!("Your room plays in the {}.", self.table.arena.name))
-                    .size(11.5)
+                    .size(15.0)
                     .italics()
                     .color(ink::MUTED),
             );
@@ -1046,7 +1083,7 @@ impl BattleApp {
     /// The chosen lesson, on the left page: what it asks, and what it says before it begins.
     fn lesson_page(&mut self, ui: &mut egui::Ui, u: f32) {
         let lesson = self.lesson;
-        ui.label(label_job(
+        ui.label(hand_job(
             &format!("Lesson {} \u{b7} {}", lesson.number(), lesson.title()),
             14.0,
             ink::FOREST,
@@ -1054,7 +1091,7 @@ impl BattleApp {
         ui.add_space(u * 2.0);
         ui.label(
             RichText::new(lesson.goal())
-                .size(14.0)
+                .size(16.0)
                 .strong()
                 .color(ink::PAGE),
         );
@@ -1064,7 +1101,7 @@ impl BattleApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 for note in lesson.notes() {
-                    ui.label(RichText::new(*note).size(13.0).color(ink::PAGE));
+                    ui.label(RichText::new(*note).size(15.0).color(ink::PAGE));
                     ui.add_space(u * 2.0);
                 }
                 let yours = if lesson.plain() {
@@ -1072,7 +1109,7 @@ impl BattleApp {
                 } else {
                     "Your three play this one as they really are."
                 };
-                ui.label(RichText::new(yours).size(12.0).italics().color(ink::MUTED));
+                ui.label(RichText::new(yours).size(15.0).italics().color(ink::MUTED));
             });
     }
 
@@ -1088,19 +1125,19 @@ impl BattleApp {
             let (response, _) = crate::feel::dropping(ui, since, i, u, |ui| {
                 card(ui, Id::new(("lesson", i)), here, true, true, u, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(label_job(&format!("{}", lesson.number()), 13.0, ink::STAMP));
+                        ui.label(hand_job(&format!("{}", lesson.number()), 13.0, ink::STAMP));
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
-                            ui.label(label_job(
+                            ui.label(hand_job(
                                 lesson.title(),
                                 chrome::LABEL,
                                 if here { ink::FOREST } else { ink::PAGE },
                             ));
-                            ui.label(
-                                RichText::new(if learned { "Learned" } else { lesson.goal() })
-                                    .size(11.5)
-                                    .color(ink::MUTED),
-                            );
+                            // What the lesson asks is on the left page; the list only says
+                            // which are learned.
+                            if learned {
+                                ui.label(RichText::new("Learned!").size(15.0).color(ink::MUTED));
+                            }
                         });
                     });
                 })
@@ -1121,7 +1158,7 @@ impl BattleApp {
         ui.add_space(u * 2.0);
         chrome::kicker(ui, "After the lessons");
         for line in crate::app::AFTER_LESSONS {
-            ui.label(RichText::new(line).size(11.5).color(ink::MUTED));
+            ui.label(RichText::new(line).size(15.0).color(ink::MUTED));
             ui.add_space(u);
         }
         ui.add_space(u * 4.0);
@@ -1217,7 +1254,7 @@ impl BattleApp {
                     let texture = self.portrait(ctx, &contender);
                     card(ui, Id::new(("slot", slot)), false, true, false, u, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(label_job(&format!("{}", slot + 1), 13.0, ink::STAMP));
+                            ui.label(hand_job(&format!("{}", slot + 1), 13.0, ink::STAMP));
                             portrait_mat(ui, &texture, 44.0, u, true);
                             // The button takes its room at the right first, so the words beside
                             // the portrait wrap rather than run under it.
@@ -1249,7 +1286,7 @@ impl BattleApp {
                                             );
                                             ui.label(
                                                 RichText::new(&contender.traveler.character.phrase)
-                                                    .size(12.0)
+                                                    .size(15.0)
                                                     .color(ink::MUTED),
                                             );
                                         },
@@ -1293,7 +1330,7 @@ impl BattleApp {
                     Step::Where,
                 ),
             };
-            ui.label(RichText::new(playing).size(12.5).color(ink::MUTED));
+            ui.label(RichText::new(playing).size(15.0).color(ink::MUTED));
             if !waiting && chrome::button(ui, "change", Kind::Quiet, false, true, None, u).clicked()
             {
                 let now = self.clock;
@@ -1366,7 +1403,7 @@ impl BattleApp {
             if friend.seated {
                 ui.label(
                     RichText::new("Your last match is still closing on the relay…")
-                        .size(13.0)
+                        .size(15.0)
                         .color(ink::MUTED),
                 );
                 return;
@@ -1403,12 +1440,12 @@ impl BattleApp {
                         RichText::new(format!(
                             "Waiting for your friend to join{dots} The match begins as soon as they do."
                         ))
-                        .size(13.0)
+                        .size(15.0)
                         .color(ink::MUTED),
                     );
                 }
                 Some(code) => {
-                    ui.label(RichText::new(format!("Joining room {code}…")).size(14.0));
+                    ui.label(RichText::new(format!("Joining room {code}…")).size(16.0));
                 }
                 None if self.joining => {
                     ui.label(
@@ -1417,13 +1454,13 @@ impl BattleApp {
                             formiga_battle_room::code::normalize(&self.join_code)
                                 .unwrap_or_else(|| self.join_code.clone())
                         ))
-                        .size(14.0),
+                        .size(16.0),
                     );
                 }
                 None => {
                     ui.label(
                         RichText::new("Opening the room…")
-                            .size(14.0)
+                            .size(16.0)
                             .color(ink::MUTED),
                     );
                 }
@@ -1471,7 +1508,7 @@ impl BattleApp {
             } else {
                 format!("Your friend will see “{shown}” beside your team.")
             })
-            .size(12.0)
+            .size(15.0)
             .color(ink::MUTED),
         );
         ui.add_space(u * 8.0);
@@ -1486,12 +1523,12 @@ impl BattleApp {
             ui.allocate_ui_with_layout(vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
                 card(ui, Id::new("open-room"), false, true, false, u, |ui| {
                     ui.set_min_height(132.0);
-                    ui.label(label_job("Open a room", chrome::LABEL + 1.0, ink::FOREST));
+                    ui.label(hand_job("Open a room", chrome::LABEL + 1.0, ink::FOREST));
                     ui.label(
                         RichText::new(
                             "Battle gives you a six-letter code to pass on. Your friend joins with it, and the match begins in the place you chose.",
                         )
-                        .size(12.5),
+                        .size(15.0),
                     );
                     ui.add_space(u * 3.0);
                     let width = ui.available_width();
@@ -1502,10 +1539,10 @@ impl BattleApp {
             ui.allocate_ui_with_layout(vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
                 card(ui, Id::new("join-room"), false, true, false, u, |ui| {
                     ui.set_min_height(132.0);
-                    ui.label(label_job("Join their room", chrome::LABEL + 1.0, ink::FOREST));
+                    ui.label(hand_job("Join their room", chrome::LABEL + 1.0, ink::FOREST));
                     ui.label(
                         RichText::new("Type the code your friend gives you. You play in the place they chose.")
-                            .size(12.5),
+                            .size(15.0),
                     );
                     ui.add_space(u * 2.0);
                     ui.horizontal(|ui| {
@@ -1532,7 +1569,7 @@ impl BattleApp {
                             RichText::new(
                                 "A code is six letters and numbers, with no 0, 1, 2, 5 or 8 to mix up.",
                             )
-                            .size(11.5)
+                            .size(15.0)
                             .color(ink::STAMP),
                         );
                     }
@@ -1546,7 +1583,7 @@ impl BattleApp {
             } else {
                 "Read what a friend match shares, on the right, and tick that you understand."
             };
-            ui.label(RichText::new(why).size(12.5).italics().color(ink::MUTED));
+            ui.label(RichText::new(why).size(15.0).italics().color(ink::MUTED));
         }
         if open {
             let handler = self.handler.clone();
@@ -1569,7 +1606,7 @@ impl BattleApp {
         chrome::kicker(ui, "What a friend match shares");
         ui.add_space(u * 2.0);
         for line in SHARED {
-            ui.label(RichText::new(format!("· {line}")).size(12.0));
+            ui.label(RichText::new(format!("· {line}")).size(15.0));
             ui.add_space(u);
         }
         ui.add_space(u * 2.0);
@@ -1594,7 +1631,7 @@ impl BattleApp {
                 "To the {}. Open Circuit points so far: {}. Friend matches earn points, match history and notebook entries.",
                 self.table.arena.name, self.table.record.circuit_points
             ))
-            .size(11.5)
+            .size(15.0)
             .color(ink::MUTED),
         );
     }
@@ -1649,7 +1686,7 @@ fn empty_slot(ui: &mut egui::Ui, slot: usize, breath: f32, u: f32) {
         pos2(r.left() + u * 16.0, r.center().y),
         Align2::LEFT_CENTER,
         "Choose a companion",
-        FontId::proportional(12.5),
+        FontId::proportional(15.0),
         ink::MUTED,
     );
 }
@@ -1721,17 +1758,17 @@ impl Companion<'_> {
                             );
                             ui.label(
                                 RichText::new(&self.contender.traveler.character.phrase)
-                                    .size(12.5)
+                                    .size(15.0)
                                     .color(ink::MUTED),
                             );
-                            ui.label(label_job(
+                            ui.label(hand_job(
                                 &self.contender.traveler.character.traits.join(" · "),
                                 9.0,
                                 ink::MUTED,
                             ));
                             ui.label(
                                 RichText::new(self.note)
-                                    .size(12.0)
+                                    .size(15.0)
                                     .italics()
                                     .color(ink::FOREST),
                             );

@@ -4,7 +4,8 @@
 //! kept by Desktop with the colony's Battle record, and none of it changes how a match is played.
 
 use super::{BattleApp, Kind, sticky, texture};
-use crate::chrome::{self, ink, label_job};
+use crate::chrome::{self, hand_job, ink};
+use crate::crest;
 use crate::heraldry::{self, Part};
 use crate::identity::{self, FIELDS, SHAPES, SYMBOLS, Standing, Style, TRIMS};
 use crate::look::Look;
@@ -219,7 +220,7 @@ impl BattleApp {
                         ui.allocate_exact_size(vec2(u * 34.0, TILE_ROW * u), Sense::hover());
                     let galley =
                         ui.painter()
-                            .layout_job(label_job(label, chrome::LABEL - 0.5, ink::MUTED));
+                            .layout_job(hand_job(label, chrome::LABEL - 0.5, ink::MUTED));
                     ui.painter().galley(
                         pos2(slot.min.x, slot.center().y - galley.size().y / 2.0 - u),
                         galley,
@@ -249,7 +250,7 @@ impl BattleApp {
                     "{}. It flies beside your team in every match, and your friends see it.",
                     capitalised(&style.words())
                 ))
-                .size(12.0)
+                .size(15.0)
                 .italics()
                 .color(ink::MUTED),
             );
@@ -345,7 +346,7 @@ impl BattleApp {
         let standing = Standing::of(&self.table.record);
         let _ = ctx;
         let rules = self.rules;
-        on_rules(ui, rules, label_job("Standing", chrome::LABEL, ink::FOREST));
+        on_rules(ui, rules, hand_job("Standing", chrome::LABEL, ink::FOREST));
         on_rules(
             ui,
             rules,
@@ -366,7 +367,7 @@ impl BattleApp {
         on_rules(
             ui,
             rules,
-            label_job("Your trios", chrome::LABEL, ink::FOREST),
+            hand_job("Your trios", chrome::LABEL, ink::FOREST),
         );
         let trios: Vec<Trio> = self.table.record.trios.iter().rev().cloned().collect();
         if trios.is_empty() {
@@ -499,7 +500,7 @@ impl BattleApp {
                 let y = ui.cursor().min.y;
                 let rule = rule_below(rules, y + rules.1);
                 ui.add_space((rule - rules.1 * 0.85 - y).max(0.0));
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = u * 3.0;
                     if !renaming
                         && chrome::button(ui, "rename", Kind::Quiet, false, true, None, u).clicked()
@@ -674,7 +675,7 @@ impl BattleApp {
         ui.horizontal(|ui| {
             let edit = ui.add(
                 egui::TextEdit::singleline(&mut self.trio_draft)
-                    .font(FontId::proportional(14.0))
+                    .font(FontId::proportional(16.0))
                     .char_limit(identity::TRIO_CHARS)
                     .hint_text("Name these three")
                     .desired_width((ui.available_width() - 90.0).max(120.0)),
@@ -702,15 +703,17 @@ impl BattleApp {
             }
         });
         if let Err(why) = can {
-            ui.label(RichText::new(why).size(11.5).italics().color(ink::MUTED));
+            ui.label(RichText::new(why).size(15.0).italics().color(ink::MUTED));
         }
     }
 
-    /// Over the board as a match begins: a ribbon strung between two canes, each flying its
-    /// side's pennant, with each side's trio (or Handler) lettered on its half, and a tag under
-    /// each cane naming the Handler and their standing, while "Ready?" and "Go!" are said.
+    /// Over the board as a match begins: each side's painted panel slides in from its edge, its
+    /// pennant flown large, its name on a ribbon, its Handler on a brass plate, its club on a tab
+    /// and a badge saying how it plays, and a red burst punches in between them with VS on it,
+    /// while "Ready?" and "Go!" are said. Under reduced motion it is simply there.
     pub(super) fn introduction(&mut self, painter: &egui::Painter, board: Rect, now: f32, u: f32) {
-        const SHOWN: f32 = 2.6;
+        const SHOWN: f32 = 2.8;
+        const SLIDE: f32 = 0.35;
         let Some((at, _)) = self.ready else {
             return;
         };
@@ -720,105 +723,160 @@ impl BattleApp {
         }
         let ctx = painter.ctx().clone();
         let you = self.table.you;
-        let mut flags: [Option<Style>; 2] = [None, None];
-        let mut names: [String; 2] = Default::default();
-        let mut tags: [String; 2] = Default::default();
+        let them = you.other();
+        // What each side shows: pennant, name, Handler, club, badge.
+        let mut sides: [Side; 2] = Default::default();
         let ours = self.our_team_words();
-        flags[you.index()] = Some(ours.0);
-        names[you.index()] = ours.1;
-        tags[you.index()] = ours.2;
-        match &self.table.friend {
-            Some(f) => {
-                let card = f.cards[you.other().index()].clone().unwrap_or_default();
-                flags[you.other().index()] = card
-                    .trio_pennant
-                    .as_ref()
-                    .or(card.pennant.as_ref())
-                    .map(Style::of);
-                let name = f.handlers[you.other().index()].clone();
-                names[you.other().index()] = card
-                    .trio
-                    .clone()
-                    .unwrap_or_else(|| format!("{name}'s three"));
-                tags[you.other().index()] = match (&card.club, &card.standing) {
-                    (Some(club), Some(s)) => format!("{name} · {club} · {s}"),
-                    (Some(club), None) => format!("{name} · {club}"),
-                    (None, Some(s)) => format!("{name} · {s}"),
-                    (None, None) => name,
-                };
+        let handler = self.table.record.handler.clone();
+        sides[you.index()] = Side {
+            flag: Some(ours.0),
+            name: ours.1,
+            handler: handler
+                .as_ref()
+                .map_or_else(|| "Your team".to_owned(), |h| h.name.clone()),
+            club: handler
+                .as_ref()
+                .and_then(|h| h.club.clone())
+                .unwrap_or_else(|| Standing::of(&self.table.record).title.to_owned()),
+            badge: Some(crest::Badge::Own),
+        };
+        sides[them.index()] = match (&self.table.friend, self.table.rival) {
+            (Some(f), _) => {
+                let card = f.cards[them.index()].clone().unwrap_or_default();
+                let name = f.handlers[them.index()].clone();
+                Side {
+                    flag: card
+                        .trio_pennant
+                        .as_ref()
+                        .or(card.pennant.as_ref())
+                        .map(Style::of),
+                    name: card
+                        .trio
+                        .clone()
+                        .unwrap_or_else(|| format!("{name}'s three")),
+                    handler: name,
+                    club: card
+                        .club
+                        .clone()
+                        .or(card.standing.clone())
+                        .unwrap_or_else(|| "A friend".to_owned()),
+                    badge: Some(crest::Badge::Friend),
+                }
             }
-            None => match self.table.rival {
-                Some(rival) => {
-                    flags[you.other().index()] = Some(Style::of(&rival.pennant()));
-                    names[you.other().index()] = format!("{}'s three", rival.short);
-                    tags[you.other().index()] = rival.tag();
-                }
-                None => {
-                    names[you.other().index()] = "The visitors".to_owned();
-                    tags[you.other().index()] = "From next door".to_owned();
-                }
+            (None, Some(rival)) => Side {
+                flag: Some(Style::of(&rival.pennant())),
+                name: format!("{}'s three", rival.short),
+                handler: rival.name.to_owned(),
+                club: format!("{} \u{b7} {}", rival.club, rival.archetype.label()),
+                badge: Some(crest::Badge::of(rival.archetype)),
             },
-        }
-        // As many of the board's own pixels across as most of the board is wide.
+            (None, None) => Side {
+                flag: None,
+                name: "The visitors".to_owned(),
+                handler: "From next door".to_owned(),
+                club: "Visiting".to_owned(),
+                badge: None,
+            },
+        };
+        // Each panel is a little under half the board's width, at the board's own pixel.
         let scale = self.board_scale.max(1.0);
-        let w = ((board.width() * 0.78) / scale).floor() as i32;
-        let key = format!("banner-{w}-{flags:?}");
-        let picture = self.painted(&ctx, key, |_| {
-            heraldry::banner(w, flags, crate::scene::TEAM)
-        });
-        let alpha = 1.0 - ((age - (SHOWN - 0.4)) / 0.4).clamp(0.0, 1.0);
-        let drop = if self.table.reduce_motion {
+        let w = ((board.width() * 0.47) / scale).floor() as i32;
+        let reduce = self.table.reduce_motion;
+        let slide = if reduce {
             0.0
         } else {
-            ((0.25 - age).max(0.0) / 0.25) * u * 12.0
+            let k = (1.0 - age / SLIDE).clamp(0.0, 1.0);
+            k * k * board.width() * 0.55
         };
+        let alpha = 1.0 - ((age - (SHOWN - 0.4)) / 0.4).clamp(0.0, 1.0);
         let mut painter = painter.clone();
         painter.set_opacity(alpha);
-        let size = picture.size_vec2() * scale;
-        let min = pos2(
-            (board.center().x - size.x / 2.0).round(),
-            (board.min.y + u * 8.0 - drop).round(),
-        );
-        let rect = Rect::from_min_size(min, size);
-        painter.image(
-            picture.id(),
-            rect,
-            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-            Color32::WHITE,
-        );
-        let (rx, ry, rw, rh) = heraldry::banner_ribbon(w);
-        let ribbon = Rect::from_min_size(
-            rect.min + vec2(rx as f32, ry as f32) * scale,
-            vec2(rw as f32, rh as f32) * scale,
-        );
-        let gap = ribbon.width() * 0.08;
-        let halves = [
-            Rect::from_min_max(ribbon.min, pos2(ribbon.center().x - gap, ribbon.max.y)),
-            Rect::from_min_max(pos2(ribbon.center().x + gap, ribbon.min.y), ribbon.max),
-        ];
-        for (i, half) in halves.iter().enumerate() {
-            letter(&painter, *half, &names[i], ON_RIBBON, 0.55);
-        }
-        letter(
-            &painter,
-            Rect::from_center_size(ribbon.center(), vec2(gap * 2.0, ribbon.height())),
-            "vs",
-            Color32::from_rgb(0xf5, 0xc5, 0x42),
-            0.55,
-        );
-        // A paper tag hung under each cane.
-        for (i, tag) in tags.iter().enumerate() {
-            let galley = painter.layout_no_wrap(tag.clone(), FontId::proportional(11.0), ink::PAGE);
-            let pad = vec2(u * 4.0, u * 2.0);
-            let tag_size = galley.size() + pad * 2.0;
+        let top = board.min.y + u * 10.0;
+        let size = vec2(w as f32, crest::CREST_H as f32) * scale;
+        for (i, side) in sides.iter().enumerate() {
+            let team = crate::scene::TEAM[i];
+            let key = format!("crest-{i}-{w}-{:?}-{:?}", side.flag, side.badge);
+            let (flag, badge) = (side.flag, side.badge);
+            let picture = self.painted(&ctx, key, |_| crest::crest(w, i, team, flag, badge));
             let x = if i == 0 {
-                rect.min.x + u * 2.0
+                board.center().x - size.x - u * 6.0 - slide
             } else {
-                rect.max.x - u * 2.0 - tag_size.x
+                board.center().x + u * 6.0 + slide
             };
-            let tag_rect = Rect::from_min_size(pos2(x, rect.max.y + u * 2.0), tag_size);
-            chrome::card(&painter, tag_rect, u, ink::CARD, ink::LINE);
-            painter.galley(tag_rect.min + pad, galley, ink::PAGE);
+            let rect = Rect::from_min_size(pos2(x.round(), top.round()), size);
+            painter.image(
+                picture.id(),
+                rect,
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            let places = crest::crest_places(w, i);
+            let at = |(px, py, pw, ph): heraldry::Area| {
+                Rect::from_min_size(
+                    rect.min + vec2(px as f32, py as f32) * scale,
+                    vec2(pw as f32, ph as f32) * scale,
+                )
+            };
+            shadowed(&painter, at(places.name), &side.name, ON_RIBBON, 0.72);
+            letter(&painter, at(places.plate), &side.handler, ON_BRASS, 0.62);
+            letter(&painter, at(places.club), &side.club, ON_RIBBON, 0.6);
+        }
+        // The burst, punching in once the panels have met.
+        let pop = if reduce {
+            1.0
+        } else {
+            ((age - SLIDE * 0.7) / 0.18).clamp(0.0, 1.0)
+        };
+        if pop > 0.0 {
+            let picture = self.painted(&ctx, "versus".to_owned(), |_| crest::versus());
+            let grow = if reduce { 1.0 } else { 1.0 + (1.0 - pop) * 0.8 };
+            let side = crest::VERSUS_W as f32 * scale * grow;
+            let centre = pos2(board.center().x, top + size.y * 0.45);
+            let rect = Rect::from_center_size(centre, vec2(side, side));
+            painter.image(
+                picture.id(),
+                rect,
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::WHITE.gamma_multiply(pop),
+            );
+        }
+        // How this match is set up, when it is not the place as it always is: said once, here,
+        // before the first order, on a ribbon of its own under the burst.
+        let setup = self
+            .table
+            .m
+            .as_ref()
+            .filter(|_| self.table.lesson.is_none())
+            .and_then(|m| m.arena.variant.as_ref().map(|v| v.headline(&m.arena)))
+            .unwrap_or_default();
+        if !setup.is_empty() {
+            let rw = ((board.width() * 0.5) / scale).floor() as i32;
+            let picture = self.painted(&ctx, format!("setup-ribbon-{rw}"), |_| {
+                let mut canvas = formiga_art::Canvas::new(rw.max(40) as u32, 18);
+                heraldry::ribbon(&mut canvas, (8, 1, rw.max(40) - 16, 15));
+                canvas
+            });
+            let rsize = picture.size_vec2() * scale;
+            let rect = Rect::from_min_size(
+                pos2(
+                    (board.center().x - rsize.x / 2.0).round(),
+                    (top + size.y + u * 2.0).round(),
+                ),
+                rsize,
+            );
+            painter.image(
+                picture.id(),
+                rect,
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            letter(
+                &painter,
+                rect.shrink2(vec2(10.0 * scale, 2.0 * scale)),
+                &setup,
+                ON_RIBBON,
+                0.62,
+            );
         }
     }
 
@@ -1008,12 +1066,38 @@ fn letter_left(
 /// Words lettered in the notebook's printed capitals, as large as `area` holds, centred on it.
 pub(super) fn letter(painter: &egui::Painter, area: Rect, text: &str, colour: Color32, fill: f32) {
     let mut size = (area.height() * fill).clamp(8.0, 16.0);
-    let mut galley = painter.layout_job(label_job(text, size, colour));
+    let mut galley = painter.layout_job(hand_job(text, size, colour));
     while galley.size().x > area.width() * 0.92 && size > 7.0 {
         size -= 0.5;
-        galley = painter.layout_job(label_job(text, size, colour));
+        galley = painter.layout_job(hand_job(text, size, colour));
     }
     painter.galley(area.center() - galley.size() / 2.0, galley, colour);
+}
+
+/// What a side's panel shows as a match begins.
+#[derive(Default)]
+struct Side {
+    flag: Option<Style>,
+    name: String,
+    handler: String,
+    club: String,
+    badge: Option<crest::Badge>,
+}
+
+/// Words lettered as `letter` does, larger, with a hard shadow under them, for a name that should
+/// be read first.
+fn shadowed(painter: &egui::Painter, area: Rect, text: &str, colour: Color32, fill: f32) {
+    let mut size = (area.height() * fill).clamp(10.0, 24.0);
+    let mut galley = painter.layout_job(hand_job(text, size, colour));
+    while galley.size().x > area.width() * 0.92 && size > 8.0 {
+        size -= 0.5;
+        galley = painter.layout_job(hand_job(text, size, colour));
+    }
+    let at = area.center() - galley.size() / 2.0;
+    let shade = Color32::from_rgba_unmultiplied(0x10, 0x18, 0x10, 200);
+    let under = painter.layout_job(hand_job(text, size, shade));
+    painter.galley(at + vec2(1.5, 1.5), under, shade);
+    painter.galley(at, galley, colour);
 }
 
 fn capitalised(text: &str) -> String {

@@ -6,6 +6,7 @@ mod app;
 mod career;
 mod chrome;
 mod cli;
+mod crest;
 mod feel;
 mod found;
 mod friend;
@@ -188,7 +189,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "picking" | "who" => app::Review::Picking,
                     "friend" => app::Review::Friend,
                     "history" => app::Review::History,
-                    "circuit" => app::Review::Circuit,
+                    "season" => app::Review::Season,
                     "playbooks" => app::Review::Playbooks,
                     "planned" => app::Review::Planned,
                     "handler" => app::Review::Handler,

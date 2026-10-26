@@ -601,6 +601,87 @@ fn a_match_is_confirmed_to_both_only_once_both_boards_after_its_last_turn_are_in
 }
 
 #[test]
+fn once_a_finished_matchs_boards_are_told_a_later_report_changes_nothing() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let (code, host, guest) = room(&mut relay);
+    for (seat, at) in [(&host, 10), (&guest, 20)] {
+        relay.handle(
+            Request::Orders {
+                code: code.clone(),
+                seat: seat.clone(),
+                turn: 1,
+                orders: Vec::new(),
+            },
+            at,
+        );
+    }
+    let board = |seat: &String, hash: u64| Request::Board {
+        code: code.clone(),
+        seat: seat.clone(),
+        turn: 1,
+        hash,
+        finished: true,
+    };
+    relay.handle(board(&host, 9), 30);
+    let v = viewed(relay.handle(board(&guest, 9), 40));
+    assert!(v.confirmed);
+    // The second to report tries to take it back before the first has heard.
+    let v = viewed(relay.handle(board(&guest, 1), 45));
+    assert!(v.confirmed && !v.out_of_step);
+    let v = viewed(relay.handle(
+        Request::Look {
+            code: code.clone(),
+            seat: host.clone(),
+        },
+        50,
+    ));
+    assert!(
+        v.confirmed && !v.out_of_step,
+        "the first to report hears the same"
+    );
+}
+
+#[test]
+fn a_match_left_after_both_boards_for_the_turns_before_are_in_is_still_not_confirmed() {
+    let mut relay = Relay::with_entropy(Limits::default(), counting());
+    let (code, host, guest) = room(&mut relay);
+    for (seat, at) in [(&host, 10), (&guest, 20)] {
+        relay.handle(
+            Request::Orders {
+                code: code.clone(),
+                seat: seat.clone(),
+                turn: 1,
+                orders: Vec::new(),
+            },
+            at,
+        );
+    }
+    for (seat, at) in [(&host, 30), (&guest, 40)] {
+        relay.handle(
+            Request::Board {
+                code: code.clone(),
+                seat: seat.clone(),
+                turn: 1,
+                hash: 9,
+                finished: false,
+            },
+            at,
+        );
+    }
+    relay.handle(
+        Request::Leave {
+            code: code.clone(),
+            seat: guest,
+        },
+        50,
+    );
+    let v = viewed(relay.handle(Request::Look { code, seat: host }, 60));
+    assert_eq!(v.stage, Stage::Over);
+    assert!(v.ending.is_some_and(|e| e.forfeited.is_some()));
+    assert!(!v.confirmed, "a forfeit is never confirmed");
+}
+
+#[test]
 fn boards_that_differ_after_the_last_turn_reach_both_windows_before_the_room_goes() {
     let mut relay = Relay::with_entropy(Limits::default(), counting());
     let (code, host, guest) = room(&mut relay);

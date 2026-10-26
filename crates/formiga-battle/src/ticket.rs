@@ -7,7 +7,7 @@
 //!
 //! It lifts off the page when pointed at, and springs with a brass sparkle when taken.
 
-use crate::chrome::{self, ink, label_job};
+use crate::chrome::{self, hand_job, ink, label_job};
 use eframe::egui::{self, Color32};
 use formiga_art::paint::{self, Ramp, rgb, rgba};
 use formiga_art::{Canvas, Rgba};
@@ -364,10 +364,10 @@ pub fn ticket(
         );
         // As large as the card has room for, up to its usual size.
         let mut letters = 18.0;
-        let mut big = painter.layout_job(label_job(title, letters, colour));
+        let mut big = painter.layout_job(hand_job(title, letters, colour));
         while big.size().x > body.width() - unit * 14.0 && letters > 10.0 {
             letters -= 0.5;
-            big = painter.layout_job(label_job(title, letters, colour));
+            big = painter.layout_job(hand_job(title, letters, colour));
         }
         let little = painter.layout_job(label_job(small, chrome::LABEL, ink::STAMP));
         let stamp_size = little.size() + egui::vec2(unit * 8.0, unit * 4.0);
