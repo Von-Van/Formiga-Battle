@@ -106,7 +106,7 @@ fn choices<T: Copy + PartialEq>(
     value: &mut T,
     u: f32,
 ) -> bool {
-    ui.label(RichText::new(label).size(12.5).color(ink::MUTED));
+    ui.label(RichText::new(label).size(15.0).color(ink::MUTED));
     let mut changed = false;
     ui.with_layout(row(), |ui| {
         ui.spacing_mut().item_spacing = egui::vec2(u * 2.0, u * 2.0);
@@ -170,7 +170,7 @@ impl BattleApp {
                 RichText::new(
                     "A playbook is written for three who play together. Name a trio on the Handler page first.",
                 )
-                .size(13.0)
+                .size(15.0)
                 .color(ink::PAGE),
             );
             ui.add_space(u * 3.0);
@@ -201,7 +201,7 @@ impl BattleApp {
         if shelf.books.is_empty() {
             ui.label(
                 RichText::new("No playbooks yet. Start one from a sample below.")
-                    .size(13.0)
+                    .size(15.0)
                     .color(ink::MUTED),
             );
         }
@@ -216,12 +216,12 @@ impl BattleApp {
                 if shelf.playing == Some(i) {
                     ui.label(
                         RichText::new("Plays when they go")
-                            .size(12.0)
+                            .size(15.0)
                             .color(ink::FOREST),
                     );
                 }
             });
-            ui.label(RichText::new(outline(book)).size(12.0).color(ink::MUTED));
+            ui.label(RichText::new(outline(book)).size(15.0).color(ink::MUTED));
             ui.add_space(u * 3.0);
         }
         ui.add_space(u * 3.0);
@@ -330,7 +330,7 @@ impl BattleApp {
         if let Some(stage) = book.stages.get_mut(k) {
             ui.label(
                 RichText::new(stage_words(stage))
-                    .size(13.0)
+                    .size(15.0)
                     .color(ink::PAGE),
             );
             ui.add_space(u * 3.0);
@@ -438,7 +438,7 @@ impl BattleApp {
         if shelf.books.is_empty() {
             ui.label(
                 RichText::new("No playbooks for them yet.")
-                    .size(12.5)
+                    .size(15.0)
                     .color(ink::MUTED),
             );
             ui.add_space(u);

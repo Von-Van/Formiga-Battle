@@ -965,6 +965,17 @@ impl Table {
         self.drawn(self.rival.map_or(self.seed, |r| r.trio_seed))
     }
 
+    /// Who the visitors will be on the chosen place, and which three of theirs come, as the next
+    /// match against them would field them: an event's opponent while a fixture is waiting, the
+    /// place's own Handler first otherwise, then each in turn.
+    pub fn next_visitors(&self) -> (&'static Rival, Vec<usize>) {
+        let rival = self
+            .event_fixture
+            .and_then(|index| self.event_opponent(index))
+            .unwrap_or_else(|| rival::visiting(&self.arena.id, self.career.meetings()));
+        (rival, self.drawn(rival.trio_seed))
+    }
+
     /// Three of the visitors, drawn by `seed`.
     fn drawn(&self, seed: u64) -> Vec<usize> {
         let mut pool: Vec<usize> = (0..self.away.len()).collect();
