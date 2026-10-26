@@ -155,7 +155,7 @@ Each prints its program's SHA-256 last: that is how the site's friend-match rela
   notebook's pages of getting ready, `app/handler` its history and settings, `app/registry` the Handler's page and trios, `app/match_screen` the match on screen, `app/widgets` the little painted pieces the pages share), `settings` (the volumes, mute, motion and window size Battle keeps for next time), `identity` (the pennant's choices, a Handler's standing, which trio three picked companions are), `pennant` (a pennant, painted), `rewards` (what a finished match earns), `cli` (the headless commands), and the smaller `announce`, `found`, `heraldry`, `keepsake`, `lettering`, `still`, `sound` and `icon`.
 
 `formiga-core`, `formiga-art`, `formiga-travel`, `formiga-expansion-rulebook` and
-`formiga-battle-contract` come from Desktop by one release tag (`v0.67.14`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
+`formiga-battle-contract` come from Desktop by one release tag (`v0.68.0`) in the root `Cargo.toml`, so their types agree with Desktop's. Desktop is
 authoritative for the colony; Battle never writes a colony file, and the only file it keeps is
 its own `settings.json`.
 
