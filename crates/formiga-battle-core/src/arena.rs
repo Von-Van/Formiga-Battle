@@ -32,7 +32,9 @@
 //! decides where anyone can walk.
 
 use crate::grid::Tile;
+use crate::items::Finds;
 use crate::order::Side;
+use crate::variant::Variant;
 
 /// The arenas that come with Battle, by id, Backyard first. A new arena is a file in `arenas/`
 /// and a line here.
@@ -153,6 +155,15 @@ pub struct Arena {
     /// The obstacles are water: a twig thrown in floats there as a raft.
     #[serde(default)]
     pub water: bool,
+    /// When found things turn up, and which. Every arena file plays the standard rhythm; a match
+    /// variant may change it.
+    #[serde(default, skip_serializing_if = "Finds::is_standard")]
+    pub finds: Finds,
+    /// The match variant this arena was set up in, if any: its starts, finds and conditions are
+    /// already in the fields above, so a recorded match replays as it was played, and this names
+    /// them for the Handler.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<Variant>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -278,6 +289,8 @@ impl Arena {
             switches: Vec::new(),
             item_spots: Vec::new(),
             water,
+            finds: Finds::default(),
+            variant: None,
         };
         let mut starts: [Vec<Tile>; 2] = [Vec::new(), Vec::new()];
         for (y, row) in rows.iter().enumerate() {

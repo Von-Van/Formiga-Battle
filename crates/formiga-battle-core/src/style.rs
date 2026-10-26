@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 /// The version of the styles' numbers: a change bumps it, and a recorded match says which it was
 /// played under, so a replay is read against the right book.
-pub const STYLE_VERSION: u32 = 1;
+pub const STYLE_VERSION: u32 = 2;
 
 /// The four ways of playing a coach can be told apart by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -27,6 +27,11 @@ pub enum Archetype {
     /// Plays for what turns up: found things first, a tap when it soaks the other team, a steal
     /// when one wanders close.
     Opportunist,
+    /// Reads how the other Handler has played and answers it: after two turns of watching, the
+    /// book that beats what they have ordered most of late, by the rules' own circle (a HOLD
+    /// turns a PRESS away, a TRICK breaks a HOLD, a PRESS catches a TRICK). It reads only the
+    /// orders both Handlers see each turn, never the other team's leanings.
+    Adaptive,
 }
 
 impl Archetype {
@@ -44,6 +49,7 @@ impl Archetype {
             Self::Defender => "Defender",
             Self::Tactician => "Tactician",
             Self::Opportunist => "Opportunist",
+            Self::Adaptive => "Adaptive",
         }
     }
 
@@ -54,6 +60,7 @@ impl Archetype {
             Self::Defender => "holds the yard and shuts the board",
             Self::Tactician => "goes round the sides and behind",
             Self::Opportunist => "plays for whatever turns up",
+            Self::Adaptive => "reads how you play and answers it",
         }
     }
 
@@ -111,6 +118,8 @@ impl Archetype {
                 keep_home: 0,
                 prefers_trick: false,
             },
+            // Its own book until it has watched; the coach chooses another once it has.
+            Self::Adaptive => Book::EXHIBITION,
         }
     }
 }
@@ -140,6 +149,65 @@ pub struct Book {
     pub keep_home: u8,
     /// Tricks a holder of theirs before thinking of flanking it, rather than after.
     pub prefers_trick: bool,
+}
+
+/// How a thinking coach values a board after a turn it imagines: the same five things the
+/// familiar and generic coaches weigh, in proportions a style chooses. Whole numbers, so a match
+/// replays the same everywhere.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Weights {
+    pub capture: i32,
+    pub composure: i32,
+    pub standing: i32,
+    pub holding: i32,
+    pub carrying: i32,
+}
+
+impl Weights {
+    /// The familiar and generic coaches' weights, as they have always been.
+    pub const PLAIN: Self = Self {
+        capture: 300,
+        composure: 80,
+        standing: 200,
+        holding: 40,
+        carrying: 25,
+    };
+}
+
+impl Archetype {
+    /// What a thinking rival of this style values most after a turn it imagines.
+    pub fn weights(self) -> Weights {
+        let plain = Weights::PLAIN;
+        match self {
+            // Wants the other team dizzy and off the board.
+            Self::Aggressor => Weights {
+                composure: 130,
+                standing: 280,
+                holding: 20,
+                ..plain
+            },
+            // Wants the yard held, and to keep its own on their feet.
+            Self::Defender => Weights {
+                capture: 340,
+                holding: 110,
+                composure: 70,
+                ..plain
+            },
+            // Wants holds broken and the beacon moving.
+            Self::Tactician => Weights {
+                capture: 330,
+                composure: 110,
+                holding: 30,
+                ..plain
+            },
+            // Wants what turns up in hand.
+            Self::Opportunist => Weights {
+                carrying: 90,
+                ..plain
+            },
+            Self::Adaptive => plain,
+        }
+    }
 }
 
 impl Book {

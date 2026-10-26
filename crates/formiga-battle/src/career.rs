@@ -6,7 +6,8 @@
 //! applied once, by the same id Desktop applies it by, so a crash between the two writes never
 //! counts a match twice. A rehearsal, with no Desktop behind it, keeps no career.
 
-use formiga_battle_world::Bracket;
+use formiga_battle_core::playbook::{MAX_STAGES, Playbook};
+use formiga_battle_world::{Bracket, Season};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -70,6 +71,149 @@ pub struct Career {
     pub events_entered: u32,
     /// Events won, oldest first.
     pub titles: Vec<Title>,
+    /// The season under way, or the last finished.
+    pub season: Option<Season>,
+    /// Every season's champion, oldest first: rivals and the colony alike.
+    pub hall: Vec<Champion>,
+    /// What the Battleground has noticed about the colony, oldest first, each with the matches
+    /// that show it.
+    pub recognition: Vec<Recognition>,
+    /// Each trio's playbooks, by trio id.
+    pub playbooks: BTreeMap<String, Shelf>,
+}
+
+/// The most playbooks one trio keeps.
+pub const PLAYBOOKS_KEPT: usize = 3;
+
+/// A trio's playbooks, and the one it plays by, if any.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Shelf {
+    pub books: Vec<Playbook>,
+    /// Which of `books` its orders are filled in from when it plays the visitors.
+    pub playing: Option<usize>,
+}
+
+impl Shelf {
+    /// The playbook it plays by, if one is chosen and can be played.
+    pub fn in_play(&self) -> Option<&Playbook> {
+        self.playing
+            .and_then(|i| self.books.get(i))
+            .filter(|p| p.validate().is_ok())
+    }
+
+    /// Keeps it to what Battle can play: no more than `PLAYBOOKS_KEPT`, each with no more than
+    /// `MAX_STAGES` stages, and the one in play one of them.
+    pub fn tidy(&mut self) {
+        self.books.truncate(PLAYBOOKS_KEPT);
+        for book in &mut self.books {
+            book.stages.truncate(MAX_STAGES);
+            book.name = book
+                .name
+                .chars()
+                .take(formiga_battle_core::playbook::NAME_LEN)
+                .collect();
+        }
+        if self.playing.is_some_and(|i| i >= self.books.len()) {
+            self.playing = None;
+        }
+    }
+}
+
+/// A season's champion, for the Hall of Champions.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Champion {
+    pub season: u32,
+    /// "you" for the colony, or a rival's id.
+    pub who: String,
+    pub event: String,
+}
+
+/// Something the Battleground noticed, backed by the matches that show it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Noticed {
+    /// The first win over a rival.
+    FirstWin { rival: String },
+    /// A win over a rival seeded above the colony in an event.
+    Upset {
+        rival: String,
+        event: String,
+        season: u32,
+    },
+    /// A fifth meeting with the same rival.
+    Rivalry { rival: String },
+    /// An event won.
+    EventWon { event: String, season: u32 },
+    /// The season's Championship won for the first time.
+    SeasonChampion { season: u32 },
+    /// The Championship won again by its holder.
+    TitleDefended { season: u32 },
+    /// The Championship lost by its holder.
+    TitleLost { season: u32, to: String },
+    /// The Championship won back after losing it.
+    TitleReclaimed { season: u32 },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Recognition {
+    #[serde(flatten)]
+    pub noticed: Noticed,
+    /// The matches that show it.
+    pub evidence: Vec<String>,
+    pub when_utc: String,
+}
+
+/// Recognition kept; the oldest are let go, the Hall and titles keep the rest.
+const NOTICED_KEPT: usize = 64;
+
+/// The colony's standing at the Battleground, from what it has done, never from how much it has
+/// played, with how the next is earned.
+pub fn standing(career: &Career) -> (&'static str, &'static str) {
+    let championships = career.hall.iter().filter(|c| c.who == "you").count();
+    let reached_final = !career.titles.is_empty()
+        || career
+            .recognition
+            .iter()
+            .any(|r| matches!(r.noticed, Noticed::TitleLost { .. }))
+        || career.event.as_ref().is_some_and(|e| {
+            let b = &e.bracket;
+            b.entrants
+                .iter()
+                .position(|x| x == "you")
+                .is_some_and(|you| b.reached(you).0 + 1 == b.rounds())
+        });
+    if championships >= 3 {
+        ("Legend of the Battleground", "Three Championships won")
+    } else if championships >= 1 {
+        ("Season Champion", "Win three Championships to be a Legend")
+    } else if !career.titles.is_empty() {
+        (
+            "Champion",
+            "Win a season's Championship to be Season Champion",
+        )
+    } else if reached_final {
+        ("Contender", "Win an event to be a Champion")
+    } else {
+        ("Newcomer", "Reach a final to be a Contender")
+    }
+}
+
+impl Career {
+    /// Notes something the Battleground noticed, once: the same notice twice is kept once.
+    pub fn notice(&mut self, noticed: Noticed, evidence: Vec<String>, when_utc: &str) {
+        if self.recognition.iter().any(|r| r.noticed == noticed) {
+            return;
+        }
+        self.recognition.push(Recognition {
+            noticed,
+            evidence,
+            when_utc: when_utc.to_owned(),
+        });
+        if self.recognition.len() > NOTICED_KEPT {
+            self.recognition.remove(0);
+        }
+    }
 }
 
 impl Default for Career {
@@ -82,6 +226,10 @@ impl Default for Career {
             event: None,
             events_entered: 0,
             titles: Vec::new(),
+            season: None,
+            hall: Vec::new(),
+            recognition: Vec::new(),
+            playbooks: BTreeMap::new(),
         }
     }
 }
@@ -111,7 +259,11 @@ impl Career {
         let read = std::fs::read(file(folder, colony_id))
             .ok()
             .and_then(|bytes| serde_json::from_slice::<Self>(&bytes).ok())
-            .filter(|c| c.colony_id == colony_id);
+            .filter(|c| c.colony_id == colony_id)
+            .map(|mut c| {
+                c.playbooks.values_mut().for_each(Shelf::tidy);
+                c
+            });
         read.unwrap_or_else(|| Self {
             colony_id: colony_id.to_owned(),
             ..Self::default()
@@ -199,6 +351,37 @@ pub fn meeting_words(before: &HeadToHead, name: &str, short: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_trios_playbooks_are_kept_and_read_back_within_bounds() {
+        let dir = std::env::temp_dir().join(format!("battle-career-books-{}", std::process::id()));
+        let folder = folder(&dir);
+        let mut career = Career::load(&folder, "colony-books");
+        let samples = Playbook::samples();
+        career.playbooks.insert(
+            "0123456789abcdef".to_owned(),
+            Shelf {
+                books: samples.clone(),
+                playing: Some(4),
+            },
+        );
+        career.save(&folder).unwrap();
+        let read = Career::load(&folder, "colony-books");
+        let shelf = &read.playbooks["0123456789abcdef"];
+        assert_eq!(shelf.books.len(), PLAYBOOKS_KEPT, "three kept at most");
+        assert_eq!(shelf.books[..], samples[..PLAYBOOKS_KEPT]);
+        assert_eq!(shelf.playing, None, "the one in play was not kept");
+        assert_eq!(shelf.in_play(), None);
+        // A career written before playbooks reads with none.
+        let older = serde_json::json!({"version": 1, "colony_id": "colony-old"});
+        std::fs::write(
+            file(&folder, "colony-old"),
+            serde_json::to_vec(&older).unwrap(),
+        )
+        .unwrap();
+        assert!(Career::load(&folder, "colony-old").playbooks.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_match_counts_once_by_its_id_and_the_file_round_trips() {
