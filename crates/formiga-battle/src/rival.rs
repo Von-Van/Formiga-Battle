@@ -23,7 +23,7 @@ pub struct Rival {
     pub trio_seed: u64,
 }
 
-pub const RIVALS: [Rival; 4] = [
+pub const RIVALS: [Rival; 9] = [
     Rival {
         id: "hazel",
         name: "Hazel Thorne",
@@ -64,9 +64,65 @@ pub const RIVALS: [Rival; 4] = [
         home: "cove",
         trio_seed: 0x4272_616d_4404,
     },
+    // The second four come to a season's Regionals and Championship, and to the cups in turn.
+    Rival {
+        id: "wren",
+        name: "Wren Ashby",
+        short: "Wren",
+        club: "Thistledown",
+        pennant: ("banner", "rose", "flower", "plain"),
+        archetype: Archetype::Aggressor,
+        home: "backyard",
+        trio_seed: 0x5772_656e_4105,
+    },
+    Rival {
+        id: "otto",
+        name: "Otto Pell",
+        short: "Otto",
+        club: "Weir Keepers",
+        pennant: ("pennon", "slate", "key", "brass"),
+        archetype: Archetype::Defender,
+        home: "millpond",
+        trio_seed: 0x4f74_746f_5006,
+    },
+    Rival {
+        id: "sorrel",
+        name: "Sorrel Vane",
+        short: "Sorrel",
+        club: "Mossbank",
+        pennant: ("banner", "plum", "mushroom", "stitched"),
+        archetype: Archetype::Tactician,
+        home: "woodland",
+        trio_seed: 0x536f_7272_6507,
+    },
+    Rival {
+        id: "kit",
+        name: "Kit Tidewell",
+        short: "Kit",
+        club: "Shingle Club",
+        pennant: ("swallowtail", "cream", "star", "plain"),
+        archetype: Archetype::Opportunist,
+        home: "cove",
+        trio_seed: 0x4b69_7454_6908,
+    },
+    // The one who reads how you play: the adaptive style, met in turn like the rest.
+    Rival {
+        id: "morrow",
+        name: "Morrow Quill",
+        short: "Morrow",
+        club: "The Weathervane",
+        pennant: ("pennon", "forest", "feather", "brass"),
+        archetype: Archetype::Adaptive,
+        home: "woodland",
+        trio_seed: 0x4d6f_7272_6f09,
+    },
 ];
 
 impl Rival {
+    pub fn by_id(id: &str) -> Option<&'static Rival> {
+        RIVALS.iter().find(|r| r.id == id)
+    }
+
     pub fn pennant(&self) -> Pennant {
         let (shape, field, symbol, trim) = self.pennant;
         Pennant {
@@ -88,11 +144,34 @@ impl Rival {
     }
 }
 
+/// The rival with this id.
+pub fn by_id(id: &str) -> Option<&'static Rival> {
+    Rival::by_id(id)
+}
+
 /// Who comes to `arena` for the colony's `meetings`-th match against the visitors: the arena's
 /// own Handler first, then each of the others in turn, so every rival is met on every arena.
 pub fn visiting(arena: &str, meetings: u32) -> &'static Rival {
     let home = RIVALS.iter().position(|r| r.home == arena).unwrap_or(0);
     &RIVALS[(home + meetings as usize) % RIVALS.len()]
+}
+
+/// The rivals in a season: seven, so with the colony an eight-Handler event is full.
+pub const SEASON_RIVALS: usize = 7;
+
+/// Every rival in a season, the place's own Handler first and then each in turn, seven of them:
+/// those sitting the season out go round, so participation changes from season to season.
+pub fn season_pool(arena: &str, season: u32) -> Vec<String> {
+    let resting = RIVALS.len() - SEASON_RIVALS;
+    let away: Vec<&str> = (0..resting)
+        .map(|k| RIVALS[(season as usize + k) % RIVALS.len()].id)
+        .collect();
+    (0..RIVALS.len() as u32)
+        .map(|k| visiting(arena, k).id)
+        .filter(|id| !away.contains(id))
+        .take(SEASON_RIVALS)
+        .map(str::to_owned)
+        .collect()
 }
 
 #[cfg(test)]
@@ -117,21 +196,42 @@ mod tests {
     fn each_arena_is_met_by_its_own_handler_first_and_then_every_other() {
         for arena in ["backyard", "woodland", "millpond", "cove"] {
             assert_eq!(visiting(arena, 0).home, arena);
-            let mut seen: Vec<&str> = (0..4).map(|n| visiting(arena, n).id).collect();
+            let n = RIVALS.len() as u32;
+            let mut seen: Vec<&str> = (0..n).map(|k| visiting(arena, k).id).collect();
             seen.sort();
-            assert_eq!(seen, ["bram", "hazel", "ivy", "tam"]);
-            assert_eq!(visiting(arena, 4), visiting(arena, 0));
+            seen.dedup();
+            assert_eq!(seen.len(), RIVALS.len());
+            assert_eq!(visiting(arena, n), visiting(arena, 0));
         }
+    }
+
+    #[test]
+    fn a_season_has_seven_rivals_and_the_rest_sit_it_out_in_turn() {
+        let mut everyone = std::collections::BTreeSet::new();
+        for season in 1..=RIVALS.len() as u32 {
+            let pool = season_pool("backyard", season);
+            assert_eq!(pool.len(), SEASON_RIVALS);
+            assert!(
+                !pool
+                    .iter()
+                    .any(|id| id == RIVALS[season as usize % RIVALS.len()].id)
+            );
+            everyone.extend(pool);
+        }
+        assert_eq!(everyone.len(), RIVALS.len(), "everyone plays some season");
     }
 
     #[test]
     fn rivals_are_told_apart_by_name_club_and_way_of_playing() {
         let ids: std::collections::BTreeSet<_> = RIVALS.iter().map(|r| r.id).collect();
-        assert_eq!(ids.len(), 4);
-        for (i, a) in RIVALS.iter().enumerate() {
+        assert_eq!(ids.len(), RIVALS.len());
+        let seeds: std::collections::BTreeSet<_> = RIVALS.iter().map(|r| r.trio_seed).collect();
+        assert_eq!(seeds.len(), RIVALS.len());
+        for (i, a) in RIVALS.iter().take(4).enumerate() {
             assert!(
                 RIVALS
                     .iter()
+                    .take(4)
                     .skip(i + 1)
                     .all(|b| b.archetype != a.archetype),
                 "{} and another rival play the same way",

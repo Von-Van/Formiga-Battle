@@ -6,6 +6,7 @@ mod app;
 mod career;
 mod chrome;
 mod cli;
+mod crest;
 mod feel;
 mod found;
 mod friend;
@@ -188,6 +189,9 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "picking" | "who" => app::Review::Picking,
                     "friend" => app::Review::Friend,
                     "history" => app::Review::History,
+                    "season" => app::Review::Season,
+                    "playbooks" => app::Review::Playbooks,
+                    "planned" => app::Review::Planned,
                     "handler" => app::Review::Handler,
                     "settings" => app::Review::Settings,
                     "orders" => app::Review::Orders,
@@ -231,15 +235,16 @@ fn window(args: Vec<String>) -> Result<()> {
     });
     let (host, roster) = host::open(args.source)?;
     // The colony's career against the rivals is Battle's own to keep, for a colony Desktop sent.
-    let career = match (&host, settings::folder()) {
-        (host::Host::Visit { .. }, Some(data)) => Some((
-            career::folder(&data),
-            career::Career::load(&career::folder(&data), &roster.colony_id),
-        )),
+    let career_folder = match (&host, settings::folder()) {
+        (host::Host::Visit { .. }, Some(data)) => Some(career::folder(&data)),
         _ => None,
     };
+    let colony = roster.colony_id.clone();
     let mut table = table::Table::new(roster, sample::visitors(args.visitors), seed);
-    table.career = career;
+    if let Some(folder) = career_folder {
+        table.career = career::Career::load(&folder, &colony);
+        table.career_folder = Some(folder);
+    }
     if let Some(id) = &args.arena {
         table.arena = formiga_battle_core::Arena::by_id(id)
             .with_context(|| format!("there is no arena called {id:?}"))?;

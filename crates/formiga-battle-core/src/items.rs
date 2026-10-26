@@ -79,9 +79,61 @@ impl Item {
 }
 
 /// Turns, from the start of the match, the first items turn up in; and how many turns apart after
-/// that. Each is glinted a whole turn before.
+/// that. Each is glinted a whole turn before. A match variant can change both (`Finds`).
 pub const FIRST_TURN: u8 = 2;
 pub const EVERY: u8 = 3;
+
+/// When found things turn up in a match, and how likely each is to be the one: the arena's own
+/// rhythm, which a match variant may change. Every arena plays the standard one unless a variant
+/// says otherwise, and a record of a match played before variants reads as it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Finds {
+    /// The first turn found things turn up in. Never the first turn, which has no turn before it
+    /// to glint in.
+    pub first: u8,
+    /// Turns between finds after that; at least 1.
+    pub every: u8,
+    /// How likely each found thing is, against the others, in `Item::ALL`'s order. A zero never
+    /// turns up.
+    pub weights: [u8; 6],
+}
+
+impl Default for Finds {
+    fn default() -> Self {
+        Self {
+            first: FIRST_TURN,
+            every: EVERY,
+            weights: Item::ALL.map(|i| i.weight() as u8),
+        }
+    }
+}
+
+impl Finds {
+    /// Whether this is the rhythm every arena has without a variant.
+    pub fn is_standard(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Whether found things turn up in this turn.
+    pub fn due(&self, turn: u8) -> bool {
+        self.every > 0 && turn >= self.first && (turn - self.first).is_multiple_of(self.every)
+    }
+
+    /// How likely this found thing is, against the others.
+    pub fn weight(&self, item: Item) -> u64 {
+        let at = Item::ALL
+            .iter()
+            .position(|i| *i == item)
+            .expect("every item is listed");
+        u64::from(self.weights[at])
+    }
+
+    /// Whether a match can be played by it: found things come round, from the second turn on, and
+    /// at least one of them can turn up.
+    pub fn playable(&self) -> bool {
+        self.first >= 2 && self.every >= 1 && self.weights.iter().any(|w| *w > 0)
+    }
+}
 
 /// Whole turns a twig stays wedged, or honey sticky.
 pub const TWIG_TURNS: u8 = 2;
