@@ -6,6 +6,7 @@
 //! applied once, by the same id Desktop applies it by, so a crash between the two writes never
 //! counts a match twice. A rehearsal, with no Desktop behind it, keeps no career.
 
+use formiga_battle_core::playbook::{MAX_STAGES, Playbook};
 use formiga_battle_world::{Bracket, Season};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -77,6 +78,46 @@ pub struct Career {
     /// What the Battleground has noticed about the colony, oldest first, each with the matches
     /// that show it.
     pub recognition: Vec<Recognition>,
+    /// Each trio's playbooks, by trio id.
+    pub playbooks: BTreeMap<String, Shelf>,
+}
+
+/// The most playbooks one trio keeps.
+pub const PLAYBOOKS_KEPT: usize = 3;
+
+/// A trio's playbooks, and the one it plays by, if any.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Shelf {
+    pub books: Vec<Playbook>,
+    /// Which of `books` its orders are filled in from when it plays the visitors.
+    pub playing: Option<usize>,
+}
+
+impl Shelf {
+    /// The playbook it plays by, if one is chosen and can be played.
+    pub fn in_play(&self) -> Option<&Playbook> {
+        self.playing
+            .and_then(|i| self.books.get(i))
+            .filter(|p| p.validate().is_ok())
+    }
+
+    /// Keeps it to what Battle can play: no more than `PLAYBOOKS_KEPT`, each with no more than
+    /// `MAX_STAGES` stages, and the one in play one of them.
+    pub fn tidy(&mut self) {
+        self.books.truncate(PLAYBOOKS_KEPT);
+        for book in &mut self.books {
+            book.stages.truncate(MAX_STAGES);
+            book.name = book
+                .name
+                .chars()
+                .take(formiga_battle_core::playbook::NAME_LEN)
+                .collect();
+        }
+        if self.playing.is_some_and(|i| i >= self.books.len()) {
+            self.playing = None;
+        }
+    }
 }
 
 /// A season's champion, for the Hall of Champions.
@@ -188,6 +229,7 @@ impl Default for Career {
             season: None,
             hall: Vec::new(),
             recognition: Vec::new(),
+            playbooks: BTreeMap::new(),
         }
     }
 }
@@ -217,7 +259,11 @@ impl Career {
         let read = std::fs::read(file(folder, colony_id))
             .ok()
             .and_then(|bytes| serde_json::from_slice::<Self>(&bytes).ok())
-            .filter(|c| c.colony_id == colony_id);
+            .filter(|c| c.colony_id == colony_id)
+            .map(|mut c| {
+                c.playbooks.values_mut().for_each(Shelf::tidy);
+                c
+            });
         read.unwrap_or_else(|| Self {
             colony_id: colony_id.to_owned(),
             ..Self::default()
@@ -305,6 +351,37 @@ pub fn meeting_words(before: &HeadToHead, name: &str, short: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_trios_playbooks_are_kept_and_read_back_within_bounds() {
+        let dir = std::env::temp_dir().join(format!("battle-career-books-{}", std::process::id()));
+        let folder = folder(&dir);
+        let mut career = Career::load(&folder, "colony-books");
+        let samples = Playbook::samples();
+        career.playbooks.insert(
+            "0123456789abcdef".to_owned(),
+            Shelf {
+                books: samples.clone(),
+                playing: Some(4),
+            },
+        );
+        career.save(&folder).unwrap();
+        let read = Career::load(&folder, "colony-books");
+        let shelf = &read.playbooks["0123456789abcdef"];
+        assert_eq!(shelf.books.len(), PLAYBOOKS_KEPT, "three kept at most");
+        assert_eq!(shelf.books[..], samples[..PLAYBOOKS_KEPT]);
+        assert_eq!(shelf.playing, None, "the one in play was not kept");
+        assert_eq!(shelf.in_play(), None);
+        // A career written before playbooks reads with none.
+        let older = serde_json::json!({"version": 1, "colony_id": "colony-old"});
+        std::fs::write(
+            file(&folder, "colony-old"),
+            serde_json::to_vec(&older).unwrap(),
+        )
+        .unwrap();
+        assert!(Career::load(&folder, "colony-old").playbooks.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_match_counts_once_by_its_id_and_the_file_round_trips() {

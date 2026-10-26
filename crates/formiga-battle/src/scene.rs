@@ -986,6 +986,7 @@ fn footing(
         gappy,
         0,
     );
+    team_mark(canvas, fx, fy + 5, slot.side, team, alpha);
     if f.holding {
         ellipse_ring(
             canvas,
@@ -1177,6 +1178,53 @@ fn pips(canvas: &mut Canvas, at: (i32, i32), composure: u8, team: Ramp) {
         } else {
             paint::put(canvas, px, y, rgb(0xfff8e4));
         }
+    }
+}
+
+/// A small mark at the front of a creature's ring that says its team by shape as well as by
+/// colour: a little arrowhead for the left team, a diamond for the right, each in its team's
+/// colour with its darker edge, so a Handler who cannot tell the two colours apart can still
+/// tell the teams apart.
+fn team_mark(canvas: &mut Canvas, x: i32, y: i32, side: Side, team: Ramp, alpha: u8) {
+    let fill = paint::faded(team.light, alpha);
+    let edge = paint::faded(team.edge, alpha);
+    let shape: &[(i32, i32, bool)] = match side {
+        // An arrowhead pointing up: ▲
+        Side::Left => &[
+            (0, -2, true),
+            (-1, -1, true),
+            (0, -1, false),
+            (1, -1, true),
+            (-2, 0, true),
+            (-1, 0, false),
+            (0, 0, false),
+            (1, 0, false),
+            (2, 0, true),
+            (-2, 1, true),
+            (-1, 1, true),
+            (0, 1, true),
+            (1, 1, true),
+            (2, 1, true),
+        ],
+        // A diamond: ◆
+        Side::Right => &[
+            (0, -2, true),
+            (-1, -1, true),
+            (0, -1, false),
+            (1, -1, true),
+            (-2, 0, true),
+            (-1, 0, false),
+            (0, 0, false),
+            (1, 0, false),
+            (2, 0, true),
+            (-1, 1, true),
+            (0, 1, false),
+            (1, 1, true),
+            (0, 2, true),
+        ],
+    };
+    for &(dx, dy, rim) in shape {
+        paint::put(canvas, x + dx, y + dy, if rim { edge } else { fill });
     }
 }
 

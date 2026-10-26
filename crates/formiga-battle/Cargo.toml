@@ -17,6 +17,7 @@ formiga-battle-room.workspace = true
 formiga-battle-world.workspace = true
 formiga-core.workspace = true
 formiga-expansion-rulebook.workspace = true
+formiga-pencil.workspace = true
 formiga-travel.workspace = true
 getrandom.workspace = true
 png.workspace = true
