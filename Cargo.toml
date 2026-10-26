@@ -3,6 +3,7 @@ members = [
     "crates/formiga-battle",
     "crates/formiga-battle-core",
     "crates/formiga-battle-room",
+    "crates/formiga-battle-world",
 ]
 resolver = "2"
 
@@ -25,9 +26,13 @@ formiga-battle-contract = { git = "https://github.com/Von-Van/Formiga-Desktop", 
 formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "76cc29bfa71775138dd3ae4047225a3bc04c75c6" }
 formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "76cc29bfa71775138dd3ae4047225a3bc04c75c6" }
 formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", rev = "76cc29bfa71775138dd3ae4047225a3bc04c75c6" }
+# The notebooks' pencil hand, from Desktop's branch until a Desktop release carries it; then by the
+# same tag as the rest.
+formiga-pencil = { git = "https://github.com/Von-Van/Formiga-Desktop", branch = "desktop-pencil-notebook" }
 
 formiga-battle-core = { path = "crates/formiga-battle-core" }
 formiga-battle-room = { path = "crates/formiga-battle-room" }
+formiga-battle-world = { path = "crates/formiga-battle-world" }
 
 anyhow = "1.0.104"
 directories = "5.0.1"

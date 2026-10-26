@@ -369,6 +369,77 @@ Before rules version 4 the yard was the whole 3 by 3 square. With all six creatu
 holders could always be found to keep it contested, and a flank could rarely push anyone out:
 in 3,000 Exhibition matches on the square, 14% were won by capture, and Wallflowers scored 0.413.
 
+## Match variants
+
+A match against the visitors or a friend is set up in a variant of its arena, so one match's
+opening is not the last one's. A variant has three parts, each compiled in beside the arenas
+(`crates/formiga-battle-core/src/variant.rs`) and naming the arenas it fits:
+
+- a **start**: where each team's three stand;
+- **finds**: which item spots are live, which found things turn up and how often;
+- at most one **condition**: the map event's timing, how long a switch rests, or a gate's
+  starting state.
+
+Every part is set out for the left team only and the right team's half is its mirror image, so a
+variant cannot favour a side by how it is written. The match seed draws each part on its own,
+every start and every finds equally likely and no condition as likely as each one, so both
+windows of a friend match draw the same variant without a word more through the relay, and a
+replay does too. Field Lessons are always the Backyard as its file has it. The Where page says how
+the next match against the visitors is set up, and the match introduction names every part that
+is not the arena's own before the first order.
+
+| Start | What it is | Arenas |
+|---|---|---|
+| Usual starts | Each team along its own edge, as the arena file has it | All |
+| A step in | One column in from the edge, closer to the beacon | All but Sandy Cove |
+| Bunched far | Three together in the far corner | All |
+| Spread wide | Corner to corner along the edge | All |
+
+| Finds | What it is | Arenas |
+|---|---|---|
+| Usual finds | From turn 2, every third turn, the usual mix | All |
+| Few finds | From turn 3, every fourth turn | All |
+| Plenty of finds | From turn 2, every other turn | All |
+| Light finds | Only puffs (36), twigs (34) and leaf umbrellas (30) | All |
+| One pair of spots | One pair of item spots live: the far corners (Backyard, Millpond), the near corners (Woodland Glade), the rocks by the sandbar (Sandy Cove) | All |
+
+| Condition | Backyard | Woodland Glade | Millpond | Sandy Cove |
+|---|---|---|---|---|
+| Early | Early sprinkler: turns 2, 6, 10 | Early breeze: turns 2, 6, 10 | Early flood: turns 2, 7, 12 | Early tide: turns 2, 5, 8, 11 |
+| Restless | Restless sprinkler: turns 3, 6, 9, 12 | Gusty: turns 3, 6, 9, 12 | High water: turns 3, 6, 9, 12 | |
+| Calm | Sprinkler off | Still air | Still pond | Slack tide |
+| Slow switches | Stiff taps | Settled trees | Stiff sluices | Quiet shells |
+| Gate open | Gate left open | | Footbridge down | |
+
+Calm leaves the map event to the switches alone; slow switches rest 4 whole turns after setting it
+off, not 2. A variant changes only data the arena already has (its start tiles, item spots, the
+map event's timing, the gates' starting state) and the found things' rhythm, which every arena
+plays at the usual one: how a turn resolves is unchanged, so `RULES_VERSION` does not move. The
+arena a match is played on, variant and all, is what its `MatchRecord` keeps, so a variant match
+replays exactly; a record kept before variants reads as the usual rhythm. `--variant` sets one up
+from the command line, `arena --variants` lists an arena's parts, and `tournament --sweep` plays
+each one.
+
+Every variant that changes one part is held to the arena's own fairness check in
+`tests/variants.rs`: 150 pairings played from both sides, the left side within 0.42 to 0.58 and
+every temperament kind within 0.35 to 0.65, besides being checked as each start's mirror and the
+same number of steps from the beacon. Over 3,000 Exhibition-coached matches
+a variant (`tournament --sweep --pairings 1500 --seed 7`), every one of them stays within a couple
+of hundredths of even for the left side, and its kinds within the arena's own usual spread:
+
+| Arena | Left, usual | Kinds, usual | Variants | Left, variants | Lowest kind | Highest kind |
+|---|---|---|---|---|---|---|
+| Backyard | 0.508 | 0.458 to 0.529 | 12 | 0.496 to 0.516 | 0.434 (Early sprinkler) | 0.538 (Light finds) |
+| Woodland Glade | 0.493 | 0.409 to 0.522 | 11 | 0.493 to 0.512 | 0.399 (Early breeze) | 0.567 (Bunched far) |
+| Millpond | 0.504 | 0.444 to 0.523 | 12 | 0.495 to 0.514 | 0.402 (Spread wide) | 0.545 (Still pond) |
+| Sandy Cove | 0.500 | 0.432 to 0.537 | 9 | 0.496 to 0.516 | 0.409 (Bunched far) | 0.539 (Bunched far) |
+
+A step in was cut from Sandy Cove: so close to the rocks the teams meet by turn 2, and Wallflowers
+fell to 0.368 there (0.432 from the usual starts). Bunched far on the Cove is the shortest variant,
+4.7 turns a match against 7.0, and Early flood on the Millpond 9.1 against 10.4. The Exhibition
+coach seldom turns the same switch twice, so slow switches play out as the usual board in these
+numbers; they change how often a Handler can set the event off.
+
 ## How a creature walks
 
 A creature never chooses whether to obey: its order sets where it is going and what it does there.
@@ -420,10 +491,14 @@ recap says in words.
 ## Replay and desync
 
 A `MatchRecord` is the rules version, ruleset, arena, seed, both rosters and every turn's orders as
-sent, with the board's hash after each turn. Replaying it plays the match again and stops at the
+sent, with the board's hash after each turn, and the board the first turn began from when a match
+was set up part way (a Field Lesson, a test) rather than from the arena's start tiles. Replaying
+it plays the match again, from that board if there is one, and stops at the
 first turn whose board differs. Every chance the rules take is a hash of the seed and where in the
 match it is asked, and every value a profile contributes is a whole number, so the same record
-replays the same on every machine.
+replays the same on every machine. `tests/golden.rs` pins the board thirty-six seeded matches end
+on, across every arena and coach, and the default ruleset's own words and hash: a change there
+without a `RULES_VERSION` bump is a rule changed by accident.
 
 ## Fairness
 
@@ -575,6 +650,90 @@ almost never beaten by capture; they are beaten on the cap, because a team that 
 stops anyone from standing in the zone too and is flanked turn after turn. Under rules version 3
 (`majority`, no flanking) the turtle beat the Exhibition coach 99.9% of the time and the familiar
 coach 83%.
+
+## Coaching styles
+
+A styled coach (`style.rs`: an `Archetype` and its `Book`, `Coach::Styled`) plays the Exhibition coach's opening book with its
+chances set to make a different Handler of it. Every number is a whole number and every chance is
+rolled from the match seed, so a styled coach's match replays like any other; the Exhibition
+coach's own book is unchanged, and its matches are the same as they were before there were
+styles. A style changes which orders a coach gives, never what an order does, and the team shares
+the plan out by itself exactly as it would a Handler's. `STYLE_VERSION` is 1.
+
+| Style | Plays | Flank, trick, press a loose one | Keeps a second at home | With what is left | Uses what it carries |
+|---|---|---|---|---|---|
+| Exhibition (the measure) | as it always has | 60%, 75%, 80% | 70% | the tap from 60, something near below 35, a chaser below 45, the lever from 85 | 75% |
+| Aggressor | presses first and sends everyone | 90%, 85%, 95% | 20% | tap from 85, near below 15, chaser below 75, lever from 95 | 90% |
+| Defender | holds the yard and shuts the board; one hand never leaves the anchor | 25%, 35%, 40% | 95% | tap from 35, near below 20, chaser below 5, lever from 55 | 60% |
+| Tactician | goes round the sides and behind: tricks a holder before it thinks of flanking | 55%, 55%, 15% | 60% | tap from 65, near below 30, chaser below 10, lever from 80 | 70% |
+| Opportunist | plays for whatever turns up | 35%, 55%, 90% | 40% | tap from 25, near below 85, chaser below 90, lever from 70 | 100% |
+
+`tests/styles.rs` tells them apart by the jobs their plans give a team over eight matches against
+the Exhibition coach on Backyard: the Aggressor's creatures flank a quarter of the time (23% of
+jobs) and are seldom tricking; the Defender's claim and guard (42% and 30%) and never chase; the
+Tactician's trick most (15%) and flank least; the Opportunist's oust and fetch most. The nearest
+two mixes are 0.15 apart, where 0.08 is the least the test allows. Each style against each
+other, 50 matches a pair with the sides swapped, no style beats every other: the Tactician
+scores 0.67 against the Aggressor and 0.56 against the Defender but 0.48 against the
+Opportunist; the Aggressor, who sends everyone, scores lowest (0.40 to 0.48).
+
+### The adaptive style
+
+`Archetype::Adaptive` reads how the other Handler has played and answers it. For its first three
+turns it plays the Exhibition coach's book. From then on it counts the orders the other team sent
+over its last three turns, which both Handlers see as each turn plays, and when one kind is more
+than half of them it plays the book that answers it, by the circle of orders: against PRESS, the Defender's (a HOLD turns a
+press away); against HOLD, the Tactician's (a TRICK breaks a hold); against TRICK, the
+Aggressor's (a PRESS catches a trickster); against INTERACT and USE ITEM, the Opportunist's. Without
+so clear a habit it keeps its own book: answering every lean of the last three turns made it
+beat every other style on the Millpond. It never reads the other team's leanings.
+`STYLE_VERSION` is 2.
+
+### Rivals' tiers
+
+A rival plays the same style at every event, more strongly as the competition rises:
+
+| Where | Coach | How it plans |
+|---|---|---|
+| Cup matches and an Open | `Coach::Styled` | Its style's book: the Exhibition coach's moves with its own chances |
+| A Regional | `Coach::Thinking` | Thinks each turn through as the generic coach does, starting from its style's book and valuing the board by its style's weights; every creature imagined plain |
+| A Championship | `Coach::Scouted` | The same, knowing its own team as they are; the other team still imagined plain |
+
+| Style | Weights after a turn it imagines (beacon, composure, standing, holding, carrying) |
+|---|---|
+| Plain (familiar and generic coaches) | 300, 80, 200, 40, 25 |
+| Aggressor | 300, 130, 280, 20, 25 |
+| Defender | 340, 70, 200, 110, 25 |
+| Tactician | 330, 110, 200, 30, 25 |
+| Opportunist | 300, 80, 200, 40, 90 |
+| Adaptive | the weights of the style it is answering with |
+
+No tier reads the other team's leanings or orders before they are sent, so it plays by the same
+rules and the same information as a Handler.
+
+### Balance
+
+`cargo run --release -p formiga-battle-core --example balance -- [pairings]` plays every style,
+tier and sample playbook against each other with random trios, each pairing from both sides. With
+12 pairings (24 matches a cell, about 0.1 either way by chance):
+
+| | Against Exhibition | Against generic |
+|---|---|---|
+| Book rivals (cups, Opens) | 0.29 to 0.67 | 0.00 to 0.21 |
+| Thinking rivals (Regionals) | 0.88 to 0.96 | 0.42 to 0.60 |
+| Scouted rivals (Championships) | 0.96 to 1.00 | 0.62 to 0.71 |
+
+So the ladder climbs: a book rival is about as hard as the visitors were, a Regional rival about
+as hard as the generic coach, a Championship rival harder still. Among book rivals and among
+thinking rivals no style beats every other on any arena; no thinking style scores 0.6 or more
+against every other (the Defender, 0.50 to 0.60, comes closest). `tests/styles.rs` checks that no style beats every other on any
+of the four arenas.
+
+The sample playbooks beat book rivals (0.58 to 0.96, except Finders keepers) and lose to thinking
+rivals (0.04 to 0.52): a good plan wins the cups and the Opens, and is not enough at a Regional.
+Finders keepers loses to every rival (0.04 to 0.42): fetching first gives the beacon away.
+`tests/playbook.rs` checks that no sample playbook beats every thinking rival. Over 16 events of
+eight rivals across the four places, no style wins half of them (`table.rs`).
 
 ## Knowing your creatures
 

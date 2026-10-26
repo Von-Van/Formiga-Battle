@@ -106,3 +106,58 @@ fn every_match_ends_by_the_turn_cap() {
         assert!(m.outcome().unwrap().turn <= Ruleset::default().turn_cap);
     }
 }
+
+#[test]
+fn a_match_set_up_part_way_records_where_it_began_and_replays_from_there() {
+    let arena = Arena::backyard();
+    let mut m = Match::new(arena.clone(), Ruleset::default(), 8, rosters(8)).unwrap();
+    assert_eq!(
+        m.staged(),
+        None,
+        "a fresh match begins where the arena says"
+    );
+    // Left's first creature is carried into the yard and the right's beacon is half lit.
+    m.board.fighters[0][0].at = Tile::new(4, 2);
+    m.board.capture[1] = 1;
+    assert!(
+        m.staged().is_some(),
+        "moved before the first turn, the board is staged"
+    );
+    while m.outcome().is_none() {
+        let plans = [
+            Coach::Exhibition.plan(&m, Side::Left),
+            Coach::Exhibition.plan(&m, Side::Right),
+        ];
+        m.resolve_turn(plans);
+    }
+    let record = m.record();
+    let staged = record
+        .staged
+        .as_ref()
+        .expect("the staged board is in the record");
+    assert_eq!(staged.fighters[0][0].at, Tile::new(4, 2));
+    assert_eq!(staged.capture, [0, 1]);
+    let json = serde_json::to_string(&record).unwrap();
+    let read: MatchRecord = serde_json::from_str(&json).unwrap();
+    let (replayed, _) = read.replay().expect("replays from where it began");
+    assert_eq!(replayed.board, m.board);
+    // Without its staged board the same record is another match, found on its first turn.
+    let mut unstaged = record.clone();
+    unstaged.staged = None;
+    assert!(matches!(
+        unstaged.replay(),
+        Err(replay::ReplayError::Desync { turn: 1, .. })
+    ));
+    // A record kept before boards were staged still reads, and begins where the arena says.
+    let (plain, _) = play(
+        &arena,
+        Ruleset::default(),
+        8,
+        rosters(8),
+        [Coach::Exhibition; 2],
+    );
+    let mut old = serde_json::to_value(plain.record()).unwrap();
+    assert!(old.as_object_mut().unwrap().remove("staged").is_none());
+    let read: MatchRecord = serde_json::from_value(old).unwrap();
+    assert_eq!(read.replay().unwrap().0.board, plain.board);
+}

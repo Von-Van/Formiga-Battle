@@ -1,7 +1,8 @@
 # What a match earns
 
-Battle keeps no record of its own; the one file it keeps is how it looks and sounds
-(`settings.json`, see the [README](../README.md)), and nothing a match earns goes there. Desktop
+Battle keeps two small files of its own: how it looks and sounds (`settings.json`, see the
+[README](../README.md)), and each colony's record against the named rivals (see [The career
+against the rivals](#the-career-against-the-rivals)). Nothing a match earns goes in either. Desktop
 keeps a colony's Battle record and hands it to Battle in each session's snapshot; Battle writes
 what each match earns into the session as it goes (`result.json`, written whole after every
 match), and Desktop applies it when Battle closes, each match once, by its id. A rehearsal, with no Desktop behind it, keeps no record at all.
@@ -69,3 +70,28 @@ rewards and history line, and the registry a session ends with to the result.
 `BattleRecord::register` keeps the registry (the card, and each trio's name, members, pennant
 and retirement) before the session's matches are applied, so a match played as a trio named
 that session counts for it; only `apply` adds to a trio's record.
+
+## The career against the rivals
+
+The visitors close to home are four named Handlers (`crates/formiga-battle/src/rival.rs`), each
+playing one of the coaching styles in [RULES.md](RULES.md#coaching-styles). How a colony has fared
+against each (played, won, drawn and lost, and the last meeting) is the one record of play Battle
+keeps itself (Jake, 2026-10-23), in `careers/<colony id>.json` in Battle's data folder, until a
+Desktop contract carries it. Each match is counted once, by the same match id Desktop applies it
+by; a file for another colony, or one that cannot be read, is a fresh career rather than a refused
+match. A rehearsal keeps none. The career earns nothing and changes nothing about how a match is
+played.
+
+Events are kept there too: the Open under way or last finished, as a bracket
+(`crates/formiga-battle-world`), how many have been entered, and the titles won. An event's
+fixtures against the colony are ordinary matches against the visitors, earning toward the place's
+cup as any other; the rivals' own fixtures are played out under the same rules and earn nothing.
+A fixture is recorded once, by its match id, so a crash never plays it twice.
+
+A season (`formiga-battle-world`'s `season.rs`) is an Open of four, a Spring and a Summer Regional
+of eight, and a Championship of the four with most season points, with last season's champion
+defending. Season points (8, 5, 3 and 1 for winning, the final, a semi-final and a quarter-final)
+decide only seeding and who reaches the Championship, and start from nothing each season. The
+career keeps the season, every season's champion for the Hall of Champions, and what the
+Battleground noticed, each with the match ids that show it. The colony's standing comes from what
+it has won, never from how much it has played.

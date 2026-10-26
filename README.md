@@ -37,6 +37,8 @@ with "Play Formiga Battle…"; Battle's side of that hand-off is `--formiga-batt
   what is shared and kept.
 - [docs/RELAY.md](docs/RELAY.md): the relay's contract, request by request, for the one on the
   Formiga site.
+- [docs/PLAYBOOK.md](docs/PLAYBOOK.md): playbooks, a Handler's plan for a match in stages,
+  compiled to ordinary orders each turn (a prototype in the match core).
 
 ## Getting it
 

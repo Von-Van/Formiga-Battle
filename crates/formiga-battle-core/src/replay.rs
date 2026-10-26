@@ -1,10 +1,11 @@
 //! A whole match as data: the rules, the arena, the seed, both rosters and every turn's plans as
-//! they were sent, with the board's hash after each turn. Replaying it runs the same match again
-//! and stops at the first turn whose board differs, which is how a desync is found.
+//! they were sent, with the board's hash after each turn, and the board it began from when that
+//! was not the arena's own start (a lesson, a test). Replaying it runs the same match again and
+//! stops at the first turn whose board differs, which is how a desync is found.
 
 use crate::arena::Arena;
 use crate::event::Outcome;
-use crate::game::{Match, MatchError, TurnRecord, TurnReport};
+use crate::game::{Board, Match, MatchError, TurnRecord, TurnReport};
 use crate::profile::Profile;
 use crate::ruleset::{RULES_VERSION, Ruleset};
 use serde::{Deserialize, Serialize};
@@ -19,6 +20,10 @@ pub struct MatchRecord {
     pub turns: Vec<TurnRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome: Option<Outcome>,
+    /// The board the first turn began from, only when it was not the arena's own start: a
+    /// record without one, as every record before it was kept, begins where `Match::new` does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staged: Option<Board>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -49,7 +54,15 @@ impl Match {
             rosters: self.rosters.clone().map(Vec::from),
             turns: self.history.clone(),
             outcome: self.outcome(),
+            staged: self.staged(),
         }
+    }
+
+    /// The board the first turn began from, if it was set up by hand rather than by the arena.
+    /// Before the first turn, the board as it stands, if it has been moved.
+    pub fn staged(&self) -> Option<Board> {
+        let began = self.start.as_ref().unwrap_or(&self.board);
+        (*began != Self::starting_board(&self.arena, &self.ruleset)).then(|| began.clone())
     }
 }
 
@@ -66,6 +79,9 @@ impl MatchRecord {
             self.seed,
             self.rosters.clone(),
         )?;
+        if let Some(staged) = &self.staged {
+            m.board = staged.clone();
+        }
         let mut reports = Vec::with_capacity(self.turns.len());
         for record in &self.turns {
             let report = match record.orders {

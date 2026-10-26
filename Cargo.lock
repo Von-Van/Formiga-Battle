@@ -1297,8 +1297,10 @@ dependencies = [
  "formiga-battle-contract",
  "formiga-battle-core",
  "formiga-battle-room",
+ "formiga-battle-world",
  "formiga-core",
  "formiga-expansion-rulebook",
+ "formiga-pencil",
  "formiga-travel",
  "getrandom 0.4.3",
  "rodio",
@@ -1350,6 +1352,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "formiga-battle-world"
+version = "0.67.14"
+dependencies = [
+ "formiga-battle-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "formiga-core"
 version = "0.67.14"
 source = "git+https://github.com/Von-Van/Formiga-Desktop?rev=76cc29bfa71775138dd3ae4047225a3bc04c75c6#76cc29bfa71775138dd3ae4047225a3bc04c75c6"
@@ -1375,6 +1387,16 @@ dependencies = [
  "serde_json",
  "sha2",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "formiga-pencil"
+version = "0.67.14"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-pencil-notebook#07b804313eacc32089a3fb8841022e5c4137024c"
+dependencies = [
+ "egui",
+ "skrifa",
+ "vello_cpu",
 ]
 
 [[package]]

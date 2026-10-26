@@ -67,7 +67,33 @@ impl Default for Ruleset {
     }
 }
 
+/// A ruleset no match can be played by.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum RulesetError {
+    #[error("{0} must be at least 1")]
+    Zero(&'static str),
+}
+
 impl Ruleset {
+    /// Whether a match can be played by these numbers at all: every count a turn or a match is
+    /// measured in is at least one. Checked once, when a match is set up, so a ruleset typed on
+    /// the command line or read from a record is refused rather than played into a corner.
+    pub fn validate(&self) -> Result<(), RulesetError> {
+        for (name, value) in [
+            ("composure", u16::from(self.composure)),
+            ("ticks_per_turn", u16::from(self.ticks_per_turn)),
+            ("capture_ticks", u16::from(self.capture_ticks)),
+            ("turn_cap", u16::from(self.turn_cap)),
+            ("damage_cap", u16::from(self.damage_cap)),
+            ("turn_seconds", self.turn_seconds),
+        ] {
+            if value == 0 {
+                return Err(RulesetError::Zero(name));
+            }
+        }
+        Ok(())
+    }
+
     /// Names this ruleset and the rules version exactly, for a room to compare before two clients
     /// play and for a replay to check before it runs.
     pub fn hash(&self) -> u64 {

@@ -2,6 +2,105 @@
 
 ## Unreleased
 
+- The Season page is drawn in the notebook's pencil: its heading says in the Handler's own words
+  what is next or how the last event went; the season's four events stand as stations on a line,
+  stamped with who won each; the event under way is a bracket of cards, each Handler with their
+  pennant, the one who went through in bold with how, an open place naming who could fill it, and
+  the champion stamped. Its right page has the Handler's standing on a card with their pennant,
+  the season's points as bars, the Hall of Champions on brass plates, the newest thing noticed on
+  a sticky note, and every rival with their pennant and how the meetings stand.
+- The result of a match against a rival shows their pennant beside how the meetings stand, and
+  stamps how the event stands ("Through!", "Out", "Champion!") beside the line that says it.
+- A fifth coaching style, the Adaptive, reads what the other Handler has ordered over the last
+  three turns and answers it by the circle of orders, and a ninth rival plays it: Morrow Quill of
+  The Weathervane. Seven rivals play each season, the rest sitting it out in turn.
+- Rivals grow stronger as the competition rises: they play their style's book in cup matches and
+  Opens, think each turn through with their style's priorities at a Regional, and also know their
+  own team at a Championship. None reads the other team's leanings. A good playbook wins the cups
+  and the Opens; a Regional needs more. See docs/RULES.md, "Rivals' tiers" and "Balance", and the
+  new `balance` example that measures it all.
+- A Secure stage set to hold facing across the board keeps that facing on the squares the team
+  already holds, instead of pressing onto them and facing the nearest of the other team.
+- The relay Battle keeps for tests never confirms a forfeited match, and once a finished match's
+  boards are both in, a later report cannot change what the two windows were told, as the site's
+  relay now does.
+- A match opens on a painted card. Each side's panel slides in from its edge in its team's
+  colours, its pennant flown large, its name on a ribbon, its Handler on a brass plate, its club
+  on a cloth tab and a stitched badge saying how it plays, and a red burst with VS on it punches
+  in between them. Under reduced motion the card is simply there. It takes the place of the
+  ribbon and the paper tags.
+- Playbooks: a trio's plan for a match, in up to three stages (secure the beacon, put pressure
+  on, draw them out, counter their holders, fetch, work the board), written on a new Playbooks
+  page among the Handler's own. A stage can come in whenever the board shows something, such as
+  "they hold the beacon" or "we are behind". Against the visitors, the playbook the trio plays by,
+  chosen on the Who page, fills in each turn's orders, and you change any of them before locking
+  in; the whole match says what the playbook made of each turn. A friend match or a Field Lesson
+  never uses one. Playbooks are kept with the career in Battle's own file. `--review playbooks`
+  and `--review planned` picture them. See docs/PLAYBOOK.md.
+- Orders can be given from the keyboard alone: the arrow keys move a square cursor over the board
+  from the middle of the yard, and Space gives the order in hand there as a click would
+  (Shift+Space as a right click). The mouse over the board puts the cursor away. The keys are
+  listed on the Settings page.
+- Each creature's ring carries a small mark that says its team by shape as well as by colour: an
+  arrowhead for the left team and a diamond for the right, so the teams can be told apart without
+  telling the two colours apart.
+- Seasons at the Battleground. Each season is four events on the places open to the colony, moving
+  round a place each season: an Open of four, a Spring and a Summer Regional of eight, and a
+  Championship of the four with most season points, where last season's champion defends their
+  title. Season points come from how far each Handler went (8 for winning, 5 for the final, 3 for
+  a semi-final, 1 for a quarter-final), the rivals' as well as the colony's, and a Championship the
+  colony did not reach is played out under the same rules. Four more rivals join for the
+  eight-Handler events: Wren Ashby of Thistledown, Otto Pell of the Weir Keepers, Sorrel Vane of
+  Mossbank and Kit Tidewell of Shingle Club, each playing one of the four styles; one of the eight
+  sits each season out in turn.
+- The Season page shows the season's events and points, the Hall of Champions (every season's
+  champion, rivals' too), the colony's standing (Newcomer, Contender, Champion, Season Champion,
+  Legend of the Battleground, each saying how the next is earned, none earned by playing more),
+  and what the Battleground has noticed, each backed by the matches that show it: a first win over
+  a rival, an upset over a higher seed, a rivalry of five meetings, an event won, a title won,
+  defended, lost or won back.
+- Events at the Battleground. The Handler's notebook has a new page, the Season, where a colony
+  enters an Open at a place whose cup is open to it: four Handlers, the three rivals who come to
+  that place most and the colony itself, drawn as fourth seed against the first. The colony plays
+  its semi-final and, if it gets through, the final; the rivals' own fixtures are played out under
+  the same rules, each with its own coach and three. A draw is settled by a toss, the same on
+  every machine. The result says how the event stands ("Through to the final against Tam Rook"),
+  and an event won is kept as a title. The Season page also shows the titles won and the record
+  against each rival. An event match counts toward the place's cup like any other.
+- The visitors close to home are four named Handlers, each with a club, a pennant, a way of
+  playing and a trio of their own: Hazel Thorne of Bramble Club presses first and sends everyone,
+  Tam Rook of Sluice Gate holds the yard and shuts the board, Ivy Larkspur of the Glade Walkers
+  goes round the sides and behind, and Bram Driftwood of Driftwood Cove plays for whatever turns
+  up. Each arena's own Handler comes first, then each of the others in turn. The introduction
+  flies their pennant and names them, the result card names them and says how the meetings stand
+  ("Third meeting with Hazel Thorne: you lead 2 to 0"), and cups are won exactly as before.
+- Battle keeps the colony's record against the rivals in a small file of its own, one per colony
+  (`careers/<colony>.json` beside `settings.json`), counting each match once by the id Desktop
+  counts it by. Cups, points, the notebook and trios stay with Desktop. A rehearsal keeps none.
+- Every match against the visitors or a friend is set up in a variant of its place, drawn by the
+  match seed: where the teams start (a step in, bunched far, spread wide, or as usual), what turns
+  up (few finds, plenty, only light things, one pair of spots, or as usual), and at times one
+  condition (an early or restless map event, the event left to the switches, switches that rest
+  longer, a gate left open). The right team's half is always the mirror of the left's, and every
+  variant passes the same fairness check the arenas do. The Where page says how the next match is
+  set up, and the match introduction names what is different before the first order. Field
+  Lessons stay the Backyard as it always is. A match record keeps the arena as it was set up, so a
+  variant match replays exactly, and a record kept before reads as before. `--variant`, `arena
+  --variants` and `tournament --sweep` set up, list and measure them from the command line. Rules
+  version 9 is unchanged. See docs/RULES.md, "Match variants".
+- Four coaching styles for a Handler who is not a person, each a way of playing the Exhibition
+  coach's book: the Aggressor presses first and sends everyone, the Defender holds the yard and
+  shuts the board, the Tactician goes round the sides and behind, and the Opportunist plays for
+  whatever turns up. `--coach aggressor,defender` and the like play them from the command line;
+  nothing in the window uses them yet. The Exhibition coach's matches are unchanged. See
+  docs/RULES.md, "Coaching styles".
+- A match set up part way, as a Field Lesson is, records the board it began from and replays
+  from it; a record kept before this reads as before. A ruleset with a zero in it (no ticks, no
+  composure, no turns) is refused when a match is set up rather than played into a corner, and
+  `tournament` counts forfeits apart from matches that reached the cap. Thirty-six seeded
+  matches across every arena and coach now pin the board they end on, and the fairness check runs
+  on all four arenas.
+
 - The rules are checked against matches recorded by an earlier build, one on each arena, kept as
   a file beside the core's tests. A change to how a turn resolves now fails that test until
   `RULES_VERSION` moves and the file is rewritten on purpose

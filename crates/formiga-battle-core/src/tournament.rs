@@ -59,13 +59,24 @@ pub fn play(
     rosters: [Vec<Profile>; 2],
     coaches: [Coach; 2],
 ) -> (Match, Vec<TurnReport>) {
+    play_by(arena, ruleset, seed, rosters, |m, side| {
+        coaches[side.index()].plan(m, side)
+    })
+}
+
+/// The same, with each turn's plans from `plan`, asked for the left team and then the right:
+/// how a pilot that keeps something from turn to turn, a playbook, plays a match.
+pub fn play_by(
+    arena: &Arena,
+    ruleset: Ruleset,
+    seed: u64,
+    rosters: [Vec<Profile>; 2],
+    mut plan: impl FnMut(&Match, Side) -> crate::order::TeamPlan,
+) -> (Match, Vec<TurnReport>) {
     let mut m = Match::new(arena.clone(), ruleset, seed, rosters).expect("rosters of three");
     let mut reports = Vec::new();
     while m.outcome().is_none() {
-        let plans = [
-            coaches[0].plan(&m, Side::Left),
-            coaches[1].plan(&m, Side::Right),
-        ];
+        let plans = [plan(&m, Side::Left), plan(&m, Side::Right)];
         reports.push(m.resolve_turn(plans));
     }
     (m, reports)
@@ -104,6 +115,9 @@ pub struct Summary {
     pub by_capture: u32,
     pub by_knockout: u32,
     pub at_cap: u32,
+    /// Matches a side gave up, which only a room can bring about: none in a tournament here,
+    /// counted apart from the cap so a bracket can tell them apart.
+    pub by_forfeit: u32,
     pub draws: u32,
     pub turns: u32,
     pub knockouts: u32,
@@ -180,7 +194,8 @@ pub fn run(
             match outcome.victory {
                 Some(Victory::Capture) => summary.by_capture += 1,
                 Some(Victory::Knockout) => summary.by_knockout += 1,
-                Some(Victory::TurnCap | Victory::Forfeit) => summary.at_cap += 1,
+                Some(Victory::TurnCap) => summary.at_cap += 1,
+                Some(Victory::Forfeit) => summary.by_forfeit += 1,
                 None => summary.draws += 1,
             }
             let mut progress = [0u8; 2];

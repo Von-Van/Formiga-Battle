@@ -2,8 +2,8 @@
 //! the upper left, edges a darker shade of their own colour, grain from `paint::noise`. A pennant
 //! on its cane stirring in a tuft of grass; sample tiles to choose a pennant from, as a tailor's
 //! swatch card; a brass nameplate for a Handler's title; a ribbon rosette for each cup; a trio's
-//! team picture, three of them on a strip of lawn by their pennant, pasted in with tape; and the
-//! banner a match opens under. The companions are drawn only through their own looks. Words on
+//! team picture, three of them on a strip of lawn by their pennant, pasted in with tape. The card
+//! a match opens under is `crest.rs`. The companions are drawn only through their own looks. Words on
 //! them are egui's, lettered on top where each says.
 
 use crate::garden::{BRASS, GRASS, PLANK};
@@ -23,7 +23,6 @@ const TAPE: Rgba = rgba(0xfffaf0, 150);
 const RIBBON: Ramp = Ramp::new(0x10281f, 0x173a2e, 0x1c4137, 0x285a4b, 0x3b7563);
 const THREAD: Rgba = rgb(0xcdb17a);
 const THREAD_DARK: Rgba = rgb(0xb2955f);
-const IRON: Rgba = rgb(0x48434a);
 
 /// A rectangle of a picture, in its pixels: left, top, width, height.
 pub type Area = (i32, i32, i32, i32);
@@ -611,68 +610,6 @@ pub fn team_picture(
     canvas
 }
 
-/// The banner a match opens under, `width` pixels wide: a ribbon strung between two canes, each
-/// flying its side's pennant (none for the visitors, who fly the team's colours). Its two halves
-/// are where the window letters each side's name.
-pub const BANNER_H: i32 = CLOTH_H + 24;
-
-pub fn banner(width: i32, flags: [Option<Style>; 2], team: [Ramp; 2]) -> Canvas {
-    let w = width.max(120);
-    let mut canvas = Canvas::new(w as u32, BANNER_H as u32);
-    let foot = BANNER_H - 2;
-    let (left, right) = (6, w - 7);
-    // The ribbon, strung between the canes a little below their tops.
-    ribbon(&mut canvas, banner_ribbon(w));
-    for (side, x) in [(0usize, left), (1, right)] {
-        paint::vline(&mut canvas, x, 1, foot - 1, PLANK.shadow);
-        paint::vline(&mut canvas, x + 1, 1, foot - 1, PLANK.light);
-        paint::rect(&mut canvas, x - 1, 0, 4, 2, BRASS.base);
-        paint::hline(&mut canvas, x - 1, 0, 4, BRASS.shine);
-        match flags[side] {
-            Some(style) => {
-                let mut flag = cloth(style);
-                if side == 1 {
-                    flag = mirrored(&flag);
-                }
-                let fx = if side == 0 { x + 2 } else { x - CLOTH_W };
-                paint::blit(&mut canvas, &flag, fx, 2);
-            }
-            None => {
-                // A plain pennant in the team's colours.
-                let tip = if side == 0 { x + 14 } else { x - 13 };
-                let base = if side == 0 { x + 2 } else { x - 1 };
-                paint::polygon(
-                    &mut canvas,
-                    &[(base as f32, 2.0), (tip as f32, 7.0), (base as f32, 12.0)],
-                    team[side].base,
-                );
-                paint::line(&mut canvas, (base, 2), (tip, 7), team[side].light);
-                paint::line(&mut canvas, (base, 12), (tip, 7), team[side].shadow);
-            }
-        }
-        paint::put(&mut canvas, x, foot, IRON);
-        paint::put(&mut canvas, x + 1, foot, IRON);
-    }
-    canvas
-}
-
-/// Where the banner's ribbon is.
-pub fn banner_ribbon(width: i32) -> Area {
-    (CLOTH_W + 10, CLOTH_H - 4, width - (CLOTH_W + 10) * 2, 18)
-}
-
-/// A picture turned to face the other way.
-fn mirrored(canvas: &Canvas) -> Canvas {
-    let (w, h) = (canvas.width() as i32, canvas.height() as i32);
-    let mut out = Canvas::new(w as u32, h as u32);
-    for y in 0..h {
-        for x in 0..w {
-            out.set(w - 1 - x, y, canvas.get(x, y));
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,8 +678,5 @@ mod tests {
         );
         let plate = plate(120);
         assert_eq!(plate.get(60, PLATE_H / 2).a, 255);
-        let banner = banner(200, [Some(Style::default()), None], crate::scene::TEAM);
-        let (bx, by, bw, bh) = banner_ribbon(200);
-        assert_eq!(banner.get(bx + bw / 2, by + bh / 2).a, 255);
     }
 }
