@@ -246,6 +246,8 @@ pub enum MatchError {
     Duplicate,
     #[error("the rules cannot be played: {0}")]
     Rules(#[from] crate::ruleset::RulesetError),
+    #[error("the arena cannot be set up: {0}")]
+    Variant(#[from] crate::variant::VariantError),
 }
 
 #[derive(Clone, Debug)]

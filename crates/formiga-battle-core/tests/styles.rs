@@ -77,29 +77,46 @@ fn every_style_gives_its_team_different_jobs_from_every_other() {
     );
 }
 
+/// Every style, the adaptive one too.
+const EVERY: [Archetype; 5] = [
+    Archetype::Aggressor,
+    Archetype::Defender,
+    Archetype::Tactician,
+    Archetype::Opportunist,
+    Archetype::Adaptive,
+];
+
 #[test]
-fn no_style_beats_every_other_style() {
+fn on_no_arena_does_one_style_beat_every_other_style() {
     let mut wins_against_all = Vec::new();
     let mut report = String::new();
-    for a in Archetype::ALL {
-        let mut beats_all = true;
-        for b in Archetype::ALL {
-            if a == b {
-                continue;
+    for arena in Arena::built_in() {
+        for a in EVERY {
+            let mut beats_all = true;
+            for b in EVERY {
+                if a == b {
+                    continue;
+                }
+                let s = run(
+                    &arena,
+                    Ruleset::default(),
+                    5,
+                    60,
+                    [Coach::Styled(a), Coach::Styled(b)],
+                );
+                let score = s.left.score();
+                report.push_str(&format!(
+                    "{}: {} v {}: {score:.3}\n",
+                    arena.name,
+                    a.label(),
+                    b.label()
+                ));
+                // 120 matches a pair: about 0.045 either way is chance.
+                beats_all &= score > 0.6;
             }
-            let s = run(
-                &Arena::backyard(),
-                Ruleset::default(),
-                5,
-                25,
-                [Coach::Styled(a), Coach::Styled(b)],
-            );
-            let score = s.left.score();
-            report.push_str(&format!("{} v {}: {score:.3}\n", a.label(), b.label()));
-            beats_all &= score > 0.55;
-        }
-        if beats_all {
-            wins_against_all.push(a.label());
+            if beats_all {
+                wins_against_all.push(format!("{} on {}", a.label(), arena.name));
+            }
         }
     }
     eprintln!("{report}");
@@ -107,4 +124,40 @@ fn no_style_beats_every_other_style() {
         wins_against_all.is_empty(),
         "{wins_against_all:?} beat every other style:\n{report}"
     );
+}
+
+#[test]
+fn the_adaptive_coach_answers_what_the_other_team_orders_most() {
+    use formiga_battle_core::ai::adapted;
+    let rosters = || {
+        [
+            (0..3).map(|i| tournament::drawn_creature(4, i)).collect(),
+            (3..6).map(|i| tournament::drawn_creature(4, i)).collect(),
+        ]
+    };
+    // Against a team that only ever holds, after three turns of watching it goes round them.
+    let mut m = Match::new(Arena::backyard(), Ruleset::default(), 4, rosters()).unwrap();
+    assert_eq!(
+        adapted(&m, Side::Left),
+        Archetype::Adaptive,
+        "nothing seen yet"
+    );
+    for turn in 0..3 {
+        let plans = [
+            Coach::Styled(Archetype::Adaptive).plan(&m, Side::Left),
+            Coach::Turtle.plan(&m, Side::Right),
+        ];
+        m.resolve_turn(plans);
+        if turn == 0 {
+            assert_eq!(
+                adapted(&m, Side::Left),
+                Archetype::Adaptive,
+                "one turn is not enough"
+            );
+        }
+    }
+    assert_eq!(adapted(&m, Side::Left), Archetype::Tactician);
+    // It reads only what was sent: the same match gives the same answer.
+    let again = m.clone();
+    assert_eq!(adapted(&again, Side::Left), adapted(&m, Side::Left));
 }

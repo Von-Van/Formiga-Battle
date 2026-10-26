@@ -4,7 +4,7 @@
 //! it until the Handler sets it here.
 
 use super::{BattleApp, card, padlock, portrait_mat, rosette};
-use crate::chrome::{self, ink, label_job};
+use crate::chrome::{self, hand_job, ink};
 use eframe::egui::{self, Id, RichText};
 use formiga_battle_contract::{MatchSummary, Mode};
 
@@ -48,7 +48,7 @@ impl BattleApp {
         if history.is_empty() {
             ui.label(
                 RichText::new("No matches yet. Take the train out to play one.")
-                    .size(14.0)
+                    .size(16.0)
                     .italics()
                     .color(ink::MUTED),
             );
@@ -99,13 +99,13 @@ impl BattleApp {
                                             ended(&summary.ended_by),
                                             summary.turns
                                         ))
-                                        .size(12.5)
+                                        .size(15.0)
                                         .color(ink::MUTED),
                                     );
                                     if let Some(trio) = ours {
                                         ui.label(
                                             RichText::new(format!("Played as {}", trio.name))
-                                                .size(12.0)
+                                                .size(15.0)
                                                 .color(ink::FOREST),
                                         );
                                     }
@@ -140,9 +140,9 @@ impl BattleApp {
         ui.add_space(u * 2.0);
         let line = |ui: &mut egui::Ui, label: &str, value: String| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(label).size(13.0).color(ink::MUTED));
+                ui.label(RichText::new(label).size(15.0).color(ink::MUTED));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(label_job(&value, 12.0, ink::FOREST));
+                    ui.label(hand_job(&value, 12.0, ink::FOREST));
                 });
             });
         };
@@ -162,7 +162,7 @@ impl BattleApp {
         for cup in &crate::rewards::CUPS {
             let wins = record.cup_wins(cup.id).min(crate::rewards::CUP_WINS);
             ui.horizontal(|ui| {
-                ui.label(RichText::new(cup.name).size(13.0).color(ink::PAGE));
+                ui.label(RichText::new(cup.name).size(15.0).color(ink::PAGE));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = u;
                     if open.contains(&cup.arena) {
@@ -179,7 +179,7 @@ impl BattleApp {
         ui.add_space(u * 4.0);
         ui.label(
             RichText::new("Formiga Desktop keeps all of this with your colony.")
-                .size(11.5)
+                .size(15.0)
                 .italics()
                 .color(ink::MUTED),
         );
@@ -229,7 +229,7 @@ impl BattleApp {
                     ui.horizontal(|ui| {
                         ui.add_sized(
                             [100.0, u * 12.0],
-                            egui::Label::new(RichText::new(label).size(13.0).color(ink::PAGE)),
+                            egui::Label::new(RichText::new(label).size(15.0).color(ink::PAGE)),
                         );
                         chrome::dial(ui, value, width, !muted, u);
                     });
@@ -246,8 +246,8 @@ impl BattleApp {
         chrome::kicker(ui, "Keys");
         ui.add_space(u * 2.0);
         for (keys, does) in KEYS {
-            ui.label(label_job(keys, 9.5, ink::FOREST));
-            ui.label(RichText::new(does).size(12.5).color(ink::PAGE));
+            ui.label(hand_job(keys, 9.5, ink::FOREST));
+            ui.label(RichText::new(does).size(15.0).color(ink::PAGE));
             ui.add_space(u);
         }
         ui.add_space(u * 6.0);
@@ -259,11 +259,11 @@ impl BattleApp {
                 env!("CARGO_PKG_VERSION"),
                 formiga_battle_core::RULES_VERSION
             ))
-            .size(12.5),
+            .size(15.0),
         );
         ui.label(
             RichText::new(self.host.describe())
-                .size(12.5)
+                .size(15.0)
                 .color(ink::MUTED),
         );
     }
@@ -281,8 +281,8 @@ fn switch_row(ui: &mut egui::Ui, name: &str, does: &str, on: &mut bool, u: f32) 
             chrome::switch(ui, on, u);
             ui.add_space(u * 6.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                ui.label(label_job(name, chrome::LABEL + 1.0, ink::FOREST));
-                ui.label(RichText::new(does).size(12.5));
+                ui.label(hand_job(name, chrome::LABEL + 1.0, ink::FOREST));
+                ui.label(RichText::new(does).size(15.0));
             });
         });
     });
@@ -295,7 +295,7 @@ fn stamp(ui: &mut egui::Ui, won: Option<bool>, u: f32) {
         Some(false) => ("Lost", ink::STAMP),
         None => ("Drawn", ink::MUTED),
     };
-    let galley = ui.painter().layout_job(label_job(word, 11.0, colour));
+    let galley = ui.painter().layout_job(hand_job(word, 11.0, colour));
     let size = egui::vec2(u * 32.0, galley.size().y + u * 6.0);
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let painter = ui.painter();

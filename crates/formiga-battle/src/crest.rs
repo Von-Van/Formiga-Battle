@@ -36,6 +36,8 @@ pub enum Badge {
     Tactician,
     /// Plays for what turns up: a glint.
     Opportunist,
+    /// Reads how you play: an eye.
+    Adaptive,
     /// A friend's team: a heart.
     Friend,
     /// The colony's own: a star.
@@ -50,6 +52,7 @@ impl Badge {
             Defender => Self::Defender,
             Tactician => Self::Tactician,
             Opportunist => Self::Opportunist,
+            Adaptive => Self::Adaptive,
         }
     }
 
@@ -98,6 +101,17 @@ impl Badge {
                 "...###...",
                 "....#....",
                 "....#....",
+            ],
+            Self::Adaptive => [
+                ".........",
+                ".........",
+                "..#####..",
+                ".#.....#.",
+                "#..###..#",
+                "#..###..#",
+                ".#.....#.",
+                "..#####..",
+                ".........",
             ],
             Self::Friend => [
                 ".........",
@@ -398,6 +412,7 @@ mod tests {
             Badge::Defender,
             Badge::Tactician,
             Badge::Opportunist,
+            Badge::Adaptive,
             Badge::Friend,
             Badge::Own,
         ];

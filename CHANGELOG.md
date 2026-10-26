@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- The Season page is drawn in the notebook's pencil: its heading says in the Handler's own words
+  what is next or how the last event went; the season's four events stand as stations on a line,
+  stamped with who won each; the event under way is a bracket of cards, each Handler with their
+  pennant, the one who went through in bold with how, an open place naming who could fill it, and
+  the champion stamped. Its right page has the Handler's standing on a card with their pennant,
+  the season's points as bars, the Hall of Champions on brass plates, the newest thing noticed on
+  a sticky note, and every rival with their pennant and how the meetings stand.
+- The result of a match against a rival shows their pennant beside how the meetings stand, and
+  stamps how the event stands ("Through!", "Out", "Champion!") beside the line that says it.
+- A fifth coaching style, the Adaptive, reads what the other Handler has ordered over the last
+  three turns and answers it by the circle of orders, and a ninth rival plays it: Morrow Quill of
+  The Weathervane. Seven rivals play each season, the rest sitting it out in turn.
+- Rivals grow stronger as the competition rises: they play their style's book in cup matches and
+  Opens, think each turn through with their style's priorities at a Regional, and also know their
+  own team at a Championship. None reads the other team's leanings. A good playbook wins the cups
+  and the Opens; a Regional needs more. See docs/RULES.md, "Rivals' tiers" and "Balance", and the
+  new `balance` example that measures it all.
+- A Secure stage set to hold facing across the board keeps that facing on the squares the team
+  already holds, instead of pressing onto them and facing the nearest of the other team.
+- The relay Battle keeps for tests never confirms a forfeited match, and once a finished match's
+  boards are both in, a later report cannot change what the two windows were told, as the site's
+  relay now does.
 - A match opens on a painted card. Each side's panel slides in from its edge in its team's
   colours, its pennant flown large, its name on a ribbon, its Handler on a brass plate, its club
   on a cloth tab and a stitched badge saying how it plays, and a red burst with VS on it punches
@@ -55,6 +77,17 @@
 - Battle keeps the colony's record against the rivals in a small file of its own, one per colony
   (`careers/<colony>.json` beside `settings.json`), counting each match once by the id Desktop
   counts it by. Cups, points, the notebook and trios stay with Desktop. A rehearsal keeps none.
+- Every match against the visitors or a friend is set up in a variant of its place, drawn by the
+  match seed: where the teams start (a step in, bunched far, spread wide, or as usual), what turns
+  up (few finds, plenty, only light things, one pair of spots, or as usual), and at times one
+  condition (an early or restless map event, the event left to the switches, switches that rest
+  longer, a gate left open). The right team's half is always the mirror of the left's, and every
+  variant passes the same fairness check the arenas do. The Where page says how the next match is
+  set up, and the match introduction names what is different before the first order. Field
+  Lessons stay the Backyard as it always is. A match record keeps the arena as it was set up, so a
+  variant match replays exactly, and a record kept before reads as before. `--variant`, `arena
+  --variants` and `tournament --sweep` set up, list and measure them from the command line. Rules
+  version 9 is unchanged. See docs/RULES.md, "Match variants".
 - Four coaching styles for a Handler who is not a person, each a way of playing the Exhibition
   coach's book: the Aggressor presses first and sends everyone, the Defender holds the yard and
   shuts the board, the Tactician goes round the sides and behind, and the Opportunist plays for

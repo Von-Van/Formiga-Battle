@@ -4,7 +4,7 @@
 //! kept by Desktop with the colony's Battle record, and none of it changes how a match is played.
 
 use super::{BattleApp, Kind, sticky, texture};
-use crate::chrome::{self, ink, label_job};
+use crate::chrome::{self, hand_job, ink};
 use crate::crest;
 use crate::heraldry::{self, Part};
 use crate::identity::{self, FIELDS, SHAPES, SYMBOLS, Standing, Style, TRIMS};
@@ -220,7 +220,7 @@ impl BattleApp {
                         ui.allocate_exact_size(vec2(u * 34.0, TILE_ROW * u), Sense::hover());
                     let galley =
                         ui.painter()
-                            .layout_job(label_job(label, chrome::LABEL - 0.5, ink::MUTED));
+                            .layout_job(hand_job(label, chrome::LABEL - 0.5, ink::MUTED));
                     ui.painter().galley(
                         pos2(slot.min.x, slot.center().y - galley.size().y / 2.0 - u),
                         galley,
@@ -250,7 +250,7 @@ impl BattleApp {
                     "{}. It flies beside your team in every match, and your friends see it.",
                     capitalised(&style.words())
                 ))
-                .size(12.0)
+                .size(15.0)
                 .italics()
                 .color(ink::MUTED),
             );
@@ -346,7 +346,7 @@ impl BattleApp {
         let standing = Standing::of(&self.table.record);
         let _ = ctx;
         let rules = self.rules;
-        on_rules(ui, rules, label_job("Standing", chrome::LABEL, ink::FOREST));
+        on_rules(ui, rules, hand_job("Standing", chrome::LABEL, ink::FOREST));
         on_rules(
             ui,
             rules,
@@ -367,7 +367,7 @@ impl BattleApp {
         on_rules(
             ui,
             rules,
-            label_job("Your trios", chrome::LABEL, ink::FOREST),
+            hand_job("Your trios", chrome::LABEL, ink::FOREST),
         );
         let trios: Vec<Trio> = self.table.record.trios.iter().rev().cloned().collect();
         if trios.is_empty() {
@@ -500,7 +500,7 @@ impl BattleApp {
                 let y = ui.cursor().min.y;
                 let rule = rule_below(rules, y + rules.1);
                 ui.add_space((rule - rules.1 * 0.85 - y).max(0.0));
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = u * 3.0;
                     if !renaming
                         && chrome::button(ui, "rename", Kind::Quiet, false, true, None, u).clicked()
@@ -675,7 +675,7 @@ impl BattleApp {
         ui.horizontal(|ui| {
             let edit = ui.add(
                 egui::TextEdit::singleline(&mut self.trio_draft)
-                    .font(FontId::proportional(14.0))
+                    .font(FontId::proportional(16.0))
                     .char_limit(identity::TRIO_CHARS)
                     .hint_text("Name these three")
                     .desired_width((ui.available_width() - 90.0).max(120.0)),
@@ -703,7 +703,7 @@ impl BattleApp {
             }
         });
         if let Err(why) = can {
-            ui.label(RichText::new(why).size(11.5).italics().color(ink::MUTED));
+            ui.label(RichText::new(why).size(15.0).italics().color(ink::MUTED));
         }
     }
 
@@ -838,6 +838,44 @@ impl BattleApp {
                 rect,
                 Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
                 Color32::WHITE.gamma_multiply(pop),
+            );
+        }
+        // How this match is set up, when it is not the place as it always is: said once, here,
+        // before the first order, on a ribbon of its own under the burst.
+        let setup = self
+            .table
+            .m
+            .as_ref()
+            .filter(|_| self.table.lesson.is_none())
+            .and_then(|m| m.arena.variant.as_ref().map(|v| v.headline(&m.arena)))
+            .unwrap_or_default();
+        if !setup.is_empty() {
+            let rw = ((board.width() * 0.5) / scale).floor() as i32;
+            let picture = self.painted(&ctx, format!("setup-ribbon-{rw}"), |_| {
+                let mut canvas = formiga_art::Canvas::new(rw.max(40) as u32, 18);
+                heraldry::ribbon(&mut canvas, (8, 1, rw.max(40) - 16, 15));
+                canvas
+            });
+            let rsize = picture.size_vec2() * scale;
+            let rect = Rect::from_min_size(
+                pos2(
+                    (board.center().x - rsize.x / 2.0).round(),
+                    (top + size.y + u * 2.0).round(),
+                ),
+                rsize,
+            );
+            painter.image(
+                picture.id(),
+                rect,
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            letter(
+                &painter,
+                rect.shrink2(vec2(10.0 * scale, 2.0 * scale)),
+                &setup,
+                ON_RIBBON,
+                0.62,
             );
         }
     }
@@ -1028,10 +1066,10 @@ fn letter_left(
 /// Words lettered in the notebook's printed capitals, as large as `area` holds, centred on it.
 pub(super) fn letter(painter: &egui::Painter, area: Rect, text: &str, colour: Color32, fill: f32) {
     let mut size = (area.height() * fill).clamp(8.0, 16.0);
-    let mut galley = painter.layout_job(label_job(text, size, colour));
+    let mut galley = painter.layout_job(hand_job(text, size, colour));
     while galley.size().x > area.width() * 0.92 && size > 7.0 {
         size -= 0.5;
-        galley = painter.layout_job(label_job(text, size, colour));
+        galley = painter.layout_job(hand_job(text, size, colour));
     }
     painter.galley(area.center() - galley.size() / 2.0, galley, colour);
 }
@@ -1050,14 +1088,14 @@ struct Side {
 /// be read first.
 fn shadowed(painter: &egui::Painter, area: Rect, text: &str, colour: Color32, fill: f32) {
     let mut size = (area.height() * fill).clamp(10.0, 24.0);
-    let mut galley = painter.layout_job(label_job(text, size, colour));
+    let mut galley = painter.layout_job(hand_job(text, size, colour));
     while galley.size().x > area.width() * 0.92 && size > 8.0 {
         size -= 0.5;
-        galley = painter.layout_job(label_job(text, size, colour));
+        galley = painter.layout_job(hand_job(text, size, colour));
     }
     let at = area.center() - galley.size() / 2.0;
     let shade = Color32::from_rgba_unmultiplied(0x10, 0x18, 0x10, 200);
-    let under = painter.layout_job(label_job(text, size, shade));
+    let under = painter.layout_job(hand_job(text, size, shade));
     painter.galley(at + vec2(1.5, 1.5), under, shade);
     painter.galley(at, galley, colour);
 }
