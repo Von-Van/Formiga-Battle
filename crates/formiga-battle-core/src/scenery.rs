@@ -66,7 +66,8 @@ impl Match {
                 },
             });
         }
-        if next >= items::FIRST_TURN && (next - items::FIRST_TURN).is_multiple_of(items::EVERY) {
+        let finds = self.arena.finds;
+        if finds.due(next) {
             let free = |t: &Tile| {
                 !self.board.ground.iter().any(|(g, _)| g == t)
                     && !self.board.twigs.iter().any(|(w, _)| w == t)
@@ -82,15 +83,15 @@ impl Match {
             }
             let roll = |k: u64| rng::roll(self.seed, Purpose::Find, &[u64::from(next), k]);
             let spots = pairs[(roll(1) % pairs.len() as u64) as usize].clone();
-            let total: u64 = Item::ALL.iter().map(|i| i.weight()).sum();
+            let total: u64 = Item::ALL.iter().map(|i| finds.weight(*i)).sum();
             let mut pick = roll(2) % total;
             let item = Item::ALL
                 .into_iter()
                 .find(|i| {
-                    if pick < i.weight() {
+                    if pick < finds.weight(*i) {
                         true
                     } else {
-                        pick -= i.weight();
+                        pick -= finds.weight(*i);
                         false
                     }
                 })

@@ -40,8 +40,8 @@ pub mod ink {
     pub const PAGE: Color32 = Color32::from_rgb(35, 54, 47);
     /// Headings, and the accent the notebook is built round.
     pub const FOREST: Color32 = Color32::from_rgb(28, 65, 55);
-    /// Present, but not asking for attention.
-    pub const MUTED: Color32 = Color32::from_rgb(110, 119, 108);
+    /// Present, but not asking for attention: the pencil's grey, at better than 4.5:1 on paper.
+    pub const MUTED: Color32 = Color32::from_rgb(80, 90, 79);
     /// Whatever is chosen.
     pub const MINT: Color32 = Color32::from_rgb(174, 221, 186);
     /// The notebook's outlines: plum, as the creatures are outlined.
@@ -345,7 +345,28 @@ fn tab_slip(canvas: &mut Canvas, tab: &Tab) {
 /// The size every printed label is set at, as Home's notebook sets them.
 pub const LABEL: f32 = 10.5;
 
-/// A printed label: small spaced capitals.
+/// The smallest the pencil hand is written: kickers, buttons and anything jotted in passing.
+pub const HAND: f32 = 15.0;
+
+/// Something the Handler jots down as a heading: the pencil hand's bold capitals, spaced a
+/// little, never under [`HAND`].
+pub fn hand_job(text: &str, size: f32, color: Color32) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        &text.to_uppercase(),
+        0.0,
+        egui::TextFormat {
+            font_id: formiga_pencil::hand_bold(size.max(HAND)),
+            color,
+            extra_letter_spacing: 1.0,
+            ..Default::default()
+        },
+    );
+    job
+}
+
+/// A printed label, for what really is printed (the brass plate, tab numbers, a room's code):
+/// small spaced capitals in monospace.
 pub fn label_job(text: &str, size: f32, color: Color32) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     job.append(
@@ -363,7 +384,7 @@ pub fn label_job(text: &str, size: f32, color: Color32) -> egui::text::LayoutJob
 
 /// A section's printed label on a page.
 pub fn kicker(ui: &mut egui::Ui, text: &str) {
-    ui.label(label_job(text, LABEL, ink::FOREST));
+    ui.label(hand_job(text, HAND, ink::FOREST));
 }
 
 /// A one-unit outline round `rect` with its corners left out: the notebook's stepped edge.
@@ -388,6 +409,184 @@ pub fn card(painter: &egui::Painter, rect: egui::Rect, unit: f32, fill: Color32,
     stepped(painter, rect, unit, edge);
 }
 
+/// A rectangle `size` big centred on `centre`, turned by `angle` about `pivot`, added to `mesh`.
+fn turned_rect(
+    mesh: &mut egui::Mesh,
+    pivot: egui::Pos2,
+    angle: f32,
+    centre: egui::Pos2,
+    size: egui::Vec2,
+    colour: Color32,
+) {
+    if colour.a() == 0 || size.x <= 0.0 || size.y <= 0.0 {
+        return;
+    }
+    let turn = egui::emath::Rot2::from_angle(angle);
+    let half = size / 2.0;
+    let base = mesh.vertices.len() as u32;
+    for corner in [
+        egui::vec2(-half.x, -half.y),
+        egui::vec2(half.x, -half.y),
+        egui::vec2(half.x, half.y),
+        egui::vec2(-half.x, half.y),
+    ] {
+        mesh.colored_vertex(pivot + turn * (centre - pivot + corner), colour);
+    }
+    mesh.add_triangle(base, base + 1, base + 2);
+    mesh.add_triangle(base, base + 2, base + 3);
+}
+
+/// `rect`'s outline, `width` thick and turned by `angle` about its centre.
+fn turned_outline(
+    mesh: &mut egui::Mesh,
+    rect: egui::Rect,
+    angle: f32,
+    width: f32,
+    colour: Color32,
+) {
+    let c = rect.center();
+    let (w, h) = (rect.width(), rect.height());
+    for (centre, size) in [
+        (
+            egui::pos2(c.x, rect.top() + width / 2.0),
+            egui::vec2(w - 2.0 * width, width),
+        ),
+        (
+            egui::pos2(c.x, rect.bottom() - width / 2.0),
+            egui::vec2(w - 2.0 * width, width),
+        ),
+        (
+            egui::pos2(rect.left() + width / 2.0, c.y),
+            egui::vec2(width, h - 2.0 * width),
+        ),
+        (
+            egui::pos2(rect.right() - width / 2.0, c.y),
+            egui::vec2(width, h - 2.0 * width),
+        ),
+    ] {
+        turned_rect(mesh, c, angle, centre, size, colour);
+    }
+}
+
+/// The tape that holds a photograph or a note to the page.
+pub const TAPE: Color32 = Color32::from_rgba_premultiplied(240, 236, 220, 153);
+
+/// A strip of tape `size` big, centred on `centre` and turned by `angle`.
+pub fn tape(painter: &egui::Painter, centre: egui::Pos2, size: egui::Vec2, angle: f32) {
+    let mut mesh = egui::Mesh::default();
+    turned_rect(&mut mesh, centre, angle, centre, size, TAPE);
+    painter.add(egui::Shape::mesh(mesh));
+}
+
+/// A rubber stamp pressed on the page at `centre`, turned by `angle`: `word` in the hand's bold
+/// capitals inside a stepped double edge, the inner one faint as ink takes on paper, over `fill`
+/// if anything shows through it. Won, lost and drawn, a NEW, a result over the board: every stamp
+/// in the notebook is this one. Returns the space it covers, unturned.
+#[allow(clippy::too_many_arguments)]
+pub fn stamp(
+    painter: &egui::Painter,
+    centre: egui::Pos2,
+    word: &str,
+    size: f32,
+    colour: Color32,
+    fill: Option<Color32>,
+    angle: f32,
+    unit: f32,
+) -> egui::Rect {
+    let galley = painter.layout_job(hand_job(word, size, colour));
+    let rect =
+        egui::Rect::from_center_size(centre, galley.size() + egui::vec2(unit * 8.0, unit * 3.0));
+    let mut mesh = egui::Mesh::default();
+    if let Some(fill) = fill {
+        turned_rect(&mut mesh, centre, angle, centre, rect.size(), fill);
+    }
+    turned_outline(&mut mesh, rect, angle, unit, colour);
+    turned_outline(
+        &mut mesh,
+        rect.shrink(unit),
+        angle,
+        unit,
+        colour.gamma_multiply(0.45),
+    );
+    painter.add(egui::Shape::mesh(mesh));
+    let turn = egui::emath::Rot2::from_angle(angle);
+    let top_left = centre - galley.size() / 2.0;
+    let at = centre + turn * (top_left - centre);
+    painter.add(egui::epaint::TextShape::new(at, galley, colour).with_angle(angle));
+    rect
+}
+
+/// A photograph pasted onto the page: a card mat round `photo`, with a hard shadow, and a strip
+/// of tape across each top corner.
+pub fn taped_mat(painter: &egui::Painter, photo: egui::Rect, unit: f32) {
+    card(
+        painter,
+        photo.expand(unit * 4.0),
+        unit,
+        ink::CARD,
+        ink::LINE.gamma_multiply(0.55),
+    );
+    let strip = egui::vec2(unit * 29.0, unit * 9.0);
+    for (corner, angle) in [(photo.left_top(), -32f32), (photo.right_top(), 32f32)] {
+        tape(
+            painter,
+            corner + egui::vec2(0.0, -unit),
+            strip,
+            angle.to_radians(),
+        );
+    }
+}
+
+/// A keepsake on its plinth, filling `rect`: the picture on a brass-rimmed slip, a forest tag
+/// with `tag` under it.
+pub fn plinth(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    picture: &egui::TextureHandle,
+    tag: &str,
+    unit: f32,
+) {
+    let galley = painter.layout_job(hand_job(tag, HAND, ink::COVER));
+    let tag_h = galley.size().y + unit * 3.0;
+    let slip = egui::Rect::from_min_max(
+        rect.min,
+        egui::pos2(rect.max.x, rect.max.y - tag_h - unit * 3.0),
+    );
+    let shadow = slip.translate(egui::vec2(unit * 2.0, unit * 2.0));
+    painter.rect_filled(shadow, 0.0, ink::SHADOW);
+    painter.rect_filled(slip, 0.0, ink::BRASS_EDGE);
+    painter.rect_filled(slip.shrink(unit), 0.0, ink::BRASS);
+    painter.rect_filled(
+        slip.shrink(unit * 2.0),
+        0.0,
+        Color32::from_rgb(0xf6, 0xe7, 0xbd),
+    );
+    // The keepsake at a whole number of its pixels, as large as the slip allows.
+    let room = slip.shrink(unit * 5.0);
+    let size = picture.size_vec2();
+    let times = (room.width() / (size.x * unit))
+        .min(room.height() / (size.y * unit))
+        .floor()
+        .max(1.0);
+    let ppp = painter.ctx().pixels_per_point();
+    let drawn = size * unit * times;
+    let min = room.center() - drawn / 2.0;
+    let min = egui::pos2((min.x * ppp).round() / ppp, (min.y * ppp).round() / ppp);
+    painter.image(
+        picture.id(),
+        egui::Rect::from_min_size(min, drawn),
+        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+        Color32::WHITE,
+    );
+    let tag_rect = egui::Rect::from_center_size(
+        egui::pos2(rect.center().x, rect.max.y - tag_h / 2.0),
+        egui::vec2(galley.size().x + unit * 8.0, tag_h),
+    );
+    painter.rect_filled(tag_rect, 0.0, ink::BRASS);
+    painter.rect_filled(tag_rect.shrink(unit), 0.0, ink::FOREST);
+    painter.galley(tag_rect.center() - galley.size() / 2.0, galley, ink::COVER);
+}
+
 /// How a button looks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -406,10 +605,10 @@ pub enum Kind {
 /// much clear for it before laying out what goes beside it.
 pub fn button_size(ui: &egui::Ui, text: &str, kind: Kind, unit: f32) -> egui::Vec2 {
     let size = match kind {
-        Kind::Primary => 13.0,
-        _ => LABEL,
+        Kind::Primary => 17.0,
+        _ => HAND,
     };
-    let galley = ui.painter().layout_job(label_job(text, size, ink::PAGE));
+    let galley = ui.painter().layout_job(hand_job(text, size, ink::PAGE));
     natural_size(galley.size(), kind, unit)
 }
 
@@ -422,7 +621,7 @@ fn natural_size(lettering: egui::Vec2, kind: Kind, unit: f32) -> egui::Vec2 {
     lettering + pad * 2.0 + egui::vec2(0.0, unit)
 }
 
-/// A button in the notebook's way, after Hill's: printed capitals on a slip of card with a
+/// A button in the notebook's way, after Hill's: pencilled capitals on a slip of card with a
 /// stepped edge and a lip along its foot, mint when pointed at or chosen; pressing it takes the
 /// lip away and sinks the lettering a unit, so it feels pressed.
 pub fn button(
@@ -435,15 +634,15 @@ pub fn button(
     unit: f32,
 ) -> egui::Response {
     let size = match kind {
-        Kind::Primary => 13.0,
-        _ => LABEL,
+        Kind::Primary => 17.0,
+        _ => HAND,
     };
     let colour = match kind {
         Kind::Primary => ink::COVER,
         _ if !enabled => ink::MUTED,
         _ => ink::PAGE,
     };
-    let galley = ui.painter().layout_job(label_job(text, size, colour));
+    let galley = ui.painter().layout_job(hand_job(text, size, colour));
     let natural = natural_size(galley.size(), kind, unit);
     let size = egui::vec2(width.unwrap_or(natural.x).max(natural.x), natural.y);
     let sense = if enabled {
@@ -796,19 +995,19 @@ pub fn turn_leaf(
     true
 }
 
-/// A page's heading, as Desktop's journal heads its pages: a printed line saying which page of
-/// the notebook this is, the page's title, and a line on what it is for.
+/// A page's heading, as Desktop's journal heads its pages: a pencilled line saying which page of
+/// the notebook this is, the page's title, and a line on what it is for, all in the Handler's
+/// hand.
 pub fn page_heading(ui: &mut egui::Ui, line: &str, title: &str, observation: &str) {
-    ui.label(label_job(line, LABEL, ink::FOREST));
+    ui.label(hand_job(line, HAND, ink::FOREST));
     ui.label(
         egui::RichText::new(title)
-            .size(26.0)
-            .color(ink::PAGE)
-            .strong(),
+            .font(formiga_pencil::hand_bold(34.0))
+            .color(ink::PAGE),
     );
     ui.label(
         egui::RichText::new(observation)
-            .size(13.5)
+            .size(16.0)
             .color(ink::MUTED),
     );
 }
@@ -816,6 +1015,9 @@ pub fn page_heading(ui: &mut egui::Ui, line: &str, title: &str, observation: &st
 /// The page's visuals: ink on paper, mint for whatever is chosen, and the notebook's plum outline
 /// instead of rounded grey boxes. Home's, so a text field or a scroll bar reads the same in both.
 pub fn style(ctx: &egui::Context) {
+    // Everything the Handler writes is in the pencil hand; only what is printed asks for
+    // monospace.
+    formiga_pencil::install(ctx, formiga_pencil::Everywhere::Yes);
     ctx.set_theme(egui::ThemePreference::Light);
     for theme in [egui::Theme::Light, egui::Theme::Dark] {
         ctx.style_mut_of(theme, |style| {
@@ -866,6 +1068,16 @@ pub fn style(ctx: &egui::Context) {
             widgets.active.bg_fill = ink::MINT.gamma_multiply(0.85);
             widgets.active.weak_bg_fill = ink::MINT.gamma_multiply(0.85);
             widgets.active.bg_stroke = egui::Stroke::new(1.0, ink::FOREST);
+            for (text_style, size) in [
+                (egui::TextStyle::Body, 15.0),
+                (egui::TextStyle::Button, 15.0),
+                (egui::TextStyle::Small, 15.0),
+                (egui::TextStyle::Heading, 26.0),
+            ] {
+                style
+                    .text_styles
+                    .insert(text_style, egui::FontId::proportional(size));
+            }
             style.spacing.button_padding = egui::vec2(6.0, 2.0);
             style.spacing.item_spacing = egui::vec2(6.0, 4.0);
             style.spacing.scroll.floating = true;

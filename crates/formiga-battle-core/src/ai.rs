@@ -6,6 +6,7 @@ use crate::grid::Tile;
 use crate::interpret::distances;
 use crate::order::{Directive, Facing, Order, Side, Slot, TeamPlan};
 use crate::rng::{self, Purpose};
+use crate::style::{Archetype, Book};
 
 /// The order a creature gives itself when its Handler gave none in time. It is the same for both
 /// teams and only looks at the board as it stands and at the creature's own temperament: in the
@@ -112,13 +113,27 @@ pub enum Coach {
     /// Thinks each turn through the same way, imagining every creature as one that leans no way
     /// at all: the measure `Familiar` is held against.
     Generic,
+    /// Plays the Exhibition coach's book with one of the four styles' numbers (`style.rs`): a
+    /// Handler who can be told from another by what they order.
+    Styled(Archetype),
+    /// Thinks each turn through as the generic coach does, starting from its style's book and
+    /// valuing the board by its style's weights, imagining every creature as plain: a rival at
+    /// a Regional.
+    Thinking(Archetype),
+    /// The same, knowing its own team as they are: a rival at a Championship, who has played
+    /// with them all season. It still imagines the other team as plain.
+    Scouted(Archetype),
 }
 
 impl Coach {
     pub fn plan(self, m: &Match, side: Side) -> TeamPlan {
         match self {
             Self::Absent => Vec::new(),
-            Self::Exhibition => exhibition(m, side),
+            Self::Exhibition => book(m, side, &Book::EXHIBITION),
+            Self::Styled(Archetype::Adaptive) => book(m, side, &adapted(m, side).book()),
+            Self::Styled(archetype) => book(m, side, &archetype.book()),
+            Self::Thinking(archetype) => crate::plan::think_styled(m, side, archetype, false),
+            Self::Scouted(archetype) => crate::plan::think_styled(m, side, archetype, true),
             Self::Familiar => crate::plan::think_ahead(m, side, true),
             Self::Turtle => turtle(m, side),
             Self::Generic => crate::plan::think_ahead(m, side, false),
@@ -206,7 +221,67 @@ fn turtle(m: &Match, side: Side) -> TeamPlan {
     }]
 }
 
-fn exhibition(m: &Match, side: Side) -> TeamPlan {
+/// How many of the other team's last turns the adaptive coach weighs.
+const WATCHED: usize = 3;
+
+/// The book the adaptive coach plays this turn: until it has watched three turns, its own (the
+/// Exhibition coach's); then, if one kind of order is more than half of what the other team sent
+/// over the last three, the book that answers it by the circle of orders, and otherwise its own.
+/// It reads the plans both teams sent, which both Handlers see as each turn plays.
+pub fn adapted(m: &Match, side: Side) -> Archetype {
+    let seen: Vec<&TeamPlan> = m
+        .history
+        .iter()
+        .rev()
+        .take(WATCHED)
+        .map(|t| &t.submitted[side.other().index()])
+        .collect();
+    if seen.len() < WATCHED {
+        return Archetype::Adaptive;
+    }
+    let (mut press, mut hold, mut trick, mut work) = (0u32, 0u32, 0u32, 0u32);
+    for plan in seen {
+        for d in plan {
+            match d {
+                Directive::Press { .. } => press += 1,
+                Directive::Hold { .. } => hold += 1,
+                Directive::Trick { .. } => trick += 1,
+                Directive::Interact { .. } | Directive::UseItem { .. } => work += 1,
+            }
+        }
+    }
+    let most = press.max(hold).max(trick).max(work);
+    let total = press + hold + trick + work;
+    // Only a clear habit is answered: one kind of order more than half of all it saw. Anything
+    // less, and it keeps its own book rather than guess.
+    if most == 0 || most * 2 <= total {
+        return Archetype::Adaptive;
+    }
+    if most == press {
+        // Pressing: hold the yard and turn the presses away.
+        Archetype::Defender
+    } else if most == hold {
+        // Holding: go round and break the holds.
+        Archetype::Tactician
+    } else if most == trick {
+        // Tricking: press, and catch the tricksters.
+        Archetype::Aggressor
+    } else {
+        // Working the board: get to what turns up first.
+        Archetype::Opportunist
+    }
+}
+
+/// The opening book: the Exhibition coach's way of playing, with `style`'s numbers for every
+/// chance it takes. Every roll is numbered the same whatever the style, so the Exhibition
+/// coach's matches are the same as they were before there were styles.
+/// The opening book's plan for `side` with `style`'s numbers: for the thinking coaches to start
+/// from.
+pub(crate) fn book_plan(m: &Match, side: Side, style: &Book) -> TeamPlan {
+    book(m, side, style)
+}
+
+fn book(m: &Match, side: Side, style: &Book) -> TeamPlan {
     let mut plan: TeamPlan = Vec::new();
     let team: Vec<Slot> = m.team(side).collect();
     if team.is_empty() {
@@ -290,10 +365,20 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         .copied()
         .filter(|e| !holds(*e))
         .min_by_key(|e| (m.fighter(*e).at.distance(centre), *e));
-    // Each order takes a creature, a flank two; the team has only so many.
-    let mut hands = team.len().saturating_sub(1);
-    let flanking = flankable.filter(|_| hands >= 2 && roll(1) < 60);
-    if let Some(e) = flanking {
+    // Each order takes a creature, a flank two; the team has only so many, and a style may keep
+    // some at home beyond the one on the anchor.
+    let mut hands = team.len().saturating_sub(1 + usize::from(style.keep_home));
+    // A style that goes round rather than through tricks a holder before it thinks of flanking.
+    let tricking_first =
+        dug_in.filter(|_| style.prefers_trick && hands >= 1 && roll(4) < u64::from(style.trick));
+    let flanking = flankable
+        .filter(|_| tricking_first.is_none() && hands >= 2 && roll(1) < u64::from(style.flank));
+    if let Some(e) = tricking_first {
+        hands -= 1;
+        plan.push(Directive::Trick {
+            squares: vec![m.fighter(e).at],
+        });
+    } else if let Some(e) = flanking {
         hands -= 2;
         plan.push(Directive::Press {
             squares: vec![m.fighter(e).at],
@@ -302,7 +387,7 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         plan.push(anchor_order.clone());
     } else if let Some(e) = dug_in
         && hands >= 1
-        && roll(4) < 75
+        && roll(4) < u64::from(style.trick)
     {
         hands -= 1;
         plan.push(Directive::Trick {
@@ -310,7 +395,7 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         });
     } else if let Some(e) = loose
         && hands >= 1
-        && roll(2) < 80
+        && roll(2) < u64::from(style.press_loose)
     {
         hands -= 1;
         plan.push(Directive::Press {
@@ -328,7 +413,7 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         && hands >= 1
         && in_zone_ours < 2
         && let Some(t) = free_square(&[anchor])
-        && roll(3) < 70
+        && roll(3) < u64::from(style.second_home)
     {
         hands -= 1;
         plan.push(Directive::Press { squares: vec![t] });
@@ -384,15 +469,15 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
             break;
         }
         let r = roll(k);
-        let next = if let Some(t) = tap.filter(|_| r >= 60) {
+        let next = if let Some(t) = tap.filter(|_| r >= u64::from(style.tap_from)) {
             Directive::Interact { at: t }
-        } else if let Some(t) = find.filter(|_| r < 35) {
+        } else if let Some(t) = find.filter(|_| r < u64::from(style.find_below)) {
             Directive::Interact { at: t }
-        } else if let Some(e) = chase.filter(|_| r < 45) {
+        } else if let Some(e) = chase.filter(|_| r < u64::from(style.chase_below)) {
             Directive::Press {
                 squares: vec![m.fighter(e).at],
             }
-        } else if let Some(t) = lever.filter(|_| r >= 85) {
+        } else if let Some(t) = lever.filter(|_| r >= u64::from(style.lever_from)) {
             Directive::Interact { at: t }
         } else {
             Directive::Hold {
@@ -406,7 +491,9 @@ fn exhibition(m: &Match, side: Side) -> TeamPlan {
         plan.push(next);
         hands -= 1;
     }
-    plan.extend(item_uses(m, side, &[], |k| roll(30 + k) < 75));
+    plan.extend(item_uses(m, side, &[], |k| {
+        roll(30 + k) < u64::from(style.item_use)
+    }));
     plan
 }
 

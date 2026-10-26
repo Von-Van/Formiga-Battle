@@ -1,0 +1,13 @@
+[package]
+name = "formiga-battle-world"
+description = "Formiga Battle's events: brackets and fixtures played out under the same rules, with no drawing, clock or network"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+formiga-battle-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

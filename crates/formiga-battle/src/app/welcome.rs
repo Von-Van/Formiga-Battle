@@ -3,7 +3,7 @@
 //! with the sample colony meanwhile, or to close.
 
 use super::{BattleApp, Kind, dashed_rule, registry, slip_ribbon};
-use crate::chrome::{self, ink, label_job};
+use crate::chrome::{self, hand_job, ink};
 use eframe::egui::{self, Color32, Id, LayerId, Order, Rect, RichText, Sense, pos2, vec2};
 
 /// What the ribbon across the card's top says.
@@ -51,7 +51,7 @@ impl BattleApp {
             card.size(),
         );
         let painter = ctx.layer_painter(LayerId::new(Order::Middle, Id::new("welcome-under")));
-        let lettering = painter.layout_job(label_job(RIBBON, 13.0, registry::ON_RIBBON));
+        let lettering = painter.layout_job(hand_job(RIBBON, 13.0, registry::ON_RIBBON));
         let ribbon_size = lettering.size() + vec2(u * 22.0, u * 9.0);
         let ribbon = Rect::from_min_size(
             pos2(
@@ -75,14 +75,14 @@ impl BattleApp {
                     ui.set_width(words.width());
                     ui.label(RichText::new(TITLE).size(22.0).color(ink::PAGE).strong());
                     ui.add_space(u * 3.0);
-                    ui.label(RichText::new(how_to_open()).size(13.5).color(ink::PAGE));
+                    ui.label(RichText::new(how_to_open()).size(16.0).color(ink::PAGE));
                     ui.add_space(u * 2.0);
                     ui.label(
                         RichText::new(
                             "Meanwhile the sample colony is here to look around with. A look \
                              around keeps nothing.",
                         )
-                        .size(12.5)
+                        .size(15.0)
                         .color(ink::MUTED),
                     );
                     ui.add_space(u * 4.0);
@@ -92,12 +92,12 @@ impl BattleApp {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         ui.label(
                             RichText::new("Don't have Formiga yet? It's at")
-                                .size(12.5)
+                                .size(15.0)
                                 .color(ink::MUTED),
                         );
                         ui.hyperlink_to(
                             RichText::new("formigaworld.com")
-                                .size(12.5)
+                                .size(15.0)
                                 .color(ink::FOREST),
                             WEBSITE,
                         );

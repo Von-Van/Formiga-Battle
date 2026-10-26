@@ -3,10 +3,12 @@
 //! asks this what to show and tells it what was clicked, so tests drive the same code.
 
 use crate::announce::Callout;
+use crate::career::{self, Career, Shelf};
 use crate::friend::{Ask, Line, Told};
 use crate::look::Look;
 use crate::playback::{Frame, Playback};
 use crate::rewards;
+use crate::rival::{self, Rival};
 use crate::scene::{Choice, Marks, PlanKind, PlanMark};
 use formiga_battle_contract::{BattleRecord, BattleResult};
 use formiga_battle_contract::{BattleSnapshot, Contender};
@@ -15,6 +17,7 @@ use formiga_battle_core::ai::Coach;
 use formiga_battle_core::lesson::{Lesson, Verdict};
 use formiga_battle_core::muster::checked;
 use formiga_battle_core::notebook::Page;
+use formiga_battle_core::playbook::{Deviation, Runner};
 use formiga_battle_core::recap::recap_naming;
 use formiga_battle_core::rng::{self, Purpose};
 use formiga_battle_core::{
@@ -238,6 +241,18 @@ pub struct Table {
     pub board_teams: [Vec<Contender>; 2],
     /// The other side's name in recaps.
     pub other_name: String,
+    /// The rival Handler whose team the visitors are, in a match against them.
+    pub rival: Option<&'static Rival>,
+    /// The colony's career against the rivals: kept in Battle's own file, in `career_folder`, only
+    /// for a colony Desktop sent; a rehearsal plays it and keeps nothing.
+    pub career: Career,
+    pub career_folder: Option<PathBuf>,
+    /// The event fixture the next match is, by place in the event's bracket.
+    pub event_fixture: Option<usize>,
+    /// How the event stands after the match being shown, as the result says it.
+    pub event_line: Option<String>,
+    /// How the match being shown stands between the Handler and the rival, as the result says it.
+    pub meeting: Option<String>,
     pub friend: Option<Friend>,
     /// Where friend matches go: the site's relay, unless development points elsewhere.
     pub relay: String,
@@ -251,6 +266,11 @@ pub struct Table {
     pub ended_because: Option<String>,
     /// The Field Lesson being played, if the match is one.
     pub lesson: Option<LessonRun>,
+    /// The playbook the Handler's trio plays by in this match, filling in each turn's orders:
+    /// against the visitors only, never a friend or a lesson.
+    pub playbook: Option<Runner>,
+    /// The playbook for the match being set up, taken up when it begins.
+    pending_playbook: Option<Runner>,
 }
 
 impl Table {
@@ -302,6 +322,12 @@ impl Table {
             you: Side::Left,
             board_teams: [Vec::new(), Vec::new()],
             other_name: "The visiting team".to_owned(),
+            rival: None,
+            career: Career::default(),
+            career_folder: None,
+            event_fixture: None,
+            event_line: None,
+            meeting: None,
             friend: None,
             relay: relay_base(),
             desktop_version: roster.desktop_version.clone(),
@@ -309,7 +335,47 @@ impl Table {
             notice: None,
             ended_because: None,
             lesson: None,
+            playbook: None,
+            pending_playbook: None,
         }
+    }
+
+    /// The trio the three picked are, if they are one still flying.
+    pub fn picked_trio(&self) -> Option<&formiga_battle_contract::Trio> {
+        let ids: Vec<u64> = self
+            .picked
+            .iter()
+            .filter_map(|&i| self.home.get(i))
+            .map(|(c, _)| c.traveler.id.0)
+            .collect();
+        crate::identity::trio_of(&self.record, &ids)
+    }
+
+    /// The playbook in play this match, in words for the orders page: its name, and the stage
+    /// filling in this turn's orders.
+    pub fn playbook_words(&self) -> Option<(String, String)> {
+        let runner = self.playbook.as_ref()?;
+        let book = &runner.playbook;
+        let compiled = runner.log.last()?;
+        let ran = compiled.ran.first()?;
+        let stage = match ran.stage {
+            Some(i) => format!(
+                "Stage {} of {}: {}",
+                i + 1,
+                book.stages.len(),
+                ran.intent.label()
+            ),
+            None => format!("Past its last stage: {}", ran.intent.label()),
+        };
+        let why = match ran.deviation {
+            Some(Deviation::NoTarget) => " Nothing to aim it at just now, so the beacon instead.",
+            Some(Deviation::Shorthanded) => " Short of hands, so one comes off the beacon for it.",
+            _ => "",
+        };
+        Some((
+            book.name.clone(),
+            format!("{stage}.{why} Its orders are in: change any before you lock in."),
+        ))
     }
 
     /// A companion's notebook page, if it has played a friend: read from what Desktop keeps.
@@ -400,6 +466,7 @@ impl Table {
         let earned = rewards::for_reader(earned, self.desktop_reads);
         self.record.apply(&earned.result);
         self.earned = earned.lines;
+        self.remember_meeting(&earned.result.id);
         if let Some(trio) = earned
             .result
             .rewards
@@ -417,6 +484,407 @@ impl Table {
             session.result.matches.push(earned.result);
         }
         self.write_session("What this match earned");
+    }
+
+    /// Counts a match against a rival on the colony's career, once by its id, settles the event
+    /// fixture it was, and keeps the file.
+    fn remember_meeting(&mut self, match_id: &str) {
+        let (Some(rival), Some(m)) = (self.rival, &self.m) else {
+            return;
+        };
+        let outcome = m.outcome();
+        let won = outcome.and_then(|o| o.winner).map(|w| w == self.you);
+        let arena = self.arena.id.clone();
+        let when = now_words();
+        let counted = self.career.apply(match_id, rival.id, &arena, won, &when);
+        if counted {
+            let h = self.career.against(rival.id);
+            if won == Some(true) && h.won == 1 {
+                self.career.notice(
+                    career::Noticed::FirstWin {
+                        rival: rival.id.to_owned(),
+                    },
+                    vec![match_id.to_owned()],
+                    &when,
+                );
+            }
+            if h.played == 5 {
+                self.career.notice(
+                    career::Noticed::Rivalry {
+                        rival: rival.id.to_owned(),
+                    },
+                    vec![match_id.to_owned()],
+                    &when,
+                );
+            }
+        }
+        if counted && let Some(index) = self.event_fixture.take() {
+            let decided = formiga_battle_world::fixture::decided(outcome.and_then(|o| o.victory));
+            let turns = outcome.map_or(0, |o| o.turn);
+            self.settle_fixture(index, match_id, won, decided, turns);
+        }
+        self.keep_career();
+    }
+
+    /// Keeps the career, playbooks and all, if this colony keeps one: a rehearsal keeps nothing.
+    pub fn keep_career(&mut self) {
+        if let Some(folder) = &self.career_folder
+            && let Err(error) = self.career.save(folder)
+        {
+            self.notice = Some(format!(
+                "Your record against the rivals and your playbooks could not be kept: {error}"
+            ));
+        }
+    }
+
+    /// The colony's place in an event's bracket, by the id it is entered under.
+    fn you_in(bracket: &formiga_battle_world::Bracket) -> Option<usize> {
+        bracket.entrants.iter().position(|e| e == YOU)
+    }
+
+    /// The rival the colony meets in event fixture `index`.
+    fn event_opponent(&self, index: usize) -> Option<&'static Rival> {
+        let bracket = &self.career.event.as_ref()?.bracket;
+        let you = Self::you_in(bracket)?;
+        let other = bracket
+            .fixtures
+            .get(index)?
+            .sides
+            .iter()
+            .flatten()
+            .find(|s| **s != you)?;
+        rival::by_id(&bracket.entrants[*other])
+    }
+
+    /// Begins the season's next event, beginning a new season first if the last is over: an Open
+    /// of four, two Regionals of eight, then the Championship of the season's best four, each on
+    /// a place whose cup is open. An event the colony is not in (a Championship it did not reach)
+    /// is played out at once, under the same rules.
+    pub fn begin_next_event(&mut self) {
+        if self
+            .career
+            .event
+            .as_ref()
+            .is_some_and(|e| !e.bracket.finished())
+        {
+            return;
+        }
+        let open: Vec<String> = rewards::open_to_play(&self.record)
+            .iter()
+            .map(|a| (*a).to_owned())
+            .collect();
+        if self
+            .career
+            .season
+            .as_ref()
+            .is_none_or(formiga_battle_world::Season::finished)
+        {
+            let number = self.career.season.as_ref().map_or(1, |s| s.number + 1);
+            let defending = self.career.season.as_ref().and_then(|s| s.champion.clone());
+            self.career.season = Some(formiga_battle_world::Season::new(number, &open, defending));
+        }
+        let Some(season) = self.career.season.as_ref() else {
+            return;
+        };
+        let Some(stage) = season.next_stage().cloned() else {
+            return;
+        };
+        let arena = Arena::by_id(&stage.arena).unwrap_or_else(Arena::backyard);
+        let pool = rival::season_pool(&arena.id, season.number);
+        let entrants = season.entrants(&stage, &pool, YOU);
+        let name = stage.name(&arena.name, season.number);
+        let n = self.career.events_entered + 1;
+        let seed = rng::roll(self.seed, Purpose::Pairing, &[4000, u64::from(n)]);
+        let id = format!("s{}-{}-{n}", season.number, arena.id);
+        let Ok(bracket) = formiga_battle_world::Bracket::new(&id, seed, entrants) else {
+            return;
+        };
+        let mut entered = career::Entered {
+            name,
+            arena: arena.id.clone(),
+            bracket,
+        };
+        self.career.events_entered = n;
+        self.play_out_rivals(&mut entered.bracket, &arena);
+        self.event_line = None;
+        if entered.bracket.finished() {
+            self.event_line = Some(self.finish_event(&entered));
+        }
+        self.career.event = Some(entered);
+        self.keep_career();
+    }
+
+    /// Plays out every fixture that is ready and has no place for the colony, under the same
+    /// rules, each rival with its own coach and three.
+    fn play_out_rivals(&self, bracket: &mut formiga_battle_world::Bracket, arena: &Arena) {
+        let you = Self::you_in(bracket);
+        while let Some(i) = bracket
+            .fixtures
+            .iter()
+            .position(|f| f.ready() && (you.is_none() || !f.sides.contains(&you)))
+        {
+            let [a, b] = bracket.fixtures[i].sides.map(|s| s.expect("ready"));
+            let (Some(ra), Some(rb)) = (
+                rival::by_id(&bracket.entrants[a]),
+                rival::by_id(&bracket.entrants[b]),
+            ) else {
+                break;
+            };
+            let played = formiga_battle_world::fixture::play_out(
+                arena,
+                self.ruleset,
+                bracket.seed,
+                i,
+                [self.rival_team(ra), self.rival_team(rb)],
+                [self.rival_coach(ra, true), self.rival_coach(rb, true)],
+            );
+            if bracket
+                .record(
+                    i,
+                    &played.match_id,
+                    played.winner,
+                    played.decided,
+                    played.turns,
+                )
+                .is_err()
+            {
+                break;
+            }
+        }
+    }
+
+    /// A finished event, counted: season points, a title if the colony won it, and for a
+    /// Championship the Hall of Champions, a defence or a title lost or won back. Gives the line
+    /// the result card says about it.
+    fn finish_event(&mut self, entered: &career::Entered) -> String {
+        let bracket = &entered.bracket;
+        let Some(champion) = bracket.champion() else {
+            return String::new();
+        };
+        let winner = bracket.entrants[champion].clone();
+        let final_match = bracket
+            .fixtures
+            .last()
+            .and_then(|f| f.result.as_ref())
+            .map(|r| r.match_id.clone())
+            .unwrap_or_default();
+        let when = now_words();
+        let name = |id: &str| rival::by_id(id).map_or("Someone", |r| r.name);
+        let championship = self
+            .career
+            .season
+            .as_ref()
+            .and_then(|s| s.next_stage())
+            .is_some_and(|st| st.kind == formiga_battle_world::Kind::Championship);
+        let (number, defending) = self
+            .career
+            .season
+            .as_ref()
+            .map_or((0, None), |s| (s.number, s.defending.clone()));
+        if let Some(season) = &mut self.career.season {
+            season.finish(bracket);
+        }
+        if winner == YOU {
+            self.career.titles.push(career::Title {
+                event: entered.name.clone(),
+                arena: entered.arena.clone(),
+                match_id: final_match.clone(),
+                when_utc: when.clone(),
+            });
+            self.career.notice(
+                career::Noticed::EventWon {
+                    event: entered.name.clone(),
+                    season: number,
+                },
+                vec![final_match.clone()],
+                &when,
+            );
+        }
+        if !championship {
+            return if winner == YOU {
+                format!("You won {}!", entered.name)
+            } else {
+                format!("{} won {}", name(&winner), entered.name)
+            };
+        }
+        let held_before = self.career.hall.iter().any(|c| c.who == YOU);
+        self.career.hall.push(career::Champion {
+            season: number,
+            who: winner.clone(),
+            event: entered.name.clone(),
+        });
+        let evidence = vec![final_match];
+        match (winner == YOU, defending.as_deref() == Some(YOU)) {
+            (true, true) => {
+                self.career.notice(
+                    career::Noticed::TitleDefended { season: number },
+                    evidence,
+                    &when,
+                );
+                format!("You defended your title: Season {number} Champion again!")
+            }
+            (true, false) if held_before => {
+                self.career.notice(
+                    career::Noticed::TitleReclaimed { season: number },
+                    evidence,
+                    &when,
+                );
+                format!("You won your title back: Season {number} Champion!")
+            }
+            (true, false) => {
+                self.career.notice(
+                    career::Noticed::SeasonChampion { season: number },
+                    evidence,
+                    &when,
+                );
+                format!("You are the Season {number} Champion!")
+            }
+            (false, true) => {
+                self.career.notice(
+                    career::Noticed::TitleLost {
+                        season: number,
+                        to: winner.clone(),
+                    },
+                    evidence,
+                    &when,
+                );
+                format!("{} took your title in {}", name(&winner), entered.name)
+            }
+            (false, false) => format!("{} is the Season {number} Champion", name(&winner)),
+        }
+    }
+
+    /// The colony's next fixture in the event under way: its place, its round's name and who.
+    pub fn next_event_fixture(&self) -> Option<(usize, &'static str, &'static Rival)> {
+        let entered = self.career.event.as_ref()?;
+        let you = Self::you_in(&entered.bracket)?;
+        let index = entered.bracket.ready_for(you)?;
+        let round = entered
+            .bracket
+            .fixture_name(entered.bracket.fixtures[index].round);
+        Some((index, round, self.event_opponent(index)?))
+    }
+
+    /// Records the colony's fixture, then plays out every fixture between rivals that is ready,
+    /// under the same rules, and says how the event stands.
+    fn settle_fixture(
+        &mut self,
+        index: usize,
+        match_id: &str,
+        won: Option<bool>,
+        decided: formiga_battle_world::Decided,
+        turns: u8,
+    ) {
+        let Some(mut entered) = self.career.event.take() else {
+            return;
+        };
+        let line = self.settle_in(&mut entered, index, match_id, won, decided, turns);
+        self.event_line = line;
+        self.career.event = Some(entered);
+    }
+
+    fn settle_in(
+        &mut self,
+        entered: &mut career::Entered,
+        index: usize,
+        match_id: &str,
+        won: Option<bool>,
+        decided: formiga_battle_world::Decided,
+        turns: u8,
+    ) -> Option<String> {
+        let bracket = &mut entered.bracket;
+        let you = Self::you_in(bracket)?;
+        let fixture = bracket.fixtures.get(index)?;
+        let first = fixture.sides[0] == Some(you);
+        let round = bracket.fixture_name(fixture.round);
+        let winner = won.map(|w| u8::from(w != first));
+        bracket
+            .record(index, match_id, winner, decided, turns)
+            .ok()?;
+        // A win over a rival seeded above the colony is an upset.
+        let opponent = bracket.fixtures[index]
+            .sides
+            .iter()
+            .flatten()
+            .find(|e| **e != you)
+            .copied();
+        if won == Some(true)
+            && let Some(o) = opponent
+            && o < you
+        {
+            self.career.notice(
+                career::Noticed::Upset {
+                    rival: bracket.entrants[o].clone(),
+                    event: entered.name.clone(),
+                    season: self.career.season.as_ref().map_or(0, |s| s.number),
+                },
+                vec![match_id.to_owned()],
+                &now_words(),
+            );
+        }
+        let arena = self.arena.clone();
+        self.play_out_rivals(bracket, &arena);
+        if bracket.finished() {
+            let line = self.finish_event(entered);
+            let toss = if won.is_none() { " on the toss" } else { "" };
+            let through = entered.bracket.fixtures[index].winner() == Some(you);
+            return Some(if through || toss.is_empty() {
+                line
+            } else {
+                format!("Out on the toss in the {round}. {line}")
+            });
+        }
+        let bracket = &entered.bracket;
+        let name = |e: usize| rival::by_id(&bracket.entrants[e]).map_or("Someone", |r| r.name);
+        let toss = if won.is_none() { " on the toss" } else { "" };
+        let through = bracket.fixtures[index].winner() == Some(you);
+        Some(match (through, bracket.champion()) {
+            (true, _) => match bracket.ready_for(you) {
+                Some(next) => {
+                    let who = bracket.fixtures[next]
+                        .sides
+                        .iter()
+                        .flatten()
+                        .find(|s| **s != you)
+                        .map_or("someone", |e| name(*e));
+                    format!(
+                        "Through{toss} to the {} against {who}",
+                        bracket.fixture_name(bracket.fixtures[next].round)
+                    )
+                }
+                None => format!("Through{toss} from the {round}"),
+            },
+            (false, Some(c)) => {
+                format!("Out{toss} in the {round}; {} won {}", name(c), entered.name)
+            }
+            (false, None) => format!("Out{toss} in the {round}"),
+        })
+    }
+
+    /// How a rival coaches: from their style's book in a cup match and an Open; thinking each
+    /// turn through at a Regional; and knowing their own team as well at a Championship. Every
+    /// tier imagines the other team as plain, as a Handler must.
+    fn rival_coach(&self, rival: &Rival, in_event: bool) -> Coach {
+        let stage = self
+            .career
+            .season
+            .as_ref()
+            .and_then(formiga_battle_world::Season::next_stage)
+            .map(|s| s.kind)
+            .filter(|_| in_event);
+        match stage {
+            Some(formiga_battle_world::Kind::Regional) => Coach::Thinking(rival.archetype),
+            Some(formiga_battle_world::Kind::Championship) => Coach::Scouted(rival.archetype),
+            _ => Coach::Styled(rival.archetype),
+        }
+    }
+
+    /// A rival's three, as they always field them.
+    fn rival_team(&self, rival: &Rival) -> Vec<formiga_battle_core::Profile> {
+        self.drawn(rival.trio_seed)
+            .into_iter()
+            .map(|i| self.away[i].1.clone())
+            .collect()
     }
 
     /// Writes the session's answer for Desktop again, whole, with the Handler card and trios as
@@ -492,17 +960,40 @@ impl Table {
         }
     }
 
-    /// Three of the visitors, chosen by the seed.
+    /// Three of the visitors, chosen by the seed; a rival's three are always the same three.
     fn opponents(&self) -> Vec<usize> {
+        self.drawn(self.rival.map_or(self.seed, |r| r.trio_seed))
+    }
+
+    /// Who the visitors will be on the chosen place, and which three of theirs come, as the next
+    /// match against them would field them: an event's opponent while a fixture is waiting, the
+    /// place's own Handler first otherwise, then each in turn.
+    pub fn next_visitors(&self) -> (&'static Rival, Vec<usize>) {
+        let rival = self
+            .event_fixture
+            .and_then(|index| self.event_opponent(index))
+            .unwrap_or_else(|| rival::visiting(&self.arena.id, self.career.meetings()));
+        (rival, self.drawn(rival.trio_seed))
+    }
+
+    /// Three of the visitors, drawn by `seed`.
+    fn drawn(&self, seed: u64) -> Vec<usize> {
         let mut pool: Vec<usize> = (0..self.away.len()).collect();
         let mut chosen = Vec::new();
         let mut k = 0;
         while chosen.len() < TEAM_SIZE && !pool.is_empty() {
-            let i = (rng::roll(self.seed, Purpose::Roster, &[k, 7]) as usize) % pool.len();
+            let i = (rng::roll(seed, Purpose::Roster, &[k, 7]) as usize) % pool.len();
             chosen.push(pool.remove(i));
             k += 1;
         }
         chosen
+    }
+
+    /// The variant the next match against the visitors is set up in: drawn by its seed for the
+    /// place chosen, the same one the Where page shows. Field Lessons are always the Backyard as
+    /// its file has it.
+    pub fn variant(&self) -> formiga_battle_core::Variant {
+        formiga_battle_core::Variant::drawn(&self.arena, self.seed)
     }
 
     /// Puts both teams on the board. Fails only if a look cannot be drawn.
@@ -525,6 +1016,24 @@ impl Table {
         {
             self.arena = Arena::backyard();
         }
+        // An event's fixture is played where the event is, against whoever the bracket says.
+        let fixture = self.event_fixture.filter(|_| lesson.is_none());
+        if let Some(entered) = fixture.and(self.career.event.as_ref())
+            && let Some(arena) = Arena::by_id(&entered.arena)
+        {
+            self.arena = arena;
+        }
+        // The visitors are a rival Handler's team: the event's, or the arena's own first, then
+        // each in turn. A lesson's visitors are nobody's.
+        self.rival = match (lesson, fixture) {
+            (Some(_), _) => None,
+            (None, Some(index)) => self.event_opponent(index),
+            (None, None) => Some(rival::visiting(&self.arena.id, self.career.meetings())),
+        };
+        self.event_line = None;
+        self.meeting = self
+            .rival
+            .map(|r| career::meeting_words(&self.career.against(r.id), r.name, r.short));
         let away = self.opponents();
         anyhow::ensure!(
             away.len() == TEAM_SIZE,
@@ -546,7 +1055,12 @@ impl Table {
         }
         let m = match lesson {
             Some(lesson) => lesson.stage(self.ruleset, self.seed, rosters)?,
-            None => Match::new(self.arena.clone(), self.ruleset, self.seed, rosters)?,
+            None => Match::new(
+                self.variant().apply(&self.arena)?,
+                self.ruleset,
+                self.seed,
+                rosters,
+            )?,
         };
         let look = |pool: &[(Contender, Profile)], picks: &[usize]| -> anyhow::Result<Vec<Look>> {
             picks
@@ -567,8 +1081,21 @@ impl Table {
         ];
         self.teams = [self.picked.clone(), away];
         self.you = Side::Left;
-        self.other_name = "The visiting team".to_owned();
+        self.other_name = match self.rival {
+            Some(r) => format!("{}'s team", r.short),
+            None => "The visiting team".to_owned(),
+        };
         self.friend = None;
+        // The trio's playbook fills in its orders against the visitors, never in a lesson.
+        self.pending_playbook = match lesson {
+            Some(_) => None,
+            None => self
+                .picked_trio()
+                .and_then(|t| self.career.playbooks.get(&t.id))
+                .and_then(Shelf::in_play)
+                .cloned()
+                .map(|book| Runner::new(book, self.you)),
+        };
         self.begin_match(m, now);
         self.lesson = lesson.map(|lesson| LessonRun {
             lesson,
@@ -582,6 +1109,7 @@ impl Table {
         self.facing = [[true; TEAM_SIZE], [false; TEAM_SIZE]];
         self.m = Some(m);
         self.shown = None;
+        self.playbook = self.pending_playbook.take();
         self.begin_orders(now);
         self.log.clear();
         self.told.clear();
@@ -971,6 +1499,27 @@ impl Table {
         self.turning = None;
         self.turn_began = now;
         self.selected = Some(0);
+        // A playbook fills in the orders, for the Handler to change as they like.
+        if let (Some(runner), Some(m)) = (&mut self.playbook, &self.m)
+            && m.outcome().is_none()
+        {
+            let plan = runner.plan(m);
+            self.fill_orders(&plan);
+        }
+    }
+
+    /// Puts a whole team plan in hand: its orders in their places, and each USE ITEM.
+    fn fill_orders(&mut self, plan: &TeamPlan) {
+        let mut tactical = plan.iter().filter(|d| d.tactical()).cloned();
+        self.orders = [(); PLAN_SIZE].map(|_| tactical.next());
+        self.uses = [None; TEAM_SIZE];
+        for d in plan {
+            if let Directive::UseItem { by, at } = d
+                && let Some(using) = self.uses.get_mut(usize::from(*by))
+            {
+                *using = Some(*at);
+            }
+        }
     }
 
     /// Puts down whatever order is in hand, and the creature a USE ITEM was for.
@@ -985,9 +1534,10 @@ impl Table {
 
     /// What the other side is called in a few words: the visitors, or the friend's name.
     pub fn other_short(&self) -> String {
-        match &self.friend {
-            Some(f) => f.handlers[self.you.other().index()].clone(),
-            None => "Visitors".to_owned(),
+        match (&self.friend, self.rival) {
+            (Some(f), _) => f.handlers[self.you.other().index()].clone(),
+            (None, Some(rival)) => rival.short.to_owned(),
+            (None, None) => "Visitors".to_owned(),
         }
     }
 
@@ -1504,6 +2054,9 @@ impl Table {
     /// against a friend, sends them to the room, which resolves the turn when both are in.
     pub fn lock(&mut self, now: f32) {
         let ours = self.plan();
+        let visiting = self
+            .rival
+            .map(|rival| self.rival_coach(rival, self.event_fixture.is_some()));
         let Some(m) = &mut self.m else {
             return;
         };
@@ -1521,9 +2074,13 @@ impl Table {
             self.put_down();
             return;
         }
-        let away = match &self.lesson {
-            Some(run) => run.lesson.visitors(m),
-            None => Coach::Exhibition.plan(m, self.you.other()),
+        if let Some(runner) = &mut self.playbook {
+            runner.sent(&ours);
+        }
+        let away = match (&self.lesson, visiting) {
+            (Some(run), _) => run.lesson.visitors(m),
+            (None, Some(coach)) => coach.plan(m, self.you.other()),
+            (None, None) => Coach::Exhibition.plan(m, self.you.other()),
         };
         let plans = match self.you {
             Side::Left => [ours.clone(), away],
@@ -1547,6 +2104,13 @@ impl Table {
             }
         }
         self.show_turn(before, report, now);
+        // The whole-match log says what the playbook made of the turn, and what was changed.
+        if let Some(runner) = &self.playbook
+            && let Some(compiled) = runner.log.last()
+            && let Some((_, lines)) = self.log.last_mut()
+        {
+            lines.insert(0, compiled.line(&runner.playbook));
+        }
     }
 
     /// Plays `turns` turns with the AI coach giving the Handler's orders too, each shown through
@@ -1566,16 +2130,7 @@ impl Table {
     pub fn coach_orders(&mut self) {
         if let Some(m) = &self.m {
             let plan = Coach::Exhibition.plan(m, self.you);
-            let mut tactical = plan.iter().filter(|d| d.tactical()).cloned();
-            self.orders = [(); PLAN_SIZE].map(|_| tactical.next());
-            self.uses = [None; TEAM_SIZE];
-            for d in &plan {
-                if let Directive::UseItem { by, at } = d
-                    && let Some(using) = self.uses.get_mut(usize::from(*by))
-                {
-                    *using = Some(*at);
-                }
-            }
+            self.fill_orders(&plan);
         }
     }
 
@@ -1620,6 +2175,16 @@ impl Table {
     }
 }
 
+/// The colony's own id in an event's bracket.
+const YOU: &str = "you";
+
+/// The time now, as the career keeps it.
+fn now_words() -> String {
+    time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1636,6 +2201,57 @@ mod tests {
         let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
         t.start(0.0).unwrap();
         t
+    }
+
+    #[test]
+    fn a_trios_playbook_fills_in_its_orders_and_the_handler_can_change_them() {
+        use formiga_battle_core::playbook::Playbook;
+        let mut t = Table::new(sample::snapshot_with_record(), sample::visitors(9), 5);
+        let trio = t.record.trios[0].clone();
+        t.picked = trio
+            .members
+            .iter()
+            .filter_map(|id| t.home.iter().position(|(c, _)| c.traveler.id.0 == *id))
+            .collect();
+        assert_eq!(
+            t.picked.len(),
+            TEAM_SIZE,
+            "the sample's trio is in its colony"
+        );
+        let book = Playbook::samples()[0].clone();
+        t.career.playbooks.insert(
+            trio.id.clone(),
+            Shelf {
+                books: vec![book.clone()],
+                playing: Some(0),
+            },
+        );
+        t.start(0.0).unwrap();
+        let proposed = t.playbook.as_ref().expect("plays by it").log[0]
+            .plan
+            .clone();
+        assert_eq!(t.plan(), proposed, "its orders are filled in");
+        assert_eq!(t.playbook_words().unwrap().0, book.name);
+        // The Handler takes one out before locking in.
+        t.clear_order(0);
+        t.lock(0.0);
+        let first = &t.playbook.as_ref().unwrap().log[0];
+        assert!(first.sent.is_some(), "the change is recorded");
+        assert!(
+            t.log.last().unwrap().1[0].starts_with(&format!("Turn 1: {}", book.name)),
+            "the whole match says what the playbook made of the turn"
+        );
+        // Once the turn has been shown, the next turn's orders are filled in again.
+        t.frame(1.0e6);
+        assert_eq!(t.playbook.as_ref().unwrap().log.len(), 2);
+        assert!(t.orders.iter().any(Option::is_some));
+    }
+
+    #[test]
+    fn three_who_are_not_a_trio_play_by_no_playbook() {
+        let t = table();
+        assert!(t.playbook.is_none());
+        assert!(t.playbook_words().is_none());
     }
 
     fn yard(t: &Table) -> Tile {
@@ -1943,6 +2559,128 @@ mod tests {
             t.frame(now);
         }
         assert!(t.outcome().is_some());
+    }
+
+    /// Plays every fixture of the event under way that is the colony's, coached as a Handler
+    /// would be. How many it played.
+    fn play_event(t: &mut Table) -> u32 {
+        let mut played = 0;
+        while let Some((index, _, rival)) = t.next_event_fixture() {
+            t.event_fixture = Some(index);
+            t.start(0.0).unwrap();
+            assert_eq!(
+                t.rival.map(|r| r.id),
+                Some(rival.id),
+                "the bracket's rival comes"
+            );
+            let mut now = 0.0;
+            while !t.finished(now) {
+                t.coach_orders();
+                t.lock(now);
+                now += 20.0;
+                t.frame(now);
+            }
+            played += 1;
+            assert!(
+                t.event_line.is_some(),
+                "the result says how the event stands"
+            );
+            assert_eq!(t.event_fixture, None);
+        }
+        played
+    }
+
+    #[test]
+    fn a_season_runs_its_four_events_and_the_next_one_has_a_champion_to_defend() {
+        let mut t = Table::new(sample::snapshot(), sample::visitors(9), 3);
+        t.begin_next_event();
+        let first = t.career.event.clone().expect("an event begun");
+        assert_eq!(first.name, "The Backyard Open");
+        assert_eq!(first.bracket.entrants.len(), 4);
+        assert_eq!(first.bracket.entrants.last().map(String::as_str), Some(YOU));
+        // Beginning again while it is under way changes nothing.
+        t.begin_next_event();
+        assert_eq!(t.career.events_entered, 1);
+        let mut meetings = play_event(&mut t);
+        assert!(t.career.event.as_ref().unwrap().bracket.finished());
+        for _ in 0..3 {
+            t.begin_next_event();
+            meetings += play_event(&mut t);
+            assert!(
+                t.career.event.as_ref().unwrap().bracket.finished(),
+                "the rivals' own fixtures are played out too"
+            );
+        }
+        let season = t.career.season.clone().unwrap();
+        assert!(season.finished());
+        let champion = season.champion.clone().expect("a champion");
+        assert_eq!(t.career.hall.len(), 1);
+        assert_eq!(t.career.hall[0].who, champion);
+        assert_eq!(t.career.meetings(), meetings);
+        assert_eq!(t.career.events_entered, 4);
+        // Season 2 begins with last season's champion defending.
+        t.begin_next_event();
+        let next = t.career.season.clone().unwrap();
+        assert_eq!(next.number, 2);
+        assert_eq!(next.defending, Some(champion));
+        assert_eq!(next.played, 0);
+        // What it noticed is backed by matches.
+        for r in &t.career.recognition {
+            assert!(!r.evidence.is_empty(), "{:?} has its evidence", r.noticed);
+        }
+        let (title, how) = career::standing(&t.career);
+        assert!(!title.is_empty() && !how.is_empty());
+    }
+
+    #[test]
+    fn a_match_against_the_visitors_is_set_up_in_the_variant_the_where_page_shows() {
+        let mut t = table();
+        let shown = t.variant();
+        assert_eq!(t.m.as_ref().unwrap().arena.variant.as_ref(), Some(&shown));
+        // The place chosen stays the arena as its file has it; only the match's copy is varied.
+        assert_eq!(t.arena.variant, None);
+        t.start_lesson(Lesson::Flank, 0.0).unwrap();
+        assert_eq!(
+            t.m.as_ref().unwrap().arena.variant,
+            None,
+            "lessons are never varied"
+        );
+    }
+
+    #[test]
+    fn no_way_of_playing_wins_most_of_the_rivals_own_events() {
+        // Eight rivals, every way of playing among them, in event after event on every place:
+        // whoever wins should not be settled by how they play.
+        let t = Table::new(sample::snapshot(), sample::visitors(9), 3);
+        let mut by_style: std::collections::BTreeMap<&str, u32> = Default::default();
+        let mut events = 0;
+        for (k, arena) in Arena::built_in().into_iter().enumerate() {
+            for n in 0..4u64 {
+                let entrants: Vec<String> = (0..8)
+                    .map(|i| {
+                        rival::visiting(&arena.id, i + n as u32 + k as u32)
+                            .id
+                            .to_owned()
+                    })
+                    .collect();
+                let mut b =
+                    formiga_battle_world::Bracket::new("rivals", 100 + n * 7 + k as u64, entrants)
+                        .expect("eight rivals, each once");
+                t.play_out_rivals(&mut b, &arena);
+                let champion = b.champion().expect("played out");
+                let style = rival::by_id(&b.entrants[champion])
+                    .unwrap()
+                    .archetype
+                    .label();
+                *by_style.entry(style).or_default() += 1;
+                events += 1;
+            }
+        }
+        let most = by_style.values().copied().max().unwrap_or(0);
+        assert!(
+            most * 2 <= events,
+            "one way of playing won {most} of {events}: {by_style:?}"
+        );
     }
 
     #[test]

@@ -13,6 +13,7 @@ use crate::ai::Coach;
 use crate::game::Match;
 use crate::order::{Directive, Facing, PLAN_SIZE, Side, TeamPlan};
 use crate::profile::{Leanings, Nature, Profile};
+use crate::style::{Archetype, Book, Weights};
 
 /// Each of the plan's orders is revisited this many times, each time with the others' best so
 /// far.
@@ -86,8 +87,8 @@ fn options(m: &Match, side: Side) -> Vec<Directive> {
 }
 
 /// How good the board is for `side`: the beacon most of all, then who is still standing and how
-/// steady they are, then holding in the zone, then having something in hand.
-fn score(m: &Match, side: Side) -> i32 {
+/// steady they are, then holding in the zone, then having something in hand, each by `weights`.
+fn score(m: &Match, side: Side, weights: &Weights) -> i32 {
     if let Some(outcome) = m.outcome() {
         return match outcome.winner {
             Some(w) if w == side => 1_000_000,
@@ -113,11 +114,11 @@ fn score(m: &Match, side: Side) -> i32 {
             .filter(|x| m.fighter(*x).carrying.is_some())
             .count() as i32
     };
-    300 * (capture(s) - capture(o))
-        + 80 * (composure(s) - composure(o))
-        + 200 * (standing(s) - standing(o))
-        + 40 * (holding(s) - holding(o))
-        + 25 * (carrying(s) - carrying(o))
+    weights.capture * (capture(s) - capture(o))
+        + weights.composure * (composure(s) - composure(o))
+        + weights.standing * (standing(s) - standing(o))
+        + weights.holding * (holding(s) - holding(o))
+        + weights.carrying * (carrying(s) - carrying(o))
 }
 
 /// One turn's plan for `side`, thought through on `model`.
@@ -127,11 +128,34 @@ pub fn think_ahead(m: &Match, side: Side, familiar: bool) -> TeamPlan {
     } else {
         imagined_plainly(m, side)
     };
+    search(&model, side, &Book::EXHIBITION, &Weights::PLAIN)
+}
+
+/// One turn's plan for `side` as a styled coach thinks it through: starting from its style's
+/// book, valuing the board by its style's weights, and imagining the other team as creatures that
+/// lean no way at all, as a Handler who cannot see their leanings must. `own_known` is whether it
+/// knows its own team as they are (a Championship rival who has played with them all season) or
+/// imagines them plainly too.
+pub fn think_styled(m: &Match, side: Side, archetype: Archetype, own_known: bool) -> TeamPlan {
+    let mut model = imagined_plainly(m, side.other());
+    if !own_known {
+        model = imagined_plainly(&model, side);
+    }
+    let style = match archetype {
+        Archetype::Adaptive => crate::ai::adapted(m, side),
+        other => other,
+    };
+    search(&model, side, &style.book(), &style.weights())
+}
+
+/// The search both kinds of thinking coach share: the book's plan to start from, every order in
+/// each of its three places tried in turn against what the Exhibition coach would do, the best
+/// board by `weights` kept.
+fn search(model: &Match, side: Side, start: &Book, weights: &Weights) -> TeamPlan {
     // What the other team will do: what the Exhibition coach would.
-    let theirs = Coach::Exhibition.plan(&model, side.other());
-    // Its USE ITEMs are the Exhibition coach's; only the three orders are thought through.
-    let (mut ours, uses): (TeamPlan, TeamPlan) = Coach::Exhibition
-        .plan(&model, side)
+    let theirs = Coach::Exhibition.plan(model, side.other());
+    // Its USE ITEMs are the book's; only the three orders are thought through.
+    let (mut ours, uses): (TeamPlan, TeamPlan) = crate::ai::book_plan(model, side, start)
         .into_iter()
         .partition(Directive::tactical);
     let play = |ours: &TeamPlan| {
@@ -143,10 +167,10 @@ pub fn think_ahead(m: &Match, side: Side, familiar: bool) -> TeamPlan {
             Side::Right => [theirs.clone(), ours],
         };
         sim.resolve_turn(plans);
-        score(&sim, side)
+        score(&sim, side, weights)
     };
     let mut best = play(&ours);
-    let options = options(&model, side);
+    let options = options(model, side);
     for _ in 0..PASSES {
         for place in 0..PLAN_SIZE {
             for option in options.iter() {
