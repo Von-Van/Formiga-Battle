@@ -960,6 +960,13 @@ impl Table {
         chosen
     }
 
+    /// The variant the next match against the visitors is set up in: drawn by its seed for the
+    /// place chosen, the same one the Where page shows. Field Lessons are always the Backyard as
+    /// its file has it.
+    pub fn variant(&self) -> formiga_battle_core::Variant {
+        formiga_battle_core::Variant::drawn(&self.arena, self.seed)
+    }
+
     /// Puts both teams on the board. Fails only if a look cannot be drawn.
     pub fn start(&mut self, now: f32) -> anyhow::Result<()> {
         self.field(now, None)
@@ -1019,7 +1026,12 @@ impl Table {
         }
         let m = match lesson {
             Some(lesson) => lesson.stage(self.ruleset, self.seed, rosters)?,
-            None => Match::new(self.arena.clone(), self.ruleset, self.seed, rosters)?,
+            None => Match::new(
+                self.variant().apply(&self.arena)?,
+                self.ruleset,
+                self.seed,
+                rosters,
+            )?,
         };
         let look = |pool: &[(Contender, Profile)], picks: &[usize]| -> anyhow::Result<Vec<Look>> {
             picks
@@ -2586,6 +2598,21 @@ mod tests {
         }
         let (title, how) = career::standing(&t.career);
         assert!(!title.is_empty() && !how.is_empty());
+    }
+
+    #[test]
+    fn a_match_against_the_visitors_is_set_up_in_the_variant_the_where_page_shows() {
+        let mut t = table();
+        let shown = t.variant();
+        assert_eq!(t.m.as_ref().unwrap().arena.variant.as_ref(), Some(&shown));
+        // The place chosen stays the arena as its file has it; only the match's copy is varied.
+        assert_eq!(t.arena.variant, None);
+        t.start_lesson(Lesson::Flank, 0.0).unwrap();
+        assert_eq!(
+            t.m.as_ref().unwrap().arena.variant,
+            None,
+            "lessons are never varied"
+        );
     }
 
     #[test]

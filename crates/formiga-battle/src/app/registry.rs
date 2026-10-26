@@ -840,6 +840,44 @@ impl BattleApp {
                 Color32::WHITE.gamma_multiply(pop),
             );
         }
+        // How this match is set up, when it is not the place as it always is: said once, here,
+        // before the first order, on a ribbon of its own under the burst.
+        let setup = self
+            .table
+            .m
+            .as_ref()
+            .filter(|_| self.table.lesson.is_none())
+            .and_then(|m| m.arena.variant.as_ref().map(|v| v.headline(&m.arena)))
+            .unwrap_or_default();
+        if !setup.is_empty() {
+            let rw = ((board.width() * 0.5) / scale).floor() as i32;
+            let picture = self.painted(&ctx, format!("setup-ribbon-{rw}"), |_| {
+                let mut canvas = formiga_art::Canvas::new(rw.max(40) as u32, 18);
+                heraldry::ribbon(&mut canvas, (8, 1, rw.max(40) - 16, 15));
+                canvas
+            });
+            let rsize = picture.size_vec2() * scale;
+            let rect = Rect::from_min_size(
+                pos2(
+                    (board.center().x - rsize.x / 2.0).round(),
+                    (top + size.y + u * 2.0).round(),
+                ),
+                rsize,
+            );
+            painter.image(
+                picture.id(),
+                rect,
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            letter(
+                &painter,
+                rect.shrink2(vec2(10.0 * scale, 2.0 * scale)),
+                &setup,
+                ON_RIBBON,
+                0.62,
+            );
+        }
     }
 
     /// The Handler's own side, for the introduction and the top bar: the pennant it flies, its

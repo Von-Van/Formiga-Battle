@@ -7,7 +7,7 @@ use crate::bracket::Decided;
 use formiga_battle_core::ai::Coach;
 use formiga_battle_core::rng::{self, Purpose};
 use formiga_battle_core::tournament::play;
-use formiga_battle_core::{Arena, MatchRecord, Profile, Ruleset, Side, Victory};
+use formiga_battle_core::{Arena, MatchRecord, Profile, Ruleset, Side, Variant, Victory};
 
 /// What a fixture came to.
 #[derive(Clone, Debug)]
@@ -45,7 +45,9 @@ pub fn decided(victory: Option<Victory>) -> Decided {
     }
 }
 
-/// Plays fixture `index` out between two teams, each with its own coach.
+/// Plays fixture `index` out between two teams, each with its own coach, in the variant of the
+/// arena its match seed draws, as every match against the visitors is set up. An arena already
+/// set up in a variant is played as it is.
 pub fn play_out(
     arena: &Arena,
     ruleset: Ruleset,
@@ -54,7 +56,11 @@ pub fn play_out(
     rosters: [Vec<Profile>; 2],
     coaches: [Coach; 2],
 ) -> PlayedOut {
-    let (m, _) = play(arena, ruleset, match_seed(seed, index), rosters, coaches);
+    let match_seed = match_seed(seed, index);
+    let varied = Variant::drawn(arena, match_seed)
+        .apply(arena)
+        .unwrap_or_else(|_| arena.clone());
+    let (m, _) = play(&varied, ruleset, match_seed, rosters, coaches);
     let outcome = m.outcome().expect("played to the end");
     PlayedOut {
         match_id: match_id(seed, index),

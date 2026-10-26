@@ -55,6 +55,17 @@
 - Battle keeps the colony's record against the rivals in a small file of its own, one per colony
   (`careers/<colony>.json` beside `settings.json`), counting each match once by the id Desktop
   counts it by. Cups, points, the notebook and trios stay with Desktop. A rehearsal keeps none.
+- Every match against the visitors or a friend is set up in a variant of its place, drawn by the
+  match seed: where the teams start (a step in, bunched far, spread wide, or as usual), what turns
+  up (few finds, plenty, only light things, one pair of spots, or as usual), and at times one
+  condition (an early or restless map event, the event left to the switches, switches that rest
+  longer, a gate left open). The right team's half is always the mirror of the left's, and every
+  variant passes the same fairness check the arenas do. The Where page says how the next match is
+  set up, and the match introduction names what is different before the first order. Field
+  Lessons stay the Backyard as it always is. A match record keeps the arena as it was set up, so a
+  variant match replays exactly, and a record kept before reads as before. `--variant`, `arena
+  --variants` and `tournament --sweep` set up, list and measure them from the command line. Rules
+  version 9 is unchanged. See docs/RULES.md, "Match variants".
 - Four coaching styles for a Handler who is not a person, each a way of playing the Exhibition
   coach's book: the Aggressor presses first and sends everyone, the Defender holds the yard and
   shuts the board, the Tactician goes round the sides and behind, and the Opportunist plays for
