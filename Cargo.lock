@@ -1295,8 +1295,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-art"
-version = "0.68.0"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.0#ba39ba024524aa32317b794e65f8b203d9055544"
+version = "0.68.1"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.1#53a610a0b0a1401c7b7c4d3189724c4d9e430057"
 dependencies = [
  "epaint",
  "formiga-core",
@@ -1309,7 +1309,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle"
-version = "0.68.0"
+version = "0.68.1"
 dependencies = [
  "anyhow",
  "directories 5.0.1",
@@ -1332,8 +1332,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-contract"
-version = "0.68.0"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.0#ba39ba024524aa32317b794e65f8b203d9055544"
+version = "0.68.1"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.1#53a610a0b0a1401c7b7c4d3189724c4d9e430057"
 dependencies = [
  "formiga-core",
  "formiga-expansion-rulebook",
@@ -1346,7 +1346,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-core"
-version = "0.68.0"
+version = "0.68.1"
 dependencies = [
  "formiga-core",
  "serde",
@@ -1356,7 +1356,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-room"
-version = "0.68.0"
+version = "0.68.1"
 dependencies = [
  "formiga-battle-contract",
  "formiga-battle-core",
@@ -1374,7 +1374,7 @@ dependencies = [
 
 [[package]]
 name = "formiga-battle-world"
-version = "0.68.0"
+version = "0.68.1"
 dependencies = [
  "formiga-battle-core",
  "serde",
@@ -1384,8 +1384,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-core"
-version = "0.68.0"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.0#ba39ba024524aa32317b794e65f8b203d9055544"
+version = "0.68.1"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.1#53a610a0b0a1401c7b7c4d3189724c4d9e430057"
 dependencies = [
  "getrandom 0.4.3",
  "rand",
@@ -1400,8 +1400,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-expansion-rulebook"
-version = "0.68.0"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.0#ba39ba024524aa32317b794e65f8b203d9055544"
+version = "0.68.1"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.1#53a610a0b0a1401c7b7c4d3189724c4d9e430057"
 dependencies = [
  "directories 6.0.0",
  "getrandom 0.4.3",
@@ -1413,8 +1413,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-pencil"
-version = "0.68.0"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?branch=desktop-ruled-lines#15905861bd2f8ac1bc4ab699e2be39cdbbcc0b8b"
+version = "0.68.1"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.1#53a610a0b0a1401c7b7c4d3189724c4d9e430057"
 dependencies = [
  "egui",
  "skrifa",
@@ -1423,8 +1423,8 @@ dependencies = [
 
 [[package]]
 name = "formiga-travel"
-version = "0.68.0"
-source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.0#ba39ba024524aa32317b794e65f8b203d9055544"
+version = "0.68.1"
+source = "git+https://github.com/Von-Van/Formiga-Desktop?tag=v0.68.1#53a610a0b0a1401c7b7c4d3189724c4d9e430057"
 dependencies = [
  "formiga-art",
  "formiga-core",

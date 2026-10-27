@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.68.1] - 2026-10-26
+
+Built on Formiga Desktop 0.68.1, released alongside it and Formiga Hill and Home 0.68.1. Battle
+contract version 5, relay protocol 4 and rules version 9 are unchanged. A friend match needs both
+Handlers on Battle 0.68.1 and Formiga Desktop 0.68.1.
+
+- The notebook's pencil hand is drawn on a grain about a fifth finer, so its writing reads less
+  blocky.
+- Every right page writes on its ruled lines, and the rules are 20 pt apart on any screen: before,
+  they spread out at 1x until the Lessons page's main button fell off the page.
+- The hint along the foot no longer touches the pages above it, and the dashed rule above "After
+  the lessons" is gone, as a blank rule does its job.
+
 ## [0.68.0] - 2026-10-26
 
 Built on Formiga Desktop 0.68.0, released alongside it and Formiga Hill and Home 0.68.0. Battle
