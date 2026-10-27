@@ -23,8 +23,9 @@ formiga-battle-contract = { git = "https://github.com/Von-Van/Formiga-Desktop", 
 formiga-core = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.68.0" }
 formiga-expansion-rulebook = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.68.0" }
 formiga-travel = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.68.0" }
-# The notebooks' pencil hand, from the same Desktop release.
-formiga-pencil = { git = "https://github.com/Von-Van/Formiga-Desktop", tag = "v0.68.0" }
+# The notebooks' pencil hand, and the writing on their ruled lines, from Desktop's branch until a
+# Desktop release carries it; then back to that release's tag with the others.
+formiga-pencil = { git = "https://github.com/Von-Van/Formiga-Desktop", branch = "desktop-ruled-lines" }
 
 formiga-battle-core = { path = "crates/formiga-battle-core" }
 formiga-battle-room = { path = "crates/formiga-battle-room" }

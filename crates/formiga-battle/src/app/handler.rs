@@ -3,10 +3,11 @@
 //! keeps only these settings, in its own folder (`settings`), with reduced motion as Desktop has
 //! it until the Handler sets it here.
 
-use super::{BattleApp, card, padlock, portrait_mat, rosette};
+use super::{BattleApp, card, padlock, portrait_mat, rosette, ruled_line};
 use crate::chrome::{self, hand_job, ink};
 use eframe::egui::{self, Id, RichText};
 use formiga_battle_contract::{MatchSummary, Mode};
+use formiga_pencil::ruled;
 
 /// The keys Battle answers to, for the settings page.
 const KEYS: [(&str, &str); 11] = [
@@ -141,14 +142,14 @@ impl BattleApp {
             .count();
         let drawn = record.history.iter().filter(|m| m.won.is_none()).count();
         chrome::kicker(ui, "So far");
-        ui.add_space(u * 2.0);
         let line = |ui: &mut egui::Ui, label: &str, value: String| {
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(label).size(15.0).color(ink::MUTED));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(hand_job(&value, 12.0, ink::FOREST));
-                });
-            });
+            ruled_line(
+                ui,
+                RichText::new(label).size(15.0).color(ink::MUTED),
+                |ui| {
+                    ruled::write(ui, hand_job(&value, 12.0, ink::FOREST));
+                },
+            );
         };
         line(ui, "Matches with friends", played.to_string());
         line(ui, "Won", won.to_string());
@@ -159,15 +160,15 @@ impl BattleApp {
             "Companions in your notebook",
             record.notebook.len().to_string(),
         );
-        ui.add_space(u * 6.0);
+        ruled::write(ui, "");
         chrome::kicker(ui, "The Championship Circuit");
-        ui.add_space(u * 2.0);
         let open = crate::rewards::open_to_play(record);
         for cup in &crate::rewards::CUPS {
             let wins = record.cup_wins(cup.id).min(crate::rewards::CUP_WINS);
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(cup.name).size(15.0).color(ink::PAGE));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ruled_line(
+                ui,
+                RichText::new(cup.name).size(15.0).color(ink::PAGE),
+                |ui| {
                     ui.spacing_mut().item_spacing.x = u;
                     if open.contains(&cup.arena) {
                         for k in (0..crate::rewards::CUP_WINS).rev() {
@@ -176,12 +177,12 @@ impl BattleApp {
                     } else {
                         padlock(ui, "Win the cup before it to open this one", u);
                     }
-                });
-            });
-            ui.add_space(u);
+                },
+            );
         }
-        ui.add_space(u * 4.0);
-        ui.label(
+        ruled::write(ui, "");
+        ruled::write(
+            ui,
             RichText::new("Formiga Desktop keeps all of this with your colony.")
                 .size(15.0)
                 .italics()
@@ -246,18 +247,16 @@ impl BattleApp {
     }
 
     /// Beside the settings: the keys, and which Battle this is.
-    pub(super) fn keys_and_about(&mut self, ui: &mut egui::Ui, u: f32) {
+    pub(super) fn keys_and_about(&mut self, ui: &mut egui::Ui, _u: f32) {
         chrome::kicker(ui, "Keys");
-        ui.add_space(u * 2.0);
         for (keys, does) in KEYS {
-            ui.label(hand_job(keys, 9.5, ink::FOREST));
-            ui.label(RichText::new(does).size(15.0).color(ink::PAGE));
-            ui.add_space(u);
+            ruled::write(ui, hand_job(keys, 9.5, ink::FOREST));
+            ruled::write(ui, RichText::new(does).size(15.0).color(ink::PAGE));
         }
-        ui.add_space(u * 6.0);
+        ruled::write(ui, "");
         chrome::kicker(ui, "This Battle");
-        ui.add_space(u * 2.0);
-        ui.label(
+        ruled::write(
+            ui,
             RichText::new(format!(
                 "Formiga Battle {}, rules version {}",
                 env!("CARGO_PKG_VERSION"),
@@ -265,7 +264,8 @@ impl BattleApp {
             ))
             .size(15.0),
         );
-        ui.label(
+        ruled::write(
+            ui,
             RichText::new(self.host.describe())
                 .size(15.0)
                 .color(ink::MUTED),

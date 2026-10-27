@@ -12,6 +12,7 @@ use crate::identity::Style;
 use crate::rival::{self, RIVALS};
 use eframe::egui::{self, Color32, Id, Rect, RichText, Sense, pos2, vec2};
 use formiga_battle_world::{Bracket, Decided, Kind, Season};
+use formiga_pencil::ruled;
 
 /// A Handler's name by their id in an event: the colony is "You".
 fn who(id: &str) -> String {
@@ -582,16 +583,20 @@ impl BattleApp {
         if let Some(season) = &career.season
             && !season.points.is_empty()
         {
-            ui.label(hand_job(
-                &format!("Season {} points", season.number),
-                chrome::HAND,
-                ink::FOREST,
-            ));
+            ruled::write(
+                ui,
+                hand_job(
+                    &format!("Season {} points", season.number),
+                    chrome::HAND,
+                    ink::FOREST,
+                ),
+            );
             let table = season.table();
             let most = table.first().map_or(1, |(_, p)| (*p).max(1));
             for (id, points) in table {
                 let flag = self.event_flag(&ctx, &id);
-                let (row, _) = ui.allocate_exact_size(vec2(width, u * 13.0), Sense::hover());
+                // A rule to each: the name and the points rest on it, the bar beside them.
+                let row = ruled::band(ui, 1.0, u * 13.0);
                 let painter = ui.painter().clone();
                 let fh = u * 9.0;
                 let fw = flag.size_vec2().x * fh / flag.size_vec2().y;
@@ -612,7 +617,8 @@ impl BattleApp {
                     },
                     colour,
                 );
-                painter.galley(pos2(row.left() + fw + u * 3.0, row.top()), name, colour);
+                let rests = ruled::on_rule(&name, row.bottom());
+                painter.galley(pos2(row.left() + fw + u * 3.0, rests), name, colour);
                 let bar_x = row.left() + width * 0.42;
                 let bar_w = (row.right() - bar_x - u * 14.0) * points as f32 / most as f32;
                 let bar = Rect::from_min_size(
@@ -625,14 +631,15 @@ impl BattleApp {
                     formiga_pencil::hand_bold(15.0),
                     colour,
                 );
-                painter.galley(pos2(bar.right() + u * 2.0, row.top()), number, colour);
+                let rests = ruled::on_rule(&number, row.bottom());
+                painter.galley(pos2(bar.right() + u * 2.0, rests), number, colour);
             }
             ui.add_space(u * 6.0);
         }
 
         // The Hall of Champions, a brass plate a season.
         if !career.hall.is_empty() {
-            ui.label(hand_job("Hall of Champions", chrome::HAND, ink::FOREST));
+            ruled::write(ui, hand_job("Hall of Champions", chrome::HAND, ink::FOREST));
             let plate_w = (width / u).floor() as i32;
             let plate = kept_picture(&ctx, &format!("hall-plate-{plate_w}"), || {
                 crate::heraldry::plate(plate_w)
@@ -658,10 +665,11 @@ impl BattleApp {
 
         // What the Battleground noticed: the newest on a sticky note, the rest under it.
         if let Some((newest, rest)) = career.recognition.split_last() {
-            ui.label(hand_job("Noticed!", chrome::HAND, ink::FOREST));
+            ruled::write(ui, hand_job("Noticed!", chrome::HAND, ink::FOREST));
             super::sticky(ui, &format!("{}!", noticed_words(&newest.noticed)), u);
             for r in rest.iter().rev().take(4) {
-                ui.label(
+                ruled::write(
+                    ui,
                     RichText::new(noticed_words(&r.noticed))
                         .font(formiga_pencil::hand(15.0))
                         .color(ink::MUTED),
@@ -671,11 +679,11 @@ impl BattleApp {
         }
 
         // How I stand against each rival.
-        ui.label(hand_job("The rivals", chrome::HAND, ink::FOREST));
+        ruled::write(ui, hand_job("The rivals", chrome::HAND, ink::FOREST));
         for r in &RIVALS {
             let h = career.against(r.id);
             let flag = self.event_flag(&ctx, r.id);
-            ui.horizontal(|ui| {
+            ruled::ruled_row(ui, |ui| {
                 let fh = u * 11.0;
                 let size = vec2(flag.size_vec2().x * fh / flag.size_vec2().y, fh);
                 let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
@@ -686,13 +694,15 @@ impl BattleApp {
                     Color32::WHITE,
                 );
                 ui.vertical(|ui| {
-                    ui.label(
+                    ruled::write(
+                        ui,
                         RichText::new(format!("{} · {}", r.name, r.club))
                             .font(formiga_pencil::hand_bold(15.0))
                             .color(ink::PAGE),
                     )
                     .on_hover_text(r.tag());
-                    ui.label(
+                    ruled::write(
+                        ui,
                         RichText::new(format!(
                             "{} {}",
                             against_line(h.played, h.won, h.lost, r.short),
@@ -706,9 +716,10 @@ impl BattleApp {
         }
         if !career.titles.is_empty() {
             ui.add_space(u * 6.0);
-            ui.label(hand_job("My titles", chrome::HAND, ink::FOREST));
+            ruled::write(ui, hand_job("My titles", chrome::HAND, ink::FOREST));
             for title in career.titles.iter().rev() {
-                ui.label(
+                ruled::write(
+                    ui,
                     RichText::new(&title.event)
                         .font(formiga_pencil::hand_bold(15.0))
                         .color(ink::FOREST),

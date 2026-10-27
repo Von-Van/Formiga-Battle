@@ -382,9 +382,9 @@ pub fn label_job(text: &str, size: f32, color: Color32) -> egui::text::LayoutJob
     job
 }
 
-/// A section's printed label on a page.
+/// A section's heading on a page, on the next rule if the page is ruled.
 pub fn kicker(ui: &mut egui::Ui, text: &str) {
-    ui.label(hand_job(text, HAND, ink::FOREST));
+    formiga_pencil::ruled::write(ui, hand_job(text, HAND, ink::FOREST));
 }
 
 /// A one-unit outline round `rect` with its corners left out: the notebook's stepped edge.
