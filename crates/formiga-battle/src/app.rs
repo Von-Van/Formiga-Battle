@@ -39,12 +39,13 @@ use crate::look::Look;
 use crate::scene::{self, TEAM};
 use crate::sound::{Cue, Sound, Track};
 use crate::table::{Aim, Table, Verb};
-use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
+use eframe::egui::{self, Color32, FontId, Id, Rect, RichText, Sense, Stroke, pos2, vec2};
 use formiga_art::Canvas;
 use formiga_battle_contract::Contender;
 use formiga_battle_core::lesson::{Lesson, Verdict};
 use formiga_battle_core::{Directive, Facing, Match, Tile};
 use formiga_battle_core::{PLAN_SIZE, Side, Slot, TEAM_SIZE, Victory};
+use formiga_pencil::ruled;
 use std::collections::HashMap;
 use std::path::PathBuf;
 // The little painted pieces every page uses (cards, notes, tokens, the watch), by name here
@@ -55,8 +56,10 @@ use widgets::*;
 /// and the fold between the pages.
 const RIM: f32 = 9.0;
 const STRIP: f32 = 25.0;
-const FOOT: f32 = 17.0;
+const FOOT: f32 = 19.0;
 const FOLD: f32 = 3.0;
+/// How far apart the ruled page's lines are, in points: a line of writing to each.
+const RULE_PITCH: f32 = 20.0;
 /// How long a page takes to settle in when it changes, in seconds.
 const SETTLE: f32 = 0.22;
 /// The side tabs in a match, left to right.
@@ -891,7 +894,9 @@ impl BattleApp {
                     open: i == layout.open_tab,
                 })
                 .collect(),
-            rules: (24, 14),
+            // As far apart on any screen as a line of writing needs, however many screen
+            // pixels the notebook's pixels are.
+            rules: (24, (RULE_PITCH / u).round() as i32),
         };
         self.rules = (
             layout.full.min.y + (spread.right.1 + spread.rules.0) as f32 * u,
@@ -1021,6 +1026,12 @@ impl BattleApp {
                 // Clear of the margin line.
                 let right = Rect::from_min_max(pos2(right.min.x + u * 6.0, right.min.y), right.max);
                 let fade = self.settled(now);
+                // What is written on the ruled right page rests on its rules; anything else is
+                // written as it comes.
+                let ruling = formiga_pencil::ruled::RuleGrid {
+                    top: self.rules.0,
+                    pitch: self.rules.1,
+                };
                 match self.stage {
                     Stage::Journal => {
                         // A page being turned shows itself turning; otherwise it settles in.
@@ -1031,7 +1042,9 @@ impl BattleApp {
                         });
                         ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
                             ui.multiply_opacity(fade);
+                            ruling.keep(ui.ctx());
                             self.journal_right(ui, &ctx, u);
+                            formiga_pencil::ruled::RuleGrid::forget(ui.ctx());
                         });
                     }
                     Stage::Station => {
@@ -1041,7 +1054,9 @@ impl BattleApp {
                         });
                         ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
                             ui.multiply_opacity(fade);
+                            ruling.keep(ui.ctx());
                             self.station_right(ui, u, now);
+                            formiga_pencil::ruled::RuleGrid::forget(ui.ctx());
                         });
                     }
                     Stage::Playing => {
@@ -1049,7 +1064,9 @@ impl BattleApp {
                         self.board_page(ui, layout.left, now, u);
                         ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
                             ui.multiply_opacity(fade);
+                            ruling.keep(ui.ctx());
                             self.side_panel(ui, &ctx, now, u);
+                            formiga_pencil::ruled::RuleGrid::forget(ui.ctx());
                         });
                     }
                 }

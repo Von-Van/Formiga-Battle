@@ -12,6 +12,7 @@ use crate::look::Look;
 use eframe::egui::{self, Color32, FontId, Id, Rect, RichText, Sense, pos2, vec2};
 use formiga_art::Canvas;
 use formiga_battle_contract::{HandlerCard, Trio, TrioCard, lineup_of};
+use formiga_pencil::ruled;
 
 /// Thread cream, for words lettered on the notebook's green ribbon.
 pub(super) const ON_RIBBON: Color32 = Color32::from_rgb(0xf3, 0xe4, 0xbc);
@@ -345,15 +346,9 @@ impl BattleApp {
     pub(super) fn standing_and_trios(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, u: f32) {
         let standing = Standing::of(&self.table.record);
         let _ = ctx;
-        let rules = self.rules;
-        on_rules(
+        ruled::write(ui, hand_job("How I'm doing", chrome::LABEL, ink::FOREST));
+        ruled::write(
             ui,
-            rules,
-            hand_job("How I'm doing", chrome::LABEL, ink::FOREST),
-        );
-        on_rules(
-            ui,
-            rules,
             hand(
                 &format!(
                     "{} · {} Open Circuit points · {}",
@@ -366,14 +361,13 @@ impl BattleApp {
                 false,
             ),
         );
-        on_rules(ui, rules, hand(&standing.how(), 12.0, ink::MUTED, false));
-        on_rules(ui, rules, hand("", 12.0, ink::MUTED, false));
-        on_rules(ui, rules, hand_job("My trios", chrome::LABEL, ink::FOREST));
+        ruled::write(ui, hand(&standing.how(), 12.0, ink::MUTED, false));
+        ruled::write(ui, hand("", 12.0, ink::MUTED, false));
+        ruled::write(ui, hand_job("My trios", chrome::LABEL, ink::FOREST));
         let trios: Vec<Trio> = self.table.record.trios.iter().rev().cloned().collect();
         if trios.is_empty() {
-            on_rules(
+            ruled::write(
                 ui,
-                rules,
                 hand(
                     "None yet. Pick three on the Who page and name them: a trio keeps its own record, and its name and pennant go with it into every match.",
                     12.5,
@@ -385,7 +379,7 @@ impl BattleApp {
         }
         for trio in &trios {
             self.trio_card(ui, ctx, trio, u);
-            on_rules(ui, rules, hand("", 12.0, ink::MUTED, false));
+            ruled::write(ui, hand("", 12.0, ink::MUTED, false));
         }
     }
 
@@ -409,7 +403,7 @@ impl BattleApp {
         let mut rename_to: Option<Option<Renaming>> = None;
         let rules = self.rules;
         // The picture sits on the rules: its card from one rule down to another.
-        to_rule(ui, rules);
+        ruled::to_next_rule(ui);
         self.team_picture(ui, trio, 84, u);
         ui.horizontal(|ui| {
             ui.add_space(u * 6.0);
@@ -442,7 +436,7 @@ impl BattleApp {
                 } else {
                     identity::record_words(trio)
                 };
-                on_rules(ui, rules, hand(&record, 13.0, ink::PAGE, false));
+                ruled::write(ui, hand(&record, 13.0, ink::PAGE, false));
                 let split = format!(
                     "Friends {} · Visitors {}",
                     identity::tally_words(
@@ -458,11 +452,10 @@ impl BattleApp {
                     )
                     .to_lowercase(),
                 );
-                on_rules(ui, rules, hand(&split, 12.0, ink::MUTED, false));
+                ruled::write(ui, hand(&split, 12.0, ink::MUTED, false));
                 if missing {
-                    on_rules(
+                    ruled::write(
                         ui,
-                        rules,
                         hand(
                             "Someone in this trio is no longer in your colony. Its record stays.",
                             12.0,
@@ -472,7 +465,7 @@ impl BattleApp {
                     );
                 }
                 for line in &earlier {
-                    on_rules(ui, rules, hand(line, 12.0, ink::MUTED, false));
+                    ruled::write(ui, hand(line, 12.0, ink::MUTED, false));
                 }
                 let cups: Vec<String> = trio
                     .cups
@@ -485,9 +478,8 @@ impl BattleApp {
                     })
                     .collect();
                 if !cups.is_empty() {
-                    on_rules(
+                    ruled::write(
                         ui,
-                        rules,
                         hand(
                             &format!("Cup wins together: {}", cups.join(", ")),
                             12.0,
@@ -621,9 +613,8 @@ impl BattleApp {
             chrome::kicker(ui, "Playing as");
             ui.add_space(u);
             self.team_picture(ui, &trio, 84, u);
-            on_rules(
+            ruled::write(
                 ui,
-                self.rules,
                 hand(&identity::record_words(&trio), 12.5, ink::MUTED, false),
             );
             if self.outing == super::Outing::Home {
@@ -969,37 +960,6 @@ fn rule_below((first, pitch): (f32, f32), y: f32) -> f32 {
     }
 }
 
-/// Writing on the ruled page, as a hand writes in a ruled notebook: each line of `job` with its
-/// foot on a rule, the first on the next rule there is room above, wrapped to the page.
-fn on_rules(ui: &mut egui::Ui, rules: (f32, f32), mut job: egui::text::LayoutJob) {
-    let pitch = rules.1;
-    for section in &mut job.sections {
-        section.format.line_height = Some(pitch);
-        section.format.valign = egui::Align::BOTTOM;
-    }
-    job.wrap.max_width = ui.available_width();
-    let galley = ui.painter().layout_job(job);
-    let baseline = galley
-        .rows
-        .first()
-        .and_then(|r| r.row.glyphs.first().map(|g| r.pos.y + g.pos.y))
-        .unwrap_or(pitch * 0.8);
-    let at = ui.cursor().min;
-    let rule = rule_below(rules, at.y + baseline);
-    let top = rule - baseline;
-    let colour = galley
-        .job
-        .sections
-        .first()
-        .map_or(ink::PAGE, |s| s.format.color);
-    // The page goes on from the last line's rule, so the next words take the rule after it.
-    let last = rule + (galley.rows.len().max(1) - 1) as f32 * pitch;
-    let spacing = ui.spacing().item_spacing.y;
-    let height = (last + 1.0 - spacing - at.y).max(0.0);
-    ui.painter().galley(pos2(at.x, top), galley, colour);
-    ui.allocate_space(vec2(ui.available_width(), height));
-}
-
 /// Words in the page's hand, for writing on its rules.
 fn hand(text: &str, size: f32, colour: Color32, italic: bool) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
@@ -1014,15 +974,6 @@ fn hand(text: &str, size: f32, colour: Color32, italic: bool) -> egui::text::Lay
         },
     );
     job
-}
-
-/// Brings the page down to the next rule, so what comes next starts on it.
-fn to_rule(ui: &mut egui::Ui, rules: (f32, f32)) {
-    let y = ui.cursor().min.y;
-    let rule = rule_below(rules, y);
-    if rule > y {
-        ui.add_space(rule - y);
-    }
 }
 
 /// How tall a row of sample tiles is, in notebook pixels.

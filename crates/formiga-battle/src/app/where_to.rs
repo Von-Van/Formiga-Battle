@@ -4,12 +4,13 @@
 //! stations on one line. The right page keeps what is secondary: the last few matches, the shelf
 //! of cups, and the friends played. Everything said is read from the record and the career.
 
-use super::{BattleApp, Step, kept_picture, portrait_mat, rosette, texture};
+use super::{BattleApp, Step, kept_picture, portrait_mat, rosette, ruled_line, texture};
 use crate::chrome::{self, Kind, hand_job, ink};
 use crate::keepsake::{self, Keepsake};
 use crate::rewards::{self, CUP_WINS, CUPS};
 use eframe::egui::{self, Color32, Id, Rect, RichText, Sense, pos2, vec2};
 use formiga_battle_contract::Mode;
+use formiga_pencil::ruled;
 
 /// What the Handler calls each cup's place on the shelf.
 const SHELF_NAMES: [&str; 4] = ["Backyard", "Woodland", "Millpond", "Cove"];
@@ -629,14 +630,15 @@ impl BattleApp {
             .cloned()
             .collect();
         if lately.is_empty() {
-            ui.label(
+            ruled::write(
+                ui,
                 RichText::new("No matches yet! Let's hop on the train and play one.")
                     .size(15.0)
                     .color(ink::MUTED),
             );
         }
         for summary in &lately {
-            ui.horizontal(|ui| {
+            ruled::ruled_row(ui, |ui| {
                 let (word, colour) = match summary.won {
                     Some(true) => ("Won", ink::FOREST),
                     Some(false) => ("Lost", ink::STAMP),
@@ -664,10 +666,7 @@ impl BattleApp {
                         (Mode::Ai, _, Some(false)) => "Lost to the visitors".to_owned(),
                         (Mode::Ai, _, None) => "Drew with the visitors".to_owned(),
                     };
-                    ui.add(
-                        egui::Label::new(RichText::new(against).size(15.0).color(ink::PAGE))
-                            .truncate(),
-                    );
+                    ruled::write(ui, RichText::new(against).size(15.0).color(ink::PAGE));
                     let how = match summary.ended_by.as_str() {
                         "capture" => format!("lit the beacon in {} turns", summary.turns),
                         "knockout" => format!("everyone sat out by turn {}", summary.turns),
@@ -675,23 +674,21 @@ impl BattleApp {
                         "forfeit" => "by forfeit".to_owned(),
                         _ => format!("{} turns", summary.turns),
                     };
-                    ui.add(
-                        egui::Label::new(
-                            RichText::new(format!(
-                                "{} · {how}",
-                                super::handler::date(summary.finished_at_utc)
-                            ))
-                            .size(15.0)
-                            .color(ink::MUTED),
-                        )
-                        .truncate(),
+                    ruled::write(
+                        ui,
+                        RichText::new(format!(
+                            "{} · {how}",
+                            super::handler::date(summary.finished_at_utc)
+                        ))
+                        .size(15.0)
+                        .color(ink::MUTED),
                     );
                 });
             });
         }
-        ui.add_space(u * 8.0);
+        ruled::write(ui, "");
         chrome::kicker(ui, "My shelf");
-        ui.horizontal(|ui| {
+        ruled::ruled_row(ui, |ui| {
             let gap = u * 4.0;
             ui.spacing_mut().item_spacing.x = gap;
             let slot_w = ((ui.available_width() - gap * 3.0) / 4.0).floor();
@@ -732,7 +729,8 @@ impl BattleApp {
                                 ink::MUTED,
                             );
                         }
-                        ui.label(
+                        ruled::write(
+                            ui,
                             RichText::new(SHELF_NAMES[i])
                                 .font(formiga_pencil::hand_bold(15.0))
                                 .color(ink::MUTED),
@@ -747,7 +745,7 @@ impl BattleApp {
                 });
             }
         });
-        ui.add_space(u * 8.0);
+        ruled::write(ui, "");
         chrome::kicker(ui, "Out and about");
         let mut friends: Vec<(String, u32, u32)> = Vec::new();
         for summary in &self.table.record.history {
@@ -764,23 +762,23 @@ impl BattleApp {
             }
         }
         let open = self.friends_open;
-        let row = ui
-            .horizontal(|ui| {
-                ui.label(
-                    RichText::new("Friends I've played")
-                        .size(15.0)
-                        .color(ink::PAGE),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(hand_job(
+        let row = ruled_line(
+            ui,
+            RichText::new("Friends I've played")
+                .size(15.0)
+                .color(ink::PAGE),
+            |ui| {
+                ruled::write(
+                    ui,
+                    hand_job(
                         &format!("{} {}", friends.len(), if open { "‹" } else { "›" }),
                         chrome::HAND,
                         ink::FOREST,
-                    ));
-                });
-            })
-            .response
-            .interact(Sense::click());
+                    ),
+                );
+            },
+        )
+        .interact(Sense::click());
         if row.hovered() && !friends.is_empty() {
             ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
         }
@@ -789,20 +787,19 @@ impl BattleApp {
         }
         if open {
             for (name, played, won) in &friends {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(name).size(15.0).color(ink::PAGE));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(
-                            RichText::new(crate::identity::tally_words(*played, *won, 0))
-                                .size(15.0)
-                                .color(ink::MUTED),
-                        );
-                    });
+                ruled_line(ui, RichText::new(name).size(15.0).color(ink::PAGE), |ui| {
+                    ruled::write(
+                        ui,
+                        RichText::new(crate::identity::tally_words(*played, *won, 0))
+                            .size(15.0)
+                            .color(ink::MUTED),
+                    );
                 });
             }
         }
         let points = self.table.record.circuit_points;
-        ui.label(
+        ruled::write(
+            ui,
             RichText::new(if points == 0 {
                 "No Open Circuit points yet. Friend matches are where they come from!".to_owned()
             } else {

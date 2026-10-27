@@ -345,16 +345,9 @@ impl BattleApp {
     /// What to do next, along the leather at the foot; and who Battle is open for.
     pub(super) fn foot_bar(&self, ui: &mut egui::Ui, layout: &Layout, now: f32) {
         let u = layout.unit;
-        // Between the pages' edge and the stitching along the foot.
-        let area = Rect::from_min_max(
-            pos2(
-                layout.foot.min.x + RIM * u + u * 4.0,
-                layout.foot.min.y + u * 2.0,
-            ),
-            pos2(
-                layout.foot.max.x - RIM * u - u * 4.0,
-                layout.foot.max.y - u * 7.0,
-            ),
+        let (left, right) = (
+            layout.foot.min.x + RIM * u + u * 4.0,
+            layout.foot.max.x - RIM * u - u * 4.0,
         );
         let line = match self.stage {
             Stage::Station => match &self.station {
@@ -399,20 +392,24 @@ impl BattleApp {
             },
         };
         let painter = ui.painter();
-        painter.text(
-            pos2(area.min.x, area.center().y),
-            Align2::LEFT_CENTER,
-            line,
-            FontId::proportional(15.0),
-            ink::COVER,
-        );
-        painter.text(
-            pos2(area.max.x, area.center().y),
-            Align2::RIGHT_CENTER,
-            self.host.describe(),
-            FontId::proportional(15.0),
-            ink::DEBOSS,
-        );
+        let baseline = foot_baseline(layout, FOOT_WRITING);
+        for (text, colour, at_right) in [
+            (line, ink::COVER, false),
+            (self.host.describe(), ink::DEBOSS, true),
+        ] {
+            let galley = painter.layout_no_wrap(text, FontId::proportional(FOOT_WRITING), colour);
+            let rests = galley
+                .rows
+                .first()
+                .and_then(|row| row.glyphs.first())
+                .map_or(galley.size().y * 0.75, |glyph| glyph.pos.y);
+            let x = if at_right {
+                right - galley.size().x
+            } else {
+                left
+            };
+            painter.galley(pos2(x, baseline - rests), galley, colour);
+        }
     }
 
     pub(super) fn board_view(
@@ -1519,16 +1516,20 @@ impl BattleApp {
         // The three orders in hand: pick one, then the squares or the thing on the board.
         if giving {
             let left = self.table.orders.iter().filter(|o| o.is_none()).count();
-            ui.horizontal(|ui| {
-                ui.label(hand_job("Give an order", chrome::LABEL, ink::FOREST));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(hand_job(
-                        &format!("{left} of {PLAN_SIZE} left!"),
-                        chrome::HAND,
-                        ink::STAMP,
-                    ));
-                });
-            });
+            ruled_line(
+                ui,
+                hand_job("Give an order", chrome::LABEL, ink::FOREST),
+                |ui| {
+                    ruled::write(
+                        ui,
+                        hand_job(
+                            &format!("{left} of {PLAN_SIZE} left!"),
+                            chrome::HAND,
+                            ink::STAMP,
+                        ),
+                    );
+                },
+            );
             ui.add_space(u);
             let row = egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true);
             let mut picked = None;
@@ -1809,7 +1810,8 @@ impl BattleApp {
             sticky(ui, &notice, u);
             ui.add_space(u * 3.0);
         }
-        ui.label(
+        ruled::write(
+            ui,
             RichText::new(format!(
                 "The match with {} cannot go on without it, so it ended here and earned nothing.",
                 self.table.other_short()
@@ -1860,7 +1862,7 @@ impl BattleApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 for note in lesson.notes() {
-                    ui.label(RichText::new(*note).size(15.0).color(ink::PAGE));
+                    ruled::write(ui, RichText::new(*note).size(15.0).color(ink::PAGE));
                     ui.add_space(u * 2.0);
                 }
             });
@@ -1909,7 +1911,7 @@ impl BattleApp {
             crate::keepsake::Award::NotYet
         };
         self.award(ui, award, title, u);
-        ui.label(RichText::new(words).size(15.0));
+        ruled::write(ui, RichText::new(words).size(15.0));
         ui.add_space(u * 5.0);
         let width = ui.available_width();
         let next = lesson.next().filter(|_| learned);
@@ -1969,11 +1971,12 @@ impl BattleApp {
             ui.add_space(u * 5.0);
             chrome::kicker(ui, "After the lessons");
             for line in AFTER_LESSONS {
-                ui.label(RichText::new(format!("\u{b7} {line}")).size(15.0));
+                ruled::write(ui, RichText::new(format!("\u{b7} {line}")).size(15.0));
             }
         }
         ui.add_space(u * 3.0);
-        ui.label(
+        ruled::write(
+            ui,
             RichText::new("A lesson: nothing is kept.")
                 .size(15.0)
                 .italics()
@@ -2019,7 +2022,7 @@ impl BattleApp {
                 .collect();
         }
         let arena = &self.table.arena;
-        ui.horizontal(|ui| {
+        ruled::ruled_row(ui, |ui| {
             chrome::kicker(ui, &format!("The {}", arena.name));
         })
         .response
@@ -2270,12 +2273,12 @@ impl BattleApp {
                     a.0, b.0, a.1, b.1, a.2, b.2
                 )
             });
-        ui.label(RichText::new(why).size(15.0));
+        ruled::write(ui, RichText::new(why).size(15.0));
         if let Some(counts) = counts {
-            ui.label(RichText::new(counts).size(15.0).color(ink::FOREST));
+            ruled::write(ui, RichText::new(counts).size(15.0).color(ink::FOREST));
         }
         if let Some(reason) = &self.table.ended_because {
-            ui.label(RichText::new(reason).size(15.0).color(ink::MUTED));
+            ruled::write(ui, RichText::new(reason).size(15.0).color(ink::MUTED));
         }
         // The rival met, by their pennant, and how the meetings stand.
         if let (Some(rival), Some(meeting)) = (self.table.rival, self.table.meeting.clone()) {
@@ -2340,7 +2343,8 @@ impl BattleApp {
                 ink::PAGE,
             );
         }
-        ui.label(
+        ruled::write(
+            ui,
             RichText::new(format!("After {} turns", outcome.turn))
                 .size(15.0)
                 .color(ink::MUTED),
@@ -2403,7 +2407,10 @@ impl BattleApp {
             } else {
                 "A rehearsal: nothing is kept."
             };
-            ui.label(RichText::new(kept).size(15.0).italics().color(ink::MUTED));
+            ruled::write(
+                ui,
+                RichText::new(kept).size(15.0).italics().color(ink::MUTED),
+            );
         }
         ui.add_space(u * 4.0);
         let width = ui.available_width();
@@ -2487,4 +2494,20 @@ impl BattleApp {
                 }
             });
     }
+}
+
+/// How large the words along the foot are written, in points.
+const FOOT_WRITING: f32 = 15.0;
+
+/// Where the words along the foot rest: between the pages' bottom edge, which runs on two pixels
+/// below them, and the stitching five pixels up from the cover's edge. Their tallest letters (an
+/// apostrophe reaches 0.85 of their size above where they rest, a tail 0.25 below) are kept a
+/// pixel clear of the pages, and the letters are centred between the two as far as they fit.
+fn foot_baseline(layout: &Layout, size: f32) -> f32 {
+    let u = layout.unit;
+    let (above, below) = (size * 0.85, size * 0.25);
+    let clear = layout.foot.min.y + u * 3.0;
+    let rows = (layout.full.height() / u).ceil();
+    let stitching = layout.full.min.y + (rows - 5.0) * u;
+    ((clear + stitching + above - below) / 2.0).max(clear + above)
 }

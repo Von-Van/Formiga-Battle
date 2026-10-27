@@ -5,6 +5,7 @@
 //! nothing of its own, so any page can use it.
 
 use super::*;
+use formiga_pencil::ruled;
 
 /// The width a row of these little buttons takes at the right of a card, with the gap before
 /// them: nothing for none.
@@ -30,6 +31,10 @@ pub(super) fn card<R>(
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (egui::Response, R) {
     let mark = crate::feel::mark(ui);
+    // What is written on a card is set as on any card, not on the page's rules; what follows it
+    // on the page goes back to them.
+    let ruling = formiga_pencil::ruled::RuleGrid::of(ui.ctx());
+    formiga_pencil::ruled::RuleGrid::forget(ui.ctx());
     let under = ui.painter().add(egui::Shape::Noop);
     let sense = if lively {
         Sense::click()
@@ -48,6 +53,9 @@ pub(super) fn card<R>(
             })
             .inner
     });
+    if let Some(ruling) = ruling {
+        ruling.keep(ui.ctx());
+    }
     let response = inner.response;
     let rect = response.rect;
     let pointed = lively && up && response.hovered();
@@ -85,6 +93,20 @@ pub(super) fn card<R>(
     ui.painter().set(under, egui::Shape::Vec(shapes));
     crate::feel::transform_since(ui, mark, press.transform(rect, u));
     (response, inner.inner)
+}
+
+/// A line of the ruled page with `words` at its start and whatever `end` adds at its end, the
+/// words resting on the line's rule.
+pub(super) fn ruled_line<R>(
+    ui: &mut egui::Ui,
+    words: impl Into<egui::WidgetText>,
+    end: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::Response {
+    ruled::ruled_row(ui, |ui| {
+        ruled::write(ui, words);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), end);
+    })
+    .response
 }
 
 /// A portrait on a little mat of paper, so it sits on the card like a pasted-in photo.

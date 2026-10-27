@@ -21,6 +21,7 @@ use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, RichText, Sense, Str
 use formiga_battle_contract::Contender;
 use formiga_battle_core::TEAM_SIZE;
 use formiga_battle_core::lesson::Lesson;
+use formiga_pencil::ruled;
 
 /// How tall the station is drawn, in its own pixels, whatever the window: each of them as many
 /// screen pixels as fit.
@@ -519,7 +520,7 @@ impl BattleApp {
         self.masthead(ui, u, now);
         ui.add_space(u * 2.0);
         ui.vertical_centered(|ui| {
-            ui.label(RichText::new(observation).size(16.0).color(ink::MUTED));
+            ruled::write(ui, RichText::new(observation).size(16.0).color(ink::MUTED));
         });
         ui.add_space(u * 6.0);
         let width = ui.available_width();
@@ -578,7 +579,8 @@ impl BattleApp {
                 ui.add_space(u * 4.0);
                 // A colony that has never played is told where to begin.
                 if self.table.record.applied.is_empty() {
-                    ui.label(
+                    ruled::write(
+                        ui,
                         RichText::new("New here? Field Lessons show how a match works!")
                             .size(15.0)
                             .italics()
@@ -1067,7 +1069,8 @@ impl BattleApp {
             self.choose_arena(arena);
         }
         if waiting {
-            ui.label(
+            ruled::write(
+                ui,
                 RichText::new(format!("Your room plays in the {}.", self.table.arena.name))
                     .size(15.0)
                     .italics()
@@ -1165,13 +1168,9 @@ impl BattleApp {
         if let Some(lesson) = chosen {
             self.lesson = lesson;
         }
-        ui.add_space(u * 2.0);
-        dashed_rule(ui, u);
-        ui.add_space(u * 2.0);
         chrome::kicker(ui, "After the lessons");
         for line in crate::app::AFTER_LESSONS {
-            ui.label(RichText::new(line).size(15.0).color(ink::MUTED));
-            ui.add_space(u);
+            ruled::write(ui, RichText::new(line).size(15.0).color(ink::MUTED));
         }
         ui.add_space(u * 4.0);
         let width = ui.available_width();
@@ -1331,7 +1330,7 @@ impl BattleApp {
         ui.add_space(u * 2.0);
         dashed_rule(ui, u);
         ui.add_space(u * 2.0);
-        ui.horizontal(|ui| {
+        ruled::ruled_row(ui, |ui| {
             let (playing, back_to) = match self.outing {
                 Outing::Lessons => (
                     format!("Lesson {}: {}", self.lesson.number(), self.lesson.title()),
@@ -1342,7 +1341,7 @@ impl BattleApp {
                     Step::Where,
                 ),
             };
-            ui.label(RichText::new(playing).size(15.0).color(ink::MUTED));
+            ruled::write(ui, RichText::new(playing).size(15.0).color(ink::MUTED));
             if !waiting && chrome::button(ui, "change", Kind::Quiet, false, true, None, u).clicked()
             {
                 let now = self.clock;
@@ -1631,15 +1630,15 @@ impl BattleApp {
         chrome::kicker(ui, "What a friend match shares");
         ui.add_space(u * 2.0);
         for line in SHARED {
-            ui.label(RichText::new(format!("· {line}")).size(15.0));
-            ui.add_space(u);
+            ruled::write(ui, RichText::new(format!("· {line}")).size(15.0));
         }
-        ui.add_space(u * 2.0);
         let open = self.table.friend.is_some();
-        ui.add_enabled(
-            !open,
-            egui::Checkbox::new(&mut self.understood, "I understand what is shared"),
-        );
+        ruled::on_the_line(ui, |ui| {
+            ui.add_enabled(
+                !open,
+                egui::Checkbox::new(&mut self.understood, "I understand what is shared"),
+            )
+        });
         ui.add_space(u * 4.0);
         dashed_rule(ui, u);
         ui.add_space(u * 2.0);
@@ -1651,7 +1650,8 @@ impl BattleApp {
                 portrait_mat(ui, &texture, 40.0, u, true)
             }
         });
-        ui.label(
+        ruled::write(
+            ui,
             RichText::new(format!(
                 "To the {}. Open Circuit points so far: {}. Friend matches earn points, match history and notebook entries.",
                 self.table.arena.name, self.table.record.circuit_points
