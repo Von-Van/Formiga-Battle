@@ -80,6 +80,9 @@ pub struct Career {
     pub recognition: Vec<Recognition>,
     /// Each trio's playbooks, by trio id.
     pub playbooks: BTreeMap<String, Shelf>,
+    /// How the Handler looks in town, chosen in the Handler Studio. Only how they look: kept
+    /// here, with the colony, until a Desktop contract carries it (Jake, 2026-11-11).
+    pub look: crate::town::look::HandlerLook,
 }
 
 /// The most playbooks one trio keeps.
@@ -230,6 +233,7 @@ impl Default for Career {
             hall: Vec::new(),
             recognition: Vec::new(),
             playbooks: BTreeMap::new(),
+            look: crate::town::look::HandlerLook::default(),
         }
     }
 }
@@ -314,6 +318,7 @@ impl Career {
         match serde_json::from_slice::<Self>(&bytes) {
             Ok(mut career) if career.colony_id == colony_id => {
                 career.playbooks.values_mut().for_each(Shelf::tidy);
+                career.look = career.look.sane();
                 Loaded {
                     career,
                     keep: true,

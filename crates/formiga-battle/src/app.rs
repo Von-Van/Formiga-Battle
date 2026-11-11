@@ -25,6 +25,7 @@ mod menus;
 mod playbooks;
 mod registry;
 mod season;
+mod studio;
 #[cfg(test)]
 mod tests;
 mod town;
@@ -137,6 +138,8 @@ pub enum Step {
     /// The Handler's own pages, opened from the station rather than on the way anywhere: who
     /// they are and their trios, the history, and the settings.
     Handler,
+    /// How the Handler looks around the Battleground, from the Handler Studio.
+    Studio,
     /// Each trio's playbooks: its plans for a match, in stages.
     Playbooks,
     /// The Handler's place at the Battleground: the event under way, titles won, and how they
@@ -154,6 +157,7 @@ impl Step {
             Self::Who => "Who",
             Self::Room => "Friend",
             Self::Handler => "Handler",
+            Self::Studio => "Studio",
             Self::Playbooks => "Playbooks",
             Self::Season => "Season",
             Self::History => "History",
@@ -201,6 +205,8 @@ pub enum Review {
     Town,
     /// Arriving in town, from the train coming in (`--at` picks the moment).
     Arrival,
+    /// The Handler Studio's page, a look being tried on.
+    Studio,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -357,6 +363,9 @@ pub struct BattleApp {
     desk: Option<Canvas>,
     /// The next arrival is a replay, the whole of it.
     replaying: bool,
+    /// The look being tried on in the Handler Studio, and its preview's pictures.
+    studio_draft: Option<crate::town::look::HandlerLook>,
+    studio_pictures: Option<(crate::town::look::HandlerLook, Vec<egui::TextureHandle>)>,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -498,6 +507,8 @@ impl BattleApp {
             arrival_heard: 0.0,
             desk: None,
             replaying: false,
+            studio_draft: None,
+            studio_pictures: None,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -582,6 +593,15 @@ impl BattleApp {
             }
             Some(Review::Welcome) => app.welcome = true,
             Some(Review::Town) => app.enter_town(),
+            Some(Review::Studio) => {
+                app.handler = "Jo".to_owned();
+                app.studio_draft = Some(crate::town::look::HandlerLook {
+                    hair: 2,
+                    outfit_colour: 1,
+                    ..Default::default()
+                });
+                app.open_journal(Outing::Home, Step::Studio);
+            }
             // Battle opens in town, the train coming in; the station is for its picture alone.
             Some(Review::Arrival) | None => app.stage = Stage::Arrival,
             Some(Review::Station) => {}

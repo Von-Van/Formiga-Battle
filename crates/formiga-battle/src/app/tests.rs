@@ -646,3 +646,24 @@ fn space_skips_the_arrival_straight_to_the_office() {
     h.frames(2);
     assert_eq!(h.app.stage, Stage::Town);
 }
+
+#[test]
+fn the_studio_tries_a_look_on_and_keeps_it_only_when_asked() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.app
+        .use_in_town(crate::town::map::PlaceId::Studio, "mirror");
+    h.frames(12);
+    assert_eq!(h.app.step, Step::Studio);
+    h.click("Auburn", 0);
+    h.frames(2);
+    assert_eq!(
+        h.app.table.career.look,
+        crate::town::look::HandlerLook::default(),
+        "only tried on"
+    );
+    h.click("Keep this look", 0);
+    h.frames(2);
+    assert_eq!(h.app.table.career.look.hair, 2, "kept");
+}

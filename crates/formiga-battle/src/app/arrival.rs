@@ -59,7 +59,9 @@ impl BattleApp {
             self.arrival = Some((journey, halt));
             self.arrival_heard = now;
             if self.town.is_none() {
-                self.town = Some(Town::new(now));
+                let mut town = Town::new(now);
+                town.dress(&self.table.career.look);
+                self.town = Some(town);
             }
         }
         let skip = !ctx.egui_wants_keyboard_input()

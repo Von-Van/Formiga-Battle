@@ -43,6 +43,7 @@ impl BattleApp {
         if self.own_pages() {
             &[
                 Step::Handler,
+                Step::Studio,
                 Step::Playbooks,
                 Step::Season,
                 Step::History,
@@ -57,7 +58,12 @@ impl BattleApp {
     pub(super) fn own_pages(&self) -> bool {
         matches!(
             self.step,
-            Step::Handler | Step::Playbooks | Step::Season | Step::History | Step::Settings
+            Step::Handler
+                | Step::Studio
+                | Step::Playbooks
+                | Step::Season
+                | Step::History
+                | Step::Settings
         )
     }
 
@@ -257,6 +263,7 @@ impl BattleApp {
                 }
             },
             Step::Handler => "My name, my pennant, and my trios.".to_owned(),
+            Step::Studio => "Try a look on, then keep it.".to_owned(),
             Step::Playbooks => {
                 "Write each trio's plans in stages; the one it plays by fills in its orders."
                     .to_owned()
@@ -709,6 +716,19 @@ impl BattleApp {
                     .auto_shrink([false, false])
                     .show(ui, |ui| self.handler_page(ui, ctx, u));
             }
+            Step::Studio => {
+                chrome::page_heading(
+                    ui,
+                    &line,
+                    "The Handler Studio",
+                    "How I look around the Battleground. Only how I look: it changes nothing in a match.",
+                );
+                ui.add_space(u * 6.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("studio-choices")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| self.studio_choices(ui, u));
+            }
             Step::Playbooks => {
                 chrome::page_heading(
                     ui,
@@ -762,6 +782,7 @@ impl BattleApp {
                     Step::Who => self.lineup(ui, ctx, u),
                     Step::Room => self.shared(ui, ctx, u),
                     Step::Handler => self.standing_and_trios(ui, ctx, u),
+                    Step::Studio => self.studio_preview(ui, ctx, u),
                     Step::Playbooks => self.shelf_right(ui, u),
                     Step::Season => self.standing_against_rivals(ui, u),
                     Step::History => self.totals(ui, u),
@@ -793,6 +814,7 @@ impl BattleApp {
             Some(Step::Lessons) => "Lessons",
             Some(Step::Who) => "Who goes",
             Some(Step::Handler) => "My Handler page",
+            Some(Step::Studio) => "The Studio",
             Some(Step::Playbooks) => "Playbooks",
             Some(Step::Season) => "The Season",
             Some(Step::History) => "History",

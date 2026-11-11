@@ -76,10 +76,23 @@ The thing in front, or the one Tab points to, shows its prompt over it.
 | Clubhouse | chalkboard | Playbooks |
 | Clubhouse | history shelves | History |
 | Guild Hall | board, Hall of Champions, Odile | Season |
-| Studio | mirror, counter, the tailor | the Handler's page |
+| Studio | mirror, counter, the tailor | the Handler Studio |
 
 Closing the page, or finishing a match begun from it, comes back to the town where the Handler
 stood, and the way back is named after the place: "‹ Back to the Arena".
+
+## The Handler Studio
+
+The Studio's page (also a tab among the Handler's own pages) chooses how the Handler looks around
+the Battleground: hair colour, jacket colour (the club's), skin tone, build, hairstyle, outfit and
+accessory. A look is tried on first and kept only by "Keep this look", with the colony's career
+in Battle's own file (`career.rs`, `look`), where a rehearsal keeps nothing. Only how they look:
+nothing in it touches a match or the record.
+
+A colour is a lookup, never a redraw: each recolourable material is painted in shades of one hue,
+and a chosen colour swaps them for the same steps of the new one (`town/look.rs`). On the stand-in
+sheet, hair, jacket and skin can already be recoloured; build, hairstyle, outfit and accessory are
+kept and drawn once their layered sheets exist. The usual look is the stand-in sheet exactly.
 
 ## Character sheets
 
