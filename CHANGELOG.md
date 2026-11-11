@@ -6,8 +6,13 @@
   courtyard, the Arena, the Clubhouse, the Guild Hall and the Handler Studio, read from place files
   in `town/` (docs/TOWN.md). The Handler walks a tile at a time from the keyboard or by clicking,
   and the things in each place open the pages Battle already has, coming back to the town when the
-  page closes. Its places are stand-ins until their pictures are drawn, and for now it opens only
-  for its review picture (`--review town`).
+  page closes, the way back named after the place. Its places are stand-ins until their pictures
+  are drawn.
+- Battle opens by arriving in town: the train pulls into a little halt inside the habitat on the
+  Handler's desk, the camera draws back to the whole desk, and the office settles on its grid with
+  the Handler at the desk. After the first time only the train coming in is seen; Escape, Space,
+  Enter or a click skips it, reduced motion leaves it out, and the Settings page shows it again.
+  The country station is kept for its review picture.
 
 ## [0.68.1] - 2026-10-26
 

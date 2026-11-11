@@ -22,7 +22,8 @@ impl Headless {
         };
         Self {
             ctx: egui::Context::default(),
-            app: BattleApp::new(host, table, None, None, Sound::silent()),
+            // At the station, where most of these tests begin; Battle itself opens in town.
+            app: BattleApp::new(host, table, Some(Review::Station), None, Sound::silent()),
             time: 0.0,
             drawn: Vec::new(),
             closed: false,
@@ -116,8 +117,8 @@ fn battle_opened_by_itself_welcomes_the_player_until_they_look_around() {
     h.frames(2);
     assert!(!says(&h, welcome::TITLE));
     assert!(!h.closed);
-    // The rehearsal carries on at the Battleground, as it would have without the card.
-    assert_eq!(h.app.stage, Stage::Station);
+    // The rehearsal carries on arriving in town, as it would have without the card.
+    assert!(matches!(h.app.stage, Stage::Arrival | Stage::Town));
 }
 
 #[test]
@@ -596,4 +597,52 @@ fn the_town_draws_its_place_name_and_walks_from_the_keyboard() {
         (start.0, start.1 + 2),
         "two steps down in about half a second"
     );
+}
+
+#[test]
+fn battle_opens_with_the_train_coming_into_the_habitat_and_ends_at_the_office_desk() {
+    let mut h = Headless::new();
+    h.app = BattleApp::new(
+        Host::Rehearsal {
+            from: "a test".to_owned(),
+        },
+        Table::new(sample::snapshot(), sample::visitors(9), 5),
+        None,
+        None,
+        Sound::silent(),
+    );
+    h.frames(4);
+    assert_eq!(h.app.stage, Stage::Arrival);
+    assert!(h.drawn.iter().any(|(w, _)| w == "THE HABITAT"));
+    // The whole of it the first time: about nine seconds at twenty frames a second.
+    h.frames(200);
+    assert_eq!(h.app.stage, Stage::Town);
+    let town = h.app.town.as_ref().expect("in town");
+    assert_eq!(town.place.id, crate::town::map::PlaceId::Office);
+}
+
+#[test]
+fn space_skips_the_arrival_straight_to_the_office() {
+    let mut h = Headless::new();
+    h.app = BattleApp::new(
+        Host::Rehearsal {
+            from: "a test".to_owned(),
+        },
+        Table::new(sample::snapshot(), sample::visitors(9), 5),
+        None,
+        None,
+        Sound::silent(),
+    );
+    h.frames(4);
+    let key = |pressed| egui::Event::Key {
+        key: egui::Key::Space,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::default(),
+    };
+    h.frame(vec![key(true)]);
+    h.frame(vec![key(false)]);
+    h.frames(2);
+    assert_eq!(h.app.stage, Stage::Town);
 }

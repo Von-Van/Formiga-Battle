@@ -181,7 +181,7 @@ impl BattleApp {
                     ink::DEBOSS
                 };
                 let response = ui.add(
-                    egui::Label::new(hand_job("‹ The station", chrome::LABEL, colour)).sense(
+                    egui::Label::new(hand_job(self.home_words().0, chrome::LABEL, colour)).sense(
                         if waiting {
                             Sense::hover()
                         } else {
@@ -788,7 +788,7 @@ impl BattleApp {
         let steps = self.steps();
         let at = steps.iter().position(|s| *s == self.step).unwrap_or(0);
         Some(match at.checked_sub(1).map(|i| steps[i]) {
-            None => "The station",
+            None => self.home_words().2,
             Some(Step::Where) => "Where to",
             Some(Step::Lessons) => "Lessons",
             Some(Step::Who) => "Who goes",

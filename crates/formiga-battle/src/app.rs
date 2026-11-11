@@ -18,6 +18,7 @@
 //! The match on screen is drawn in `match_screen`, and the little painted pieces every page is
 //! made of (cards, notes, tokens, the watch) are in `widgets`.
 
+mod arrival;
 mod handler;
 mod match_screen;
 mod menus;
@@ -91,6 +92,8 @@ pub enum Stage {
     Playing,
     /// Walking the town round the Battleground (`crate::town`), between pages.
     Town,
+    /// Arriving in town: the train into the habitat on the desk, and the office settling.
+    Arrival,
 }
 
 /// Where the companions are off to, chosen at the station.
@@ -196,6 +199,8 @@ pub enum Review {
     Planned,
     /// The Handler in the town, at their office desk.
     Town,
+    /// Arriving in town, from the train coming in (`--at` picks the moment).
+    Arrival,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -344,6 +349,14 @@ pub struct BattleApp {
     town_picture: Option<egui::TextureHandle>,
     /// The walking keys down, in the order they were pressed.
     walk_keys: Vec<(egui::Key, crate::town::map::Facing)>,
+    /// Arriving in town: how far along, and the halt in the habitat the train comes in at.
+    arrival: Option<(crate::town::arrival::Arrival, crate::station::Station)>,
+    /// When the arrival's sounds were last listened for.
+    arrival_heard: f32,
+    /// The desk the habitat stands on, painted once.
+    desk: Option<Canvas>,
+    /// The next arrival is a replay, the whole of it.
+    replaying: bool,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -481,6 +494,10 @@ impl BattleApp {
             town: None,
             town_picture: None,
             walk_keys: Vec::new(),
+            arrival: None,
+            arrival_heard: 0.0,
+            desk: None,
+            replaying: false,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -565,7 +582,9 @@ impl BattleApp {
             }
             Some(Review::Welcome) => app.welcome = true,
             Some(Review::Town) => app.enter_town(),
-            Some(Review::Station) | None => {}
+            // Battle opens in town, the train coming in; the station is for its picture alone.
+            Some(Review::Arrival) | None => app.stage = Stage::Arrival,
+            Some(Review::Station) => {}
         }
         app
     }
@@ -876,7 +895,7 @@ impl BattleApp {
                 .enumerate()
                 .map(|(i, s)| format!("{} {}", i + 1, s.tab()))
                 .collect(),
-            Stage::Station | Stage::Town => Vec::new(),
+            Stage::Station | Stage::Town | Stage::Arrival => Vec::new(),
         }
     }
 
@@ -1026,10 +1045,20 @@ impl BattleApp {
         self.keys(&ctx);
         self.pokes.retain(|(_, at)| now - at < 0.6);
         let full = ui.max_rect();
-        if self.stage == Stage::Town {
+        if matches!(self.stage, Stage::Town | Stage::Arrival) {
             egui::CentralPanel::default()
                 .frame(egui::Frame::NONE)
-                .show(ui, |ui| self.town_frame(ui, &ctx, now));
+                .show(ui, |ui| {
+                    if self.stage == Stage::Arrival {
+                        self.arrival_frame(ui, &ctx, now);
+                    } else {
+                        self.town_frame(ui, &ctx, now);
+                    }
+                });
+            if self.welcome {
+                let layout = self.layout(&ctx, full);
+                self.welcome_card(&ctx, layout.full, layout.unit);
+            }
             self.take_snap(&ctx);
             return;
         }
@@ -1080,8 +1109,8 @@ impl BattleApp {
                             formiga_pencil::ruled::RuleGrid::forget(ui.ctx());
                         });
                     }
-                    // Drawn on its own before the notebook, above.
-                    Stage::Town => {}
+                    // Drawn on their own before the notebook, above.
+                    Stage::Town | Stage::Arrival => {}
                     Stage::Playing => {
                         self.board_view(ui, &ctx, layout.left.shrink(u * 4.0), now, u);
                         self.board_page(ui, layout.left, now, u);

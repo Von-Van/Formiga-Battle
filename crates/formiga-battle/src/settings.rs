@@ -57,6 +57,8 @@ pub struct Settings {
     pub reduce_motion: Option<bool>,
     /// The window's size inside its frame, in points.
     pub window: Option<[f32; 2]>,
+    /// The whole arrival in town has been seen once; after that the train alone comes in.
+    pub arrival_seen: bool,
 }
 
 impl Default for Settings {
@@ -69,6 +71,7 @@ impl Default for Settings {
             muted: levels.muted,
             reduce_motion: None,
             window: None,
+            arrival_seen: false,
         }
     }
 }
@@ -98,6 +101,7 @@ impl Settings {
             muted: read.muted,
             reduce_motion: read.reduce_motion,
             window: read.window.filter(sane),
+            arrival_seen: read.arrival_seen,
         }
     }
 
@@ -126,6 +130,8 @@ pub struct Keeper {
     pending: Option<(Settings, f32)>,
     /// Reduced motion, if the Handler has chosen it in Battle.
     motion: Option<bool>,
+    /// The whole arrival in town has been seen.
+    arrived: bool,
 }
 
 impl Keeper {
@@ -137,6 +143,7 @@ impl Keeper {
             written,
             pending: None,
             motion: written.reduce_motion,
+            arrived: written.arrival_seen,
         }
     }
 
@@ -150,6 +157,11 @@ impl Keeper {
         self.motion = Some(reduce);
     }
 
+    /// The whole arrival in town has been seen, or skipped: next time the train alone comes in.
+    pub fn arrived(&mut self) {
+        self.arrived = true;
+    }
+
     /// The settings as they are this frame, at `now` seconds. `window` is the window's size if
     /// it is known; `closing`, that the window is about to go, writes any change at once.
     pub fn note(&mut self, levels: Levels, window: Option<[f32; 2]>, now: f32, closing: bool) {
@@ -159,6 +171,7 @@ impl Keeper {
             muted: levels.muted,
             reduce_motion: self.motion,
             window: window.filter(sane).or(self.written.window),
+            arrival_seen: self.arrived,
             ..self.written
         };
         if live == self.written {
