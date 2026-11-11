@@ -1,12 +1,13 @@
-//! Character sheets: the Handler's and the townspeople's frames, as drawn by hand and read from
-//! PNG files built into Battle. A sheet is cells of 48 × 48 pixels, a row for each way of facing
-//! (down, left, right, up) and a column for each frame: four of walking, two of standing and two
-//! of reaching. The feet rest on the same pixel row in every cell, so frames and layers line up
-//! with no shifting.
+//! Character sheets: the Handler's and the townspeople's frames, Jake's hand-drawn art read from
+//! the PNG files built into Battle (`art`). A sheet is cells of 48 × 48 pixels, a row for each
+//! way of facing (down, left, right, up) and a column for each frame. The feet rest on the same
+//! pixel row in every cell, so frames and layers line up with no shifting.
 //!
-//! Until the layered sheets are drawn, the Handler is the first sheet Jake made: four walking
-//! frames and nothing else, standing on its first walking frame.
+//! A full sheet is 8 frames across: four of walking, two of standing (breathing in and out) and
+//! two of its own (the Handler reaching, Wren pointing, the gardener's can, the angler's rod).
+//! A staff sheet is 4 across: two of standing and two of talking.
 
+use super::art;
 use super::map::Facing;
 use formiga_art::{Canvas, Rgba};
 
@@ -17,21 +18,18 @@ pub const FEET: i32 = 43;
 /// The frames a full sheet has across.
 pub const FRAMES: usize = 8;
 
-/// The Handler's stand-in sheet: Jake's first, walking only.
-const STAND_IN: &[u8] = include_bytes!("../../assets/town/handler-standin.png");
-
 /// A character sheet, read.
 #[derive(Clone, Debug)]
 pub struct Sheet {
     canvas: Canvas,
-    /// How many frames it has across: 8 for a full sheet, 4 for one that only walks.
+    /// How many frames it has across: 8 for a full sheet, 4 for a staff sheet.
     across: usize,
 }
 
 impl Sheet {
-    /// The Handler as the stand-in sheet draws them.
-    pub fn stand_in() -> Self {
-        Self::read(STAND_IN).expect("the stand-in sheet is a 4 × 4 sheet of 48-pixel cells")
+    /// A sheet already stacked and dyed.
+    pub fn from_canvas(canvas: Canvas, across: usize) -> Self {
+        Self { canvas, across }
     }
 
     /// A sheet from a PNG: 4 rows of 48-pixel cells, 4 or 8 across.
@@ -42,10 +40,14 @@ impl Sheet {
         (fits && (across == 4 || across == FRAMES)).then_some(Self { canvas, across })
     }
 
-    /// One frame: a column of a full sheet (walk 0 to 3, stand 4 and 5, reach 6 and 7). A sheet
-    /// that only walks stands and reaches on its first walking frame.
+    /// A townsperson's sheet, by their id: `npc-<id>.png`.
+    pub fn person(id: &str) -> Option<Self> {
+        art::bytes(&format!("npc-{id}.png")).and_then(Self::read)
+    }
+
+    /// One frame by its column.
     pub fn frame(&self, facing: Facing, column: usize) -> Canvas {
-        let column = if column < self.across { column } else { 0 };
+        let column = column.min(self.across - 1);
         let mut out = Canvas::new(CELL as u32, CELL as u32);
         let (ox, oy) = (column as i32 * CELL, facing.row() as i32 * CELL);
         for y in 0..CELL {
@@ -55,17 +57,17 @@ impl Sheet {
         }
         out
     }
-}
 
-impl Sheet {
-    /// Every pixel of the sheet run through `f`, given its row.
-    pub(super) fn map_pixels(&mut self, f: impl Fn(i32, Rgba) -> Rgba) {
-        for y in 0..self.canvas.height() as i32 {
-            for x in 0..self.canvas.width() as i32 {
-                let p = self.canvas.get(x, y);
-                self.canvas.set(x, y, f(y, p));
-            }
-        }
+    /// Standing, breathing in or out.
+    pub fn standing(&self, facing: Facing, out: bool) -> Canvas {
+        let first = if self.across == FRAMES { 4 } else { 0 };
+        self.frame(facing, first + usize::from(out))
+    }
+
+    /// Talking (or, on a full sheet, its own two frames: pointing, the can, the rod).
+    pub fn talking(&self, facing: Facing, second: bool) -> Canvas {
+        let first = if self.across == FRAMES { 6 } else { 2 };
+        self.frame(facing, first + usize::from(second))
     }
 }
 
@@ -105,30 +107,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_stand_in_reads_as_a_walking_sheet() {
-        let sheet = Sheet::stand_in();
-        assert_eq!(sheet.across, 4);
-    }
-
-    #[test]
-    fn every_stand_in_frame_has_its_feet_on_the_feet_row() {
-        let sheet = Sheet::stand_in();
-        for facing in Facing::ALL {
-            for column in 0..4 {
-                let frame = sheet.frame(facing, column);
-                let (_, _, _, bottom) = frame.alpha_bounds().expect("every frame is drawn");
-                assert!(
-                    (FEET - 3..=FEET).contains(&(bottom as i32)),
-                    "{facing:?} {column}: feet on row {bottom}"
-                );
-            }
+    fn every_built_in_picture_reads() {
+        for name in art::ALL {
+            let bytes = art::bytes(name).expect("listed");
+            assert!(decode(bytes).is_some(), "{name} does not read");
         }
     }
 
     #[test]
-    fn standing_on_a_walking_sheet_uses_its_first_frame() {
-        let sheet = Sheet::stand_in();
-        assert_eq!(sheet.frame(Facing::Left, 5), sheet.frame(Facing::Left, 0));
+    fn every_townsperson_has_a_sheet_with_feet_on_the_feet_row() {
+        for id in [
+            "wren", "marlow", "iris", "tailor", "odile", "gardener", "angler",
+        ] {
+            let sheet = Sheet::person(id).unwrap_or_else(|| panic!("no sheet for {id}"));
+            for facing in Facing::ALL {
+                let frame = sheet.standing(facing, false);
+                let (_, _, _, bottom) = frame.alpha_bounds().expect("drawn");
+                assert!(
+                    (FEET - 1..=FEET).contains(&(bottom as i32)),
+                    "{id} {facing:?}: feet on row {bottom}"
+                );
+            }
+        }
     }
 
     #[test]

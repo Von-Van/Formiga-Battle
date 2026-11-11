@@ -2,26 +2,31 @@
 //! (`career.rs`): build, skin, hairstyle and hair colour, outfit and its colour, and one
 //! accessory. Purely how they look: nothing here touches a match, the record or the companions.
 //!
-//! A colour choice is a lookup, never a redraw: each recolourable material is painted in shades
-//! of one hue, and choosing a colour swaps those shades for the same steps of the new one. Until
-//! the layered sheets are drawn the Handler is the stand-in sheet, on which hair, jacket and skin
-//! can already be recoloured; the other choices are kept, and drawn once their layers exist.
+//! The Handler is drawn from Jake's layered sheets, stacked in his draw order: hair behind, the
+//! accessory behind, body, outfit, the accessory in front, hair in front, then glasses or a cap.
+//! A colour is a lookup, never a redraw: each recolourable material is painted in four shades of
+//! one hue (the ramps below, from the art pack's character layout), and a chosen colour swaps
+//! them for the same steps of the new one. "As drawn" keeps the art's own colour.
 
-use super::sheet::{CELL, Sheet};
+use super::art;
+use super::sheet::{CELL, Sheet, decode};
 use formiga_art::{Canvas, Rgba};
 use serde::{Deserialize, Serialize};
 
-/// A choice's name and the colour it shows, for colour choices.
+/// A choice's name and the colour it shows; for colour choices the first is "As drawn", whose
+/// colour is the art's own and changes with the hairstyle or outfit.
 pub type Swatch = (&'static str, u32);
 
-pub const HAIR_COLOURS: [Swatch; 5] = [
+pub const HAIR_COLOURS: [Swatch; 6] = [
+    ("As drawn", 0),
     ("Brown", 0x6b3c37),
     ("Black", 0x2a1e22),
     ("Auburn", 0x923c22),
     ("Blonde", 0xc9a040),
     ("Silver", 0x8c8892),
 ];
-pub const OUTFIT_COLOURS: [Swatch; 5] = [
+pub const OUTFIT_COLOURS: [Swatch; 6] = [
+    ("As drawn", 0),
     ("Navy", 0x4c4262),
     ("Forest", 0x285a4b),
     ("Maroon", 0x7a2c33),
@@ -29,8 +34,8 @@ pub const OUTFIT_COLOURS: [Swatch; 5] = [
     ("Slate", 0x4a6288),
 ];
 pub const SKIN_TONES: [Swatch; 6] = [
+    ("As drawn", 0xdc986b),
     ("Fair", 0xf4d9c0),
-    ("Light", 0xedaa76),
     ("Warm", 0xc7936b),
     ("Tan", 0xa86b4a),
     ("Brown", 0x7a4a32),
@@ -55,17 +60,30 @@ pub const ACCESSORIES: [&str; 6] = [
     "None",
 ];
 
-/// The stand-in sheet's own shades of each recolourable material, darkest first; the last is
-/// the one a chosen colour is matched to.
-const STAND_IN_JACKET: [u32; 4] = [0x2f1f30, 0x382a3d, 0x453850, 0x4c4262];
-const STAND_IN_HAIR: [u32; 2] = [0x6b3c37, 0x703f3a];
-/// The hair's highlight shares its colour with the satchel, so it counts as hair only on the
-/// head, above this row of a cell.
-const STAND_IN_HAIR_LIGHT: (u32, i32) = (0xae7154, 17);
-const STAND_IN_SKIN: [u32; 2] = [0xc7936b, 0xedaa76];
+/// Each material's four shades as the art draws them, darkest first.
+type Ramp = [u32; 4];
+const SKIN: Ramp = [0x96583f, 0xbb7752, 0xdc986b, 0xf0b883];
+const HAIR: [Ramp; 6] = [
+    [0x553038, 0x70423d, 0x965d4b, 0xb97c60],
+    [0x3c3545, 0x51495d, 0x6b6077, 0x897e95],
+    [0x632f34, 0x8b4541, 0xa95a49, 0xc77d56],
+    [0x543553, 0x714466, 0x905579, 0xb77292],
+    [0x765130, 0x9c703a, 0xbf934c, 0xe0bb68],
+    [0x464254, 0x656078, 0x817c91, 0xaaa4b4],
+];
+const OUTFIT: [Ramp; 6] = [
+    [0x403950, 0x534a68, 0x675d82, 0x8a7fa1],
+    [0x777184, 0xa39bac, 0xc9c0d0, 0xe7dfeb],
+    [0x394638, 0x4e6149, 0x657b56, 0x8b9d6f],
+    [0x35434c, 0x475c66, 0x5e7880, 0x81a098],
+    [0x633947, 0x884d62, 0xae6580, 0xd98ea2],
+    [0x584335, 0x7d5b43, 0xa17850, 0xc99e66],
+];
+/// The shade a chosen colour is matched to: the third, the material's middle light.
+const MATCHED: usize = 2;
 
 /// The Handler's look: each choice an index into its list above.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HandlerLook {
     pub build: u8,
@@ -77,97 +95,182 @@ pub struct HandlerLook {
     pub accessory: u8,
 }
 
-impl Default for HandlerLook {
-    /// Jake's first sheet: build A, light skin, tousled brown hair, a navy field jacket and the
-    /// satchel.
-    fn default() -> Self {
-        Self {
-            build: 0,
-            skin: 1,
-            hairstyle: 0,
-            hair: 0,
-            outfit: 0,
-            outfit_colour: 0,
-            accessory: 0,
-        }
-    }
+/// The file names used for each choice.
+fn slug(name: &str) -> String {
+    name.to_lowercase().replace(' ', "-")
 }
 
 impl HandlerLook {
     /// The same look with any choice past the end of its list put back to the usual one, as a
     /// file from a newer Battle or a hand-edited one might hold.
     pub fn sane(self) -> Self {
-        let usual = Self::default();
-        let keep = |v: u8, len: usize, usual: u8| if (v as usize) < len { v } else { usual };
+        let keep = |v: u8, len: usize| if (v as usize) < len { v } else { 0 };
         Self {
-            build: keep(self.build, BUILDS.len(), usual.build),
-            skin: keep(self.skin, SKIN_TONES.len(), usual.skin),
-            hairstyle: keep(self.hairstyle, HAIRSTYLES.len(), usual.hairstyle),
-            hair: keep(self.hair, HAIR_COLOURS.len(), usual.hair),
-            outfit: keep(self.outfit, OUTFITS.len(), usual.outfit),
-            outfit_colour: keep(
-                self.outfit_colour,
-                OUTFIT_COLOURS.len(),
-                usual.outfit_colour,
-            ),
-            accessory: keep(self.accessory, ACCESSORIES.len(), usual.accessory),
+            build: keep(self.build, BUILDS.len()),
+            skin: keep(self.skin, SKIN_TONES.len()),
+            hairstyle: keep(self.hairstyle, HAIRSTYLES.len()),
+            hair: keep(self.hair, HAIR_COLOURS.len()),
+            outfit: keep(self.outfit, OUTFITS.len()),
+            outfit_colour: keep(self.outfit_colour, OUTFIT_COLOURS.len()),
+            accessory: keep(self.accessory, ACCESSORIES.len()),
         }
     }
 
-    /// The Handler's sheet in this look.
-    pub fn sheet(&self) -> Sheet {
+    /// The colour "As drawn" stands for now, for hair and outfit: the art's own.
+    pub fn own_colours(&self) -> (u32, u32) {
         let look = self.sane();
-        let usual = Self::default();
-        let mut sheet = Sheet::stand_in();
-        if look.outfit_colour != usual.outfit_colour {
-            let to = OUTFIT_COLOURS[look.outfit_colour as usize].1;
-            sheet.recolour(&STAND_IN_JACKET, to, |_| true);
+        (
+            HAIR[look.hairstyle as usize][MATCHED],
+            OUTFIT[look.outfit as usize][MATCHED],
+        )
+    }
+
+    /// The overworld sheets in draw order, by file name.
+    fn layers(&self) -> Vec<String> {
+        let look = self.sane();
+        let build = if look.build == 0 { "a" } else { "b" };
+        let hair = slug(HAIRSTYLES[look.hairstyle as usize]);
+        let outfit = slug(OUTFITS[look.outfit as usize]);
+        let accessory = slug(ACCESSORIES[look.accessory as usize]);
+        let (back, front, top): (Option<String>, Option<String>, Option<String>) = match accessory
+            .as_str()
+        {
+            "satchel" | "scarf" => (
+                Some(format!("handler-acc-{accessory}-back.png")),
+                Some(format!("handler-acc-{accessory}-front.png")),
+                None,
+            ),
+            "magnifier" => (None, Some("handler-acc-magnifier.png".to_owned()), None),
+            "glasses" | "field-cap" => (None, None, Some(format!("handler-acc-{accessory}.png"))),
+            _ => (None, None, None),
+        };
+        [
+            Some(format!("handler-hair-{hair}-back.png")),
+            back,
+            Some(format!("handler-body-{build}.png")),
+            Some(format!("handler-outfit-{outfit}-{build}.png")),
+            front,
+            Some(format!("handler-hair-{hair}-front.png")),
+            top,
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    /// The portrait's pieces in draw order: a file, and which 64-pixel row of it.
+    fn portrait_layers(&self) -> Vec<(String, u32)> {
+        let look = self.sane();
+        let hair = slug(HAIRSTYLES[look.hairstyle as usize]);
+        let outfit = slug(OUTFITS[look.outfit as usize]);
+        let accessory = slug(ACCESSORIES[look.accessory as usize]);
+        let mut out = vec![
+            (format!("portrait-hair-{hair}.png"), 0),
+            ("portrait-body.png".to_owned(), 0),
+            (format!("portrait-outfit-{outfit}.png"), 0),
+        ];
+        if matches!(accessory.as_str(), "satchel" | "scarf") {
+            out.push((format!("portrait-acc-{accessory}.png"), 0));
         }
-        if look.hair != usual.hair {
-            let to = HAIR_COLOURS[look.hair as usize].1;
-            sheet.recolour(&STAND_IN_HAIR, to, |_| true);
-            let (light, below) = STAND_IN_HAIR_LIGHT;
-            let ramp = [light];
-            // The highlight follows the hair, a step lighter than its chosen colour.
-            sheet.recolour(&ramp, lighter(to), |y| y % CELL < below);
+        out.push((format!("portrait-hair-{hair}.png"), 1));
+        if matches!(accessory.as_str(), "glasses" | "field-cap") {
+            out.push((format!("portrait-acc-{accessory}.png"), 0));
         }
-        if look.skin != usual.skin {
-            let to = SKIN_TONES[look.skin as usize].1;
-            sheet.recolour(&STAND_IN_SKIN, to, |_| true);
+        out
+    }
+
+    /// Swaps the art's own colours for the chosen ones.
+    fn dye(&self, canvas: &mut Canvas) {
+        let look = self.sane();
+        if look.hair != 0 {
+            recolour(
+                canvas,
+                &HAIR[look.hairstyle as usize],
+                HAIR_COLOURS[look.hair as usize].1,
+            );
         }
-        sheet
+        if look.outfit_colour != 0 {
+            recolour(
+                canvas,
+                &OUTFIT[look.outfit as usize],
+                OUTFIT_COLOURS[look.outfit_colour as usize].1,
+            );
+        }
+        if look.skin != 0 {
+            recolour(canvas, &SKIN, SKIN_TONES[look.skin as usize].1);
+        }
+    }
+
+    /// The Handler's overworld sheet in this look.
+    pub fn sheet(&self) -> Sheet {
+        let mut canvas = Canvas::new(8 * CELL as u32, 4 * CELL as u32);
+        for name in self.layers() {
+            if let Some(layer) = art::bytes(&name).and_then(decode) {
+                stack(&mut canvas, &layer, 0, 0);
+            }
+        }
+        self.dye(&mut canvas);
+        Sheet::from_canvas(canvas, 8)
+    }
+
+    /// The Handler's portrait in this look, in one of its four expressions: calm, talking,
+    /// pleased and curious.
+    pub fn portrait(&self, expression: usize) -> Canvas {
+        let mut canvas = Canvas::new(64, 64);
+        for (name, row) in self.portrait_layers() {
+            let Some(layer) = art::bytes(&name).and_then(decode) else {
+                continue;
+            };
+            // The body has a column for each expression; the others are one picture.
+            let column = if name == "portrait-body.png" {
+                expression.min(3) as i32
+            } else {
+                0
+            };
+            stack(&mut canvas, &layer, -64 * column, -64 * row as i32);
+        }
+        self.dye(&mut canvas);
+        canvas
     }
 
     /// A few words for the look, as the Studio sums it up.
     pub fn summary(&self) -> String {
         let look = self.sane();
-        format!(
-            "{} {} hair, a {} {}, {}",
-            HAIR_COLOURS[look.hair as usize].0,
+        let hair = match look.hair {
+            0 => String::new(),
+            i => format!("{} ", HAIR_COLOURS[i as usize].0.to_lowercase()),
+        };
+        let outfit = match look.outfit_colour {
+            0 => String::new(),
+            i => format!("{} ", OUTFIT_COLOURS[i as usize].0.to_lowercase()),
+        };
+        let words = format!(
+            "{hair}{} hair, a {outfit}{}, {}",
             HAIRSTYLES[look.hairstyle as usize].to_lowercase(),
-            OUTFIT_COLOURS[look.outfit_colour as usize].0.to_lowercase(),
             OUTFITS[look.outfit as usize].to_lowercase(),
             match ACCESSORIES[look.accessory as usize] {
                 "None" => "nothing carried".to_owned(),
                 a => format!("the {}", a.to_lowercase()),
             }
-        )
+        );
+        let mut chars = words.chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => words,
+        }
     }
 }
 
-/// A head-and-shoulders portrait from the sheet's first frame facing down, twice its size: the
-/// stand-in until the portraits are drawn.
-pub fn portrait(sheet: &Sheet) -> Canvas {
-    let frame = sheet.frame(super::map::Facing::Down, 4);
-    let (top, size) = (2, 32);
-    let left = (CELL - size) / 2;
-    let mut out = Canvas::new((size * 2) as u32, (size * 2) as u32);
-    for y in 0..size * 2 {
-        for x in 0..size * 2 {
-            out.set(x, y, frame.get(left + x / 2, top + y / 2));
+/// `layer` laid over `canvas`, its top-left corner at `(x, y)`; the art's alpha is all or nothing.
+fn stack(canvas: &mut Canvas, layer: &Canvas, x: i32, y: i32) {
+    for ly in 0..layer.height() as i32 {
+        for lx in 0..layer.width() as i32 {
+            let p = layer.get(lx, ly);
+            if p.a > 0 {
+                canvas.set(x + lx, y + ly, p);
+            }
         }
     }
-    out
 }
 
 fn rgb(hex: u32) -> Rgba {
@@ -197,7 +300,7 @@ fn hsv(c: Rgba) -> (f32, f32, f32) {
     (h, s, max)
 }
 
-fn from_hsv(h: f32, s: f32, v: f32, a: u8) -> Rgba {
+fn from_hsv(h: f32, s: f32, v: f32) -> Rgba {
     let i = (h * 6.0).floor();
     let f = h * 6.0 - i;
     let (p, q, t) = (v * (1.0 - s), v * (1.0 - f * s), v * (1.0 - (1.0 - f) * s));
@@ -210,48 +313,34 @@ fn from_hsv(h: f32, s: f32, v: f32, a: u8) -> Rgba {
         _ => (v, p, q),
     };
     let byte = |x: f32| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
-    Rgba::new(byte(r), byte(g), byte(b), a)
+    Rgba::new(byte(r), byte(g), byte(b), 255)
 }
 
-/// A step lighter: the value raised by a fifth of the way to white.
-fn lighter(hex: u32) -> u32 {
-    let (h, s, v) = hsv(rgb(hex));
-    let c = from_hsv(h, s * 0.85, v + (1.0 - v) * 0.35, 255);
-    (u32::from(c.r) << 16) | (u32::from(c.g) << 8) | u32::from(c.b)
-}
-
-impl Sheet {
-    /// Swaps the shades of `ramp` (darkest first, the last matched to the chosen colour) for the
-    /// same steps of `to`: each keeps how much darker or paler it was than the ramp's last, in
-    /// the new colour's hue. `rows` says which pixel rows of the sheet it applies to.
-    pub fn recolour(&mut self, ramp: &[u32], to: u32, rows: impl Fn(i32) -> bool) {
-        let Some(&base) = ramp.last() else {
-            return;
-        };
-        let (_, base_s, base_v) = hsv(rgb(base));
-        let (to_h, to_s, to_v) = hsv(rgb(to));
-        let swaps: Vec<(Rgba, Rgba)> = ramp
-            .iter()
-            .map(|&from| {
-                let (_, s, v) = hsv(rgb(from));
-                let s_ratio = if base_s > 0.0 { s / base_s } else { 1.0 };
-                let v_ratio = if base_v > 0.0 { v / base_v } else { 1.0 };
-                (
-                    rgb(from),
-                    from_hsv(to_h, to_s * s_ratio, to_v * v_ratio, 255),
-                )
-            })
-            .collect();
-        self.map_pixels(|y, p| {
-            if p.a == 0 || !rows(y) {
-                return p;
+/// Swaps a material's four shades for the same steps of `to`: each keeps how much darker or
+/// paler it was than the matched shade, in the new colour's hue.
+pub fn recolour(canvas: &mut Canvas, ramp: &Ramp, to: u32) {
+    let (_, base_s, base_v) = hsv(rgb(ramp[MATCHED]));
+    let (to_h, to_s, to_v) = hsv(rgb(to));
+    let swaps: Vec<(Rgba, Rgba)> = ramp
+        .iter()
+        .map(|&from| {
+            let (_, s, v) = hsv(rgb(from));
+            let s_ratio = if base_s > 0.0 { s / base_s } else { 1.0 };
+            let v_ratio = if base_v > 0.0 { v / base_v } else { 1.0 };
+            (rgb(from), from_hsv(to_h, to_s * s_ratio, to_v * v_ratio))
+        })
+        .collect();
+    for y in 0..canvas.height() as i32 {
+        for x in 0..canvas.width() as i32 {
+            let p = canvas.get(x, y);
+            if p.a == 0 {
+                continue;
             }
             let opaque = Rgba::new(p.r, p.g, p.b, 255);
-            match swaps.iter().find(|(from, _)| *from == opaque) {
-                Some((_, to)) => Rgba::new(to.r, to.g, to.b, p.a),
-                None => p,
+            if let Some((_, to)) = swaps.iter().find(|(from, _)| *from == opaque) {
+                canvas.set(x, y, Rgba::new(to.r, to.g, to.b, p.a));
             }
-        });
+        }
     }
 }
 
@@ -261,24 +350,49 @@ mod tests {
     use crate::town::map::Facing;
 
     #[test]
-    fn the_usual_look_is_the_stand_in_sheet_exactly() {
-        let dressed = HandlerLook::default().sheet();
-        let plain = Sheet::stand_in();
-        for facing in Facing::ALL {
-            assert_eq!(dressed.frame(facing, 0), plain.frame(facing, 0));
+    fn every_choice_has_its_pictures() {
+        for build in 0..BUILDS.len() as u8 {
+            for hairstyle in 0..HAIRSTYLES.len() as u8 {
+                for outfit in 0..OUTFITS.len() as u8 {
+                    for accessory in 0..ACCESSORIES.len() as u8 {
+                        let look = HandlerLook {
+                            build,
+                            hairstyle,
+                            outfit,
+                            accessory,
+                            ..HandlerLook::default()
+                        };
+                        for name in look.layers() {
+                            assert!(art::bytes(&name).is_some(), "no {name}");
+                        }
+                        for (name, _) in look.portrait_layers() {
+                            assert!(art::bytes(&name).is_some(), "no {name}");
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    #[test]
+    fn the_usual_look_stacks_jakes_default_and_keeps_its_colours() {
+        let sheet = HandlerLook::default().sheet();
+        let frame = sheet.frame(Facing::Down, 4);
+        let (_, _, _, bottom) = frame.alpha_bounds().expect("drawn");
+        assert_eq!(bottom as i32, crate::town::sheet::FEET);
+        let hair = rgb(HAIR[0][MATCHED]);
+        assert!(frame.pixels().contains(&hair), "the tousled hair as drawn");
     }
 
     #[test]
     fn a_new_jacket_colour_changes_the_jacket_and_nothing_else() {
         let look = HandlerLook {
-            outfit_colour: 1,
+            outfit_colour: 2,
             ..HandlerLook::default()
         };
-        let (dressed, plain) = (look.sheet(), Sheet::stand_in());
-        let a = dressed.frame(Facing::Down, 0);
-        let b = plain.frame(Facing::Down, 0);
-        let jacket: Vec<Rgba> = STAND_IN_JACKET.iter().map(|&h| rgb(h)).collect();
+        let a = look.sheet().frame(Facing::Down, 4);
+        let b = HandlerLook::default().sheet().frame(Facing::Down, 4);
+        let jacket: Vec<Rgba> = OUTFIT[0].iter().map(|&h| rgb(h)).collect();
         let mut changed = 0;
         for y in 0..CELL {
             for x in 0..CELL {
@@ -308,15 +422,37 @@ mod tests {
     fn a_look_reads_from_a_file_missing_its_newer_choices() {
         let look: HandlerLook = serde_json::from_str(r#"{"hair": 2}"#).unwrap();
         assert_eq!(look.hair, 2);
-        assert_eq!(look.skin, HandlerLook::default().skin);
+        assert_eq!(look.skin, 0);
     }
 
     #[test]
     fn the_summary_names_every_choice() {
-        let words = HandlerLook::default().summary();
         assert_eq!(
-            words,
-            "Brown tousled hair, a navy field jacket, the satchel"
+            HandlerLook::default().summary(),
+            "Tousled hair, a field jacket, the satchel"
+        );
+        let dyed = HandlerLook {
+            hair: 3,
+            outfit_colour: 2,
+            ..HandlerLook::default()
+        };
+        assert_eq!(
+            dyed.summary(),
+            "Auburn tousled hair, a forest field jacket, the satchel"
+        );
+    }
+
+    #[test]
+    fn the_portrait_is_a_head_and_shoulders_in_every_expression() {
+        let look = HandlerLook::default();
+        for expression in 0..4 {
+            let p = look.portrait(expression);
+            assert!(p.pixels().iter().filter(|c| c.a > 0).count() > 600);
+        }
+        assert_ne!(
+            look.portrait(0),
+            look.portrait(1),
+            "talking moves the mouth"
         );
     }
 }

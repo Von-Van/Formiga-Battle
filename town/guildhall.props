@@ -1,0 +1,26 @@
+# Built by scripts/town_art.py from the art pack's layout guide.
+background place-guildhall-bg.png
+foreground place-guildhall-fg.png
+floor prop-rug-guild.png 144 89
+floor prop-doormat.png 192 220
+wall prop-notice-board.png 118 7
+wall prop-pennant.png 59 5
+wall prop-pennant.png 302 5
+sort prop-bookcase.png 32 24 96 prop-bookcase-shadow.png 69 prop-bookcase-fg.png 0
+sort prop-bookcase.png 320 24 96 prop-bookcase-shadow.png 69 prop-bookcase-fg.png 0
+sort prop-trophy-sideboard.png 32 77 128 prop-trophy-sideboard-shadow.png 69 - 0
+cup 0 47 95 128 prop-trophy-empty-stand.png 41 89
+cup 1 69 95 128 prop-trophy-empty-stand.png 63 89
+cup 2 91 95 128 prop-trophy-empty-stand.png 85 89
+cup 3 113 95 128 prop-trophy-empty-stand.png 107 89
+sort prop-trophy-sideboard.png 288 77 128 prop-trophy-sideboard-shadow.png 69 - 0
+cup 0 303 95 128 prop-trophy-empty-stand.png 297 89
+cup 1 325 95 128 prop-trophy-empty-stand.png 319 89
+cup 2 347 95 128 prop-trophy-empty-stand.png 341 89
+cup 3 369 95 128 prop-trophy-empty-stand.png 363 89
+sort prop-armchair-wine.png 62 146 192 prop-armchair-wine-shadow.png 69 - 0
+sort prop-armchair-wine.png 318 146 192 prop-armchair-wine-shadow.png 69 - 0
+sort prop-planter.png 128 49 96 prop-planter-shadow.png 69 prop-planter-fg.png 0
+sort prop-planter.png 256 49 96 prop-planter-shadow.png 69 prop-planter-fg.png 0
+sort prop-planter.png 32 177 224 prop-planter-shadow.png 69 prop-planter-fg.png 0
+sort prop-planter.png 352 177 224 prop-planter-shadow.png 69 prop-planter-fg.png 0

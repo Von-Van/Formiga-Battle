@@ -1,0 +1,14 @@
+# Built by scripts/town_art.py from the art pack's layout guide.
+background place-clubhouse-bg.png
+foreground place-clubhouse-fg.png
+floor prop-rug-wine.png 128 149
+floor prop-doormat.png 192 220
+wall prop-chalkboard.png 128 8
+sort prop-bookcase.png 32 24 96 prop-bookcase-shadow.png 69 prop-bookcase-fg.png 0
+sort prop-bookcase.png 320 24 96 prop-bookcase-shadow.png 69 prop-bookcase-fg.png 0
+sort prop-planning-table.png 128 96 160 prop-planning-table-shadow.png 69 - 0
+sort prop-armchair.png 62 146 192 prop-armchair-shadow.png 69 - 0
+sort prop-armchair.png 318 146 192 prop-armchair-shadow.png 69 - 0
+sort prop-planter.png 32 177 224 prop-planter-shadow.png 69 prop-planter-fg.png 0
+sort prop-planter.png 352 177 224 prop-planter-shadow.png 69 prop-planter-fg.png 0
+sort prop-side-table.png 128 53 96 prop-side-table-shadow.png 69 - 0

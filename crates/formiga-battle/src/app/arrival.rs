@@ -57,10 +57,12 @@ impl BattleApp {
                 .collect();
             let halt = Station::in_habitat(looks, VIEW, set_off, reduce);
             self.arrival = Some((journey, halt));
+            self.habitat_front = arrival::habitat_front();
             self.arrival_heard = now;
             if self.town.is_none() {
                 let mut town = Town::new(now);
                 town.dress(&self.table.career.look);
+                town.cups = self.cups_won();
                 self.town = Some(town);
             }
         }
@@ -93,14 +95,19 @@ impl BattleApp {
         let Some(town) = &mut self.town else {
             return;
         };
+        // The halt with what stands in front of the train laid over it.
+        let mut close = halt.compose(now);
+        if let Some(front) = &self.habitat_front {
+            crate::town::picture::over(&mut close, front, 0, 0);
+        }
         let view = match beat {
-            Beat::CloseUp(_) => halt.compose(now),
+            Beat::CloseUp(_) => close,
             Beat::PullBack(t) => {
-                let desk = self.desk.get_or_insert_with(arrival::desk_stand_in);
-                arrival::pull_back(desk, &halt.compose(now), t)
+                let desk = self.desk.get_or_insert_with(arrival::desk);
+                arrival::pull_back(desk, &close, t)
             }
             Beat::Handoff(t) => {
-                let desk = self.desk.get_or_insert_with(arrival::desk_stand_in);
+                let desk = self.desk.get_or_insert_with(arrival::desk);
                 let office = town.compose(now, reduce);
                 arrival::handoff(desk, &office, town.view_origin(now), t)
             }

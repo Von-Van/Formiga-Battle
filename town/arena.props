@@ -1,0 +1,19 @@
+# Built by scripts/town_art.py from the art pack's layout guide.
+background place-arena-bg.png
+foreground place-arena-fg.png
+floor prop-doormat.png 192 220
+wall prop-scoreboard.png 144 6
+wall prop-arena-wall-flag.png 86 5
+wall prop-arena-wall-flag.png 110 5
+wall prop-arena-wall-flag.png 283 5
+wall prop-arena-wall-flag.png 307 5
+sort prop-bench.png 32 128 160 prop-bench-shadow.png 69 - 0
+sort prop-bench.png 320 128 160 prop-bench-shadow.png 69 - 0
+sort prop-arena-table.png 128 94 160 prop-arena-table-shadow.png 69 - 0
+sort prop-planter.png 64 49 96 prop-planter-shadow.png 69 prop-planter-fg.png 0
+sort prop-planter.png 352 49 96 prop-planter-shadow.png 69 prop-planter-fg.png 0
+sort prop-trophy-sideboard.png 288 173 224 prop-trophy-sideboard-shadow.png 69 - 0
+cup 0 303 191 224 prop-trophy-empty-stand.png 297 185
+cup 1 325 191 224 prop-trophy-empty-stand.png 319 185
+cup 2 347 191 224 prop-trophy-empty-stand.png 341 185
+cup 3 369 191 224 prop-trophy-empty-stand.png 363 185

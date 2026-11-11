@@ -11,6 +11,7 @@
 //! - `door <digit> <place> <digit> <inward>`: the tile marked with that digit leads to the door
 //!   of that digit in the other place; arriving here through it, the Handler steps `inward`.
 //! - `person <id> <column> <row> <facing>`: someone who stands on that tile (Battle draws them).
+//! - `ledge <column> <row> <side>`: a drop along that side of the tile, crossed neither way.
 //!
 //! Ground characters: `.` `,` `=` `:` are open (floor, rug, lane, grass); `#` `~` `T` `^` are
 //! closed (wall, water, tree, ledge); `@` is open and is where the Handler stands after the
@@ -111,6 +112,24 @@ impl PlaceId {
         }
     }
 
+    /// Where the place's art stands, built in.
+    fn props_source(self) -> &'static str {
+        match self {
+            Self::Office => include_str!("../../../../town/office.props"),
+            Self::Campus => include_str!("../../../../town/campus.props"),
+            Self::Arena => include_str!("../../../../town/arena.props"),
+            Self::Clubhouse => include_str!("../../../../town/clubhouse.props"),
+            Self::GuildHall => include_str!("../../../../town/guildhall.props"),
+            Self::Studio => include_str!("../../../../town/studio.props"),
+        }
+    }
+
+    /// The place's art, laid out. Checked by the tests like the place itself.
+    pub fn scenery(self) -> super::picture::Scenery {
+        super::picture::Scenery::parse(self.props_source())
+            .unwrap_or_else(|e| panic!("the built-in {} art is broken: {e}", self.key()))
+    }
+
     /// The place as built in. The files are checked by the tests, so this cannot fail in a
     /// build that passed them.
     pub fn place(self) -> Place {
@@ -204,6 +223,8 @@ pub struct Place {
     pub people: Vec<Person>,
     /// Where the Handler stands after the arrival, in the place that has one.
     pub spawn: Option<(i32, i32)>,
+    /// Steps that cannot be taken either way, as the two tiles either side of a ledge.
+    ledges: Vec<((i32, i32), (i32, i32))>,
 }
 
 /// What is wrong with a place file, and on which line.
@@ -293,6 +314,7 @@ impl Place {
         let mut doors: Vec<Door> = Vec::new();
         let mut digits: HashMap<char, usize> = HashMap::new();
         let mut people = Vec::new();
+        let mut ledges = Vec::new();
         for (n, line) in rest {
             let words: Vec<&str> = line.split_whitespace().collect();
             match words.as_slice() {
@@ -345,10 +367,21 @@ impl Place {
                         facing,
                     });
                 }
+                ["ledge", column, row, side] => {
+                    let at = |w: &str| {
+                        w.parse::<i32>()
+                            .map_err(|_| broken(n, format!("{w:?} is not a tile")))
+                    };
+                    let side = Facing::parse(side)
+                        .ok_or_else(|| broken(n, format!("{side:?} is not a direction")))?;
+                    let tile = (at(column)?, at(row)?);
+                    let (dx, dy) = side.step();
+                    ledges.push((tile, (tile.0 + dx, tile.1 + dy)));
+                }
                 _ => {
                     return Err(broken(
                         n,
-                        format!("{line:?} is not a thing, door or person"),
+                        format!("{line:?} is not a thing, door, person or ledge"),
                     ));
                 }
             }
@@ -410,6 +443,7 @@ impl Place {
             doors,
             people,
             spawn,
+            ledges,
         };
         for p in &place.people {
             if !place.ground(p.tile).open() {
@@ -433,6 +467,18 @@ impl Place {
     /// Whether the Handler can step onto a tile: open, and nobody standing there.
     pub fn walkable(&self, tile: (i32, i32)) -> bool {
         self.ground(tile).open() && !self.people.iter().any(|p| p.tile == tile)
+    }
+
+    /// Whether a step one tile `facing` from `from` can be taken: onto a walkable tile, and not
+    /// over a ledge.
+    pub fn can_step(&self, from: (i32, i32), facing: Facing) -> bool {
+        let (dx, dy) = facing.step();
+        let to = (from.0 + dx, from.1 + dy);
+        self.walkable(to)
+            && !self
+                .ledges
+                .iter()
+                .any(|&(a, b)| (a, b) == (from, to) || (b, a) == (from, to))
     }
 
     /// The door with this mark.
@@ -513,7 +559,7 @@ impl Place {
             for facing in Facing::ALL {
                 let (dx, dy) = facing.step();
                 let next = (at.0 + dx, at.1 + dy);
-                if !self.walkable(next) || seen[index(next)] {
+                if !self.can_step(at, facing) || seen[index(next)] {
                     continue;
                 }
                 let goal = goals.contains(&next);
@@ -688,6 +734,16 @@ mod tests {
         let walled = "name Test\nsize 3 1\nground\n.#.\n";
         let place = Place::parse(PlaceId::Office, walled).unwrap();
         assert!(place.path((0, 0), &[(2, 0)]).is_none());
+    }
+
+    #[test]
+    fn a_ledge_is_crossed_neither_way_but_the_steps_beside_it_are() {
+        let text = "name Test\nsize 2 2\nground\n..\n..\nledge 0 0 down\n";
+        let place = Place::parse(PlaceId::Office, text).unwrap();
+        assert!(!place.can_step((0, 0), Facing::Down));
+        assert!(!place.can_step((0, 1), Facing::Up));
+        assert!(place.can_step((1, 0), Facing::Down));
+        assert_eq!(place.path((0, 0), &[(0, 1)]).map(|p| p.len()), Some(3));
     }
 
     #[test]

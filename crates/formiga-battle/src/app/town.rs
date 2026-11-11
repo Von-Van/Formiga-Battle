@@ -41,10 +41,19 @@ impl BattleApp {
         let now = self.clock;
         let mut town = Town::new(now);
         town.dress(&self.table.career.look);
+        town.cups = self.cups_won();
         self.town = Some(town);
         self.stage = Stage::Town;
         self.turn = None;
         self.turned = now;
+    }
+
+    /// The cups won, in the Circuit's order, for the trophy stands in town.
+    pub(super) fn cups_won(&self) -> [bool; 4] {
+        let record = &self.table.record;
+        std::array::from_fn(|i| {
+            record.cup_wins(crate::rewards::CUPS[i].id) >= crate::rewards::CUP_WINS
+        })
     }
 
     /// Where the way back from the notebook goes: the place in town the Handler came from, or
@@ -157,7 +166,9 @@ impl BattleApp {
             let at = picture_rect.min
                 + vec2(
                     ((hx * TILE + TILE / 2 - origin.0) as f32) * scale / ppp,
-                    ((hy * TILE - origin.1) as f32) * scale / ppp,
+                    // A tile above the thing's own top row, clear of what stands on it (the habitat on
+                    // the desk, the board on the wall).
+                    (((hy - 1).max(0) * TILE - origin.1) as f32) * scale / ppp,
                 );
             prompt(&painter, at, &town.prompt(target), picture_rect);
         }

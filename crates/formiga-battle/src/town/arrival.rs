@@ -26,7 +26,7 @@ const CUT: f32 = 0.3;
 /// The desk, in its own pixels, and the glass case on it: left, top, width, height. Both are
 /// the window's shape, so the pull back is one even zoom.
 pub const DESK: (i32, i32) = (832, 468);
-pub const CASE: (i32, i32, i32, i32) = (312, 140, 208, 117);
+pub const CASE: (i32, i32, i32, i32) = (208, 107, 416, 234);
 
 /// Which part of the arrival is showing.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -92,120 +92,16 @@ impl Arrival {
     }
 }
 
-/// The desk the habitat stands on, a stand-in painted here until its picture is drawn: the
-/// desk's top in warm lamplight with the glass case in the middle, an open notebook of team
-/// plans, the lamp, a mug, pencils, a little cup and a plant. Light from the upper left, every
-/// material a ramp, edges in a darker shade of their own colour.
-pub fn desk_stand_in() -> Canvas {
-    let rgb = |hex: u32| Rgba::new((hex >> 16) as u8, (hex >> 8) as u8, hex as u8, 255);
-    let wood = [rgb(0x4a2d1d), rgb(0x6b4128), rgb(0x8a5634), rgb(0xa86d43)];
-    let wall = [rgb(0x3a2a22), rgb(0x4d382d)];
-    let paper = [rgb(0xc9b88f), rgb(0xe9dcb8), rgb(0xf8efd6)];
-    let pencil = rgb(0x6e776c);
-    let brass = [rgb(0x6a4e22), rgb(0x9c7a35), rgb(0xd1ac55), rgb(0xf0d58a)];
-    let (w, h) = DESK;
-    let mut c = Canvas::new(w as u32, h as u32);
-    // The wall behind, and the desk's top running back to it.
-    let back = 96;
-    for y in 0..h {
-        for x in 0..w {
-            let n = paint::noise(x, y, 701) % 17;
-            let tone = if y < back {
-                wall[usize::from(n == 0)]
-            } else {
-                // Planks running across, a seam every 46 pixels, the grain in streaks.
-                let seam = (y - back) % 46 == 0;
-                let streak = paint::noise(x / 7, y, 703).is_multiple_of(5);
-                if seam {
-                    wood[0]
-                } else if streak || n == 0 {
-                    wood[1]
-                } else {
-                    wood[2]
-                }
-            };
-            c.set(x, y, tone);
-        }
-    }
-    paint::rect(&mut c, 0, back, w, 2, wood[3]);
-    // The edge of a window at the top right, evening beyond it.
-    paint::rect(&mut c, w - 150, 0, 120, back - 12, rgb(0x2c3b52));
-    paint::rect(&mut c, w - 150, 0, 120, 4, rgb(0x5b3a27));
-    paint::rect(&mut c, w - 92, 0, 4, back - 12, rgb(0x5b3a27));
-    // The lamp's light: a warm pool, laid over the desk in rings.
-    for (r, a) in [(300, 18), (220, 22), (150, 26)] {
-        for y in back..h {
-            for x in 0..w {
-                let (dx, dy) = (x - 150, (y - 210) * 3 / 2);
-                if dx * dx + dy * dy < r * r {
-                    paint::put(&mut c, x, y, Rgba::new(0xff, 0xd8, 0x8a, a));
-                }
-            }
-        }
-    }
-    // The open notebook, lower left: two pages with team plans pencilled on them.
-    let (nx, ny, nw, nh) = (60, 290, 230, 150);
-    paint::rect(&mut c, nx + 4, ny + 4, nw, nh, Rgba::new(0, 0, 0, 70));
-    paint::rect(&mut c, nx, ny, nw, nh, paper[1]);
-    paint::rect(&mut c, nx, ny, nw, 2, paper[2]);
-    paint::rect(&mut c, nx + nw / 2 - 1, ny, 2, nh, paper[0]);
-    for row in (ny + 16..ny + nh - 8).step_by(12) {
-        paint::rect(&mut c, nx + 8, row, nw / 2 - 18, 1, paper[0]);
-    }
-    for (cx, cy) in [
-        (nx + 160, ny + 50),
-        (nx + 195, ny + 80),
-        (nx + 150, ny + 105),
-    ] {
-        for a in 0..24 {
-            let t = a as f32 / 24.0 * std::f32::consts::TAU;
-            let (px, py) = (cx + (t.cos() * 9.0) as i32, cy + (t.sin() * 9.0) as i32);
-            c.set(px, py, pencil);
-        }
-    }
-    for i in 0..40 {
-        c.set(nx + 168 + i, ny + 56 + i / 2, pencil);
-    }
-    // Pencils beside it.
-    paint::rect(&mut c, nx + nw + 14, ny + 30, 6, 90, rgb(0xd8a23a));
-    paint::rect(&mut c, nx + nw + 14, ny + 120, 6, 8, paper[1]);
-    paint::rect(&mut c, nx + nw + 24, ny + 44, 6, 80, rgb(0x3d6a55));
-    // The lamp, upper left: its foot, its arm and its shade.
-    paint::rect(&mut c, 120, 236, 64, 12, brass[0]);
-    paint::rect(&mut c, 122, 234, 60, 4, brass[2]);
-    for i in 0..110 {
-        paint::rect(&mut c, 150 + i / 3, 236 - i, 4, 1, brass[1]);
-    }
-    paint::rect(&mut c, 160, 110, 70, 30, rgb(0x285a4b));
-    paint::rect(&mut c, 160, 110, 70, 4, rgb(0x3b7563));
-    paint::rect(&mut c, 166, 140, 58, 3, rgb(0xfff0bd));
-    // A mug, right of the case, bigger than the station inside it.
-    let (mx, my) = (560, 230);
-    paint::rect(&mut c, mx + 3, my + 3, 44, 56, Rgba::new(0, 0, 0, 70));
-    paint::rect(&mut c, mx, my, 44, 56, rgb(0xb5543f));
-    paint::rect(&mut c, mx, my, 44, 6, rgb(0x7a2c33));
-    paint::rect(&mut c, mx + 2, my + 8, 6, 44, rgb(0xd07a5f));
-    paint::rect(&mut c, mx + 44, my + 14, 10, 4, rgb(0x8a3f2f));
-    paint::rect(&mut c, mx + 50, my + 14, 4, 24, rgb(0x8a3f2f));
-    paint::rect(&mut c, mx + 44, my + 34, 10, 4, rgb(0x8a3f2f));
-    // A little cup on the right, and a plant in a pot.
-    paint::rect(&mut c, 680, 250, 30, 8, brass[0]);
-    paint::rect(&mut c, 688, 228, 14, 22, brass[2]);
-    paint::rect(&mut c, 680, 210, 30, 20, brass[3]);
-    paint::rect(&mut c, 682, 212, 4, 14, brass[1]);
-    paint::rect(&mut c, 740, 320, 50, 44, rgb(0xa8584a));
-    paint::rect(&mut c, 740, 320, 50, 5, rgb(0xc4775a));
-    for (lx, ly, r) in [(752, 300, 18), (776, 294, 16), (764, 280, 14)] {
-        c.fill_circle(lx, ly, r, rgb(0x3f6a45));
-        c.fill_circle(lx - 4, ly - 4, r / 2, rgb(0x578656));
-    }
-    // The glass case: its brass frame round the habitat, the inside left for the halt.
-    let (gx, gy, gw, gh) = CASE;
-    paint::rect(&mut c, gx - 6, gy - 6, gw + 12, gh + 12, brass[0]);
-    paint::rect(&mut c, gx - 6, gy - 6, gw + 12, 2, brass[3]);
-    paint::rect(&mut c, gx - 6, gy - 6, 2, gh + 12, brass[2]);
-    paint::rect(&mut c, gx - 10, gy + gh + 6, gw + 20, 8, wood[0]);
-    c
+/// The desk the habitat stands on: Jake's picture, the glass case exactly where `CASE` says.
+pub fn desk() -> Canvas {
+    super::art::bytes("arrival-desk.png")
+        .and_then(super::sheet::decode)
+        .unwrap_or_else(|| Canvas::new(DESK.0 as u32, DESK.1 as u32))
+}
+
+/// What stands in front of the train in the habitat: the near ferns and the glass.
+pub fn habitat_front() -> Option<Canvas> {
+    super::art::bytes("arrival-habitat-fg.png").and_then(super::sheet::decode)
 }
 
 /// A frame of the pull back, `t` from 0 to 1: the desk with the halt as it is now laid into the
@@ -332,12 +228,13 @@ mod tests {
 
     #[test]
     fn the_pull_back_starts_on_the_halt_and_ends_on_the_whole_desk() {
-        let desk = desk_stand_in();
+        let desk = desk();
         let mut halt = Canvas::new(VIEW.0 as u32, VIEW.1 as u32);
         halt.fill_rect(0, 0, VIEW.0, VIEW.1, Rgba::new(1, 2, 3, 255));
         let start = pull_back(&desk, &halt, 0.0);
         assert_eq!(start.get(200, 100), Rgba::new(1, 2, 3, 255));
         let end = pull_back(&desk, &halt, 1.0);
         assert_eq!(end.get(5, 5), desk.get(11, 11));
+        assert_eq!((desk.width() as i32, desk.height() as i32), DESK);
     }
 }

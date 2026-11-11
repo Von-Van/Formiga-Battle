@@ -6,7 +6,7 @@
 use super::*;
 use crate::town::look::{
     ACCESSORIES, BUILDS, HAIR_COLOURS, HAIRSTYLES, HandlerLook, OUTFIT_COLOURS, OUTFITS,
-    SKIN_TONES, Swatch, portrait,
+    SKIN_TONES, Swatch,
 };
 use crate::town::map::Facing;
 
@@ -31,7 +31,7 @@ impl BattleApp {
             return pictures.clone();
         }
         let sheet = look.sheet();
-        let mut pictures = vec![texture(ctx, "studio-portrait", &portrait(&sheet))];
+        let mut pictures = vec![texture(ctx, "studio-portrait", &look.portrait(0))];
         for facing in Facing::ALL {
             for column in 0..4 {
                 pictures.push(texture(
@@ -94,11 +94,17 @@ impl BattleApp {
 
     pub(super) fn studio_choices(&mut self, ui: &mut egui::Ui, u: f32) {
         let mut look = self.draft();
-        swatches(ui, "Hair colour", &HAIR_COLOURS, &mut look.hair, u);
+        // "As drawn" shows the art's own colour for the hairstyle and outfit chosen.
+        let (own_hair, own_outfit) = look.own_colours();
+        let mut hair = HAIR_COLOURS;
+        hair[0].1 = own_hair;
+        let mut outfit = OUTFIT_COLOURS;
+        outfit[0].1 = own_outfit;
+        swatches(ui, "Hair colour", &hair, &mut look.hair, u);
         swatches(
             ui,
-            "Jacket: your club colour",
-            &OUTFIT_COLOURS,
+            "Outfit colour: your club's",
+            &outfit,
             &mut look.outfit_colour,
             u,
         );
@@ -109,12 +115,9 @@ impl BattleApp {
         choices(ui, "Accessory", &ACCESSORIES, &mut look.accessory, u);
         ruled::write(
             ui,
-            RichText::new(
-                "Hair, jacket and skin show now. Build, hairstyle, outfit and accessory are kept, \
-                 and drawn once their pictures are made.",
-            )
-            .size(14.0)
-            .color(ink::MUTED),
+            RichText::new("Only how I look: none of it changes anything in a match.")
+                .size(14.0)
+                .color(ink::MUTED),
         );
         self.studio_draft = Some(look);
     }

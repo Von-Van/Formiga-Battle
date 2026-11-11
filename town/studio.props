@@ -1,0 +1,14 @@
+# Built by scripts/town_art.py from the art pack's layout guide.
+background place-studio-bg.png
+foreground place-studio-fg.png
+floor prop-fitting-rug.png 160 138
+floor prop-doormat.png 192 220
+wall prop-framed-note.png 245 14
+sort prop-hat-shelf.png 32 41 96 prop-hat-shelf-shadow.png 69 - 0
+sort prop-mirror.png 192 30 96 prop-mirror-shadow.png 69 - 0
+sort prop-clothes-rail.png 288 45 96 prop-clothes-rail-shadow.png 69 - 0
+sort prop-counter.png 288 111 160 prop-counter-shadow.png 69 - 0
+sort prop-side-table.png 64 117 160 prop-side-table-shadow.png 69 - 0
+sort prop-armchair-wine.png 62 146 192 prop-armchair-wine-shadow.png 69 - 0
+sort prop-planter.png 32 177 224 prop-planter-shadow.png 69 prop-planter-fg.png 0
+sort prop-planter.png 352 177 224 prop-planter-shadow.png 69 prop-planter-fg.png 0

@@ -44,6 +44,8 @@ pub const SEEN_OFF: f32 = 1.1;
 // The halt, in rows up from the near rail.
 /// The near rail, up from the foot of the scene.
 const RAIL: i32 = 14;
+/// The habitat's rail, up from the foot of its picture (Jake's arrival layout: row 191 of 234).
+const HABITAT_RAIL_UP: i32 = 43;
 const PLATFORM_BACK: i32 = 53;
 const PLATFORM_EDGE: i32 = 26;
 const PLATFORM_FOOT: i32 = 19;
@@ -347,7 +349,7 @@ impl Station {
     pub fn compose(&mut self, now: f32) -> Canvas {
         let mut scene = self.backdrop.clone();
         let moment = self.moment(now);
-        let rail = self.size.1 - RAIL;
+        let rail = self.size.1 - if self.habitat { HABITAT_RAIL_UP } else { RAIL };
         let still = self.reduce_motion;
         let windows: Vec<(i32, i32)> = (0..self.windows()).map(window_origin).collect();
         let Some(train_x) = moment.train_x else {
@@ -483,82 +485,25 @@ fn backdrop((width, height): (i32, i32)) -> Canvas {
     canvas
 }
 
-/// Inside the habitat: the far side of the glass case, dim and green with the office beyond it,
-/// a bank of moss with ferns along it behind the platform, and the case's own glass catching the
-/// lamp at either end. The platform, the line, the lamp and the board are the country halt's.
+/// Inside the habitat: Jake's picture of the little halt behind the glass, its rails on the row
+/// `HABITAT_RAIL_UP` above its foot. A window of another size sees it from its middle.
 fn habitat((width, height): (i32, i32)) -> Canvas {
-    const GLASS: Ramp = Ramp::new(0x1d2b24, 0x26382f, 0x30473b, 0x3b5748, 0x4a6b58);
     let mut canvas = Canvas::new(width as u32, height as u32);
-    let rail = height - RAIL;
-    let back = rail - PLATFORM_BACK;
-    // The far glass: darker toward the top, in bands dithered into each other.
-    let tones = [GLASS.edge, GLASS.shadow, GLASS.base, GLASS.light];
-    for y in 0..back {
-        let t = y as f32 / back.max(1) as f32 * 3.0;
-        let band = t.floor() as usize;
-        let into = t.fract();
-        for x in 0..width {
-            let lean = (paint::noise(x, y, 461) % 100) as f32 / 100.0 < into;
-            let i = (band + usize::from(lean)).min(tones.len() - 1);
-            canvas.set(x, y, tones[i]);
-        }
-    }
-    // The moss bank, mounded, with a lit edge along its top.
-    for x in 0..width {
-        let swell = ((x as f32 / 23.0).sin() * 4.0 + (x as f32 / 9.0).cos() * 2.0) as i32;
-        let crest = back - 14 + swell;
-        for y in crest.max(0)..back {
-            let n = paint::noise(x, y, 463) % 100;
-            let tone = match n {
-                _ if y == crest => GRASS.shine,
-                0..=11 => GRASS.shadow,
-                12..=17 => GRASS.light,
-                _ => GRASS.base,
-            };
-            canvas.set(x, y, tone);
-        }
-    }
-    // Ferns along the bank, each a few arching fronds.
-    let mut x = 18;
-    while x < width - 12 {
-        let tall = 14 + (paint::noise(x, 0, 467) % 10) as i32;
-        fern(&mut canvas, x, back - 4, tall);
-        x += 34 + (paint::noise(x, 1, 469) % 30) as i32;
-    }
-    platform(&mut canvas, width, rail);
-    line(&mut canvas, width, height, rail);
-    lamp(&mut canvas, width / 8, rail - PLATFORM_BACK + 6);
-    board(&mut canvas, sign_area((width, height)));
-    // The case's glass at each end and along the top, catching the lamp.
+    let Some(art) =
+        crate::town::art::bytes("arrival-habitat.png").and_then(crate::town::sheet::decode)
+    else {
+        return backdrop((width, height));
+    };
+    let (ox, oy) = (
+        (art.width() as i32 - width) / 2,
+        art.height() as i32 - height,
+    );
     for y in 0..height {
-        paint::put(&mut canvas, 2, y, Rgba::new(0xe8, 0xf4, 0xec, 90));
-        paint::put(&mut canvas, width - 3, y, Rgba::new(0xe8, 0xf4, 0xec, 70));
-    }
-    for x in 0..width {
-        paint::put(&mut canvas, x, 1, Rgba::new(0xe8, 0xf4, 0xec, 80));
+        for x in 0..width {
+            canvas.set(x, y, art.get(x + ox, y + oy));
+        }
     }
     canvas
-}
-
-/// A fern: fronds arching out from one foot, lit on their upper sides.
-fn fern(canvas: &mut Canvas, x: i32, foot: i32, tall: i32) {
-    for (lean, reach) in [(-1.0_f32, 0.9_f32), (-0.4, 1.0), (0.3, 1.0), (0.9, 0.85)] {
-        let steps = (tall as f32 * reach) as i32;
-        for i in 0..steps {
-            let t = i as f32 / steps as f32;
-            let fx = x + (lean * t * tall as f32 * 0.8) as i32;
-            let fy = foot - (t * tall as f32 * (1.0 - 0.45 * t * t)) as i32;
-            paint::put(canvas, fx, fy, LEAF.base);
-            // Leaflets either side, shorter toward the tip.
-            if i % 2 == 0 {
-                let w = ((1.0 - t) * 3.0) as i32 + 1;
-                for d in 1..=w {
-                    paint::put(canvas, fx - d, fy - 1, LEAF.light);
-                    paint::put(canvas, fx + d, fy, LEAF.shadow);
-                }
-            }
-        }
-    }
 }
 
 /// The sky, paler towards the hills, in bands dithered into each other.

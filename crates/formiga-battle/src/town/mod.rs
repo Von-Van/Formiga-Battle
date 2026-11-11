@@ -4,11 +4,12 @@
 //! changes how a match plays or what the record keeps, and the companions never walk it. They
 //! stay in the habitat on the office desk, at their own size.
 //!
-//! The places are data (`map`), the Handler walks them (`walk`) and is drawn from a character
-//! sheet (`sheet`) over each place's picture (`picture`). Everything here depends only on the time
+//! The places are data (`map`), the Handler walks them (`walk`) and is drawn from Jake's layered
+//! sheets (`sheet`, `look`) among each place's art (`picture`, pictures built in by `art`). Everything here depends only on the time
 //! it is given, so the town is checked without a window; the window's side is `app/town.rs`.
 
 pub mod arrival;
+pub mod art;
 pub mod look;
 pub mod map;
 pub mod picture;
@@ -18,10 +19,13 @@ pub mod walk;
 use formiga_art::{Canvas, Rgba};
 use map::{Facing, Ground, Place, PlaceId, Target};
 use sheet::Sheet;
+use std::collections::HashMap;
 use walk::{Moved, Walker};
 
 /// How long reaching for something shows, in seconds.
 const REACH: f32 = 0.35;
+/// How long someone spoken to talks back, in seconds.
+const TALK: f32 = 2.5;
 /// How long a place takes to come up after a door, in seconds.
 pub const ENTER: f32 = 0.25;
 /// The colour round a place smaller than the window.
@@ -50,23 +54,29 @@ pub struct Town {
     pub picked: Option<Target>,
     /// A target being walked to, used on arrival.
     heading_for: Option<Target>,
-    ground: Canvas,
+    scenery: picture::Scenery,
     sheet: Sheet,
+    /// The townspeople here, by id, each with their sheet.
+    people: HashMap<String, Sheet>,
+    /// The cups won, in the order of the Circuit, for the trophy stands.
+    pub cups: [bool; 4],
     /// When the place was entered.
     pub entered: f32,
     /// When the Handler last reached for something.
     reached: f32,
+    /// Who was last spoken to, and when: they talk back for a moment.
+    spoke_to: Option<(usize, f32)>,
     /// Just through a door: the key still held from the other side is ignored until it is let
     /// go, so walking out of a door never walks straight back in.
     let_go: bool,
 }
 
 impl Town {
-    /// The Handler at their office desk, as the arrival leaves them, facing the room.
+    /// The Handler at their office desk, as the arrival leaves them, facing the habitat.
     pub fn new(now: f32) -> Self {
         let place = PlaceId::Office.place();
         let at = place.spawn.expect("the office has a spawn");
-        Self::standing(place, at, Facing::Down, now)
+        Self::standing(place, at, Facing::Up, now)
     }
 
     /// The Handler just inside a place, having come through one of its doors.
@@ -80,16 +90,24 @@ impl Town {
     }
 
     fn standing(place: Place, at: (i32, i32), facing: Facing, now: f32) -> Self {
-        let ground = picture::stand_in(&place);
+        let scenery = place.id.scenery();
+        let people = place
+            .people
+            .iter()
+            .filter_map(|p| Some((p.id.clone(), Sheet::person(&p.id)?)))
+            .collect();
         Self {
             place,
             walker: Walker::new(at, facing, now),
             picked: None,
             heading_for: None,
-            ground,
-            sheet: Sheet::stand_in(),
+            scenery,
+            sheet: look::HandlerLook::default().sheet(),
+            people,
+            cups: [false; 4],
             entered: now,
             reached: f32::NEG_INFINITY,
+            spoke_to: None,
             let_go: false,
         }
     }
@@ -99,7 +117,11 @@ impl Town {
         let Some(door) = self.place.door(mark).cloned() else {
             return Happened::Nothing;
         };
+        let (sheet, cups) = (self.sheet.clone(), self.cups);
         *self = Self::through(door.to, door.to_mark, now);
+        // The Handler keeps their look, and the trophies stay won.
+        self.sheet = sheet;
+        self.cups = cups;
         self.let_go = true;
         Happened::Entered(door.to)
     }
@@ -238,28 +260,45 @@ impl Town {
         self.picked = None;
         match target {
             Target::Thing(i) => Happened::Used(self.place.id, self.place.things[i].id.clone()),
-            Target::Person(i) => Happened::Spoke(self.place.id, self.place.people[i].id.clone()),
+            Target::Person(i) => {
+                self.spoke_to = Some((i, now));
+                Happened::Spoke(self.place.id, self.place.people[i].id.clone())
+            }
         }
     }
 
-    /// The window's view of the place now: the ground, then everyone from the back row forward.
+    /// The window's view of the place now: the ground, then every piece and everyone from the
+    /// back row forward, then what stands in front of them.
     pub fn compose(&self, now: f32, reduce_motion: bool) -> Canvas {
         let feet = self.walker.at(now);
         let (cx, cy) = picture::camera(&self.place, feet);
-        let mut world = self.ground.clone();
-        // Everyone, drawn back to front by where their feet are.
-        let mut figures: Vec<((f32, f32), Canvas)> = self
-            .place
-            .people
-            .iter()
-            .map(|p| {
-                let frame = self.sheet.frame(p.facing, 4);
-                (
-                    (p.tile.0 as f32, p.tile.1 as f32),
-                    picture::tinted(&frame, person_tint(&p.id)),
-                )
-            })
+        let mut world = self.scenery.ground.clone();
+        if !reduce_motion {
+            self.ripple(&mut world, now);
+        }
+        // Pieces first at equal depth, so someone at a desk's foot stands in front of it.
+        let mut drawn: Vec<(i32, u8, picture::Piece)> = self
+            .scenery
+            .pieces(self.cups)
+            .into_iter()
+            .map(|p| (p.sort, 0, p))
             .collect();
+        let breath = |t: f32| !reduce_motion && (now + t).rem_euclid(2.4) > 1.4;
+        for (i, p) in self.place.people.iter().enumerate() {
+            let Some(sheet) = self.people.get(&p.id) else {
+                continue;
+            };
+            let at = (p.tile.0 as f32, p.tile.1 as f32);
+            // Spoken to, they turn to the Handler and talk for a moment.
+            let frame = match self.spoke_to {
+                Some((who, at)) if who == i && now - at < TALK => {
+                    let facing = facing_toward(p.tile, self.walker.tile).unwrap_or(p.facing);
+                    sheet.talking(facing, ((now - at) / 0.25) as u32 % 2 == 1)
+                }
+                _ => sheet.standing(p.facing, breath(i as f32 * 0.7)),
+            };
+            drawn.push((picture::feet_depth(at), 1, figure(frame, at)));
+        }
         let column = if now - self.reached < REACH && !self.walker.moving() {
             if now - self.reached < REACH / 2.0 {
                 6
@@ -269,11 +308,13 @@ impl Town {
         } else {
             self.walker.frame(now, reduce_motion)
         };
-        figures.push((feet, self.sheet.frame(self.walker.facing, column)));
-        figures.sort_by(|a, b| a.0.1.total_cmp(&b.0.1));
-        for (at, frame) in &figures {
-            picture::stand(&mut world, frame, *at);
+        let me = self.sheet.frame(self.walker.facing, column);
+        drawn.push((picture::feet_depth(feet), 1, figure(me, feet)));
+        drawn.sort_by_key(|(depth, order, _)| (*depth, *order));
+        for (_, _, piece) in &drawn {
+            picture::over(&mut world, &piece.picture, piece.x, piece.y);
         }
+        picture::over(&mut world, self.scenery.front(), 0, 0);
         let mut view = Canvas::new(picture::VIEW.0 as u32, picture::VIEW.1 as u32);
         for y in 0..picture::VIEW.1 {
             for x in 0..picture::VIEW.0 {
@@ -284,6 +325,30 @@ impl Town {
             }
         }
         view
+    }
+
+    /// Light moving on the water, four frames a few times a second.
+    fn ripple(&self, world: &mut Canvas, now: f32) {
+        let Some(strip) = art::bytes("anim-water.png").and_then(sheet::decode) else {
+            return;
+        };
+        let frame = (now * 3.0) as i32 % 4;
+        let t = picture::TILE;
+        for y in 0..self.place.height {
+            for x in 0..self.place.width {
+                if self.place.ground((x, y)) != Ground::Water {
+                    continue;
+                }
+                for py in 0..t {
+                    for px in 0..t {
+                        let p = strip.get(frame * t + px, py);
+                        if p.a > 0 {
+                            formiga_art::paint::put(world, x * t + px, y * t + py, p);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Dresses the Handler in a look from the Studio.
@@ -298,6 +363,27 @@ impl Town {
     }
 }
 
+/// The way from one tile to a neighbouring one, if they are neighbours.
+fn facing_toward(from: (i32, i32), to: (i32, i32)) -> Option<Facing> {
+    Facing::ALL
+        .into_iter()
+        .find(|f| f.step() == (to.0 - from.0, to.1 - from.1))
+}
+
+/// A frame as a piece drawn at someone's feet.
+fn figure(frame: Canvas, feet: (f32, f32)) -> picture::Piece {
+    let mut canvas = Canvas::new(frame.width(), frame.height());
+    picture::over(&mut canvas, &frame, 0, 0);
+    let depth = picture::feet_depth(feet);
+    let x = (feet.0 * picture::TILE as f32).round() as i32 + picture::TILE / 2 - sheet::CELL / 2;
+    picture::Piece {
+        picture: canvas,
+        x,
+        y: depth - sheet::FEET,
+        sort: depth,
+    }
+}
+
 /// How the townspeople are called.
 pub fn person_name(id: &str) -> String {
     match id {
@@ -305,19 +391,10 @@ pub fn person_name(id: &str) -> String {
         "iris" => "Iris".to_owned(),
         "odile" => "Odile".to_owned(),
         "tailor" => "the tailor".to_owned(),
+        "gardener" => "the gardener".to_owned(),
+        "angler" => "the angler".to_owned(),
         "wren" => "Wren".to_owned(),
         other => other.to_owned(),
-    }
-}
-
-/// The colour a townsperson is tinted until they have a sheet of their own.
-fn person_tint(id: &str) -> Rgba {
-    match id {
-        "marlow" => Rgba::new(0x7a, 0x2c, 0x33, 255),
-        "iris" => Rgba::new(0x28, 0x5a, 0x4b, 255),
-        "odile" => Rgba::new(0x4a, 0x62, 0x88, 255),
-        "tailor" => Rgba::new(0xa4, 0x7a, 0x2c, 255),
-        _ => Rgba::new(0xb5, 0x54, 0x3f, 255),
     }
 }
 
@@ -337,16 +414,15 @@ mod tests {
     }
 
     #[test]
-    fn the_handler_starts_at_the_desk_facing_the_room() {
+    fn the_handler_starts_at_the_desk_facing_the_habitat() {
         let town = Town::new(0.0);
         assert_eq!(town.place.id, PlaceId::Office);
-        assert_eq!(town.walker.facing, Facing::Down);
+        assert_eq!(town.walker.facing, Facing::Up);
     }
 
     #[test]
-    fn turning_to_the_desk_offers_the_habitat() {
+    fn standing_at_the_desk_offers_the_habitat() {
         let mut town = Town::new(0.0);
-        town.tick(Some(Facing::Up), 0.0);
         town.tick(None, 0.05);
         let offered = town.offered().expect("the habitat is in front");
         assert_eq!(town.prompt(offered), "Look in the habitat");
@@ -357,9 +433,12 @@ mod tests {
     }
 
     #[test]
-    fn walking_down_and_out_of_the_office_reaches_the_courtyard() {
+    fn walking_out_of_the_office_door_and_holding_on_stays_in_the_courtyard() {
         let mut town = Town::new(0.0);
-        let happened = hold(&mut town, Some(Facing::Down), 0.0, 3.0);
+        let door = town.place.door('1').unwrap().tile;
+        town.click((door.0, door.1 - 1), 0.0);
+        hold(&mut town, None, 0.0, 6.0);
+        let happened = hold(&mut town, Some(Facing::Down), 6.0, 3.0);
         assert!(happened.contains(&Happened::Entered(PlaceId::Campus)));
         // Still holding down, they stay out: the key held through the door is ignored.
         assert_eq!(town.place.id, PlaceId::Campus);
@@ -368,6 +447,9 @@ mod tests {
     #[test]
     fn tab_then_the_action_key_walks_to_a_thing_and_uses_it() {
         let mut town = Town::new(0.0);
+        // Turned away from the desk, so nothing is in front.
+        town.tick(Some(Facing::Down), 0.0);
+        town.tick(None, 0.05);
         town.pick_next(false);
         let picked = town.picked.expect("something is picked");
         town.act(0.0);
