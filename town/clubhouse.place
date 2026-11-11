@@ -1,0 +1,17 @@
+name Clubhouse
+size 13 8
+ground
+#############
+#hh..ccc..hh#
+#...........#
+#..rrrrrrr..#
+#...........#
+#.,,,,,,,,,.#
+#...........#
+######1######
+# Trios at the register, playbooks on the chalkboard, the history on the shelves.
+thing r register Look at your trios
+thing c chalkboard Open the playbooks
+thing h shelves Read the history
+person iris 6 2 down
+door 1 campus 2 up

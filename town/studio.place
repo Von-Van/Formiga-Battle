@@ -1,0 +1,16 @@
+name Handler Studio
+size 13 8
+ground
+#############
+####..mm..###
+#...........#
+#.......ccc.#
+#...,,,.....#
+#...,,,.....#
+#...........#
+######1######
+# The mirror to try a look in, and the tailor's counter.
+thing m mirror Try a new look
+thing c counter Talk at the counter
+person tailor 9 2 down
+door 1 campus 3 up

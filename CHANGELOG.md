@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+- The town round the Battleground, to walk between pages: the Handler's Research Office, a
+  courtyard, the Arena, the Clubhouse, the Guild Hall and the Handler Studio, read from place files
+  in `town/` (docs/TOWN.md). The Handler walks a tile at a time from the keyboard or by clicking,
+  and the things in each place open the pages Battle already has, coming back to the town when the
+  page closes. Its places are stand-ins until their pictures are drawn, and for now it opens only
+  for its review picture (`--review town`).
+
 ## [0.68.1] - 2026-10-26
 
 Built on Formiga Desktop 0.68.1, released alongside it and Formiga Hill and Home 0.68.1. Battle

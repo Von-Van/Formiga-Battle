@@ -31,6 +31,7 @@ mod station;
 mod still;
 mod table;
 mod ticket;
+mod town;
 
 use anyhow::{Context, Result, bail};
 use formiga_art::Canvas;
@@ -208,6 +209,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "lessons" => app::Review::Lessons,
                     "lesson" => app::Review::Lesson,
                     "welcome" => app::Review::Welcome,
+                    "town" => app::Review::Town,
                     other => bail!("unknown stage {other:?}"),
                 }
             }

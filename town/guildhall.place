@@ -1,0 +1,16 @@
+name Guild Hall
+size 13 8
+ground
+#############
+##nnnnnnnnn##
+#...........#
+#t.........t#
+#t...,,,...t#
+#....,,,....#
+#....,,,....#
+######1######
+# The season on the long board, the Hall of Champions on the trophy tables.
+thing n board Read the season board
+thing t champions Look at the Hall of Champions
+person odile 2 2 down
+door 1 campus 4 up

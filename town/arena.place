@@ -1,0 +1,17 @@
+name Arena
+size 13 8
+ground
+#############
+##ff#####ll##
+#...........#
+#...mmmmm...#
+#...mmmmm...#
+#...........#
+#.,,,,,,,,,.#
+######1######
+# The cups against the visitors at the table, friend rooms on the board, lessons on the shelf.
+thing m visitors Play the visitors
+thing f friends Play a friend
+thing l lessons Take a Field Lesson
+person marlow 1 2 down
+door 1 campus 1 up
