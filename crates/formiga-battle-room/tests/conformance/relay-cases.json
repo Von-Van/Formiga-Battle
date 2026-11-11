@@ -1,0 +1,5103 @@
+{
+ "about": "Relay conformance cases: requests and what both relays answer. Battle's formiga-battle-room keeps the original (tests/conformance/relay-cases.json) and runs it against the reference relay; the Formiga site keeps a byte-identical copy (tests/fixtures/relay-cases.json) and runs it against its relay. Change it in Battle, then copy it to the site. Times are milliseconds on the relay's clock; 'as' is the side making the request; 'view' paths are dotted (a number picks from a list, 'length' counts one), and null matches a field left out.",
+ "entrants": {
+  "friend": {
+   "arena": "backyard",
+   "bonds": [
+    {
+     "a": "003ce3d79305b030",
+     "affinity": "low",
+     "avoidance": "low",
+     "b": "7aec2f606c981db6",
+     "familiarity": "high",
+     "playfulness": "low"
+    },
+    {
+     "a": "003ce3d79305b030",
+     "affinity": "low",
+     "avoidance": "low",
+     "b": "a3164df96a1b7e0f",
+     "familiarity": "high",
+     "playfulness": "low"
+    },
+    {
+     "a": "7aec2f606c981db6",
+     "affinity": "none",
+     "avoidance": "low",
+     "b": "a3164df96a1b7e0f",
+     "familiarity": "high",
+     "playfulness": "none"
+    }
+   ],
+   "build": {
+    "battle": "0.1.0",
+    "desktop": "0.67.7",
+    "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "handler": "Friend",
+   "protocol": 4,
+   "rules_version": 9,
+   "team": [
+    {
+     "accessory": {
+      "colors": {
+       "accent": [
+        144,
+        70,
+        236
+       ],
+       "body": [
+        40,
+        90,
+        215
+       ],
+       "deep": [
+        26,
+        60,
+        142
+       ],
+       "light": [
+        160,
+        177,
+        217
+       ],
+       "outline": [
+        42,
+        36,
+        51
+       ]
+      },
+      "item": {
+       "item": "flower_crown",
+       "kind": "worn"
+      }
+     },
+     "appearance": {
+      "body_height": 18,
+      "body_width": 22,
+      "design": {
+       "parts": "01000108090905060004acdbe5b2eedb00000031"
+      },
+      "effect_motif": "heart",
+      "face": {
+       "brow": "none",
+       "cheek": "dots",
+       "eye_shape": "soft_square",
+       "eye_size": 2,
+       "eye_spacing": 5,
+       "highlight": "diagonal",
+       "mouth": "beak",
+       "pupil": "spark",
+       "vertical_offset": -1
+      },
+      "face_signature": 1756870938,
+      "family": "blob",
+      "foot_size": 2,
+      "forelimbs": {
+       "length": 5,
+       "rest_pose": "folded",
+       "style": "pseudopod",
+       "thickness": 2,
+       "tip": "round"
+      },
+      "gait_bob": 0.4783191978931427,
+      "head_appendages": {
+       "size": 4,
+       "style": "round"
+      },
+      "head_ratio": 0.7608306407928467,
+      "leg_length": 2,
+      "logical_size": 32,
+      "marking_seed": "f1d790aa91602554",
+      "palette_index": 9,
+      "pattern": "socks",
+      "pattern_density": 0.2548938989639282,
+      "roundness": 0.5638048648834229,
+      "tail": {
+       "length": 4,
+       "style": "none"
+      }
+     },
+     "born_at_utc": "2026-10-02T09:30:00Z",
+     "character": {
+      "axes": {
+       "affection": 0.8948628902435303,
+       "boldness": 0.02851271629333496,
+       "curiosity": 0.21183061599731445,
+       "energy": 0.3811805844306946,
+       "feistiness": 0.6364287734031677,
+       "impulsiveness": 0.3746017813682556,
+       "playfulness": 0.36752498149871826,
+       "social": 0.3243038058280945,
+       "suspicion": 0.46008944511413574
+      },
+      "phrase": "A cautious wallflower",
+      "temperament": "wallflower",
+      "trait_ids": [
+       "cautious",
+       "affectionate",
+       "night_owl"
+      ],
+      "traits": [
+       "Cautious",
+       "Affectionate",
+       "Night owl"
+      ]
+     },
+     "habits": [
+      "waves_hello",
+      "circles_before_naps"
+     ],
+     "id": "7aec2f606c981db6",
+     "leanings": {
+      "climbing": 0,
+      "cursor_trust": 0,
+      "exploration": 0,
+      "home_affinity": 0,
+      "play": 0,
+      "routine": 0,
+      "sleep_security": 0,
+      "sociability": 0
+     },
+     "motion": {
+      "activity": 0.4858854413032532,
+      "boldness": 0.12423580884933472,
+      "celebration": "dance",
+      "playfulness": 0.44401997327804565
+     },
+     "name": "Tansy",
+     "role": {
+      "kind": "adult"
+     },
+     "scale_percent": 100,
+     "stature_percent": 85
+    },
+    {
+     "accessory": {
+      "colors": {
+       "accent": [
+        70,
+        121,
+        236
+       ],
+       "body": [
+        40,
+        215,
+        209
+       ],
+       "deep": [
+        26,
+        142,
+        138
+       ],
+       "light": [
+        160,
+        217,
+        215
+       ],
+       "outline": [
+        42,
+        36,
+        51
+       ]
+      },
+      "item": {
+       "kind": "pin",
+       "trinket": 17
+      }
+     },
+     "appearance": {
+      "body_height": 22,
+      "body_width": 26,
+      "design": {
+       "details": "1000000000000000",
+       "parts": "0405010b0b090304000170d2b1d2389a00000041"
+      },
+      "effect_motif": "none",
+      "face": {
+       "brow": "soft",
+       "cheek": "blush",
+       "eye_shape": "round",
+       "eye_size": 1,
+       "eye_spacing": 7,
+       "highlight": "single",
+       "mouth": "tiny",
+       "pupil": "wide",
+       "vertical_offset": 0
+      },
+      "face_signature": 1097143412,
+      "family": "hopper",
+      "foot_size": 5,
+      "forelimbs": {
+       "length": 7,
+       "rest_pose": "folded",
+       "style": "mitten_arm",
+       "thickness": 1,
+       "tip": "mitten"
+      },
+      "gait_bob": 0.7108229398727417,
+      "head_appendages": {
+       "size": 6,
+       "style": "round"
+      },
+      "head_ratio": 0.5833047032356262,
+      "leg_length": 7,
+      "logical_size": 37,
+      "marking_seed": "9e807811423ef14e",
+      "palette_index": 1,
+      "pattern": "patches",
+      "pattern_density": 0.5482684969902039,
+      "roundness": 0.6894174218177795,
+      "tail": {
+       "length": 8,
+       "style": "taper"
+      }
+     },
+     "born_at_utc": "2026-10-02T09:30:00Z",
+     "character": {
+      "axes": {
+       "affection": 0.4950309693813324,
+       "boldness": 0.7157450914382935,
+       "curiosity": 0.7634108066558838,
+       "energy": 0.27903223037719727,
+       "feistiness": 0.4762563705444336,
+       "impulsiveness": 0.9184896945953369,
+       "playfulness": 0.914169192314148,
+       "social": 0.5994234085083008,
+       "suspicion": 0.3223196268081665
+      },
+      "phrase": "A messy troublemaker",
+      "temperament": "troublemaker",
+      "trait_ids": [
+       "mischievous",
+       "messy",
+       "spontaneous"
+      ],
+      "traits": [
+       "Mischievous",
+       "Messy",
+       "Spontaneous"
+      ]
+     },
+     "habits": [
+      "looks_food_over"
+     ],
+     "id": "a3164df96a1b7e0f",
+     "leanings": {
+      "climbing": 0,
+      "cursor_trust": 0,
+      "exploration": 0,
+      "home_affinity": 0,
+      "play": 0,
+      "routine": 0,
+      "sleep_security": 0,
+      "sociability": 0
+     },
+     "motion": {
+      "activity": 0.409274160861969,
+      "boldness": 0.708383321762085,
+      "celebration": "twirl",
+      "playfulness": 0.8813352584838867
+     },
+     "name": "Mallow",
+     "role": {
+      "kind": "adult"
+     },
+     "scale_percent": 100,
+     "stature_percent": 98
+    },
+    {
+     "appearance": {
+      "body_height": 14,
+      "body_width": 19,
+      "design": {
+       "parts": "0204030a080904060000db7a898cd1b101000064"
+      },
+      "effect_motif": "dot",
+      "face": {
+       "brow": "none",
+       "cheek": "none",
+       "eye_shape": "soft_square",
+       "eye_size": 2,
+       "eye_spacing": 4,
+       "highlight": "single",
+       "mouth": "cat",
+       "pupil": "dot",
+       "vertical_offset": 0
+      },
+      "face_signature": 4093827948,
+      "family": "blob",
+      "foot_size": 3,
+      "forelimbs": {
+       "length": 7,
+       "rest_pose": "together",
+       "style": "pseudopod",
+       "thickness": 1,
+       "tip": "round"
+      },
+      "gait_bob": 0.40727338194847107,
+      "head_appendages": {
+       "size": 4,
+       "style": "none"
+      },
+      "head_ratio": 0.9700014591217041,
+      "leg_length": 8,
+      "logical_size": 38,
+      "marking_seed": "ec82b7bbacab5230",
+      "palette_index": 9,
+      "pattern": "socks",
+      "pattern_density": 0.666145384311676,
+      "roundness": 0.9689294099807739,
+      "tail": {
+       "length": 10,
+       "style": "tuft"
+      }
+     },
+     "born_at_utc": "2026-10-02T09:30:00Z",
+     "character": {
+      "axes": {
+       "affection": 0.3885279595851898,
+       "boldness": 0.9236815571784973,
+       "curiosity": 0.5515760183334351,
+       "energy": 0.805738091468811,
+       "feistiness": 0.6389908194541931,
+       "impulsiveness": 1.0,
+       "playfulness": 0.8517921566963196,
+       "social": 0.6210945844650269,
+       "suspicion": 0.139726459980011
+      },
+      "phrase": "A reckless scamp",
+      "temperament": "troublemaker",
+      "trait_ids": [
+       "reckless",
+       "impulsive",
+       "mischievous"
+      ],
+      "traits": [
+       "Reckless",
+       "Impulsive",
+       "Mischievous"
+      ]
+     },
+     "id": "003ce3d79305b030",
+     "leanings": {
+      "climbing": 0,
+      "cursor_trust": 0,
+      "exploration": 0,
+      "home_affinity": 0,
+      "play": 0,
+      "routine": 0,
+      "sleep_security": 0,
+      "sociability": 0
+     },
+     "motion": {
+      "activity": 0.8043035864830017,
+      "boldness": 0.8851293325424194,
+      "celebration": "twirl",
+      "playfulness": 0.8314336538314819
+     },
+     "name": "Clover",
+     "role": {
+      "kind": "adult"
+     },
+     "scale_percent": 100,
+     "stature_percent": 100
+    }
+   ]
+  },
+  "jake": {
+   "arena": "backyard",
+   "bonds": [
+    {
+     "a": "876a55d6a17221ef",
+     "affinity": "none",
+     "avoidance": "low",
+     "b": "a5cdeae193601ce1",
+     "familiarity": "high",
+     "playfulness": "none"
+    },
+    {
+     "a": "876a55d6a17221ef",
+     "affinity": "low",
+     "avoidance": "low",
+     "b": "d9d41613046adffe",
+     "familiarity": "high",
+     "playfulness": "low"
+    },
+    {
+     "a": "a5cdeae193601ce1",
+     "affinity": "low",
+     "avoidance": "low",
+     "b": "d9d41613046adffe",
+     "familiarity": "high",
+     "playfulness": "low"
+    }
+   ],
+   "build": {
+    "battle": "0.1.0",
+    "desktop": "0.67.7",
+    "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "handler": "Jake",
+   "protocol": 4,
+   "rules_version": 9,
+   "team": [
+    {
+     "accessory": {
+      "colors": {
+       "accent": [
+        240,
+        60,
+        246
+       ],
+       "body": [
+        75,
+        27,
+        228
+       ],
+       "deep": [
+        49,
+        18,
+        151
+       ],
+       "light": [
+        172,
+        156,
+        221
+       ],
+       "outline": [
+        42,
+        36,
+        51
+       ]
+      },
+      "item": {
+       "item": "flower_crown",
+       "kind": "worn"
+      }
+     },
+     "appearance": {
+      "body_height": 13,
+      "body_width": 25,
+      "design": {
+       "parts": "0300000b0a0903030000bcd18f7ad2870000007c"
+      },
+      "effect_motif": "leaf",
+      "face": {
+       "brow": "soft",
+       "cheek": "none",
+       "eye_shape": "round",
+       "eye_size": 2,
+       "eye_spacing": 5,
+       "highlight": "double",
+       "mouth": "beak",
+       "pupil": "wide",
+       "vertical_offset": 0
+      },
+      "face_signature": 458422880,
+      "family": "blob",
+      "foot_size": 5,
+      "forelimbs": {
+       "length": 4,
+       "rest_pose": "together",
+       "style": "soft_nub",
+       "thickness": 1,
+       "tip": "round"
+      },
+      "gait_bob": 0.7812724113464355,
+      "head_appendages": {
+       "size": 3,
+       "style": "droop"
+      },
+      "head_ratio": 0.6713345646858215,
+      "leg_length": 5,
+      "logical_size": 37,
+      "marking_seed": "465568b953d40634",
+      "palette_index": 5,
+      "pattern": "patches",
+      "pattern_density": 0.6479941010475159,
+      "roundness": 0.786525547504425,
+      "tail": {
+       "length": 5,
+       "style": "none"
+      }
+     },
+     "born_at_utc": "2026-10-02T09:30:00Z",
+     "character": {
+      "axes": {
+       "affection": 0.5133249163627625,
+       "boldness": 0.21814881265163422,
+       "curiosity": 0.3669005036354065,
+       "energy": 0.24074684083461761,
+       "feistiness": 0.151881143450737,
+       "impulsiveness": 0.30826011300086975,
+       "playfulness": 0.5044404864311218,
+       "social": 0.16553476452827454,
+       "suspicion": 0.7024214267730713
+      },
+      "phrase": "A shy wallflower",
+      "temperament": "wallflower",
+      "trait_ids": [
+       "shy",
+       "wary",
+       "mellow"
+      ],
+      "traits": [
+       "Shy",
+       "Wary",
+       "Mellow"
+      ]
+     },
+     "habits": [
+      "waves_hello",
+      "circles_before_naps"
+     ],
+     "id": "876a55d6a17221ef",
+     "leanings": {
+      "climbing": 0,
+      "cursor_trust": 0,
+      "exploration": -30,
+      "home_affinity": 0,
+      "play": 0,
+      "routine": 20,
+      "sleep_security": 0,
+      "sociability": 25
+     },
+     "motion": {
+      "activity": 0.38056012988090515,
+      "boldness": 0.2854264974594116,
+      "celebration": "hop",
+      "playfulness": 0.5535523891448975
+     },
+     "name": "Mochi",
+     "role": {
+      "kind": "adult"
+     },
+     "scale_percent": 100,
+     "stature_percent": 97
+    },
+    {
+     "accessory": {
+      "colors": {
+       "accent": [
+        60,
+        97,
+        246
+       ],
+       "body": [
+        27,
+        214,
+        228
+       ],
+       "deep": [
+        18,
+        141,
+        151
+       ],
+       "light": [
+        156,
+        217,
+        221
+       ],
+       "outline": [
+        42,
+        36,
+        51
+       ]
+      },
+      "item": {
+       "kind": "pin",
+       "trinket": 17
+      }
+     },
+     "appearance": {
+      "body_height": 13,
+      "body_width": 19,
+      "design": {
+       "details": "0010000000f3bb3f",
+       "parts": "010402080809040300006edac437de3c10000037"
+      },
+      "effect_motif": "dot",
+      "face": {
+       "brow": "none",
+       "cheek": "blush",
+       "eye_shape": "tall",
+       "eye_size": 1,
+       "eye_spacing": 6,
+       "highlight": "double",
+       "mouth": "cat",
+       "pupil": "dot",
+       "vertical_offset": -1
+      },
+      "face_signature": 1777620417,
+      "family": "soft_quadruped",
+      "foot_size": 2,
+      "forelimbs": {
+       "length": 6,
+       "rest_pose": "folded",
+       "style": "front_paw",
+       "thickness": 1,
+       "tip": "paw"
+      },
+      "gait_bob": 0.4209262728691101,
+      "head_appendages": {
+       "size": 6,
+       "style": "pointed"
+      },
+      "head_ratio": 0.8283737897872925,
+      "leg_length": 5,
+      "logical_size": 41,
+      "marking_seed": "b746b07ae6c166e8",
+      "palette_index": 3,
+      "pattern": "stripes",
+      "pattern_density": 0.5457996129989624,
+      "roundness": 0.8307127356529236,
+      "tail": {
+       "length": 2,
+       "style": "stub"
+      }
+     },
+     "born_at_utc": "2026-10-02T09:30:00Z",
+     "character": {
+      "axes": {
+       "affection": 0.936623215675354,
+       "boldness": 0.7592883110046387,
+       "curiosity": 0.5970380306243896,
+       "energy": 0.8036502599716187,
+       "feistiness": 0.7017636895179749,
+       "impulsiveness": 0.8115413784980774,
+       "playfulness": 0.775902509689331,
+       "social": 0.703472375869751,
+       "suspicion": 0.1782633364200592
+      },
+      "phrase": "An excitable scamp",
+      "temperament": "troublemaker",
+      "trait_ids": [
+       "excitable",
+       "mischievous",
+       "reckless"
+      ],
+      "traits": [
+       "Excitable",
+       "Mischievous",
+       "Reckless"
+      ]
+     },
+     "habits": [
+      "looks_food_over"
+     ],
+     "id": "a5cdeae193601ce1",
+     "leanings": {
+      "climbing": 0,
+      "cursor_trust": 0,
+      "exploration": -12,
+      "home_affinity": 0,
+      "play": 9,
+      "routine": 8,
+      "sleep_security": 0,
+      "sociability": 14
+     },
+     "motion": {
+      "activity": 0.8027376532554626,
+      "boldness": 0.7453950643539429,
+      "celebration": "hop",
+      "playfulness": 0.7707220315933228
+     },
+     "name": "Biscuit",
+     "role": {
+      "kind": "adult"
+     },
+     "scale_percent": 100,
+     "stature_percent": 108
+    },
+    {
+     "appearance": {
+      "body_height": 17,
+      "body_width": 18,
+      "design": {
+       "parts": "00030109090805040001d6cb56f2787501201386"
+      },
+      "effect_motif": "none",
+      "face": {
+       "brow": "none",
+       "cheek": "none",
+       "eye_shape": "tall",
+       "eye_size": 1,
+       "eye_spacing": 4,
+       "highlight": "diagonal",
+       "mouth": "tiny",
+       "pupil": "dot",
+       "vertical_offset": 1
+      },
+      "face_signature": 1621771899,
+      "family": "hopper",
+      "foot_size": 4,
+      "forelimbs": {
+       "length": 7,
+       "rest_pose": "at_sides",
+       "style": "mitten_arm",
+       "thickness": 2,
+       "tip": "mitten"
+      },
+      "gait_bob": 0.31037285923957825,
+      "head_appendages": {
+       "size": 4,
+       "style": "pointed"
+      },
+      "head_ratio": 0.5864741802215576,
+      "leg_length": 4,
+      "logical_size": 38,
+      "marking_seed": "b73acfcb3eac0868",
+      "palette_index": 10,
+      "pattern": "socks",
+      "pattern_density": 0.1509474366903305,
+      "roundness": 0.7621352076530457,
+      "tail": {
+       "length": 7,
+       "style": "none"
+      }
+     },
+     "born_at_utc": "2026-10-02T09:30:00Z",
+     "character": {
+      "axes": {
+       "affection": 0.769440770149231,
+       "boldness": 0.4105803370475769,
+       "curiosity": 0.5370697975158691,
+       "energy": 0.19459369778633118,
+       "feistiness": 0.6200000047683716,
+       "impulsiveness": 0.3629533648490906,
+       "playfulness": 0.5277537107467651,
+       "social": 0.40325674414634705,
+       "suspicion": 0.9251432418823242
+      },
+      "phrase": "A competitive napper",
+      "temperament": "lazybones",
+      "tension": "lazy_but_competitive",
+      "trait_ids": [
+       "lazy",
+       "competitive",
+       "affectionate"
+      ],
+      "traits": [
+       "Lazy",
+       "Competitive",
+       "Affectionate"
+      ]
+     },
+     "id": "d9d41613046adffe",
+     "leanings": {
+      "climbing": 0,
+      "cursor_trust": 0,
+      "exploration": 6,
+      "home_affinity": 0,
+      "play": 18,
+      "routine": -4,
+      "sleep_security": 0,
+      "sociability": 3
+     },
+     "motion": {
+      "activity": 0.3459452986717224,
+      "boldness": 0.4489932656288147,
+      "celebration": "twirl",
+      "playfulness": 0.5722029209136963
+     },
+     "name": "Fig",
+     "role": {
+      "kind": "adult"
+     },
+     "scale_percent": 100,
+     "stature_percent": 100
+    }
+   ]
+  }
+ },
+ "cases": [
+  {
+   "name": "a turn locks once both plans are in, and both see the same locked plans",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "interact",
+        "at": {
+         "x": 0,
+         "y": 5
+        }
+       }
+      ]
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 40,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "playing",
+       "locked.0.submitted": [
+        [
+         {
+          "order": "interact",
+          "at": {
+           "x": 0,
+           "y": 5
+          }
+         }
+        ],
+        []
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a side with no orders three turns running forfeits",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 44020,
+     "as": "left",
+     "orders": {
+      "turn": 2,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 88020,
+     "as": "left",
+     "orders": {
+      "turn": 3,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 132020,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": "right",
+       "confirmed": false
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "both sides away at once call the match off, and neither forfeits",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 133010,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": null,
+       "locked.length": 3,
+       "confirmed": false
+      }
+     }
+    },
+    {
+     "at": 134010,
+     "as": "right",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": null
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "once a side reports the match ended no more turns lock, and the friend's late board still confirms it",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 100,
+     "as": "left",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 88100,
+     "as": "right",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "playing",
+       "locked.length": 1,
+       "confirmed": false
+      }
+     }
+    },
+    {
+     "at": 88110,
+     "as": "right",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 88120,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": null,
+       "locked.length": 1,
+       "confirmed": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a side that reported the match ended may leave without forfeiting",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 100,
+     "as": "left",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 200,
+     "as": "left",
+     "leave": true,
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 300,
+     "as": "right",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "playing",
+       "ending": null
+      }
+     }
+    },
+    {
+     "at": 400,
+     "as": "right",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": null,
+       "confirmed": true
+      }
+     }
+    },
+    {
+     "at": 500,
+     "as": "right",
+     "look": true,
+     "expect": {
+      "status": 404,
+      "body": {
+       "refused": "no_such_room"
+      }
+     },
+     "note": "both have seen the end, so the room is gone"
+    }
+   ]
+  },
+  {
+   "name": "a side that leaves before reporting the match ended forfeits",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 100,
+     "as": "left",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": false
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 200,
+     "as": "left",
+     "leave": true,
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 300,
+     "as": "right",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": "left",
+       "confirmed": false
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a side that never reports how the match ended forfeits once the wait is over",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 100,
+     "as": "left",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 132099,
+     "as": "right",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "playing"
+      }
+     }
+    },
+    {
+     "at": 132100,
+     "as": "right",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": "right",
+       "confirmed": false
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "the same board ended for one window and not the other is out of step",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 100,
+     "as": "left",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 200,
+     "as": "right",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": false
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 300,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "out_of_step": true,
+       "confirmed": false
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "every kind of order Battle sends is a plan, passed on as Battle reads it",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "press",
+        "squares": [
+         {
+          "x": 0,
+          "y": 0
+         }
+        ]
+       },
+       {
+        "order": "use_item",
+        "by": 0,
+        "at": {
+         "x": 4,
+         "y": 3
+        }
+       },
+       {
+        "order": "hold",
+        "squares": [
+         {
+          "x": 4,
+          "y": 3
+         }
+        ],
+        "facing": "west"
+       },
+       {
+        "order": "use_item",
+        "by": 1,
+        "at": {
+         "x": 4,
+         "y": 3
+        }
+       },
+       {
+        "order": "trick",
+        "squares": [
+         {
+          "x": 5,
+          "y": 3
+         }
+        ]
+       },
+       {
+        "order": "use_item",
+        "by": 2,
+        "at": {
+         "x": 4,
+         "y": 3
+        },
+        "note": "ignored"
+       }
+      ]
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.0.submitted": [
+        [
+         {
+          "order": "press",
+          "squares": [
+           {
+            "x": 0,
+            "y": 0
+           }
+          ]
+         },
+         {
+          "order": "use_item",
+          "by": 0,
+          "at": {
+           "x": 4,
+           "y": 3
+          }
+         },
+         {
+          "order": "hold",
+          "squares": [
+           {
+            "x": 4,
+            "y": 3
+           }
+          ],
+          "facing": "west"
+         },
+         {
+          "order": "use_item",
+          "by": 1,
+          "at": {
+           "x": 4,
+           "y": 3
+          }
+         },
+         {
+          "order": "trick",
+          "squares": [
+           {
+            "x": 5,
+            "y": 3
+           }
+          ]
+         },
+         {
+          "order": "use_item",
+          "by": 2,
+          "at": {
+           "x": 4,
+           "y": 3
+          }
+         }
+        ],
+        []
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a plan Battle could not read is malformed",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "move",
+        "to": {
+         "x": 1,
+         "y": 2
+        }
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "take",
+        "squares": [
+         {
+          "x": 1,
+          "y": 2
+         }
+        ]
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "press",
+        "squares": [
+         {
+          "x": 300,
+          "y": 0
+         }
+        ]
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "press",
+        "squares": [
+         {
+          "x": 1.5,
+          "y": 0
+         }
+        ]
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "press"
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "hold",
+        "squares": [
+         {
+          "x": 1,
+          "y": 1
+         }
+        ]
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "hold",
+        "squares": [
+         {
+          "x": 1,
+          "y": 1
+         }
+        ],
+        "facing": "up"
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "interact",
+        "at": {
+         "x": 1
+        }
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "use_item",
+        "by": -1,
+        "at": {
+         "x": 1,
+         "y": 1
+        }
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "press",
+        "squares": [
+         {
+          "x": 0,
+          "y": 0
+         }
+        ]
+       },
+       {
+        "order": "press",
+        "squares": [
+         {
+          "x": 0,
+          "y": 1
+         }
+        ]
+       },
+       {
+        "order": "press",
+        "squares": [
+         {
+          "x": 0,
+          "y": 2
+         }
+        ]
+       },
+       {
+        "order": "press",
+        "squares": [
+         {
+          "x": 0,
+          "y": 3
+         }
+        ]
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": [
+       {
+        "order": "press",
+        "squares": [
+         {
+          "x": 0,
+          "y": 0
+         },
+         {
+          "x": 0,
+          "y": 1
+         },
+         {
+          "x": 0,
+          "y": 2
+         },
+         {
+          "x": 0,
+          "y": 3
+         },
+         {
+          "x": 0,
+          "y": 4
+         },
+         {
+          "x": 0,
+          "y": 5
+         }
+        ]
+       }
+      ]
+     },
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 30,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "opponent_ready": false,
+       "locked.length": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a team Battle could not read is malformed, and the room still waits for the friend",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join_body": {
+      "arena": "backyard",
+      "bonds": [
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "7aec2f606c981db6",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "7aec2f606c981db6",
+        "affinity": "none",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "none"
+       }
+      ],
+      "build": {
+       "battle": "0.1.0",
+       "desktop": "0.67.7",
+       "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "handler": "Friend",
+      "protocol": 4,
+      "rules_version": 9,
+      "team": [
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           144,
+           70,
+           236
+          ],
+          "body": [
+           40,
+           90,
+           215
+          ],
+          "deep": [
+           26,
+           60,
+           142
+          ],
+          "light": [
+           160,
+           177,
+           217
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "item": "flower_crown",
+          "kind": "worn"
+         }
+        },
+        "appearance": {
+         "body_height": 18,
+         "body_width": 22,
+         "design": {
+          "parts": "01000108090905060004acdbe5b2eedb00000031"
+         },
+         "effect_motif": "heart",
+         "face": {
+          "brow": "none",
+          "cheek": "dots",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 5,
+          "highlight": "diagonal",
+          "mouth": "beak",
+          "pupil": "spark",
+          "vertical_offset": -1
+         },
+         "face_signature": 1756870938,
+         "family": "blob",
+         "foot_size": 2,
+         "forelimbs": {
+          "length": 5,
+          "rest_pose": "folded",
+          "style": "pseudopod",
+          "thickness": 2,
+          "tip": "round"
+         },
+         "gait_bob": 0.4783191978931427,
+         "head_appendages": {
+          "size": 4,
+          "style": "round"
+         },
+         "head_ratio": 0.7608306407928467,
+         "leg_length": 2,
+         "logical_size": 32,
+         "marking_seed": "f1d790aa91602554",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.2548938989639282,
+         "roundness": 0.5638048648834229,
+         "tail": {
+          "length": 4,
+          "style": "none"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.8948628902435303,
+          "boldness": 0.02851271629333496,
+          "curiosity": 0.21183061599731445,
+          "energy": 0.3811805844306946,
+          "feistiness": 0.6364287734031677,
+          "impulsiveness": 0.3746017813682556,
+          "playfulness": 0.36752498149871826,
+          "social": 0.3243038058280945,
+          "suspicion": 0.46008944511413574
+         },
+         "phrase": "A cautious wallflower",
+         "temperament": "wallflower",
+         "trait_ids": [
+          "cautious",
+          "affectionate",
+          "night_owl"
+         ],
+         "traits": [
+          "Cautious",
+          "Affectionate",
+          "Night owl"
+         ]
+        },
+        "habits": [
+         "waves_hello",
+         "circles_before_naps"
+        ],
+        "id": "7aec2f606c981db6",
+        "motion": {
+         "activity": 0.4858854413032532,
+         "boldness": 0.12423580884933472,
+         "celebration": "dance",
+         "playfulness": 0.44401997327804565
+        },
+        "name": "Tansy",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 85
+       },
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           70,
+           121,
+           236
+          ],
+          "body": [
+           40,
+           215,
+           209
+          ],
+          "deep": [
+           26,
+           142,
+           138
+          ],
+          "light": [
+           160,
+           217,
+           215
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "kind": "pin",
+          "trinket": 17
+         }
+        },
+        "appearance": {
+         "body_height": 22,
+         "body_width": 26,
+         "design": {
+          "details": "1000000000000000",
+          "parts": "0405010b0b090304000170d2b1d2389a00000041"
+         },
+         "effect_motif": "none",
+         "face": {
+          "brow": "soft",
+          "cheek": "blush",
+          "eye_shape": "round",
+          "eye_size": 1,
+          "eye_spacing": 7,
+          "highlight": "single",
+          "mouth": "tiny",
+          "pupil": "wide",
+          "vertical_offset": 0
+         },
+         "face_signature": 1097143412,
+         "family": "hopper",
+         "foot_size": 5,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "folded",
+          "style": "mitten_arm",
+          "thickness": 1,
+          "tip": "mitten"
+         },
+         "gait_bob": 0.7108229398727417,
+         "head_appendages": {
+          "size": 6,
+          "style": "round"
+         },
+         "head_ratio": 0.5833047032356262,
+         "leg_length": 7,
+         "logical_size": 37,
+         "marking_seed": "9e807811423ef14e",
+         "palette_index": 1,
+         "pattern": "patches",
+         "pattern_density": 0.5482684969902039,
+         "roundness": 0.6894174218177795,
+         "tail": {
+          "length": 8,
+          "style": "taper"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.4950309693813324,
+          "boldness": 0.7157450914382935,
+          "curiosity": 0.7634108066558838,
+          "energy": 0.27903223037719727,
+          "feistiness": 0.4762563705444336,
+          "impulsiveness": 0.9184896945953369,
+          "playfulness": 0.914169192314148,
+          "social": 0.5994234085083008,
+          "suspicion": 0.3223196268081665
+         },
+         "phrase": "A messy troublemaker",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "mischievous",
+          "messy",
+          "spontaneous"
+         ],
+         "traits": [
+          "Mischievous",
+          "Messy",
+          "Spontaneous"
+         ]
+        },
+        "habits": [
+         "looks_food_over"
+        ],
+        "id": "a3164df96a1b7e0f",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.409274160861969,
+         "boldness": 0.708383321762085,
+         "celebration": "twirl",
+         "playfulness": 0.8813352584838867
+        },
+        "name": "Mallow",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 98
+       },
+       {
+        "appearance": {
+         "body_height": 14,
+         "body_width": 19,
+         "design": {
+          "parts": "0204030a080904060000db7a898cd1b101000064"
+         },
+         "effect_motif": "dot",
+         "face": {
+          "brow": "none",
+          "cheek": "none",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 4,
+          "highlight": "single",
+          "mouth": "cat",
+          "pupil": "dot",
+          "vertical_offset": 0
+         },
+         "face_signature": 4093827948,
+         "family": "blob",
+         "foot_size": 3,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "together",
+          "style": "pseudopod",
+          "thickness": 1,
+          "tip": "round"
+         },
+         "gait_bob": 0.40727338194847107,
+         "head_appendages": {
+          "size": 4,
+          "style": "none"
+         },
+         "head_ratio": 0.9700014591217041,
+         "leg_length": 8,
+         "logical_size": 38,
+         "marking_seed": "ec82b7bbacab5230",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.666145384311676,
+         "roundness": 0.9689294099807739,
+         "tail": {
+          "length": 10,
+          "style": "tuft"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.3885279595851898,
+          "boldness": 0.9236815571784973,
+          "curiosity": 0.5515760183334351,
+          "energy": 0.805738091468811,
+          "feistiness": 0.6389908194541931,
+          "impulsiveness": 1.0,
+          "playfulness": 0.8517921566963196,
+          "social": 0.6210945844650269,
+          "suspicion": 0.139726459980011
+         },
+         "phrase": "A reckless scamp",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "reckless",
+          "impulsive",
+          "mischievous"
+         ],
+         "traits": [
+          "Reckless",
+          "Impulsive",
+          "Mischievous"
+         ]
+        },
+        "id": "003ce3d79305b030",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.8043035864830017,
+         "boldness": 0.8851293325424194,
+         "celebration": "twirl",
+         "playfulness": 0.8314336538314819
+        },
+        "name": "Clover",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 100
+       }
+      ]
+     },
+     "note": "a companion without its leanings",
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join_body": {
+      "arena": "backyard",
+      "bonds": [
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "7aec2f606c981db6",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "7aec2f606c981db6",
+        "affinity": "none",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "none"
+       }
+      ],
+      "build": {
+       "battle": "0.1.0",
+       "desktop": "0.67.7",
+       "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "handler": "Friend",
+      "protocol": 4,
+      "rules_version": 9,
+      "team": [
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           144,
+           70,
+           236
+          ],
+          "body": [
+           40,
+           90,
+           215
+          ],
+          "deep": [
+           26,
+           60,
+           142
+          ],
+          "light": [
+           160,
+           177,
+           217
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "item": "flower_crown",
+          "kind": "worn"
+         }
+        },
+        "appearance": {
+         "body_height": 18,
+         "body_width": 22,
+         "design": {
+          "parts": "01000108090905060004acdbe5b2eedb00000031"
+         },
+         "effect_motif": "heart",
+         "face": {
+          "brow": "none",
+          "cheek": "dots",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 5,
+          "highlight": "diagonal",
+          "mouth": "beak",
+          "pupil": "spark",
+          "vertical_offset": -1
+         },
+         "face_signature": 1756870938,
+         "family": "blob",
+         "foot_size": 2,
+         "forelimbs": {
+          "length": 5,
+          "rest_pose": "folded",
+          "style": "pseudopod",
+          "thickness": 2,
+          "tip": "round"
+         },
+         "gait_bob": 0.4783191978931427,
+         "head_appendages": {
+          "size": 4,
+          "style": "round"
+         },
+         "head_ratio": 0.7608306407928467,
+         "leg_length": 2,
+         "logical_size": 32,
+         "marking_seed": "f1d790aa91602554",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.2548938989639282,
+         "roundness": 0.5638048648834229,
+         "tail": {
+          "length": 4,
+          "style": "none"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.8948628902435303,
+          "boldness": 0.02851271629333496,
+          "curiosity": 0.21183061599731445,
+          "energy": 0.3811805844306946,
+          "feistiness": 0.6364287734031677,
+          "impulsiveness": 0.3746017813682556,
+          "playfulness": 0.36752498149871826,
+          "social": 0.3243038058280945,
+          "suspicion": 0.46008944511413574
+         },
+         "phrase": "A cautious wallflower",
+         "temperament": "wallflower",
+         "trait_ids": [
+          "cautious",
+          "affectionate",
+          "night_owl"
+         ],
+         "traits": [
+          "Cautious",
+          "Affectionate",
+          "Night owl"
+         ]
+        },
+        "habits": [
+         "waves_hello",
+         "circles_before_naps"
+        ],
+        "id": "7aec2f606c981db6",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.4858854413032532,
+         "boldness": 0.12423580884933472,
+         "celebration": "dance",
+         "playfulness": 0.44401997327804565
+        },
+        "name": "Tansy",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 85
+       },
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           70,
+           121,
+           236
+          ],
+          "body": [
+           40,
+           215,
+           209
+          ],
+          "deep": [
+           26,
+           142,
+           138
+          ],
+          "light": [
+           160,
+           217,
+           215
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "kind": "pin",
+          "trinket": 17
+         }
+        },
+        "appearance": {
+         "body_height": 22,
+         "body_width": 26,
+         "design": {
+          "details": "1000000000000000",
+          "parts": "0405010b0b090304000170d2b1d2389a00000041"
+         },
+         "effect_motif": "none",
+         "face": {
+          "brow": "soft",
+          "cheek": "blush",
+          "eye_shape": "round",
+          "eye_size": 1,
+          "eye_spacing": 7,
+          "highlight": "single",
+          "mouth": "tiny",
+          "pupil": "wide",
+          "vertical_offset": 0
+         },
+         "face_signature": 1097143412,
+         "family": "hopper",
+         "foot_size": 5,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "folded",
+          "style": "mitten_arm",
+          "thickness": 1,
+          "tip": "mitten"
+         },
+         "gait_bob": 0.7108229398727417,
+         "head_appendages": {
+          "size": 6,
+          "style": "round"
+         },
+         "head_ratio": 0.5833047032356262,
+         "leg_length": 7,
+         "logical_size": 37,
+         "marking_seed": "9e807811423ef14e",
+         "palette_index": 1,
+         "pattern": "patches",
+         "pattern_density": 0.5482684969902039,
+         "roundness": 0.6894174218177795,
+         "tail": {
+          "length": 8,
+          "style": "taper"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.4950309693813324,
+          "boldness": 0.7157450914382935,
+          "curiosity": 0.7634108066558838,
+          "energy": 0.27903223037719727,
+          "feistiness": 0.4762563705444336,
+          "impulsiveness": 0.9184896945953369,
+          "playfulness": 0.914169192314148,
+          "social": 0.5994234085083008,
+          "suspicion": 0.3223196268081665
+         },
+         "phrase": "A messy troublemaker",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "mischievous",
+          "messy",
+          "spontaneous"
+         ],
+         "traits": [
+          "Mischievous",
+          "Messy",
+          "Spontaneous"
+         ]
+        },
+        "habits": [
+         "looks_food_over"
+        ],
+        "id": "a3164df96a1b7e0f",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 200,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.409274160861969,
+         "boldness": 0.708383321762085,
+         "celebration": "twirl",
+         "playfulness": 0.8813352584838867
+        },
+        "name": "Mallow",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 98
+       },
+       {
+        "appearance": {
+         "body_height": 14,
+         "body_width": 19,
+         "design": {
+          "parts": "0204030a080904060000db7a898cd1b101000064"
+         },
+         "effect_motif": "dot",
+         "face": {
+          "brow": "none",
+          "cheek": "none",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 4,
+          "highlight": "single",
+          "mouth": "cat",
+          "pupil": "dot",
+          "vertical_offset": 0
+         },
+         "face_signature": 4093827948,
+         "family": "blob",
+         "foot_size": 3,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "together",
+          "style": "pseudopod",
+          "thickness": 1,
+          "tip": "round"
+         },
+         "gait_bob": 0.40727338194847107,
+         "head_appendages": {
+          "size": 4,
+          "style": "none"
+         },
+         "head_ratio": 0.9700014591217041,
+         "leg_length": 8,
+         "logical_size": 38,
+         "marking_seed": "ec82b7bbacab5230",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.666145384311676,
+         "roundness": 0.9689294099807739,
+         "tail": {
+          "length": 10,
+          "style": "tuft"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.3885279595851898,
+          "boldness": 0.9236815571784973,
+          "curiosity": 0.5515760183334351,
+          "energy": 0.805738091468811,
+          "feistiness": 0.6389908194541931,
+          "impulsiveness": 1.0,
+          "playfulness": 0.8517921566963196,
+          "social": 0.6210945844650269,
+          "suspicion": 0.139726459980011
+         },
+         "phrase": "A reckless scamp",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "reckless",
+          "impulsive",
+          "mischievous"
+         ],
+         "traits": [
+          "Reckless",
+          "Impulsive",
+          "Mischievous"
+         ]
+        },
+        "id": "003ce3d79305b030",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.8043035864830017,
+         "boldness": 0.8851293325424194,
+         "celebration": "twirl",
+         "playfulness": 0.8314336538314819
+        },
+        "name": "Clover",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 100
+       }
+      ]
+     },
+     "note": "a companion whose leaning is out of range",
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join_body": {
+      "arena": "backyard",
+      "bonds": [
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "7aec2f606c981db6",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "7aec2f606c981db6",
+        "affinity": "none",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "none"
+       }
+      ],
+      "build": {
+       "battle": "0.1.0",
+       "desktop": "0.67.7",
+       "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "handler": "Friend",
+      "protocol": 4,
+      "rules_version": 9,
+      "team": [
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           144,
+           70,
+           236
+          ],
+          "body": [
+           40,
+           90,
+           215
+          ],
+          "deep": [
+           26,
+           60,
+           142
+          ],
+          "light": [
+           160,
+           177,
+           217
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "item": "flower_crown",
+          "kind": "worn"
+         }
+        },
+        "appearance": {
+         "body_height": 18,
+         "body_width": 22,
+         "design": {
+          "parts": "01000108090905060004acdbe5b2eedb00000031"
+         },
+         "effect_motif": "heart",
+         "face": {
+          "brow": "none",
+          "cheek": "dots",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 5,
+          "highlight": "diagonal",
+          "mouth": "beak",
+          "pupil": "spark",
+          "vertical_offset": -1
+         },
+         "face_signature": 1756870938,
+         "family": "blob",
+         "foot_size": 2,
+         "forelimbs": {
+          "length": 5,
+          "rest_pose": "folded",
+          "style": "pseudopod",
+          "thickness": 2,
+          "tip": "round"
+         },
+         "gait_bob": 0.4783191978931427,
+         "head_appendages": {
+          "size": 4,
+          "style": "round"
+         },
+         "head_ratio": 0.7608306407928467,
+         "leg_length": 2,
+         "logical_size": 32,
+         "marking_seed": "f1d790aa91602554",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.2548938989639282,
+         "roundness": 0.5638048648834229,
+         "tail": {
+          "length": 4,
+          "style": "none"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.8948628902435303,
+          "boldness": 0.02851271629333496,
+          "curiosity": 0.21183061599731445,
+          "energy": 0.3811805844306946,
+          "feistiness": 0.6364287734031677,
+          "impulsiveness": 0.3746017813682556,
+          "playfulness": 0.36752498149871826,
+          "social": 0.3243038058280945,
+          "suspicion": 0.46008944511413574
+         },
+         "phrase": "A cautious wallflower",
+         "temperament": "wallflower",
+         "trait_ids": [
+          "cautious",
+          "affectionate",
+          "night_owl"
+         ],
+         "traits": [
+          "Cautious",
+          "Affectionate",
+          "Night owl"
+         ]
+        },
+        "habits": [
+         "waves_hello",
+         "circles_before_naps"
+        ],
+        "id": 7,
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.4858854413032532,
+         "boldness": 0.12423580884933472,
+         "celebration": "dance",
+         "playfulness": 0.44401997327804565
+        },
+        "name": "Tansy",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 85
+       },
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           70,
+           121,
+           236
+          ],
+          "body": [
+           40,
+           215,
+           209
+          ],
+          "deep": [
+           26,
+           142,
+           138
+          ],
+          "light": [
+           160,
+           217,
+           215
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "kind": "pin",
+          "trinket": 17
+         }
+        },
+        "appearance": {
+         "body_height": 22,
+         "body_width": 26,
+         "design": {
+          "details": "1000000000000000",
+          "parts": "0405010b0b090304000170d2b1d2389a00000041"
+         },
+         "effect_motif": "none",
+         "face": {
+          "brow": "soft",
+          "cheek": "blush",
+          "eye_shape": "round",
+          "eye_size": 1,
+          "eye_spacing": 7,
+          "highlight": "single",
+          "mouth": "tiny",
+          "pupil": "wide",
+          "vertical_offset": 0
+         },
+         "face_signature": 1097143412,
+         "family": "hopper",
+         "foot_size": 5,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "folded",
+          "style": "mitten_arm",
+          "thickness": 1,
+          "tip": "mitten"
+         },
+         "gait_bob": 0.7108229398727417,
+         "head_appendages": {
+          "size": 6,
+          "style": "round"
+         },
+         "head_ratio": 0.5833047032356262,
+         "leg_length": 7,
+         "logical_size": 37,
+         "marking_seed": "9e807811423ef14e",
+         "palette_index": 1,
+         "pattern": "patches",
+         "pattern_density": 0.5482684969902039,
+         "roundness": 0.6894174218177795,
+         "tail": {
+          "length": 8,
+          "style": "taper"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.4950309693813324,
+          "boldness": 0.7157450914382935,
+          "curiosity": 0.7634108066558838,
+          "energy": 0.27903223037719727,
+          "feistiness": 0.4762563705444336,
+          "impulsiveness": 0.9184896945953369,
+          "playfulness": 0.914169192314148,
+          "social": 0.5994234085083008,
+          "suspicion": 0.3223196268081665
+         },
+         "phrase": "A messy troublemaker",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "mischievous",
+          "messy",
+          "spontaneous"
+         ],
+         "traits": [
+          "Mischievous",
+          "Messy",
+          "Spontaneous"
+         ]
+        },
+        "habits": [
+         "looks_food_over"
+        ],
+        "id": "a3164df96a1b7e0f",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.409274160861969,
+         "boldness": 0.708383321762085,
+         "celebration": "twirl",
+         "playfulness": 0.8813352584838867
+        },
+        "name": "Mallow",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 98
+       },
+       {
+        "appearance": {
+         "body_height": 14,
+         "body_width": 19,
+         "design": {
+          "parts": "0204030a080904060000db7a898cd1b101000064"
+         },
+         "effect_motif": "dot",
+         "face": {
+          "brow": "none",
+          "cheek": "none",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 4,
+          "highlight": "single",
+          "mouth": "cat",
+          "pupil": "dot",
+          "vertical_offset": 0
+         },
+         "face_signature": 4093827948,
+         "family": "blob",
+         "foot_size": 3,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "together",
+          "style": "pseudopod",
+          "thickness": 1,
+          "tip": "round"
+         },
+         "gait_bob": 0.40727338194847107,
+         "head_appendages": {
+          "size": 4,
+          "style": "none"
+         },
+         "head_ratio": 0.9700014591217041,
+         "leg_length": 8,
+         "logical_size": 38,
+         "marking_seed": "ec82b7bbacab5230",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.666145384311676,
+         "roundness": 0.9689294099807739,
+         "tail": {
+          "length": 10,
+          "style": "tuft"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.3885279595851898,
+          "boldness": 0.9236815571784973,
+          "curiosity": 0.5515760183334351,
+          "energy": 0.805738091468811,
+          "feistiness": 0.6389908194541931,
+          "impulsiveness": 1.0,
+          "playfulness": 0.8517921566963196,
+          "social": 0.6210945844650269,
+          "suspicion": 0.139726459980011
+         },
+         "phrase": "A reckless scamp",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "reckless",
+          "impulsive",
+          "mischievous"
+         ],
+         "traits": [
+          "Reckless",
+          "Impulsive",
+          "Mischievous"
+         ]
+        },
+        "id": "003ce3d79305b030",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.8043035864830017,
+         "boldness": 0.8851293325424194,
+         "celebration": "twirl",
+         "playfulness": 0.8314336538314819
+        },
+        "name": "Clover",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 100
+       }
+      ]
+     },
+     "note": "a companion whose id is a number",
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join_body": {
+      "arena": "backyard",
+      "bonds": [
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "7aec2f606c981db6",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "7aec2f606c981db6",
+        "affinity": "none",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "none"
+       }
+      ],
+      "build": {
+       "battle": "0.1.0",
+       "desktop": "0.67.7",
+       "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "handler": "Friend",
+      "protocol": 4,
+      "rules_version": 9,
+      "team": [
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           144,
+           70,
+           236
+          ],
+          "body": [
+           40,
+           90,
+           215
+          ],
+          "deep": [
+           26,
+           60,
+           142
+          ],
+          "light": [
+           160,
+           177,
+           217
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "item": "flower_crown",
+          "kind": "worn"
+         }
+        },
+        "appearance": {
+         "body_height": 18,
+         "body_width": 22,
+         "design": {
+          "parts": "01000108090905060004acdbe5b2eedb00000031"
+         },
+         "effect_motif": "heart",
+         "face": {
+          "brow": "none",
+          "cheek": "dots",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 5,
+          "highlight": "diagonal",
+          "mouth": "beak",
+          "pupil": "spark",
+          "vertical_offset": -1
+         },
+         "face_signature": 1756870938,
+         "family": "blob",
+         "foot_size": 2,
+         "forelimbs": {
+          "length": 5,
+          "rest_pose": "folded",
+          "style": "pseudopod",
+          "thickness": 2,
+          "tip": "round"
+         },
+         "gait_bob": 0.4783191978931427,
+         "head_appendages": {
+          "size": 4,
+          "style": "round"
+         },
+         "head_ratio": 0.7608306407928467,
+         "leg_length": 2,
+         "logical_size": 32,
+         "marking_seed": "f1d790aa91602554",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.2548938989639282,
+         "roundness": 0.5638048648834229,
+         "tail": {
+          "length": 4,
+          "style": "none"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.8948628902435303,
+          "boldness": 0.02851271629333496,
+          "curiosity": 0.21183061599731445,
+          "energy": 0.3811805844306946,
+          "feistiness": 0.6364287734031677,
+          "impulsiveness": 0.3746017813682556,
+          "playfulness": 0.36752498149871826,
+          "social": 0.3243038058280945,
+          "suspicion": 0.46008944511413574
+         },
+         "phrase": "A cautious wallflower",
+         "temperament": "wallflower",
+         "trait_ids": [
+          "cautious",
+          "affectionate",
+          "night_owl"
+         ],
+         "traits": [
+          "Cautious",
+          "Affectionate",
+          "Night owl"
+         ]
+        },
+        "habits": [
+         "waves_hello",
+         "circles_before_naps"
+        ],
+        "id": "7aec2f606c981db6",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.4858854413032532,
+         "boldness": 0.12423580884933472,
+         "celebration": "dance",
+         "playfulness": 0.44401997327804565
+        },
+        "name": "Tansy",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 85
+       },
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           70,
+           121,
+           236
+          ],
+          "body": [
+           40,
+           215,
+           209
+          ],
+          "deep": [
+           26,
+           142,
+           138
+          ],
+          "light": [
+           160,
+           217,
+           215
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "kind": "pin",
+          "trinket": 17
+         }
+        },
+        "appearance": {
+         "body_height": 22,
+         "body_width": 26,
+         "design": {
+          "details": "1000000000000000",
+          "parts": "0405010b0b090304000170d2b1d2389a00000041"
+         },
+         "effect_motif": "none",
+         "face": {
+          "brow": "soft",
+          "cheek": "blush",
+          "eye_shape": "round",
+          "eye_size": 1,
+          "eye_spacing": 7,
+          "highlight": "single",
+          "mouth": "tiny",
+          "pupil": "wide",
+          "vertical_offset": 0
+         },
+         "face_signature": 1097143412,
+         "family": "hopper",
+         "foot_size": 5,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "folded",
+          "style": "mitten_arm",
+          "thickness": 1,
+          "tip": "mitten"
+         },
+         "gait_bob": 0.7108229398727417,
+         "head_appendages": {
+          "size": 6,
+          "style": "round"
+         },
+         "head_ratio": 0.5833047032356262,
+         "leg_length": 7,
+         "logical_size": 37,
+         "marking_seed": "9e807811423ef14e",
+         "palette_index": 1,
+         "pattern": "patches",
+         "pattern_density": 0.5482684969902039,
+         "roundness": 0.6894174218177795,
+         "tail": {
+          "length": 8,
+          "style": "taper"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.4950309693813324,
+          "boldness": 0.7157450914382935,
+          "curiosity": 0.7634108066558838,
+          "energy": 0.27903223037719727,
+          "feistiness": 0.4762563705444336,
+          "impulsiveness": 0.9184896945953369,
+          "playfulness": 0.914169192314148,
+          "social": 0.5994234085083008,
+          "suspicion": 0.3223196268081665
+         },
+         "phrase": "A messy troublemaker",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "mischievous",
+          "messy",
+          "spontaneous"
+         ],
+         "traits": [
+          "Mischievous",
+          "Messy",
+          "Spontaneous"
+         ]
+        },
+        "habits": [
+         "looks_food_over"
+        ],
+        "id": "a3164df96a1b7e0f",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.409274160861969,
+         "boldness": 0.708383321762085,
+         "celebration": "twirl",
+         "playfulness": 0.8813352584838867
+        },
+        "name": "Mallow",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 98
+       },
+       {
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.3885279595851898,
+          "boldness": 0.9236815571784973,
+          "curiosity": 0.5515760183334351,
+          "energy": 0.805738091468811,
+          "feistiness": 0.6389908194541931,
+          "impulsiveness": 1.0,
+          "playfulness": 0.8517921566963196,
+          "social": 0.6210945844650269,
+          "suspicion": 0.139726459980011
+         },
+         "phrase": "A reckless scamp",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "reckless",
+          "impulsive",
+          "mischievous"
+         ],
+         "traits": [
+          "Reckless",
+          "Impulsive",
+          "Mischievous"
+         ]
+        },
+        "id": "003ce3d79305b030",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.8043035864830017,
+         "boldness": 0.8851293325424194,
+         "celebration": "twirl",
+         "playfulness": 0.8314336538314819
+        },
+        "name": "Clover",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 100
+       }
+      ]
+     },
+     "note": "a companion with no appearance",
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join_body": {
+      "arena": "backyard",
+      "bonds": [
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "7aec2f606c981db6",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "7aec2f606c981db6",
+        "affinity": "none",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "none"
+       }
+      ],
+      "build": {
+       "battle": "0.1.0",
+       "desktop": "0.67.7",
+       "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "handler": "Friend",
+      "protocol": 4,
+      "rules_version": 9,
+      "team": [
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           144,
+           70,
+           236
+          ],
+          "body": [
+           40,
+           90,
+           215
+          ],
+          "deep": [
+           26,
+           60,
+           142
+          ],
+          "light": [
+           160,
+           177,
+           217
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "item": "flower_crown",
+          "kind": "worn"
+         }
+        },
+        "appearance": {
+         "body_height": 18,
+         "body_width": 22,
+         "design": {
+          "parts": "01000108090905060004acdbe5b2eedb00000031"
+         },
+         "effect_motif": "heart",
+         "face": {
+          "brow": "none",
+          "cheek": "dots",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 5,
+          "highlight": "diagonal",
+          "mouth": "beak",
+          "pupil": "spark",
+          "vertical_offset": -1
+         },
+         "face_signature": 1756870938,
+         "family": "blob",
+         "foot_size": 2,
+         "forelimbs": {
+          "length": 5,
+          "rest_pose": "folded",
+          "style": "pseudopod",
+          "thickness": 2,
+          "tip": "round"
+         },
+         "gait_bob": 0.4783191978931427,
+         "head_appendages": {
+          "size": 4,
+          "style": "round"
+         },
+         "head_ratio": 0.7608306407928467,
+         "leg_length": 2,
+         "logical_size": 32,
+         "marking_seed": "f1d790aa91602554",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.2548938989639282,
+         "roundness": 0.5638048648834229,
+         "tail": {
+          "length": 4,
+          "style": "none"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.8948628902435303,
+          "boldness": 0.02851271629333496,
+          "curiosity": 0.21183061599731445,
+          "energy": 0.3811805844306946,
+          "feistiness": 0.6364287734031677,
+          "impulsiveness": 0.3746017813682556,
+          "playfulness": 0.36752498149871826,
+          "social": "high",
+          "suspicion": 0.46008944511413574
+         },
+         "phrase": "A cautious wallflower",
+         "temperament": "wallflower",
+         "trait_ids": [
+          "cautious",
+          "affectionate",
+          "night_owl"
+         ],
+         "traits": [
+          "Cautious",
+          "Affectionate",
+          "Night owl"
+         ]
+        },
+        "habits": [
+         "waves_hello",
+         "circles_before_naps"
+        ],
+        "id": "7aec2f606c981db6",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.4858854413032532,
+         "boldness": 0.12423580884933472,
+         "celebration": "dance",
+         "playfulness": 0.44401997327804565
+        },
+        "name": "Tansy",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 85
+       },
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           70,
+           121,
+           236
+          ],
+          "body": [
+           40,
+           215,
+           209
+          ],
+          "deep": [
+           26,
+           142,
+           138
+          ],
+          "light": [
+           160,
+           217,
+           215
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "kind": "pin",
+          "trinket": 17
+         }
+        },
+        "appearance": {
+         "body_height": 22,
+         "body_width": 26,
+         "design": {
+          "details": "1000000000000000",
+          "parts": "0405010b0b090304000170d2b1d2389a00000041"
+         },
+         "effect_motif": "none",
+         "face": {
+          "brow": "soft",
+          "cheek": "blush",
+          "eye_shape": "round",
+          "eye_size": 1,
+          "eye_spacing": 7,
+          "highlight": "single",
+          "mouth": "tiny",
+          "pupil": "wide",
+          "vertical_offset": 0
+         },
+         "face_signature": 1097143412,
+         "family": "hopper",
+         "foot_size": 5,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "folded",
+          "style": "mitten_arm",
+          "thickness": 1,
+          "tip": "mitten"
+         },
+         "gait_bob": 0.7108229398727417,
+         "head_appendages": {
+          "size": 6,
+          "style": "round"
+         },
+         "head_ratio": 0.5833047032356262,
+         "leg_length": 7,
+         "logical_size": 37,
+         "marking_seed": "9e807811423ef14e",
+         "palette_index": 1,
+         "pattern": "patches",
+         "pattern_density": 0.5482684969902039,
+         "roundness": 0.6894174218177795,
+         "tail": {
+          "length": 8,
+          "style": "taper"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.4950309693813324,
+          "boldness": 0.7157450914382935,
+          "curiosity": 0.7634108066558838,
+          "energy": 0.27903223037719727,
+          "feistiness": 0.4762563705444336,
+          "impulsiveness": 0.9184896945953369,
+          "playfulness": 0.914169192314148,
+          "social": 0.5994234085083008,
+          "suspicion": 0.3223196268081665
+         },
+         "phrase": "A messy troublemaker",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "mischievous",
+          "messy",
+          "spontaneous"
+         ],
+         "traits": [
+          "Mischievous",
+          "Messy",
+          "Spontaneous"
+         ]
+        },
+        "habits": [
+         "looks_food_over"
+        ],
+        "id": "a3164df96a1b7e0f",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.409274160861969,
+         "boldness": 0.708383321762085,
+         "celebration": "twirl",
+         "playfulness": 0.8813352584838867
+        },
+        "name": "Mallow",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 98
+       },
+       {
+        "appearance": {
+         "body_height": 14,
+         "body_width": 19,
+         "design": {
+          "parts": "0204030a080904060000db7a898cd1b101000064"
+         },
+         "effect_motif": "dot",
+         "face": {
+          "brow": "none",
+          "cheek": "none",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 4,
+          "highlight": "single",
+          "mouth": "cat",
+          "pupil": "dot",
+          "vertical_offset": 0
+         },
+         "face_signature": 4093827948,
+         "family": "blob",
+         "foot_size": 3,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "together",
+          "style": "pseudopod",
+          "thickness": 1,
+          "tip": "round"
+         },
+         "gait_bob": 0.40727338194847107,
+         "head_appendages": {
+          "size": 4,
+          "style": "none"
+         },
+         "head_ratio": 0.9700014591217041,
+         "leg_length": 8,
+         "logical_size": 38,
+         "marking_seed": "ec82b7bbacab5230",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.666145384311676,
+         "roundness": 0.9689294099807739,
+         "tail": {
+          "length": 10,
+          "style": "tuft"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.3885279595851898,
+          "boldness": 0.9236815571784973,
+          "curiosity": 0.5515760183334351,
+          "energy": 0.805738091468811,
+          "feistiness": 0.6389908194541931,
+          "impulsiveness": 1.0,
+          "playfulness": 0.8517921566963196,
+          "social": 0.6210945844650269,
+          "suspicion": 0.139726459980011
+         },
+         "phrase": "A reckless scamp",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "reckless",
+          "impulsive",
+          "mischievous"
+         ],
+         "traits": [
+          "Reckless",
+          "Impulsive",
+          "Mischievous"
+         ]
+        },
+        "id": "003ce3d79305b030",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.8043035864830017,
+         "boldness": 0.8851293325424194,
+         "celebration": "twirl",
+         "playfulness": 0.8314336538314819
+        },
+        "name": "Clover",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 100
+       }
+      ]
+     },
+     "note": "a companion whose axes are words",
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join_body": {
+      "arena": "backyard",
+      "bonds": [
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "7aec2f606c981db6",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "7aec2f606c981db6",
+        "affinity": "none",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "none"
+       }
+      ],
+      "build": {
+       "battle": "0.1.0",
+       "desktop": "0.67.7",
+       "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "handler": "Friend",
+      "protocol": 4,
+      "rules_version": 9,
+      "team": [
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           144,
+           70,
+           236
+          ],
+          "body": [
+           40,
+           90,
+           215
+          ],
+          "deep": [
+           26,
+           60,
+           142
+          ],
+          "light": [
+           160,
+           177,
+           217
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "item": "flower_crown",
+          "kind": "worn"
+         }
+        },
+        "appearance": {
+         "body_height": 18,
+         "body_width": 22,
+         "design": {
+          "parts": "01000108090905060004acdbe5b2eedb00000031"
+         },
+         "effect_motif": "heart",
+         "face": {
+          "brow": "none",
+          "cheek": "dots",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 5,
+          "highlight": "diagonal",
+          "mouth": "beak",
+          "pupil": "spark",
+          "vertical_offset": -1
+         },
+         "face_signature": 1756870938,
+         "family": "blob",
+         "foot_size": 2,
+         "forelimbs": {
+          "length": 5,
+          "rest_pose": "folded",
+          "style": "pseudopod",
+          "thickness": 2,
+          "tip": "round"
+         },
+         "gait_bob": 0.4783191978931427,
+         "head_appendages": {
+          "size": 4,
+          "style": "round"
+         },
+         "head_ratio": 0.7608306407928467,
+         "leg_length": 2,
+         "logical_size": 32,
+         "marking_seed": "f1d790aa91602554",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.2548938989639282,
+         "roundness": 0.5638048648834229,
+         "tail": {
+          "length": 4,
+          "style": "none"
+         }
+        },
+        "born_at_utc": "yesterday",
+        "character": {
+         "axes": {
+          "affection": 0.8948628902435303,
+          "boldness": 0.02851271629333496,
+          "curiosity": 0.21183061599731445,
+          "energy": 0.3811805844306946,
+          "feistiness": 0.6364287734031677,
+          "impulsiveness": 0.3746017813682556,
+          "playfulness": 0.36752498149871826,
+          "social": 0.3243038058280945,
+          "suspicion": 0.46008944511413574
+         },
+         "phrase": "A cautious wallflower",
+         "temperament": "wallflower",
+         "trait_ids": [
+          "cautious",
+          "affectionate",
+          "night_owl"
+         ],
+         "traits": [
+          "Cautious",
+          "Affectionate",
+          "Night owl"
+         ]
+        },
+        "habits": [
+         "waves_hello",
+         "circles_before_naps"
+        ],
+        "id": "7aec2f606c981db6",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.4858854413032532,
+         "boldness": 0.12423580884933472,
+         "celebration": "dance",
+         "playfulness": 0.44401997327804565
+        },
+        "name": "Tansy",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 85
+       },
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           70,
+           121,
+           236
+          ],
+          "body": [
+           40,
+           215,
+           209
+          ],
+          "deep": [
+           26,
+           142,
+           138
+          ],
+          "light": [
+           160,
+           217,
+           215
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "kind": "pin",
+          "trinket": 17
+         }
+        },
+        "appearance": {
+         "body_height": 22,
+         "body_width": 26,
+         "design": {
+          "details": "1000000000000000",
+          "parts": "0405010b0b090304000170d2b1d2389a00000041"
+         },
+         "effect_motif": "none",
+         "face": {
+          "brow": "soft",
+          "cheek": "blush",
+          "eye_shape": "round",
+          "eye_size": 1,
+          "eye_spacing": 7,
+          "highlight": "single",
+          "mouth": "tiny",
+          "pupil": "wide",
+          "vertical_offset": 0
+         },
+         "face_signature": 1097143412,
+         "family": "hopper",
+         "foot_size": 5,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "folded",
+          "style": "mitten_arm",
+          "thickness": 1,
+          "tip": "mitten"
+         },
+         "gait_bob": 0.7108229398727417,
+         "head_appendages": {
+          "size": 6,
+          "style": "round"
+         },
+         "head_ratio": 0.5833047032356262,
+         "leg_length": 7,
+         "logical_size": 37,
+         "marking_seed": "9e807811423ef14e",
+         "palette_index": 1,
+         "pattern": "patches",
+         "pattern_density": 0.5482684969902039,
+         "roundness": 0.6894174218177795,
+         "tail": {
+          "length": 8,
+          "style": "taper"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.4950309693813324,
+          "boldness": 0.7157450914382935,
+          "curiosity": 0.7634108066558838,
+          "energy": 0.27903223037719727,
+          "feistiness": 0.4762563705444336,
+          "impulsiveness": 0.9184896945953369,
+          "playfulness": 0.914169192314148,
+          "social": 0.5994234085083008,
+          "suspicion": 0.3223196268081665
+         },
+         "phrase": "A messy troublemaker",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "mischievous",
+          "messy",
+          "spontaneous"
+         ],
+         "traits": [
+          "Mischievous",
+          "Messy",
+          "Spontaneous"
+         ]
+        },
+        "habits": [
+         "looks_food_over"
+        ],
+        "id": "a3164df96a1b7e0f",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.409274160861969,
+         "boldness": 0.708383321762085,
+         "celebration": "twirl",
+         "playfulness": 0.8813352584838867
+        },
+        "name": "Mallow",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 98
+       },
+       {
+        "appearance": {
+         "body_height": 14,
+         "body_width": 19,
+         "design": {
+          "parts": "0204030a080904060000db7a898cd1b101000064"
+         },
+         "effect_motif": "dot",
+         "face": {
+          "brow": "none",
+          "cheek": "none",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 4,
+          "highlight": "single",
+          "mouth": "cat",
+          "pupil": "dot",
+          "vertical_offset": 0
+         },
+         "face_signature": 4093827948,
+         "family": "blob",
+         "foot_size": 3,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "together",
+          "style": "pseudopod",
+          "thickness": 1,
+          "tip": "round"
+         },
+         "gait_bob": 0.40727338194847107,
+         "head_appendages": {
+          "size": 4,
+          "style": "none"
+         },
+         "head_ratio": 0.9700014591217041,
+         "leg_length": 8,
+         "logical_size": 38,
+         "marking_seed": "ec82b7bbacab5230",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.666145384311676,
+         "roundness": 0.9689294099807739,
+         "tail": {
+          "length": 10,
+          "style": "tuft"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.3885279595851898,
+          "boldness": 0.9236815571784973,
+          "curiosity": 0.5515760183334351,
+          "energy": 0.805738091468811,
+          "feistiness": 0.6389908194541931,
+          "impulsiveness": 1.0,
+          "playfulness": 0.8517921566963196,
+          "social": 0.6210945844650269,
+          "suspicion": 0.139726459980011
+         },
+         "phrase": "A reckless scamp",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "reckless",
+          "impulsive",
+          "mischievous"
+         ],
+         "traits": [
+          "Reckless",
+          "Impulsive",
+          "Mischievous"
+         ]
+        },
+        "id": "003ce3d79305b030",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.8043035864830017,
+         "boldness": 0.8851293325424194,
+         "celebration": "twirl",
+         "playfulness": 0.8314336538314819
+        },
+        "name": "Clover",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 100
+       }
+      ]
+     },
+     "note": "a companion born at no time",
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join_body": {
+      "arena": "backyard",
+      "bonds": [
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "7aec2f606c981db6",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "7aec2f606c981db6",
+        "affinity": "none",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "none"
+       }
+      ],
+      "build": {
+       "battle": "0.1.0",
+       "desktop": "0.67.7",
+       "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "handler": "Friend",
+      "protocol": 4,
+      "rules_version": 9,
+      "team": [
+       {
+        "name": "Pip"
+       },
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           70,
+           121,
+           236
+          ],
+          "body": [
+           40,
+           215,
+           209
+          ],
+          "deep": [
+           26,
+           142,
+           138
+          ],
+          "light": [
+           160,
+           217,
+           215
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "kind": "pin",
+          "trinket": 17
+         }
+        },
+        "appearance": {
+         "body_height": 22,
+         "body_width": 26,
+         "design": {
+          "details": "1000000000000000",
+          "parts": "0405010b0b090304000170d2b1d2389a00000041"
+         },
+         "effect_motif": "none",
+         "face": {
+          "brow": "soft",
+          "cheek": "blush",
+          "eye_shape": "round",
+          "eye_size": 1,
+          "eye_spacing": 7,
+          "highlight": "single",
+          "mouth": "tiny",
+          "pupil": "wide",
+          "vertical_offset": 0
+         },
+         "face_signature": 1097143412,
+         "family": "hopper",
+         "foot_size": 5,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "folded",
+          "style": "mitten_arm",
+          "thickness": 1,
+          "tip": "mitten"
+         },
+         "gait_bob": 0.7108229398727417,
+         "head_appendages": {
+          "size": 6,
+          "style": "round"
+         },
+         "head_ratio": 0.5833047032356262,
+         "leg_length": 7,
+         "logical_size": 37,
+         "marking_seed": "9e807811423ef14e",
+         "palette_index": 1,
+         "pattern": "patches",
+         "pattern_density": 0.5482684969902039,
+         "roundness": 0.6894174218177795,
+         "tail": {
+          "length": 8,
+          "style": "taper"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.4950309693813324,
+          "boldness": 0.7157450914382935,
+          "curiosity": 0.7634108066558838,
+          "energy": 0.27903223037719727,
+          "feistiness": 0.4762563705444336,
+          "impulsiveness": 0.9184896945953369,
+          "playfulness": 0.914169192314148,
+          "social": 0.5994234085083008,
+          "suspicion": 0.3223196268081665
+         },
+         "phrase": "A messy troublemaker",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "mischievous",
+          "messy",
+          "spontaneous"
+         ],
+         "traits": [
+          "Mischievous",
+          "Messy",
+          "Spontaneous"
+         ]
+        },
+        "habits": [
+         "looks_food_over"
+        ],
+        "id": "a3164df96a1b7e0f",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.409274160861969,
+         "boldness": 0.708383321762085,
+         "celebration": "twirl",
+         "playfulness": 0.8813352584838867
+        },
+        "name": "Mallow",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 98
+       },
+       {
+        "appearance": {
+         "body_height": 14,
+         "body_width": 19,
+         "design": {
+          "parts": "0204030a080904060000db7a898cd1b101000064"
+         },
+         "effect_motif": "dot",
+         "face": {
+          "brow": "none",
+          "cheek": "none",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 4,
+          "highlight": "single",
+          "mouth": "cat",
+          "pupil": "dot",
+          "vertical_offset": 0
+         },
+         "face_signature": 4093827948,
+         "family": "blob",
+         "foot_size": 3,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "together",
+          "style": "pseudopod",
+          "thickness": 1,
+          "tip": "round"
+         },
+         "gait_bob": 0.40727338194847107,
+         "head_appendages": {
+          "size": 4,
+          "style": "none"
+         },
+         "head_ratio": 0.9700014591217041,
+         "leg_length": 8,
+         "logical_size": 38,
+         "marking_seed": "ec82b7bbacab5230",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.666145384311676,
+         "roundness": 0.9689294099807739,
+         "tail": {
+          "length": 10,
+          "style": "tuft"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.3885279595851898,
+          "boldness": 0.9236815571784973,
+          "curiosity": 0.5515760183334351,
+          "energy": 0.805738091468811,
+          "feistiness": 0.6389908194541931,
+          "impulsiveness": 1.0,
+          "playfulness": 0.8517921566963196,
+          "social": 0.6210945844650269,
+          "suspicion": 0.139726459980011
+         },
+         "phrase": "A reckless scamp",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "reckless",
+          "impulsive",
+          "mischievous"
+         ],
+         "traits": [
+          "Reckless",
+          "Impulsive",
+          "Mischievous"
+         ]
+        },
+        "id": "003ce3d79305b030",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.8043035864830017,
+         "boldness": 0.8851293325424194,
+         "celebration": "twirl",
+         "playfulness": 0.8314336538314819
+        },
+        "name": "Clover",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 100
+       }
+      ]
+     },
+     "note": "a name for a companion",
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join_body": {
+      "arena": "backyard",
+      "bonds": [
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "lots",
+        "avoidance": "low",
+        "b": "7aec2f606c981db6",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "003ce3d79305b030",
+        "affinity": "low",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "low"
+       },
+       {
+        "a": "7aec2f606c981db6",
+        "affinity": "none",
+        "avoidance": "low",
+        "b": "a3164df96a1b7e0f",
+        "familiarity": "high",
+        "playfulness": "none"
+       }
+      ],
+      "build": {
+       "battle": "0.1.0",
+       "desktop": "0.67.7",
+       "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "handler": "Friend",
+      "protocol": 4,
+      "rules_version": 9,
+      "team": [
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           144,
+           70,
+           236
+          ],
+          "body": [
+           40,
+           90,
+           215
+          ],
+          "deep": [
+           26,
+           60,
+           142
+          ],
+          "light": [
+           160,
+           177,
+           217
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "item": "flower_crown",
+          "kind": "worn"
+         }
+        },
+        "appearance": {
+         "body_height": 18,
+         "body_width": 22,
+         "design": {
+          "parts": "01000108090905060004acdbe5b2eedb00000031"
+         },
+         "effect_motif": "heart",
+         "face": {
+          "brow": "none",
+          "cheek": "dots",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 5,
+          "highlight": "diagonal",
+          "mouth": "beak",
+          "pupil": "spark",
+          "vertical_offset": -1
+         },
+         "face_signature": 1756870938,
+         "family": "blob",
+         "foot_size": 2,
+         "forelimbs": {
+          "length": 5,
+          "rest_pose": "folded",
+          "style": "pseudopod",
+          "thickness": 2,
+          "tip": "round"
+         },
+         "gait_bob": 0.4783191978931427,
+         "head_appendages": {
+          "size": 4,
+          "style": "round"
+         },
+         "head_ratio": 0.7608306407928467,
+         "leg_length": 2,
+         "logical_size": 32,
+         "marking_seed": "f1d790aa91602554",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.2548938989639282,
+         "roundness": 0.5638048648834229,
+         "tail": {
+          "length": 4,
+          "style": "none"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.8948628902435303,
+          "boldness": 0.02851271629333496,
+          "curiosity": 0.21183061599731445,
+          "energy": 0.3811805844306946,
+          "feistiness": 0.6364287734031677,
+          "impulsiveness": 0.3746017813682556,
+          "playfulness": 0.36752498149871826,
+          "social": 0.3243038058280945,
+          "suspicion": 0.46008944511413574
+         },
+         "phrase": "A cautious wallflower",
+         "temperament": "wallflower",
+         "trait_ids": [
+          "cautious",
+          "affectionate",
+          "night_owl"
+         ],
+         "traits": [
+          "Cautious",
+          "Affectionate",
+          "Night owl"
+         ]
+        },
+        "habits": [
+         "waves_hello",
+         "circles_before_naps"
+        ],
+        "id": "7aec2f606c981db6",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.4858854413032532,
+         "boldness": 0.12423580884933472,
+         "celebration": "dance",
+         "playfulness": 0.44401997327804565
+        },
+        "name": "Tansy",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 85
+       },
+       {
+        "accessory": {
+         "colors": {
+          "accent": [
+           70,
+           121,
+           236
+          ],
+          "body": [
+           40,
+           215,
+           209
+          ],
+          "deep": [
+           26,
+           142,
+           138
+          ],
+          "light": [
+           160,
+           217,
+           215
+          ],
+          "outline": [
+           42,
+           36,
+           51
+          ]
+         },
+         "item": {
+          "kind": "pin",
+          "trinket": 17
+         }
+        },
+        "appearance": {
+         "body_height": 22,
+         "body_width": 26,
+         "design": {
+          "details": "1000000000000000",
+          "parts": "0405010b0b090304000170d2b1d2389a00000041"
+         },
+         "effect_motif": "none",
+         "face": {
+          "brow": "soft",
+          "cheek": "blush",
+          "eye_shape": "round",
+          "eye_size": 1,
+          "eye_spacing": 7,
+          "highlight": "single",
+          "mouth": "tiny",
+          "pupil": "wide",
+          "vertical_offset": 0
+         },
+         "face_signature": 1097143412,
+         "family": "hopper",
+         "foot_size": 5,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "folded",
+          "style": "mitten_arm",
+          "thickness": 1,
+          "tip": "mitten"
+         },
+         "gait_bob": 0.7108229398727417,
+         "head_appendages": {
+          "size": 6,
+          "style": "round"
+         },
+         "head_ratio": 0.5833047032356262,
+         "leg_length": 7,
+         "logical_size": 37,
+         "marking_seed": "9e807811423ef14e",
+         "palette_index": 1,
+         "pattern": "patches",
+         "pattern_density": 0.5482684969902039,
+         "roundness": 0.6894174218177795,
+         "tail": {
+          "length": 8,
+          "style": "taper"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.4950309693813324,
+          "boldness": 0.7157450914382935,
+          "curiosity": 0.7634108066558838,
+          "energy": 0.27903223037719727,
+          "feistiness": 0.4762563705444336,
+          "impulsiveness": 0.9184896945953369,
+          "playfulness": 0.914169192314148,
+          "social": 0.5994234085083008,
+          "suspicion": 0.3223196268081665
+         },
+         "phrase": "A messy troublemaker",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "mischievous",
+          "messy",
+          "spontaneous"
+         ],
+         "traits": [
+          "Mischievous",
+          "Messy",
+          "Spontaneous"
+         ]
+        },
+        "habits": [
+         "looks_food_over"
+        ],
+        "id": "a3164df96a1b7e0f",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.409274160861969,
+         "boldness": 0.708383321762085,
+         "celebration": "twirl",
+         "playfulness": 0.8813352584838867
+        },
+        "name": "Mallow",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 98
+       },
+       {
+        "appearance": {
+         "body_height": 14,
+         "body_width": 19,
+         "design": {
+          "parts": "0204030a080904060000db7a898cd1b101000064"
+         },
+         "effect_motif": "dot",
+         "face": {
+          "brow": "none",
+          "cheek": "none",
+          "eye_shape": "soft_square",
+          "eye_size": 2,
+          "eye_spacing": 4,
+          "highlight": "single",
+          "mouth": "cat",
+          "pupil": "dot",
+          "vertical_offset": 0
+         },
+         "face_signature": 4093827948,
+         "family": "blob",
+         "foot_size": 3,
+         "forelimbs": {
+          "length": 7,
+          "rest_pose": "together",
+          "style": "pseudopod",
+          "thickness": 1,
+          "tip": "round"
+         },
+         "gait_bob": 0.40727338194847107,
+         "head_appendages": {
+          "size": 4,
+          "style": "none"
+         },
+         "head_ratio": 0.9700014591217041,
+         "leg_length": 8,
+         "logical_size": 38,
+         "marking_seed": "ec82b7bbacab5230",
+         "palette_index": 9,
+         "pattern": "socks",
+         "pattern_density": 0.666145384311676,
+         "roundness": 0.9689294099807739,
+         "tail": {
+          "length": 10,
+          "style": "tuft"
+         }
+        },
+        "born_at_utc": "2026-10-02T09:30:00Z",
+        "character": {
+         "axes": {
+          "affection": 0.3885279595851898,
+          "boldness": 0.9236815571784973,
+          "curiosity": 0.5515760183334351,
+          "energy": 0.805738091468811,
+          "feistiness": 0.6389908194541931,
+          "impulsiveness": 1.0,
+          "playfulness": 0.8517921566963196,
+          "social": 0.6210945844650269,
+          "suspicion": 0.139726459980011
+         },
+         "phrase": "A reckless scamp",
+         "temperament": "troublemaker",
+         "trait_ids": [
+          "reckless",
+          "impulsive",
+          "mischievous"
+         ],
+         "traits": [
+          "Reckless",
+          "Impulsive",
+          "Mischievous"
+         ]
+        },
+        "id": "003ce3d79305b030",
+        "leanings": {
+         "climbing": 0,
+         "cursor_trust": 0,
+         "exploration": 0,
+         "home_affinity": 0,
+         "play": 0,
+         "routine": 0,
+         "sleep_security": 0,
+         "sociability": 0
+        },
+        "motion": {
+         "activity": 0.8043035864830017,
+         "boldness": 0.8851293325424194,
+         "celebration": "twirl",
+         "playfulness": 0.8314336538314819
+        },
+        "name": "Clover",
+        "role": {
+         "kind": "adult"
+        },
+        "scale_percent": 100,
+        "stature_percent": 100
+       }
+      ]
+     },
+     "note": "a bond that is not one",
+     "expect": {
+      "status": 400,
+      "body": {
+       "refused": "malformed"
+      }
+     }
+    },
+    {
+     "at": 20,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    }
+   ]
+  }
+ ]
+}

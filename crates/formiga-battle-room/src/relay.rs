@@ -388,9 +388,19 @@ struct Room {
     out_of_step: bool,
     ending: Option<Ending>,
     over_since: Option<Millis>,
+    /// When a side first reported that the match ended on its board after the last locked turn.
+    /// From then no turn locks while the other side's last board is awaited.
+    finishing_since: Option<Millis>,
 }
 
 impl Room {
+    /// Whether this side has reported that the match ended on its board after the last locked
+    /// turn.
+    fn said_over(&self, side: Side) -> bool {
+        self.boards[side.index()]
+            .is_some_and(|(turn, _, finished)| finished && usize::from(turn) == self.locked.len())
+    }
+
     /// Both sides have reported the board after the last locked turn.
     fn both_reported(&self) -> bool {
         let last = self.locked.len();
@@ -542,6 +552,7 @@ impl Relay {
                         out_of_step: false,
                         ending: None,
                         over_since: None,
+                        finishing_since: None,
                     },
                 );
                 Answer::Seat { code, seat }
@@ -636,10 +647,17 @@ impl Relay {
                     return Ok(());
                 }
                 room.boards[side.index()] = Some((turn, hash, finished));
+                if room.stage == Stage::Playing
+                    && room.finishing_since.is_none()
+                    && room.said_over(side)
+                {
+                    room.finishing_since = Some(now);
+                }
                 if let [Some(a), Some(b)] = room.boards
                     && a.0 == b.0
                 {
-                    if a.1 != b.1 {
+                    // The same board cannot have ended for one window and not the other.
+                    if a.1 != b.1 || a.2 != b.2 {
                         room.out_of_step = true;
                     } else if a.2 && b.2 && room.stage == Stage::Playing {
                         room.stage = Stage::Over;
@@ -659,10 +677,10 @@ impl Relay {
                         room.stage = Stage::Over;
                         room.over_since = Some(now);
                     }
-                    if room.stage == Stage::Playing {
-                        let name = room.sides[side.index()]
-                            .as_ref()
-                            .map_or("A Handler".to_owned(), |s| s.entrant.handler.clone());
+                    // A side that has already reported the match ended on its board leaves nothing
+                    // undone: its friend's last board can still confirm it. Anyone else forfeits.
+                    if room.stage == Stage::Playing && !room.said_over(side) {
+                        let name = name_of(room, side);
                         room.stage = Stage::Over;
                         room.over_since = Some(now);
                         room.ending = Some(Ending {
@@ -769,6 +787,18 @@ fn turn_ms(grace: Millis) -> Millis {
     u64::from(Ruleset::default().turn_seconds) * 1000 + grace
 }
 
+/// How long a side that reported the match ended waits for the other side's last board before
+/// the other side forfeits: as long as a side may go without orders.
+fn finish_wait_ms(limits: Limits) -> Millis {
+    u64::from(limits.absent_turns) * turn_ms(limits.grace_ms)
+}
+
+fn name_of(room: &Room, side: Side) -> String {
+    room.sides[side.index()]
+        .as_ref()
+        .map_or("A Handler".to_owned(), |s| s.entrant.handler.clone())
+}
+
 /// Locks the turn being played with whatever each side has sent, and sets the next deadline
 /// from `now`. At the turn cap the match is over, whatever the windows have said.
 fn lock(room: &mut Room, now: Millis, grace: Millis) {
@@ -803,31 +833,66 @@ fn lock(room: &mut Room, now: Millis, grace: Millis) {
 }
 
 /// Locks every turn whose deadline has passed, and ends the match for a side away too long, or
-/// at the turn cap if the windows never said it ended sooner.
+/// at the turn cap if the windows never said it ended sooner. Once a side has reported the match
+/// ended on its board, no more turns lock: the other side's last board is awaited, and a side
+/// that never sends it forfeits.
 fn catch_up(room: &mut Room, now: Millis, limits: Limits) {
+    if room.stage != Stage::Playing {
+        return;
+    }
+    if let Some(since) = room.finishing_since {
+        let last = room.locked.len();
+        let silent = Side::BOTH
+            .into_iter()
+            .find(|s| !room.boards[s.index()].is_some_and(|(turn, ..)| usize::from(turn) == last));
+        if let Some(side) = silent
+            && now.saturating_sub(since) >= finish_wait_ms(limits)
+        {
+            let name = name_of(room, side);
+            room.stage = Stage::Over;
+            room.over_since = Some(now);
+            room.ending = Some(Ending {
+                forfeited: Some(side),
+                reason: format!("{name} never reported how the match ended."),
+            });
+        }
+        return;
+    }
     while room.stage == Stage::Playing && now >= room.deadline {
         let due = room.deadline;
         lock(room, due, limits.grace_ms);
-        for side in Side::BOTH {
-            if room.sides[side.index()]
-                .as_ref()
-                .is_some_and(|s| s.absent >= limits.absent_turns)
-            {
-                let name = room.sides[side.index()]
+        let away: Vec<Side> = Side::BOTH
+            .into_iter()
+            .filter(|s| {
+                room.sides[s.index()]
                     .as_ref()
-                    .map_or("A Handler".to_owned(), |s| s.entrant.handler.clone());
-                room.stage = Stage::Over;
-                room.over_since = Some(now);
-                room.ending = Some(Ending {
-                    forfeited: Some(side),
-                    reason: format!(
-                        "{name} gave no orders for {} turns in a row.",
-                        limits.absent_turns
-                    ),
-                });
-                return;
-            }
-        }
+                    .is_some_and(|x| x.absent >= limits.absent_turns)
+            })
+            .collect();
+        let ending = match away[..] {
+            [] => continue,
+            [side] => Ending {
+                forfeited: Some(side),
+                reason: format!(
+                    "{} gave no orders for {} turns in a row.",
+                    name_of(room, side),
+                    limits.absent_turns
+                ),
+            },
+            // Both away at once (both gone, or the relay itself unreachable for a while): neither
+            // is the one who forfeits, so the match is called off.
+            _ => Ending {
+                forfeited: None,
+                reason: format!(
+                    "Neither Handler gave orders for {} turns in a row, so the match was called off.",
+                    limits.absent_turns
+                ),
+            },
+        };
+        room.stage = Stage::Over;
+        room.over_since = Some(now);
+        room.ending = Some(ending);
+        return;
     }
 }
 
