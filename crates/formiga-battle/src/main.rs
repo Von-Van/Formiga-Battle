@@ -248,8 +248,15 @@ fn window(args: Vec<String>) -> Result<()> {
     let colony = roster.colony_id.clone();
     let mut table = table::Table::new(roster, sample::visitors(args.visitors), seed);
     if let Some(folder) = career_folder {
-        table.career = career::Career::load(&folder, &colony);
-        table.career_folder = Some(folder);
+        let loaded = career::Career::load(&folder, &colony);
+        table.career = loaded.career;
+        // A career that could not be read and was left in place is not written over.
+        if loaded.keep {
+            table.career_folder = Some(folder);
+        }
+        if loaded.notice.is_some() {
+            table.notice = loaded.notice;
+        }
     }
     if let Some(id) = &args.arena {
         table.arena = formiga_battle_core::Arena::by_id(id)

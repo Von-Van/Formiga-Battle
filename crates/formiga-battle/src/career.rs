@@ -234,6 +234,34 @@ impl Default for Career {
     }
 }
 
+/// A career as read, and whether it may be written back where it was read from.
+#[derive(Debug)]
+pub struct Loaded {
+    pub career: Career,
+    /// False when what is there could not be read and was left as it was: writing would lose it.
+    pub keep: bool,
+    /// What the Handler is told about how the career was read, when it was not simply read.
+    pub notice: Option<String>,
+}
+
+/// Moves a career file that cannot be read out of the way, to a name no colony's file has, so a
+/// fresh career never writes over it.
+fn set_aside(path: &Path) -> std::io::Result<PathBuf> {
+    let stem = path
+        .file_stem()
+        .map_or_else(|| "colony".to_owned(), |s| s.to_string_lossy().into_owned());
+    let mut n = 1u32;
+    let aside = loop {
+        let aside = path.with_file_name(format!("{stem}.unreadable-{n}.json"));
+        if !aside.exists() {
+            break aside;
+        }
+        n += 1;
+    };
+    std::fs::rename(path, &aside)?;
+    Ok(aside)
+}
+
 /// Where careers are kept, under Battle's data folder.
 pub fn folder(data: &Path) -> PathBuf {
     data.join("careers")
@@ -253,21 +281,75 @@ fn file(folder: &Path, colony_id: &str) -> PathBuf {
 }
 
 impl Career {
-    /// A colony's career, as kept in `folder`; a fresh one if there is none, or it cannot be
-    /// read, so a damaged file costs the record and never the match.
-    pub fn load(folder: &Path, colony_id: &str) -> Self {
-        let read = std::fs::read(file(folder, colony_id))
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<Self>(&bytes).ok())
-            .filter(|c| c.colony_id == colony_id)
-            .map(|mut c| {
-                c.playbooks.values_mut().for_each(Shelf::tidy);
-                c
-            });
-        read.unwrap_or_else(|| Self {
+    /// A colony's career, as kept in `folder`. Only a career that is not there yet starts
+    /// fresh. One that cannot be read is never written over: a file that is not a career is set
+    /// aside under another name first, and one that cannot be read at all, or is another
+    /// colony's, is not written this session. Either way the match goes on.
+    pub fn load(folder: &Path, colony_id: &str) -> Loaded {
+        let fresh = || Self {
             colony_id: colony_id.to_owned(),
             ..Self::default()
-        })
+        };
+        let path = file(folder, colony_id);
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Loaded {
+                    career: fresh(),
+                    keep: true,
+                    notice: None,
+                };
+            }
+            Err(error) => {
+                return Loaded {
+                    career: fresh(),
+                    keep: false,
+                    notice: Some(format!(
+                        "Your record against the rivals could not be read, so this session will not \
+                         keep it: {error}"
+                    )),
+                };
+            }
+        };
+        match serde_json::from_slice::<Self>(&bytes) {
+            Ok(mut career) if career.colony_id == colony_id => {
+                career.playbooks.values_mut().for_each(Shelf::tidy);
+                Loaded {
+                    career,
+                    keep: true,
+                    notice: None,
+                }
+            }
+            // Another colony's, under the same safe file name: theirs to keep, so never written
+            // over from here.
+            Ok(_) => Loaded {
+                career: fresh(),
+                keep: false,
+                notice: None,
+            },
+            Err(_) => match set_aside(&path) {
+                Ok(aside) => Loaded {
+                    career: fresh(),
+                    keep: true,
+                    notice: Some(format!(
+                        "Your record against the rivals could not be read, so it starts afresh; the \
+                         old file is kept as {}.",
+                        aside.file_name().map_or_else(
+                            || aside.display().to_string(),
+                            |n| n.to_string_lossy().into_owned()
+                        )
+                    )),
+                },
+                Err(error) => Loaded {
+                    career: fresh(),
+                    keep: false,
+                    notice: Some(format!(
+                        "Your record against the rivals could not be read, so this session will not \
+                         keep it: {error}"
+                    )),
+                },
+            },
+        }
     }
 
     pub fn save(&self, folder: &Path) -> std::io::Result<()> {
@@ -356,7 +438,7 @@ mod tests {
     fn a_trios_playbooks_are_kept_and_read_back_within_bounds() {
         let dir = std::env::temp_dir().join(format!("battle-career-books-{}", std::process::id()));
         let folder = folder(&dir);
-        let mut career = Career::load(&folder, "colony-books");
+        let mut career = Career::load(&folder, "colony-books").career;
         let samples = Playbook::samples();
         career.playbooks.insert(
             "0123456789abcdef".to_owned(),
@@ -366,7 +448,7 @@ mod tests {
             },
         );
         career.save(&folder).unwrap();
-        let read = Career::load(&folder, "colony-books");
+        let read = Career::load(&folder, "colony-books").career;
         let shelf = &read.playbooks["0123456789abcdef"];
         assert_eq!(shelf.books.len(), PLAYBOOKS_KEPT, "three kept at most");
         assert_eq!(shelf.books[..], samples[..PLAYBOOKS_KEPT]);
@@ -379,7 +461,12 @@ mod tests {
             serde_json::to_vec(&older).unwrap(),
         )
         .unwrap();
-        assert!(Career::load(&folder, "colony-old").playbooks.is_empty());
+        assert!(
+            Career::load(&folder, "colony-old")
+                .career
+                .playbooks
+                .is_empty()
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -387,7 +474,7 @@ mod tests {
     fn a_match_counts_once_by_its_id_and_the_file_round_trips() {
         let dir = std::env::temp_dir().join(format!("battle-career-{}", std::process::id()));
         let folder = folder(&dir);
-        let mut career = Career::load(&folder, "colony-one");
+        let mut career = Career::load(&folder, "colony-one").career;
         assert_eq!(career.meetings(), 0);
         assert!(career.apply(
             "a1",
@@ -406,14 +493,14 @@ mod tests {
         assert!(career.apply("a2", "hazel", "backyard", None, "2026-10-23T00:01:00Z"));
         assert!(career.apply("a3", "tam", "millpond", Some(false), "2026-10-23T00:02:00Z"));
         career.save(&folder).unwrap();
-        let read = Career::load(&folder, "colony-one");
+        let read = Career::load(&folder, "colony-one").career;
         assert_eq!(read, career);
         let h = read.against("hazel");
         assert_eq!((h.played, h.won, h.drawn, h.lost), (2, 1, 1, 0));
         assert_eq!(h.last.as_ref().map(|m| m.match_id.as_str()), Some("a2"));
         assert_eq!(read.meetings(), 3);
         // Another colony's career is its own file, and starts fresh.
-        assert_eq!(Career::load(&folder, "colony-two").meetings(), 0);
+        assert_eq!(Career::load(&folder, "colony-two").career.meetings(), 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -421,12 +508,14 @@ mod tests {
     fn a_file_for_another_colony_is_not_read_as_this_one() {
         let dir = std::env::temp_dir().join(format!("battle-career-id-{}", std::process::id()));
         let folder = folder(&dir);
-        let mut other = Career::load(&folder, "a/b");
+        let mut other = Career::load(&folder, "a/b").career;
         other.apply("x", "ivy", "woodland", Some(true), "2026-10-23T00:00:00Z");
         other.save(&folder).unwrap();
         // The same safe file name, a different colony: read as fresh rather than as theirs.
-        assert_eq!(Career::load(&folder, "ab").meetings(), 0);
-        assert_eq!(Career::load(&folder, "a/b").meetings(), 1);
+        let ab = Career::load(&folder, "ab");
+        assert_eq!(ab.career.meetings(), 0);
+        assert!(!ab.keep, "and never written over");
+        assert_eq!(Career::load(&folder, "a/b").career.meetings(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -456,5 +545,40 @@ mod tests {
             meeting_words(&h, "Hazel Thorne", "Hazel"),
             "6th meeting with Hazel Thorne: Hazel leads 3 to 2, 1 drawn"
         );
+    }
+
+    #[test]
+    fn only_a_career_not_there_yet_starts_fresh_and_an_unreadable_one_is_never_written_over() {
+        let dir =
+            std::env::temp_dir().join(format!("battle-career-unreadable-{}", std::process::id()));
+        let folder = folder(&dir);
+        let missing = Career::load(&folder, "colony-new");
+        assert!(missing.keep && missing.notice.is_none());
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(file(&folder, "colony-bad"), b"{ not a career").unwrap();
+        let damaged = Career::load(&folder, "colony-bad");
+        assert!(
+            damaged.keep,
+            "a fresh one may be kept once the old is out of the way"
+        );
+        assert!(damaged.notice.is_some());
+        assert_eq!(damaged.career.meetings(), 0);
+        let aside = folder.join("colony-bad.unreadable-1.json");
+        assert_eq!(std::fs::read(&aside).unwrap(), b"{ not a career");
+        assert!(!file(&folder, "colony-bad").exists());
+        damaged.career.save(&folder).unwrap();
+        assert_eq!(
+            std::fs::read(&aside).unwrap(),
+            b"{ not a career",
+            "still there"
+        );
+        // A file that cannot be read at all (here a folder in its place) is left as it is, and
+        // nothing is written this session.
+        std::fs::create_dir_all(file(&folder, "colony-locked")).unwrap();
+        let locked = Career::load(&folder, "colony-locked");
+        assert!(!locked.keep);
+        assert!(locked.notice.is_some());
+        assert!(file(&folder, "colony-locked").is_dir());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

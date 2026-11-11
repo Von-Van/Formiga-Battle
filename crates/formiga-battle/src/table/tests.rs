@@ -10,6 +10,7 @@ fn a_handler_name_from_the_relay_is_cleaned_before_it_is_shown_or_kept() {
 
 use super::*;
 use formiga_battle_contract::sample;
+use std::sync::mpsc::{Receiver, Sender};
 
 fn table() -> Table {
     let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
@@ -909,4 +910,146 @@ fn a_colony_of_one_is_joined_by_friends_from_next_door() {
     let t = Table::new(roster, sample::visitors(9), 5);
     assert_eq!(t.home.len(), 3);
     assert!(t.away.len() >= 3);
+}
+
+/// A table seated in a match with a friend through a fake line, from the views a reference relay
+/// gives: the table, what it asks the line, what is told to it, and the first view it saw.
+fn seated_with_a_friend() -> (Table, Receiver<Ask>, Sender<Told>, View) {
+    use formiga_battle_room::relay::{Answer, Limits, Request};
+    use formiga_battle_room::roster::bonds_among;
+    let mut t = Table::new(sample::snapshot(), sample::visitors(9), 5);
+    t.picked = vec![0, 1, 2];
+    let (team, bonds) = t.picked_team();
+    let build = Build {
+        digest: "a".repeat(64),
+        ..Build::this(None)
+    };
+    let friends = sample::visitors(11);
+    let theirs: Vec<Contender> = friends.contenders[..TEAM_SIZE].to_vec();
+    let entrant = |handler: &str, team: Vec<Contender>, bonds| Entrant {
+        protocol: formiga_battle_room::RELAY_VERSION,
+        rules_version: formiga_battle_core::RULES_VERSION,
+        build: build.clone(),
+        handler: handler.to_owned(),
+        team,
+        bonds,
+        arena: "backyard".to_owned(),
+        card: None,
+        handler_key: None,
+    };
+    let mut relay = formiga_battle_room::Relay::new(Limits::default());
+    let Answer::Seat { code, seat } = relay.handle(
+        Request::Open {
+            entrant: entrant("Jake", team, bonds),
+        },
+        0,
+    ) else {
+        panic!("a room");
+    };
+    relay.handle(
+        Request::Join {
+            code: code.clone(),
+            entrant: entrant("Friend", theirs.clone(), bonds_among(&friends, &theirs)),
+        },
+        10,
+    );
+    let Answer::View(view) = relay.handle(Request::Look { code, seat }, 20) else {
+        panic!("a view");
+    };
+    let (line, asked, tell) = crate::friend::Line::fake();
+    t.friend = Some(Friend {
+        line,
+        code: Some(view.code.clone()),
+        seated: false,
+        gone: false,
+        handlers: [String::new(), String::new()],
+        cards: [None, None],
+        view: None,
+        sent_turn: None,
+        opponent_ready: false,
+        opponent_away: false,
+        deadline: 0.0,
+        held: None,
+    });
+    tell.send(Told::View(view.clone())).unwrap();
+    assert!(t.poll(0.0), "the match begins: {:?}", t.notice);
+    (t, asked, tell, *view)
+}
+
+/// Plays every locked turn of `view` on the table, as the window would, showing each.
+fn play_out(t: &mut Table, tell: &Sender<Told>, view: &View, now: &mut f32) {
+    for _ in 0..200 {
+        tell.send(Told::View(Box::new(view.clone()))).unwrap();
+        t.poll(*now);
+        t.frame(*now);
+        *now += 5.0;
+    }
+}
+
+#[test]
+fn a_match_the_relay_calls_off_ends_here_earns_nothing_and_leaves_the_room() {
+    let (mut t, asked, tell, seated) = seated_with_a_friend();
+    let mut view = seated;
+    view.stage = formiga_battle_room::Stage::Over;
+    view.locked = (1..=3)
+        .map(|turn| formiga_battle_room::Locked {
+            turn,
+            submitted: [Vec::new(), Vec::new()],
+        })
+        .collect();
+    view.ending = Some(formiga_battle_room::relay::Ending {
+        forfeited: None,
+        reason: "Neither Handler gave orders for 3 turns in a row, so the match was called off."
+            .to_owned(),
+    });
+    let mut now = 1.0;
+    play_out(&mut t, &tell, &view, &mut now);
+    assert_eq!(
+        t.m.as_ref().unwrap().board.turn,
+        3,
+        "every locked turn was played"
+    );
+    assert!(t.outcome().is_none(), "nobody won or lost it");
+    assert!(t.room_gone(), "the match stays on the board, ended");
+    assert!(
+        t.notice
+            .as_deref()
+            .is_some_and(|n| n.contains("called off"))
+    );
+    assert!(t.earned.is_empty());
+    assert!(
+        asked.try_iter().any(|a| matches!(a, Ask::Leave)),
+        "the room is left"
+    );
+}
+
+#[test]
+fn a_friend_who_leaves_after_the_match_ended_on_this_board_leaves_it_counted() {
+    let (mut t, _asked, tell, seated) = seated_with_a_friend();
+    let cap = Ruleset::default().turn_cap;
+    let mut view = seated;
+    view.stage = formiga_battle_room::Stage::Over;
+    view.locked = (1..=cap)
+        .map(|turn| formiga_battle_room::Locked {
+            turn,
+            submitted: [Vec::new(), Vec::new()],
+        })
+        .collect();
+    let mut now = 1.0;
+    play_out(&mut t, &tell, &view, &mut now);
+    assert!(t.outcome().is_some(), "the match ended on the board");
+    assert!(t.checking_board(), "and waits for the friend's last board");
+    // The friend never sends it, and the relay says they forfeited.
+    view.ending = Some(formiga_battle_room::relay::Ending {
+        forfeited: Some(t.you.other()),
+        reason: "Friend never reported how the match ended.".to_owned(),
+    });
+    tell.send(Told::View(Box::new(view))).unwrap();
+    t.poll(now);
+    assert!(!t.checking_board(), "nothing is left to wait for");
+    assert!(
+        !t.earned.iter().any(|l| l.contains("earned nothing")),
+        "{:?}",
+        t.earned
+    );
 }

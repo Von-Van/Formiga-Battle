@@ -85,7 +85,11 @@ reference takes them through `Relay::knowing`.
 `orders` is the team's plan: up to three orders as Battle writes them (each a PRESS, HOLD or TRICK
 of at most five squares, or an INTERACT), and besides them up to one USE ITEM (`"order":
 "use_item"`) for each of the three creatures, an empty list for none. A USE ITEM never counts
-toward the three. The relay refuses a bigger plan as `malformed` and otherwise stores it as given.
+toward the three. The relay refuses a bigger plan, or one Battle could not read (an order it does
+not know, a square outside a signed byte, a HOLD with no facing), as `malformed`, and stores each
+order with only what Battle reads in it. The site's relay reads plans order by order for rooms
+playing by the rules version it knows (9); a room playing by another only has its plans' size
+checked, since each window leaves a room whose rules are not its own.
 Before rules version 9 the three orders were TAKE, DEFEND and INTERACT, with no USE ITEM. Before protocol 3 (rules version 7) it was three
 entries, one per creature, each `null` or an order.
 
@@ -105,7 +109,12 @@ digits, because JavaScript numbers lose anything past 53 bits.
 | 409 | `{"refused": "room_full"}` | Joining a room that already has two |
 | 409 | `{"refused": "not_this_turn"}` | Orders for a turn that is not the one being played; a board for a turn not yet locked |
 | 422 | `{"refused": "team", "reason": "…"}` | Not three companions |
-| 503 | `{"refused": "busy"}` | 500 rooms open already, or one address opening more than 30 rooms or trying more than 60 joins in ten minutes (the site's relay only; the address is kept as a digest for the window and nothing more) |
+| 503 | `{"refused": "busy"}` | 500 rooms open already; or, on the site's relay only, one address with 5 rooms open, opening more than 30 rooms, trying more than 60 joins or making more than 3,000 requests with a seat in ten minutes (the address is kept as a digest for the window and nothing more) |
+
+A team the friend's window could not read (a companion missing a field, a number out of range, a
+bond whose band is not one) is `malformed`. The site's relay checks each companion field by field
+and type by type; the words an enum takes (a temperament, a tail's style) only as words, since
+they grow with Desktop.
 
 ## A room
 
@@ -116,17 +125,33 @@ Before answering any request about a room, the relay brings it up to now: while 
 the deadline has passed, it locks the turn with whatever plan each side has sent (an empty plan
 for a side that sent none), sets the next deadline 44 seconds after the one that passed, and repeats.
 A side with no orders in three locked turns running forfeits: the room is `over`, with
-`ending: {"forfeited": side, "reason": "<name> gave no orders for 3 turns in a row."}`. When
-12 turns are locked the room is `over` (`reason: "The match is over."`).
+`ending: {"forfeited": side, "reason": "<name> gave no orders for 3 turns in a row."}`. Both
+sides reaching three at once (both gone, or the relay's store out of reach for a while) call the
+match off: `over`, with an ending that names no one as forfeited, and a window whose board has not
+ended treats it as a room that closed: it earns nothing. When 12 turns are locked the room is
+`over` (`reason: "The match is over."`).
+
+Once a side has reported a `finished` board for the last locked turn, no more turns lock: the
+other side's board for that turn is awaited however long it takes to arrive. If it has not come
+three turns' time (132 seconds) after the first `finished` report, the side that never sent it
+forfeits (`"<name> never reported how the match ended."`), and the window that did report keeps
+what its board said.
 
 - **Orders** are kept for the turn being played; sent again before the turn locks, they replace
   the last. The moment both sides have sent orders, the turn locks.
 - **Board** reports are kept per side as `(turn, hash, finished)`. When both sides have reported
-  the same turn: different hashes set `out_of_step`; the same hash with both `finished` makes the
-  room `over` with `reason: "The match is over."`.
+  the same turn: different hashes, or the same hash `finished` for one and not the other, set
+  `out_of_step`; the same hash with both `finished` makes the room `over` with
+  `reason: "The match is over."`.
 - **Leave** while waiting closes the room at once: the next request, even a join, finds no room.
   While playing, the leaver forfeits:
-  `ending: {"forfeited": side, "reason": "<name> left the match."}`.
+  `ending: {"forfeited": side, "reason": "<name> left the match."}`, unless it has already reported
+  a `finished` board for the last locked turn: then it has left nothing undone, and the other
+  side's board can still confirm the match.
+
+Sending orders or a board again is always safe: the relay keeps a side's newest plan for the turn
+and its newest board. Battle keeps what it sends in an outbox and sends it again, waiting longer
+each time, until the relay answers it, and sends what is still waiting before it leaves a room.
 
 A **View** is everything one side may see: `relay`, `code`, `stage`, `you` (`"left"` or
 `"right"`), `entrants` (both, once joined), `seed`, `ruleset` (Battle's default ruleset, as JSON),
@@ -139,7 +164,12 @@ and `ending` once over.
 locked turn, those two boards are the same and no turn was ever `out_of_step`. A window keeps what
 a match with a friend earned to itself until it sees `confirmed`, and drops it if it sees
 `out_of_step` or the room goes first; a match that ended by a forfeit has no last board to wait
-for.
+for. A friend who forfeits after the match ended on a window's board (by leaving, or by never
+sending their last board) leaves nothing to compare, and that window keeps what its board said.
+
+Both relays run the same conformance cases,
+`crates/formiga-battle-room/tests/conformance/relay-cases.json`; the site keeps a byte-identical
+copy in `tests/fixtures/relay-cases.json`.
 
 ## Keeping nothing
 

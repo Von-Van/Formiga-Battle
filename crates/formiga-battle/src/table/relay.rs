@@ -164,8 +164,12 @@ impl Table {
                     .to_owned(),
             );
         }
-        if friend.held.is_some() && (view.confirmed || view.out_of_step) {
-            let confirmed = view.confirmed;
+        // A friend who left, or never sent their last board, after the match ended on this board
+        // forfeited: there is nothing left to compare, and the match counts as it ended here.
+        let friend_walked_out =
+            view.ending.as_ref().and_then(|e| e.forfeited) == Some(view.you.other());
+        if friend.held.is_some() && (view.confirmed || view.out_of_step || friend_walked_out) {
+            let confirmed = !view.out_of_step && (view.confirmed || friend_walked_out);
             self.settle_held(
                 confirmed,
                 "Your board and your friend's came out differently, so this match earned nothing.",
@@ -278,14 +282,27 @@ impl Table {
         if let Some(ending) = ending
             && m.outcome().is_none()
             && next.is_none()
-            && let Some(side) = ending.forfeited
         {
-            m.forfeit(side);
-            self.ended_because = Some(formiga_expansion_rulebook::sanitize_text(
-                &ending.reason,
-                REASON_CHARS,
-            ));
-            self.finish_match();
+            let reason = formiga_expansion_rulebook::sanitize_text(&ending.reason, REASON_CHARS);
+            match ending.forfeited {
+                Some(side) => {
+                    m.forfeit(side);
+                    self.ended_because = Some(reason);
+                    self.finish_match();
+                }
+                // The relay called the match off (both sides away at once) before it ended on the
+                // board: no more turns will come, and it earns nothing, as when the room closes.
+                // The room is left at once, so no later view of it clears why.
+                None => {
+                    if let Some(friend) = &mut self.friend
+                        && !friend.gone
+                    {
+                        friend.gone = true;
+                        friend.line.ask(Ask::Leave);
+                    }
+                    self.notice = Some(reason);
+                }
+            }
         }
     }
 
