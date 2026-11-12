@@ -1,20 +1,19 @@
 name Campus
 size 20 12
 ground
-T#####T:::~~::#####T
-T#####T:::~~::#####T
-T##1##T::::~~:##2##T
-T::=::T::::~~:::=::T
-^^^=^^^::::==:::=::T
-:::=:::::::~~~~:=::T
-:::=:::nl:::::::=::T
-===================T
-ggg:####:###::####:T
-ggg:#3##:###::#4##:T
-:::::=:::::::::=:::T
-TTTTTTTTT0TTTTTTTTTT
-# The courtyard: the Arena on its terrace and the Clubhouse over the creek to the north, the
-# green in the middle, the Handler Studio and the Guild Hall to the south, the gate to the office.
+TTTTTTTTTTTTT~TTTTTT
+T#####TTT::T~~#####T
+T#####:TT:::~::####T
+T##1##,,T:=====##2#T
+,,,=,:#,T:=#~~====TT
+T#:=:TT#:n=~~~~~~~~~
+T::=:##T=====#T#T#TT
+:=============#####T
+ggg:=###l==##=#####T
+ggg#=#######T=##4##T
+T====:##3T###====TTT
+TTTT0=======TTTTTTTT
+# Built by scripts/town_art.py from the art pack's layout guide.
 thing n notices Read the notice board
 thing l beacon Look at the beacon lamp
 thing g greenhouse Look in the greenhouse
@@ -23,3 +22,13 @@ door 1 arena 1 down
 door 2 clubhouse 1 down
 door 3 studio 1 down
 door 4 guildhall 1 down
+ledge 0 4 down
+ledge 1 4 down
+ledge 2 4 down
+ledge 4 4 down
+ledge 5 4 down
+ledge 6 4 down
+ledge 7 4 down
+ledge 8 4 down
+person gardener 1 10 up
+person angler 11 2 right

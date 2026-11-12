@@ -15,8 +15,12 @@
   The country station is kept for its review picture.
 - The Handler Studio, in town and among the Handler's own pages: try a look on (hair colour,
   jacket colour, skin tone, build, hairstyle, outfit, accessory) and keep it with the colony's
-  career. Hair, jacket and skin already show on the Handler; the other choices are kept until
-  their pictures are drawn. It changes nothing in a match.
+  career, each choice drawn from Jake's layered sheets. It changes nothing in a match.
+- The town and the arrival in Jake's own art: the office, the courtyard and the four buildings
+  furnished as his layout guide lays them out, the Handler stacked from layered sheets, Marlow,
+  Iris, Odile, Wren, the tailor, the gardener and the angler each with their own sheet and talking
+  back when spoken to, light on the water, and the cups won standing on the sideboards.
+  `scripts/town_art.py` brings a new revision of the art pack in.
 
 ## [0.68.1] - 2026-10-26
 

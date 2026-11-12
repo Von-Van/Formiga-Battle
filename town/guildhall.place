@@ -2,15 +2,16 @@ name Guild Hall
 size 13 8
 ground
 #############
-##nnnnnnnnn##
+####nnnnn####
+###.#...#.###
+#ttt.....ttt#
 #...........#
-#t.........t#
-#t...,,,...t#
-#....,,,....#
-#....,,,....#
+#.#.......#.#
+##.........##
 ######1######
-# The season on the long board, the Hall of Champions on the trophy tables.
+# Built by scripts/town_art.py from the art pack's layout guide.
 thing n board Read the season board
 thing t champions Look at the Hall of Champions
-person odile 2 2 down
 door 1 campus 4 up
+person odile 6 2 down
+person wren 6 5 down

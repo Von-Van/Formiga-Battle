@@ -207,6 +207,8 @@ pub enum Review {
     Arrival,
     /// The Handler Studio's page, a look being tried on.
     Studio,
+    /// The Handler in the courtyard, just out of the office gate.
+    Campus,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -359,8 +361,10 @@ pub struct BattleApp {
     arrival: Option<(crate::town::arrival::Arrival, crate::station::Station)>,
     /// When the arrival's sounds were last listened for.
     arrival_heard: f32,
-    /// The desk the habitat stands on, painted once.
+    /// The desk the habitat stands on, read once, and what stands in front of the train in the
+    /// habitat.
     desk: Option<Canvas>,
+    habitat_front: Option<Canvas>,
     /// The next arrival is a replay, the whole of it.
     replaying: bool,
     /// The look being tried on in the Handler Studio, and its preview's pictures.
@@ -506,6 +510,7 @@ impl BattleApp {
             arrival: None,
             arrival_heard: 0.0,
             desk: None,
+            habitat_front: None,
             replaying: false,
             studio_draft: None,
             studio_pictures: None,
@@ -593,6 +598,13 @@ impl BattleApp {
             }
             Some(Review::Welcome) => app.welcome = true,
             Some(Review::Town) => app.enter_town(),
+            Some(Review::Campus) => {
+                app.enter_town();
+                let mut town =
+                    crate::town::Town::through(crate::town::map::PlaceId::Campus, '0', 0.0);
+                town.dress(&app.table.career.look);
+                app.town = Some(town);
+            }
             Some(Review::Studio) => {
                 app.handler = "Jo".to_owned();
                 app.studio_draft = Some(crate::town::look::HandlerLook {

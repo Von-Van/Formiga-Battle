@@ -24,7 +24,10 @@ After the first time only the train's last second and a half is seen, then the o
 Space, Enter or a click skips whatever is left, and with reduced motion there is none of it.
 Whether the whole arrival has been seen is kept with Battle's settings (`arrival_seen`), and the
 Settings page can show it again. Skipping or replaying never touches the career, the trios or the
-town. The desk is a stand-in painted in code until its picture is drawn.
+town. The habitat and the desk are Jake's pictures (`arrival-habitat`, its foreground and
+`arrival-desk`), the train standing on the habitat's rails on row 191 as his arrival layout
+has it, and the glass case where the close-up is laid into the desk while the camera draws
+back.
 
 ## Places
 
@@ -37,13 +40,33 @@ reached and used.
 | Place | Size in tiles | Things to use | Who stands there |
 | --- | --- | --- | --- |
 | Research Office | 13 × 8 | the habitat, the trophies, the bookcase | |
-| Campus | 20 × 12 | the notice board, the beacon lamp, the greenhouse | |
+| Campus | 20 × 12 | the notice board, the beacon lamp, the greenhouse | the gardener, the angler |
 | Arena | 13 × 8 | the visitors' table, the friends' board, the lessons shelf | Marlow |
 | Clubhouse | 13 × 8 | the trio register, the chalkboard, the history shelves | Iris |
-| Guild Hall | 13 × 8 | the season board, the Hall of Champions | Odile |
+| Guild Hall | 13 × 8 | the season board, the Hall of Champions | Odile, Wren |
 | Handler Studio | 13 × 8 | the mirror, the counter | the tailor |
 
-Until a place has its hand-drawn picture, its ground is a plain stand-in painted from its tiles.
+## The art
+
+Every picture in town is Jake's, from his overworld art pack. The pack itself stays out of git
+(`.dev/design/formiga-battle-assets-v*`); `scripts/town_art.py` reads its layout guide and writes
+what Battle uses, all of it committed:
+
+- the pictures the town draws, in `crates/formiga-battle/assets/town/`, and the list of them
+  built into Battle (`town/art.rs`, written by the script);
+- each place's `.place` file: its walk grid from the guide, with the town's own things, doors,
+  people and the terrace's ledge laid over it;
+- each place's `.props` file: where every piece of furniture, building, tree and lamp stands, its
+  depth among the people, its shadow, and what of it stands in front of them. The format is in
+  `town/picture.rs`.
+
+A place is drawn as the guide says: its background with shadows, rugs and wall pieces laid on it,
+then every piece and everyone in the place back to front by their feet, then its foreground and
+the tops of trees, lamps, desks and bookcases over them. Light moves on the campus water. The cups
+won stand on the office and Arena sideboards in place of their empty stands.
+
+When the pack changes, run the script again with its folder and check the pictures with
+`--render-window --review town` (the office), `--review campus` and `--review arrival`.
 
 ## Walking
 
@@ -85,19 +108,20 @@ stood, and the way back is named after the place: "‹ Back to the Arena".
 
 The Studio's page (also a tab among the Handler's own pages) chooses how the Handler looks around
 the Battleground: hair colour, jacket colour (the club's), skin tone, build, hairstyle, outfit and
-accessory. A look is tried on first and kept only by "Keep this look", with the colony's career
+accessory, each with Jake's own colours as the first choice ("As drawn"). A look is tried on first and kept only by "Keep this look", with the colony's career
 in Battle's own file (`career.rs`, `look`), where a rehearsal keeps nothing. Only how they look:
 nothing in it touches a match or the record.
 
 A colour is a lookup, never a redraw: each recolourable material is painted in shades of one hue,
-and a chosen colour swaps them for the same steps of the new one (`town/look.rs`). On the stand-in
-sheet, hair, jacket and skin can already be recoloured; build, hairstyle, outfit and accessory are
-kept and drawn once their layered sheets exist. The usual look is the stand-in sheet exactly.
+and a chosen colour swaps them for the same steps of the new one (`town/look.rs`, with the ramps
+from the pack's character layout). The portrait is stacked the same way from its own layers.
 
 ## Character sheets
 
 A character sheet is 4 rows of 48 × 48 cells, facing down, left, right and up, with feet on the
 44th pixel row of every cell. A full sheet is 8 frames across: 4 walking, 2 standing, 2 reaching.
-The Handler is drawn from Jake's first sheet (`crates/formiga-battle/assets/town/`), which walks
-only, so it stands and reaches on its first walking frame. The townspeople are the same sheet
-tinted, until they have their own.
+The Handler is stacked from Jake's layered sheets in his draw order: hair behind, the accessory
+behind, body, outfit, the accessory in front, hair in front, then glasses or a cap. Wren, the
+gardener and the angler have full sheets (their last two frames are pointing, the watering can and
+the rod); Marlow, Iris, Odile and the tailor have staff sheets of 4 frames: two standing, two
+talking. Spoken to, a townsperson turns to the Handler and talks for a moment.

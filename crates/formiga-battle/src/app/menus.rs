@@ -101,9 +101,12 @@ impl BattleApp {
         // An event fixture not yet played waits on the Season page.
         self.table.event_fixture = None;
         let now = self.clock;
-        // In town, back to where the Handler was standing, the place coming up again.
+        // In town, back to where the Handler was standing, the place coming up again, with any
+        // cup the match just won on its stand.
+        let cups = self.cups_won();
         if let Some(town) = &mut self.town {
             town.entered = now;
+            town.cups = cups;
             self.stage = Stage::Town;
             self.turn = None;
             self.turned = now;

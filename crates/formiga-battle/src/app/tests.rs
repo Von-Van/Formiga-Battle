@@ -581,7 +581,7 @@ fn the_town_draws_its_place_name_and_walks_from_the_keyboard() {
     );
     let start = h.app.town.as_ref().unwrap().walker.tile;
     let key = |pressed| egui::Event::Key {
-        key: egui::Key::S,
+        key: egui::Key::D,
         physical_key: None,
         pressed,
         repeat: false,
@@ -594,8 +594,8 @@ fn the_town_draws_its_place_name_and_walks_from_the_keyboard() {
     let now = h.app.town.as_ref().unwrap().walker.tile;
     assert_eq!(
         now,
-        (start.0, start.1 + 2),
-        "two steps down in about half a second"
+        (start.0 + 2, start.1),
+        "two steps along in about half a second"
     );
 }
 
@@ -665,5 +665,5 @@ fn the_studio_tries_a_look_on_and_keeps_it_only_when_asked() {
     );
     h.click("Keep this look", 0);
     h.frames(2);
-    assert_eq!(h.app.table.career.look.hair, 2, "kept");
+    assert_eq!(h.app.table.career.look.hair, 3, "kept");
 }

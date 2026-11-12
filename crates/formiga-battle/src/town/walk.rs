@@ -129,7 +129,7 @@ impl Walker {
         self.facing = facing;
         let (dx, dy) = facing.step();
         let next = (self.tile.0 + dx, self.tile.1 + dy);
-        if !place.walkable(next) {
+        if !place.can_step(self.tile, facing) {
             self.route.clear();
             if self.strides > 0 {
                 self.strides = 0;

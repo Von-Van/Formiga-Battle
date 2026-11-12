@@ -2,16 +2,16 @@ name Clubhouse
 size 13 8
 ground
 #############
-#hh..ccc..hh#
-#...........#
-#..rrrrrrr..#
-#...........#
-#.,,,,,,,,,.#
-#...........#
+####ccccc####
+#hh.##....hh#
+#...rrrrr...#
+#...rrrrr...#
+#.#.......#.#
+##.........##
 ######1######
-# Trios at the register, playbooks on the chalkboard, the history on the shelves.
+# Built by scripts/town_art.py from the art pack's layout guide.
 thing r register Look at your trios
 thing c chalkboard Open the playbooks
 thing h shelves Read the history
-person iris 6 2 down
 door 1 campus 2 up
+person iris 3 2 down
