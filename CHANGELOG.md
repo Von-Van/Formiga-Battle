@@ -1,7 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## [0.68.23] - 2026-11-12
 
+Built on Formiga Desktop 0.68.23, released alongside it and Formiga Hill and Home 0.68.23. Battle
+contract version 5, relay protocol 4 and rules version 9 are unchanged. A friend match needs both
+Handlers on Battle 0.68.23 and Formiga Desktop 0.68.23.
+
+- The Handler's and the townspeople's walking sprites are cleaned up: round eyes and mouths,
+  slimmer side views with a hanging arm, and no skin showing through hair. The Studio has more
+  colours to try.
+- A friend match whose two last boards disagree, or that was called off while both sides were
+  away, now ends at once without a result instead of hanging on or being marked as confirmed.
 - The town is drawn in the Formiga notebook like every other page: the place on the left page,
   its name along the top, the keys along the foot, and on the right page what there is to use and
   where the doors go, each a way to walk there.
