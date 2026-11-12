@@ -21,6 +21,10 @@
   Iris, Odile, Wren, the tailor, the gardener and the angler each with their own sheet and talking
   back when spoken to, light on the water, and the cups won standing on the sideboards.
   `scripts/town_art.py` brings a new revision of the art pack in.
+- The townspeople talk, on a card with their portrait: Marlow on the cups, Iris on the trios,
+  Odile on Open Circuit points and the next fixture, Wren on how the meetings with her stand, the
+  tailor, the gardener and the angler, and the notice board. Only what the record shows is said,
+  and each keeps to the page they had before, opened after their last line.
 
 ## [0.68.1] - 2026-10-26
 

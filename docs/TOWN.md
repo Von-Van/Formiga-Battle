@@ -101,6 +101,25 @@ The thing in front, or the one Tab points to, shows its prompt over it.
 | Guild Hall | board, Hall of Champions, Odile | Season |
 | Studio | mirror, counter, the tailor | the Handler Studio |
 
+## Who says what
+
+The townspeople speak on a card over the foot of the picture, with their portrait; E, Space,
+Enter or a click goes on, and after the last line opens the page they keep, if any. Escape
+closes it. Everything said about the Handler or their companions is what the record shows, and
+with nothing recorded yet it is a plain greeting (`app/speech.rs`). Nothing said changes anything.
+
+| Who or what | Says | Then opens |
+| --- | --- | --- |
+| Marlow | the next cup and how many of its three are won, or that every cup is won | Where, against the visitors |
+| Iris | the trios in the register, by name | the Handler's page |
+| Odile | the Open Circuit points from friend matches, and the next event fixture | Season |
+| Wren | who she is, or how the meetings with her stand and how the last one went, from the career | nothing |
+| the tailor (also the Studio counter) | a welcome to try a look | the Handler Studio |
+| the gardener, the angler | one line of their own, nothing about anyone | nothing |
+| the notice board | the next cup and this season's fixture | nothing |
+| the beacon lamp, the greenhouse | what they are | nothing |
+| the habitat | the companions' names | the Handler's page |
+
 Closing the page, or finishing a match begun from it, comes back to the town where the Handler
 stood, and the way back is named after the place: "‹ Back to the Arena".
 

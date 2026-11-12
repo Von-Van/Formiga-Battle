@@ -101,7 +101,10 @@ impl BattleApp {
     }
 
     pub(super) fn town_frame(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, now: f32) {
-        let held = self.held_way(ctx);
+        let was_talking = self.speech.is_some();
+        let talking = was_talking;
+        // While someone is speaking the Handler stands still and listens.
+        let held = self.held_way(ctx).filter(|_| !talking);
         let typing = ctx.egui_wants_keyboard_input();
         let (act, next, back) = ctx.input_mut(|i| {
             if typing {
@@ -114,15 +117,24 @@ impl BattleApp {
             let next = i.consume_key(egui::Modifiers::NONE, egui::Key::Tab);
             (act, next || back, back)
         });
+        let close = talking
+            && !typing
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        if close {
+            self.speech = None;
+        } else if talking && act {
+            self.speech_on();
+        }
+        let talking = self.speech.is_some();
         let reduce = self.table.reduce_motion;
         let Some(town) = &mut self.town else {
             return;
         };
         let mut happened = town.tick(held, now);
-        if next {
+        if next && !talking {
             town.pick_next(back);
         }
-        if act && happened == Happened::Nothing {
+        if act && !was_talking && happened == Happened::Nothing {
             happened = town.act(now);
         }
 
@@ -143,10 +155,13 @@ impl BattleApp {
 
         // A click on the picture: walk to that tile, or to what stands there.
         let response = ui.interact(picture_rect, Id::new("town-picture"), Sense::click());
-        if let Some(pos) = response
+        let clicked_on = response
             .interact_pointer_pos()
-            .filter(|_| response.clicked())
-        {
+            .filter(|_| response.clicked());
+        // A click goes on with the conversation, wherever it lands.
+        let go_on = talking && clicked_on.is_some();
+        if go_on {
+        } else if let Some(pos) = clicked_on {
             let origin = town.view_origin(now);
             let px = (pos - picture_rect.min) * ppp / scale;
             let tile = (
@@ -159,8 +174,8 @@ impl BattleApp {
             }
         }
 
-        // The prompt over what is in front, or what Tab picked.
-        if let Some(target) = town.offered() {
+        // The prompt over what is in front, or what Tab picked, unless someone is speaking.
+        if let Some(target) = town.offered().filter(|_| !talking) {
             let origin = town.view_origin(now);
             let (hx, hy) = town.place.head_of(target);
             let at = picture_rect.min
@@ -208,6 +223,10 @@ impl BattleApp {
                 BRASS,
             );
         }
+        if go_on {
+            self.speech_on();
+        }
+        self.speech_card(ctx, &painter, picture_rect);
         self.town_happened(ctx, happened);
     }
 
@@ -225,6 +244,10 @@ impl BattleApp {
 
     /// The page a thing or a person in town opens.
     pub(super) fn use_in_town(&mut self, place: PlaceId, what: &str) {
+        // Someone, or something, with something to say says it first.
+        if self.talk_or_open(place, what) {
+            return;
+        }
         let own = |step| (self.outing, step);
         let (outing, step) = match (place, what) {
             (PlaceId::Arena, "visitors" | "marlow") => (Outing::Home, Step::Where),
