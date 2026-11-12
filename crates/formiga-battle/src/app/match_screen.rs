@@ -358,7 +358,7 @@ impl BattleApp {
                 _ => "Click the picture, or press Space, to hurry the train in.".to_owned(),
             },
             Stage::Journal => self.journal_hint(),
-            Stage::Town => String::new(),
+            Stage::Town | Stage::Arrival => String::new(),
             Stage::Playing if self.table.finished(now) && self.table.lesson.is_some() => {
                 "The lesson is over. Try it again, or go on, from the notes page.".to_owned()
             }
@@ -1820,17 +1820,9 @@ impl BattleApp {
             .size(15.0),
         );
         ui.add_space(u * 5.0);
-        if chrome::button(
-            ui,
-            "‹ Back to the station",
-            Kind::Back,
-            false,
-            true,
-            None,
-            u,
-        )
-        .on_hover_text("Choose again where your companions are off to")
-        .clicked()
+        if chrome::button(ui, self.home_words().1, Kind::Back, false, true, None, u)
+            .on_hover_text("Choose again where your companions are off to")
+            .clicked()
         {
             self.table.leave_room();
             self.table.shown = None;
@@ -1955,17 +1947,7 @@ impl BattleApp {
         {
             to_list = true;
         }
-        if chrome::button(
-            ui,
-            "‹ Back to the station",
-            Kind::Back,
-            false,
-            true,
-            None,
-            u,
-        )
-        .clicked()
-        {
+        if chrome::button(ui, self.home_words().1, Kind::Back, false, true, None, u).clicked() {
             to_station = true;
         }
         if learned && next.is_none() {
@@ -2378,17 +2360,9 @@ impl BattleApp {
             // Back through the notebook to choosing who goes.
             self.leaf(false);
         }
-        if chrome::button(
-            ui,
-            "‹ Back to the station",
-            Kind::Back,
-            false,
-            true,
-            None,
-            u,
-        )
-        .on_hover_text("Choose again where your companions are off to")
-        .clicked()
+        if chrome::button(ui, self.home_words().1, Kind::Back, false, true, None, u)
+            .on_hover_text("Choose again where your companions are off to")
+            .clicked()
         {
             self.table.leave_when_settled();
             self.table.shown = None;

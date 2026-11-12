@@ -12,16 +12,16 @@ use crate::town::picture::{TILE, VIEW};
 use crate::town::{Happened, Town};
 
 /// The frame round the picture and the words on it.
-const FRAME: Color32 = Color32::from_rgb(0x5b, 0x3a, 0x27);
+pub(super) const FRAME: Color32 = Color32::from_rgb(0x5b, 0x3a, 0x27);
 const FRAME_DARK: Color32 = Color32::from_rgb(0x2f, 0x1c, 0x12);
-const CREAM: Color32 = Color32::from_rgb(0xf3, 0xe6, 0xc4);
-const BRASS: Color32 = Color32::from_rgb(0xcd, 0xb1, 0x7a);
+pub(super) const CREAM: Color32 = Color32::from_rgb(0xf3, 0xe6, 0xc4);
+pub(super) const BRASS: Color32 = Color32::from_rgb(0xcd, 0xb1, 0x7a);
 const FOREST: Color32 = Color32::from_rgb(0x1c, 0x41, 0x37);
 const PAPER: Color32 = Color32::from_rgb(0xff, 0xf8, 0xe4);
 const PLUM: Color32 = Color32::from_rgb(0x3b, 0x2b, 0x3a);
 const INK_DARK: Color32 = Color32::from_rgb(0x23, 0x36, 0x2f);
 /// The bars above and below the picture, in points.
-const BAR: f32 = 40.0;
+pub(super) const BAR: f32 = 40.0;
 
 /// The keys that walk, each with its way.
 const WALK_KEYS: [(egui::Key, Facing); 8] = [
@@ -43,6 +43,32 @@ impl BattleApp {
         self.stage = Stage::Town;
         self.turn = None;
         self.turned = now;
+    }
+
+    /// Where the way back from the notebook goes: the place in town the Handler came from, or
+    /// the station when there is no town. As a tab's words, a button's, and a page's name.
+    pub(super) fn home_words(&self) -> (&'static str, &'static str, &'static str) {
+        match self.town.as_ref().map(|t| t.place.id) {
+            None => ("‹ The station", "‹ Back to the station", "The station"),
+            Some(PlaceId::Office) => ("‹ The office", "‹ Back to the office", "The office"),
+            Some(PlaceId::Campus) => (
+                "‹ The courtyard",
+                "‹ Back to the courtyard",
+                "The courtyard",
+            ),
+            Some(PlaceId::Arena) => ("‹ The Arena", "‹ Back to the Arena", "The Arena"),
+            Some(PlaceId::Clubhouse) => (
+                "‹ The Clubhouse",
+                "‹ Back to the Clubhouse",
+                "The Clubhouse",
+            ),
+            Some(PlaceId::GuildHall) => (
+                "‹ The Guild Hall",
+                "‹ Back to the Guild Hall",
+                "The Guild Hall",
+            ),
+            Some(PlaceId::Studio) => ("‹ The Studio", "‹ Back to the Studio", "The Studio"),
+        }
     }
 
     /// The direction held now: the walking key pressed last among those still down.
@@ -89,40 +115,10 @@ impl BattleApp {
             happened = town.act(now);
         }
 
-        // The picture, at a whole number of screen pixels to each of its own.
-        let full = ui.max_rect();
-        let painter = ui.painter_at(full);
-        painter.rect_filled(full, 0.0, FRAME);
-        let ppp = ctx.pixels_per_point();
-        let room = Rect::from_min_max(
-            pos2(full.min.x + 16.0, full.min.y + BAR),
-            pos2(full.max.x - 16.0, full.max.y - BAR),
-        );
-        let scale = ((room.width() * ppp) / VIEW.0 as f32)
-            .min((room.height() * ppp) / VIEW.1 as f32)
-            .floor()
-            .max(1.0);
-        let size = vec2(VIEW.0 as f32, VIEW.1 as f32) * scale / ppp;
-        let picture_rect = Rect::from_center_size(room.center(), size);
         let view = town.compose(now, reduce);
-        match &mut self.town_picture {
-            Some(t) => {
-                let mut image = egui::ColorImage::filled([1, 1], Color32::TRANSPARENT);
-                into_image(&view, &mut image);
-                t.set(image, egui::TextureOptions::NEAREST);
-            }
-            None => self.town_picture = Some(texture(ctx, "town", &view)),
-        }
-        let texture_id = self.town_picture.as_ref().map(|t| t.id());
-        if let Some(id) = texture_id {
-            painter.rect_filled(picture_rect.expand(3.0), 0.0, FRAME_DARK);
-            painter.image(
-                id,
-                picture_rect,
-                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-                Color32::WHITE,
-            );
-        }
+        let (painter, _full, picture_rect, scale) =
+            show_picture(ui, ctx, &mut self.town_picture, &view);
+        let ppp = ctx.pixels_per_point();
         // Coming in through a door, the place comes up out of the dark.
         let since = now - town.entered;
         if since < crate::town::ENTER && !reduce {
@@ -236,7 +232,7 @@ impl BattleApp {
 }
 
 /// The place's name on a small green plate edged in brass.
-fn plate(painter: &egui::Painter, left_centre: egui::Pos2, words: &str) {
+pub(super) fn plate(painter: &egui::Painter, left_centre: egui::Pos2, words: &str) {
     let galley = painter.layout_no_wrap(words.to_owned(), FontId::monospace(13.0), CREAM);
     let rect = Rect::from_min_size(
         left_centre - vec2(0.0, galley.size().y / 2.0 + 4.0),
@@ -293,4 +289,47 @@ fn prompt(painter: &egui::Painter, over: egui::Pos2, words: &str, inside: Rect) 
         PLUM,
         Stroke::NONE,
     ));
+}
+
+/// A picture of the town (or the arrival) at a whole number of screen pixels to each of its own,
+/// in the dark wooden frame with room above and below for its words: the painter, the whole
+/// window, where the picture went and how many screen pixels each of its pixels took.
+pub(super) fn show_picture(
+    ui: &egui::Ui,
+    ctx: &egui::Context,
+    slot: &mut Option<egui::TextureHandle>,
+    view: &Canvas,
+) -> (egui::Painter, Rect, Rect, f32) {
+    let full = ui.max_rect();
+    let painter = ui.painter_at(full);
+    painter.rect_filled(full, 0.0, FRAME);
+    let ppp = ctx.pixels_per_point();
+    let room = Rect::from_min_max(
+        pos2(full.min.x + 16.0, full.min.y + BAR),
+        pos2(full.max.x - 16.0, full.max.y - BAR),
+    );
+    let scale = ((room.width() * ppp) / VIEW.0 as f32)
+        .min((room.height() * ppp) / VIEW.1 as f32)
+        .floor()
+        .max(1.0);
+    let size = vec2(VIEW.0 as f32, VIEW.1 as f32) * scale / ppp;
+    let picture_rect = Rect::from_center_size(room.center(), size);
+    match slot {
+        Some(t) => {
+            let mut image = egui::ColorImage::filled([1, 1], Color32::TRANSPARENT);
+            into_image(view, &mut image);
+            t.set(image, egui::TextureOptions::NEAREST);
+        }
+        None => *slot = Some(texture(ctx, "town", view)),
+    }
+    if let Some(t) = slot {
+        painter.rect_filled(picture_rect.expand(3.0), 0.0, FRAME_DARK);
+        painter.image(
+            t.id(),
+            picture_rect,
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
+    (painter, full, picture_rect, scale)
 }

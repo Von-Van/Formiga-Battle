@@ -8,6 +8,7 @@
 //! sheet (`sheet`) over each place's picture (`picture`). Everything here depends only on the time
 //! it is given, so the town is checked without a window; the window's side is `app/town.rs`.
 
+pub mod arrival;
 pub mod map;
 pub mod picture;
 pub mod sheet;

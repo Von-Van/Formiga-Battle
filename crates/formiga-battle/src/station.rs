@@ -36,7 +36,7 @@ const DRIVING_WHEEL: f32 = 7.0;
 const PUFFS_PER_SECOND: f32 = 1.3;
 
 // The train's comings and goings, in seconds: Hill's own pace.
-const PULL_IN: f32 = 3.2;
+pub const PULL_IN: f32 = 3.2;
 const PULL_OUT: f32 = 3.0;
 /// How long the train is watched pulling away before the notebook opens.
 pub const SEEN_OFF: f32 = 1.1;
@@ -129,12 +129,31 @@ pub struct Station {
     began: f32,
     /// When it set off again, with everyone aboard.
     leaving: Option<f32>,
+    /// The halt is the little one inside the habitat on the Handler's desk, not the one in the
+    /// country: moss and ferns behind the glass instead of sky and hills.
+    habitat: bool,
 }
 
 impl Station {
     /// The halt, `size` scene pixels across and down, with the train and everyone on it setting
     /// off for it `now`.
     pub fn new(looks: Vec<Look>, size: (i32, i32), now: f32, reduce_motion: bool) -> Self {
+        Self::build(looks, size, now, reduce_motion, false)
+    }
+
+    /// The little halt inside the habitat on the Handler's desk, where the train comes in on
+    /// arriving in town: the same train and everyone on it, behind the glass.
+    pub fn in_habitat(looks: Vec<Look>, size: (i32, i32), now: f32, reduce_motion: bool) -> Self {
+        Self::build(looks, size, now, reduce_motion, true)
+    }
+
+    fn build(
+        looks: Vec<Look>,
+        size: (i32, i32),
+        now: f32,
+        reduce_motion: bool,
+        habitat: bool,
+    ) -> Self {
         let riders = looks
             .into_iter()
             .enumerate()
@@ -158,6 +177,7 @@ impl Station {
             reduce_motion,
             began: if reduce_motion { f32::MIN / 2.0 } else { now },
             leaving: None,
+            habitat,
         };
         station.resize(size);
         station
@@ -170,7 +190,11 @@ impl Station {
             return;
         }
         self.size = size;
-        self.backdrop = backdrop(size);
+        self.backdrop = if self.habitat {
+            habitat(size)
+        } else {
+            backdrop(size)
+        };
         let coaches = coaches_for(self.riders.len(), size.0);
         if coaches != self.coaches {
             self.coaches = coaches;
@@ -457,6 +481,84 @@ fn backdrop((width, height): (i32, i32)) -> Canvas {
     lamp(&mut canvas, width / 8, rail - PLATFORM_BACK + 6);
     board(&mut canvas, sign_area((width, height)));
     canvas
+}
+
+/// Inside the habitat: the far side of the glass case, dim and green with the office beyond it,
+/// a bank of moss with ferns along it behind the platform, and the case's own glass catching the
+/// lamp at either end. The platform, the line, the lamp and the board are the country halt's.
+fn habitat((width, height): (i32, i32)) -> Canvas {
+    const GLASS: Ramp = Ramp::new(0x1d2b24, 0x26382f, 0x30473b, 0x3b5748, 0x4a6b58);
+    let mut canvas = Canvas::new(width as u32, height as u32);
+    let rail = height - RAIL;
+    let back = rail - PLATFORM_BACK;
+    // The far glass: darker toward the top, in bands dithered into each other.
+    let tones = [GLASS.edge, GLASS.shadow, GLASS.base, GLASS.light];
+    for y in 0..back {
+        let t = y as f32 / back.max(1) as f32 * 3.0;
+        let band = t.floor() as usize;
+        let into = t.fract();
+        for x in 0..width {
+            let lean = (paint::noise(x, y, 461) % 100) as f32 / 100.0 < into;
+            let i = (band + usize::from(lean)).min(tones.len() - 1);
+            canvas.set(x, y, tones[i]);
+        }
+    }
+    // The moss bank, mounded, with a lit edge along its top.
+    for x in 0..width {
+        let swell = ((x as f32 / 23.0).sin() * 4.0 + (x as f32 / 9.0).cos() * 2.0) as i32;
+        let crest = back - 14 + swell;
+        for y in crest.max(0)..back {
+            let n = paint::noise(x, y, 463) % 100;
+            let tone = match n {
+                _ if y == crest => GRASS.shine,
+                0..=11 => GRASS.shadow,
+                12..=17 => GRASS.light,
+                _ => GRASS.base,
+            };
+            canvas.set(x, y, tone);
+        }
+    }
+    // Ferns along the bank, each a few arching fronds.
+    let mut x = 18;
+    while x < width - 12 {
+        let tall = 14 + (paint::noise(x, 0, 467) % 10) as i32;
+        fern(&mut canvas, x, back - 4, tall);
+        x += 34 + (paint::noise(x, 1, 469) % 30) as i32;
+    }
+    platform(&mut canvas, width, rail);
+    line(&mut canvas, width, height, rail);
+    lamp(&mut canvas, width / 8, rail - PLATFORM_BACK + 6);
+    board(&mut canvas, sign_area((width, height)));
+    // The case's glass at each end and along the top, catching the lamp.
+    for y in 0..height {
+        paint::put(&mut canvas, 2, y, Rgba::new(0xe8, 0xf4, 0xec, 90));
+        paint::put(&mut canvas, width - 3, y, Rgba::new(0xe8, 0xf4, 0xec, 70));
+    }
+    for x in 0..width {
+        paint::put(&mut canvas, x, 1, Rgba::new(0xe8, 0xf4, 0xec, 80));
+    }
+    canvas
+}
+
+/// A fern: fronds arching out from one foot, lit on their upper sides.
+fn fern(canvas: &mut Canvas, x: i32, foot: i32, tall: i32) {
+    for (lean, reach) in [(-1.0_f32, 0.9_f32), (-0.4, 1.0), (0.3, 1.0), (0.9, 0.85)] {
+        let steps = (tall as f32 * reach) as i32;
+        for i in 0..steps {
+            let t = i as f32 / steps as f32;
+            let fx = x + (lean * t * tall as f32 * 0.8) as i32;
+            let fy = foot - (t * tall as f32 * (1.0 - 0.45 * t * t)) as i32;
+            paint::put(canvas, fx, fy, LEAF.base);
+            // Leaflets either side, shorter toward the tip.
+            if i % 2 == 0 {
+                let w = ((1.0 - t) * 3.0) as i32 + 1;
+                for d in 1..=w {
+                    paint::put(canvas, fx - d, fy - 1, LEAF.light);
+                    paint::put(canvas, fx + d, fy, LEAF.shadow);
+                }
+            }
+        }
+    }
 }
 
 /// The sky, paler towards the hills, in bands dithered into each other.

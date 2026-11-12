@@ -7,8 +7,24 @@ nothing in it changes how a match plays or what the record keeps, and the compan
 it. The code is `crates/formiga-battle/src/town/` (places, walking, sheets, pictures) and
 `crates/formiga-battle/src/app/town.rs` (the window's side).
 
-For now the town opens only for its review picture (`--review town`); Battle still opens at the
-station.
+Battle opens in town: the train arrives on the Handler's desk, and the Handler walks from there.
+The country station is kept for its review picture (`--review station`).
+
+## Arriving
+
+The reveal is scale (`town/arrival.rs`, on screen in `app/arrival.rs`):
+
+| Part | First time | What shows |
+| --- | --- | --- |
+| Close-up | 4 s | The train pulls in at the little halt inside the habitat, every companion at a window: the station's own train, behind the glass among moss and ferns |
+| Pull back | 3 s | One easing zoom out from the glass case to the whole desk, the halt still running inside it, the station smaller than the mug |
+| Handoff | 2 s | A cut to the office from above, its 32-pixel tile grid showing and fading over half a second |
+
+After the first time only the train's last second and a half is seen, then the office. Escape,
+Space, Enter or a click skips whatever is left, and with reduced motion there is none of it.
+Whether the whole arrival has been seen is kept with Battle's settings (`arrival_seen`), and the
+Settings page can show it again. Skipping or replaying never touches the career, the trios or the
+town. The desk is a stand-in painted in code until its picture is drawn.
 
 ## Places
 
@@ -63,7 +79,7 @@ The thing in front, or the one Tab points to, shows its prompt over it.
 | Studio | mirror, counter, the tailor | the Handler's page |
 
 Closing the page, or finishing a match begun from it, comes back to the town where the Handler
-stood.
+stood, and the way back is named after the place: "‹ Back to the Arena".
 
 ## Character sheets
 

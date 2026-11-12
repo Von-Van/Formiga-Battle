@@ -244,6 +244,25 @@ impl BattleApp {
         if levels != self.sound.levels() {
             self.sound.set_levels(levels);
         }
+        // The arrival in town, the whole of it again, from the train coming in.
+        if self.town.is_some() {
+            ui.add_space(u * 4.0);
+            let replay = crate::feel::dropping(ui, since, 2, u, |ui| {
+                chrome::button(
+                    ui,
+                    "Watch the arrival again",
+                    chrome::Kind::Plain,
+                    false,
+                    true,
+                    None,
+                    u,
+                )
+                .clicked()
+            });
+            if replay {
+                self.replay_arrival();
+            }
+        }
     }
 
     /// Beside the settings: the keys, and which Battle this is.
