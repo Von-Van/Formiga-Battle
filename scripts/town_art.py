@@ -2,7 +2,7 @@
 """Brings an overworld art pack into Battle: the pictures the town uses, and the place files
 that say where everything stands.
 
-The pack itself stays out of git (`.dev/design/formiga-battle-assets-v*`, Jake's art). This reads
+The pack itself stays out of git (`art-source/formiga-battle-assets-v*`, Jake's art). This reads
 its layout guide and writes, inside the repository:
 
 - `crates/formiga-battle/assets/town/*.png`: every picture the town draws, copied as it is;
@@ -27,6 +27,10 @@ from PIL import Image
 ASSETS = Path("crates/formiga-battle/assets/town")
 TOWN = Path("town")
 ART_RS = Path("crates/formiga-battle/src/town/art.rs")
+# A dialogue portrait's cell, in pixels.
+TALK_CELL = 256
+# Pictures this script makes rather than copies.
+made = {"prop-habitat-train-still.png"}
 
 # The town's own uses of each place: what each thing is (by the prop instance, or wall tiles it
 # is read from), where the doors lead and who stands where. The guide gives the shapes; this
@@ -341,11 +345,25 @@ def main():
     # arrival and the small pieces.
     for f in sorted(pack.glob("handler-*.png")):
         use(pack, f.name)
-    for f in sorted(pack.glob("portrait-*.png")):
-        if not f.name.endswith("-reactions.png"):
-            use(pack, f.name)
     for npc in chars["npcs"]:
         use(pack, npc["sprite"])
+    # The dialogue portraits are Jake's illustrated sheets: four expressions (calm, talking,
+    # pleased, their own) each lined up by its draw offset, and brought down to 256-pixel cells
+    # so Battle carries a quarter of their weight. They are drawn smoothed, not as pixel art.
+    talk = chars["portrait_layout"].get("dialogue_sheets", {}).get("sheets", {})
+    for key, sheet in talk.items():
+        src = Image.open(pack / sheet["file"]).convert("RGBA")
+        out = Image.new("RGBA", (2 * TALK_CELL, 2 * TALK_CELL), (0, 0, 0, 0))
+        for i, frame in enumerate(sheet["frames"]):
+            x, y, w, h = frame["rect_px"]
+            ox, oy = frame.get("draw_offset_px", [0, 0])
+            cell = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            cell.alpha_composite(src.crop((x, y, x + w, y + h)), (ox, oy))
+            cell = cell.resize((TALK_CELL, TALK_CELL), Image.LANCZOS)
+            out.alpha_composite(cell, ((i % 2) * TALK_CELL, (i // 2) * TALK_CELL))
+        name = f"portrait-{key}-talk.png"
+        out.save(ASSETS / name, optimize=True)
+        made.add(name)
     for name in [
         "arrival-habitat.png", "arrival-habitat-fg.png", "arrival-desk.png",
         "anim-water.png", "anim-lamp.png", "anim-beacon.png", "anim-flag.png", "icon-notice.png",
@@ -357,7 +375,7 @@ def main():
             edited[flat].save(ASSETS / flat)
         else:
             shutil.copyfile(src, ASSETS / flat)
-    names = sorted({flat for _, flat in used} | {"prop-habitat-train-still.png"})
+    names = sorted({flat for _, flat in used} | made)
     arms = "\n".join(
         f'        "{n}" => include_bytes!("../../assets/town/{n}"),' for n in names
     )

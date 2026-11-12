@@ -379,7 +379,7 @@ pub struct BattleApp {
     studio_pictures: Option<(crate::town::look::HandlerLook, Vec<egui::TextureHandle>)>,
     /// Someone in town speaking, and their portrait's picture.
     speech: Option<speech::Speech>,
-    speech_face: Option<egui::TextureHandle>,
+    speech_face: Option<(String, egui::TextureHandle)>,
     /// Looking into the habitat on the office desk.
     habitat: Option<habitat::Habitat>,
     /// The campus map is open, with its picture.
@@ -1114,23 +1114,6 @@ impl BattleApp {
         self.keys(&ctx);
         self.pokes.retain(|(_, at)| now - at < 0.6);
         let full = ui.max_rect();
-        if matches!(self.stage, Stage::Town | Stage::Arrival) {
-            egui::CentralPanel::default()
-                .frame(egui::Frame::NONE)
-                .show(ui, |ui| {
-                    if self.stage == Stage::Arrival {
-                        self.arrival_frame(ui, &ctx, now);
-                    } else {
-                        self.town_frame(ui, &ctx, now);
-                    }
-                });
-            if self.welcome {
-                let layout = self.layout(&ctx, full);
-                self.welcome_card(&ctx, layout.full, layout.unit);
-            }
-            self.take_snap(&ctx);
-            return;
-        }
         if self.stage == Stage::Station {
             self.station_tick(&ctx, now);
         }
@@ -1178,8 +1161,22 @@ impl BattleApp {
                             formiga_pencil::ruled::RuleGrid::forget(ui.ctx());
                         });
                     }
-                    // Drawn on their own before the notebook, above.
-                    Stage::Town | Stage::Arrival => {}
+                    // The town's picture pasted on the left page, its notes on the right.
+                    Stage::Town | Stage::Arrival => {
+                        let picture = layout.left.shrink(u * 6.0);
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(picture), |ui| {
+                            if self.stage == Stage::Arrival {
+                                self.arrival_frame(ui, &ctx, now);
+                            } else {
+                                self.town_frame(ui, &ctx, now);
+                            }
+                        });
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                            ruling.keep(ui.ctx());
+                            self.town_notes(ui, u);
+                            formiga_pencil::ruled::RuleGrid::forget(ui.ctx());
+                        });
+                    }
                     Stage::Playing => {
                         self.board_view(ui, &ctx, layout.left.shrink(u * 4.0), now, u);
                         self.board_page(ui, layout.left, now, u);

@@ -1,12 +1,12 @@
 //! The Handler Studio's page: how the Handler looks around the Battleground, tried on before it
-//! is kept. On the left, each choice. On the right, the look as it stands: a portrait and the
+//! is kept. On the left, each choice. On the right, the look as it stands: the
 //! Handler walking in each of the four directions, and the button that keeps the look with the
 //! colony's career. Only how they look: nothing here touches a match.
 
 use super::*;
 use crate::town::look::{
-    ACCESSORIES, BUILDS, HAIR_COLOURS, HAIRSTYLES, HandlerLook, OUTFIT_COLOURS, OUTFITS,
-    SKIN_TONES, Swatch,
+    ACCESSORIES, ACCESSORY_COLOURS, BUILDS, HAIR_COLOURS, HAIRSTYLES, HandlerLook, OUTFIT_COLOURS,
+    OUTFITS, SHOE_COLOURS, SKIN_TONES, Swatch, TROUSER_COLOURS,
 };
 use crate::town::map::Facing;
 
@@ -22,7 +22,7 @@ impl BattleApp {
     }
 
     /// The preview's pictures for the look being tried on, painted again only when it changes:
-    /// the portrait, then every walking frame, a row of four for each direction.
+    /// every walking frame, a row of four for each direction.
     fn studio_pictures(&mut self, ctx: &egui::Context) -> Vec<egui::TextureHandle> {
         let look = self.draft();
         if let Some((kept, pictures)) = &self.studio_pictures
@@ -31,7 +31,7 @@ impl BattleApp {
             return pictures.clone();
         }
         let sheet = look.sheet();
-        let mut pictures = vec![texture(ctx, "studio-portrait", &look.portrait(0))];
+        let mut pictures = Vec::new();
         for facing in Facing::ALL {
             for column in 0..4 {
                 pictures.push(texture(
@@ -53,11 +53,10 @@ impl BattleApp {
         } else {
             (self.clock * STRIDE) as usize % 4
         };
+        // The page's own width, before anything is laid on it: the walkers and the words keep
+        // inside it however wide the walkers would like to be.
+        let page = ui.available_width();
         ui.vertical_centered(|ui| {
-            if let Some(face) = pictures.first() {
-                ui.add(egui::Image::new(face).fit_to_exact_size(vec2(64.0, 64.0) * PREVIEW * 0.75));
-            }
-            ui.add_space(u * 3.0);
             ruled::write(
                 ui,
                 RichText::new(self.handler.trim().to_owned())
@@ -66,20 +65,26 @@ impl BattleApp {
             );
             ui.add_space(u * 4.0);
             ui.horizontal(|ui| {
-                let each = (ui.available_width() / 4.0).min(48.0 * PREVIEW * 0.7);
-                let spare = (ui.available_width() - each * 4.0).max(0.0) / 2.0;
+                let gap = ui.spacing().item_spacing.x;
+                let each = ((page - gap * 3.0 - u * 8.0) / 4.0).min(48.0 * PREVIEW * 0.7);
+                let spare = (page - each * 4.0 - gap * 3.0).max(0.0) / 2.0;
                 ui.add_space(spare);
                 for (row, facing) in Facing::ALL.iter().enumerate() {
-                    if let Some(frame) = pictures.get(1 + row * 4 + walking) {
+                    if let Some(frame) = pictures.get(row * 4 + walking) {
                         ui.add(egui::Image::new(frame).fit_to_exact_size(vec2(each, each)))
                             .on_hover_text(format!("Facing {facing:?}").to_lowercase());
                     }
                 }
             });
             ui.add_space(u * 4.0);
-            ui.add(
-                egui::Label::new(RichText::new(look.summary()).size(15.0).color(ink::MUTED)).wrap(),
-            );
+            // Kept to the page's width, so a long look wraps rather than running off it.
+            ui.allocate_ui(vec2(page, 0.0), |ui| {
+                ui.set_max_width(page);
+                ui.add(
+                    egui::Label::new(RichText::new(look.summary()).size(15.0).color(ink::MUTED))
+                        .wrap(),
+                );
+            });
         });
         ui.add_space(u * 4.0);
         let look = self.draft();
@@ -112,7 +117,21 @@ impl BattleApp {
         choices(ui, "Build", &BUILDS, &mut look.build, u);
         choices(ui, "Hairstyle", &HAIRSTYLES, &mut look.hairstyle, u);
         choices(ui, "Outfit", &OUTFITS, &mut look.outfit, u);
+        swatches(ui, "Trousers", &TROUSER_COLOURS, &mut look.trousers, u);
+        swatches(ui, "Shoes", &SHOE_COLOURS, &mut look.shoes, u);
         choices(ui, "Accessory", &ACCESSORIES, &mut look.accessory, u);
+        // Only the satchel, the scarf and the field cap take another colour.
+        if let Some(own) = look.own_accessory_colour() {
+            let mut carried = ACCESSORY_COLOURS;
+            carried[0].1 = own;
+            swatches(
+                ui,
+                "Accessory colour",
+                &carried,
+                &mut look.accessory_colour,
+                u,
+            );
+        }
         ruled::write(
             ui,
             RichText::new("Only how I look: none of it changes anything in a match.")

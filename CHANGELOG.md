@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- The town is drawn in the Formiga notebook like every other page: the place on the left page,
+  its name along the top, the keys along the foot, and on the right page what there is to use and
+  where the doors go, each a way to walk there.
+- The townspeople speak with Jake's illustrated portraits. The Studio no longer shows a portrait of
+  the Handler, only the Handler walking each way.
+- Text in the Handler's notebook fits its boxes: the pennant's row labels, a trio's buttons on one
+  line, the season standing card as tall as its words, and the Studio's summary kept to the page.
+- Jake's art pack is kept in a visible folder, `art-source/`, out of git.
+
 - The town round the Battleground, to walk between pages: the Handler's Research Office, a
   courtyard, the Arena, the Clubhouse, the Guild Hall and the Handler Studio, read from place files
   in `town/` (docs/TOWN.md). The Handler walks a tile at a time from the keyboard or by clicking,

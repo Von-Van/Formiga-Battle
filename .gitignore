@@ -14,3 +14,5 @@
 /docs/DESIGN.md
 /docs/DESKTOP_ADOPTION.md
 /docs/*.docx
+# Jake's overworld art pack, the source the town's pictures are copied from (scripts/town_art.py).
+/art-source/

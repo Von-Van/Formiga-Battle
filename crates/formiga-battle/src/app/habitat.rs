@@ -5,7 +5,7 @@
 //! notebook has seen it do. Battle only shows these; nothing here changes them. E, Enter or
 //! Escape goes back to the office.
 
-use super::town::{BAR, CREAM, plate, show_picture};
+use super::town::show_picture;
 use super::*;
 use crate::look::Pose;
 use crate::town::picture::VIEW;
@@ -26,6 +26,11 @@ pub(super) struct Habitat {
 }
 
 impl Habitat {
+    /// The companion picked, by its place.
+    pub(super) fn picked(&self) -> usize {
+        self.picked
+    }
+
     /// Picks a companion by its place, if there is one there.
     pub(super) fn pick(&mut self, index: usize) {
         if index < self.looks.len() {
@@ -129,7 +134,7 @@ impl BattleApp {
                 }
             }
         }
-        let (painter, _full, picture_rect, scale) =
+        let (_painter, _full, picture_rect, scale) =
             show_picture(ui, ctx, &mut self.town_picture, &view);
         // A click on a companion picks it.
         let response = ui.interact(picture_rect, Id::new("habitat-picture"), Sense::click());
@@ -145,72 +150,6 @@ impl BattleApp {
             {
                 habitat.picked = i;
             }
-        }
-        plate(
-            &painter,
-            pos2(picture_rect.min.x, picture_rect.min.y - BAR / 2.0),
-            "THE HABITAT",
-        );
-        painter.text(
-            pos2(picture_rect.max.x, picture_rect.min.y - BAR / 2.0),
-            egui::Align2::RIGHT_CENTER,
-            "← → choose   ·   E or Esc: back to the office",
-            FontId::monospace(12.0),
-            CREAM,
-        );
-        painter.text(
-            pos2(picture_rect.min.x, picture_rect.max.y + BAR / 2.0),
-            egui::Align2::LEFT_CENTER,
-            "From Formiga Desktop, as it keeps them. Battle never changes who they are.",
-            FontId::proportional(15.0),
-            CREAM,
-        );
-        let picked = habitat.picked;
-        if let Some((contender, _)) = self.table.home.get(picked) {
-            let character = &contender.traveler.character;
-            let note = match self.table.page(contender.traveler.id.0) {
-                Some(page) => page
-                    .notes()
-                    .into_iter()
-                    .next()
-                    .unwrap_or_else(|| "No habits noted yet.".to_owned()),
-                None => "Not in your notebook yet.".to_owned(),
-            };
-            let card = Rect::from_min_max(
-                pos2(picture_rect.min.x + 12.0, picture_rect.max.y - 112.0),
-                pos2(picture_rect.max.x - 12.0, picture_rect.max.y - 12.0),
-            );
-            painter.rect_filled(
-                card.translate(vec2(3.0, 3.0)),
-                0.0,
-                Color32::from_black_alpha(70),
-            );
-            painter.rect_filled(card, 0.0, Color32::from_rgb(0xff, 0xf8, 0xe4));
-            painter.rect_stroke(
-                card,
-                0.0,
-                Stroke::new(2.0, Color32::from_rgb(0x3b, 0x2b, 0x3a)),
-                egui::StrokeKind::Inside,
-            );
-            let ink = Color32::from_rgb(0x23, 0x36, 0x2f);
-            let muted = Color32::from_rgb(0x4d, 0x56, 0x4b);
-            let left = card.min.x + 16.0;
-            let width = card.width() - 32.0;
-            painter.text(
-                pos2(left, card.min.y + 10.0),
-                egui::Align2::LEFT_TOP,
-                format!("{}  ·  {}", contender.traveler.name, character.phrase),
-                FontId::proportional(20.0),
-                ink,
-            );
-            let traits = character.traits.join(" · ");
-            let lines = painter.layout(
-                format!("{traits}\nIn the notebook: {note}"),
-                FontId::proportional(15.0),
-                muted,
-                width,
-            );
-            painter.galley(pos2(left, card.min.y + 40.0), lines, muted);
         }
     }
 }

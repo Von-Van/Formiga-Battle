@@ -2,7 +2,7 @@
 //! settling on its grid (`crate::town::arrival`), in the town's own frame. Escape, Space, Enter
 //! or a click skips the rest. It ends with the Handler at the desk in the office, ready to walk.
 
-use super::town::{BAR, BRASS, CREAM, plate, show_picture};
+use super::town::show_picture;
 use super::*;
 use crate::station::{Heard, Station};
 use crate::town::Town;
@@ -125,7 +125,7 @@ impl BattleApp {
                 return;
             }
         };
-        let (painter, _full, picture_rect, _scale) =
+        let (_painter, _full, picture_rect, _scale) =
             show_picture(ui, ctx, &mut self.town_picture, &view);
         let response = ui.interact(picture_rect, Id::new("arrival-picture"), Sense::click());
         if response.clicked()
@@ -133,35 +133,5 @@ impl BattleApp {
         {
             journey.skip();
         }
-        let place = match beat {
-            Beat::CloseUp(_) => "THE HABITAT",
-            Beat::PullBack(_) => "YOUR DESK",
-            _ => "RESEARCH OFFICE",
-        };
-        plate(
-            &painter,
-            pos2(picture_rect.min.x, picture_rect.min.y - BAR / 2.0),
-            place,
-        );
-        painter.text(
-            pos2(picture_rect.max.x, picture_rect.min.y - BAR / 2.0),
-            egui::Align2::RIGHT_CENTER,
-            "Esc, Space or a click: skip ›",
-            FontId::monospace(12.0),
-            BRASS,
-        );
-        let names = self.companion_names();
-        let line = if names.is_empty() {
-            "Arriving from Formiga Desktop.".to_owned()
-        } else {
-            format!("Arriving from Formiga Desktop: {names}.")
-        };
-        painter.text(
-            pos2(picture_rect.min.x, picture_rect.max.y + BAR / 2.0),
-            egui::Align2::LEFT_CENTER,
-            line,
-            FontId::proportional(16.0),
-            CREAM,
-        );
     }
 }
