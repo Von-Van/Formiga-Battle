@@ -18,12 +18,16 @@
   career, each choice drawn from Jake's layered sheets. It changes nothing in a match.
 - The town and the arrival in Jake's own art: the office, the courtyard and the four buildings
   furnished as his layout guide lays them out, the Handler stacked from layered sheets, Marlow,
-  Iris, Odile, Wren, the tailor, the gardener and the angler each with their own sheet and talking
+  Iris, Odile, Wren, Bram the tailor, the gardener and the angler each with their own sheet and talking
   back when spoken to, light on the water, and the cups won standing on the sideboards.
   `scripts/town_art.py` brings a new revision of the art pack in.
+- The office's back wall is spaced out evenly: the windows either side of the pennant over the
+  desk, the framed note over the trophy sideboard. The habitat, lamp and mug stand on the desk
+  instead of sinking into it, and a room keeps its back wall in view until the Handler nears the
+  door.
 - The townspeople talk, on a card with their portrait: Marlow on the cups, Iris on the trios,
   Odile on Open Circuit points and the next fixture, Wren on how the meetings with her stand, the
-  tailor, the gardener and the angler, and the notice board. Only what the record shows is said,
+  tailor Bram, the gardener and the angler, and the notice board. Only what the record shows is said,
   and each keeps to the page they had before, opened after their last line.
 
 ## [0.68.1] - 2026-10-26

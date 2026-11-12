@@ -41,6 +41,11 @@ INTERIORS = {
         ],
         "door": ("campus", "0"),
         "spawn": "habitat",
+        # The back wall spaced out (Jake, 12 November): the windows either side of the pennant,
+        # which hangs over the desk, and the framed note over the trophy sideboard. The windows
+        # are moved in the background picture: first and last column, and how far.
+        "windows": [(105, 152, 5), (162, 209, 96)],
+        "wall": {"pennant": (182, 12), "framed-note": (64, 12)},
         "people": [],
     },
     "arena": {
@@ -165,7 +170,7 @@ def interior(pack, guide, key, spec):
         x, y = hotspot if isinstance(hotspot, tuple) else place["hotspots"][hotspot]
         lines.append(f"person {pid} {x} {y} {facing}")
     (TOWN / f"{key}.place").write_text("\n".join(lines) + "\n")
-    write_props(pack, guide, key, props, interior=True)
+    write_props(pack, guide, key, props, interior=True, spec=spec)
 
 
 def campus(pack, guide):
@@ -211,14 +216,58 @@ def campus(pack, guide):
     write_props(pack, guide, "campus", props, interior=False)
 
 
-def write_props(pack, guide, key, props, interior):
+# The background's plaster rows; the wainscot below them has panels 32 pixels wide.
+PLASTER_ROWS = 39
+
+
+def respace(bg, moves):
+    """Moves windows baked into an office wall, filling where they were with the plain wall a
+    whole number of panels away. `moves`: each window's first and last column and its shift."""
+    plaster = {bg.getpixel((x, y)) for y in range(PLASTER_ROWS) for x in range(222, 318)}
+    out = bg.copy()
+
+    def clean(x):
+        return x - 96 if x < 158 else x + 128
+
+    def is_window(x, y):
+        if y < PLASTER_ROWS:
+            return bg.getpixel((x, y)) not in plaster
+        return bg.getpixel((x, y)) != bg.getpixel((clean(x), y))
+
+    pixels = []
+    for x0, x1, dx in moves:
+        for y in range(48):
+            for x in range(x0 - 2, x1 + 3):
+                if is_window(x, y):
+                    pixels.append((x + dx, y, bg.getpixel((x, y))))
+        for y in range(48):
+            for x in range(x0 - 2, x1 + 3):
+                out.putpixel((x, y), bg.getpixel((clean(x), y)))
+    for x, y, p in pixels:
+        out.putpixel((x, y), p)
+    return out
+
+
+edited = {}
+
+
+def write_props(pack, guide, key, props, interior, spec=None):
     shade = guide["shadows"]
+    spec = spec or {}
+    background = use(pack, f"place-{key}-bg.png")
+    if spec.get("windows"):
+        edited[background] = respace(
+            Image.open(pack / f"place-{key}-bg.png").convert("RGBA"), spec["windows"]
+        )
     lines = [
         "# Built by scripts/town_art.py from the art pack's layout guide.",
-        f"background {use(pack, f'place-{key}-bg.png')}",
+        f"background {background}",
         f"foreground {use(pack, f'place-{key}-fg.png')}",
     ]
     parents = {}
+    # Pieces whose near edge stands in front of people: what stands on them has to stand in
+    # front too, or the near edge would cover it.
+    fronted = set()
     for p, d in props:
         x, y = p["at_px"]
         layer = d.get("layer", "depth-sort")
@@ -229,9 +278,11 @@ def write_props(pack, guide, key, props, interior):
             frame = p.get("preview_frame", 0)
             name = "prop-habitat-train-still.png"
             strip.crop((fw * frame, 0, fw * (frame + 1), fh)).save(ASSETS / name)
-            sort = parents.get(p.get("attached_to"), y)
+            parent = p.get("attached_to")
+            sort = parents.get(parent, y)
             ax, ay = d["anchor_px"]
-            lines.append(f"sort {name} {x - ax} {y - ay} {sort} - 0 - 0")
+            over = name if parent in fronted else "-"
+            lines.append(f"sort {name} {x - ax} {y - ay} {sort} - 0 {over} 0")
             continue
         if p["id"] == "trophy-empty-stand":
             parent = p["attached_to"]
@@ -243,11 +294,14 @@ def write_props(pack, guide, key, props, interior):
             continue
         file = use(pack, d.get("base_file", d["file"]))
         if layer in ("floor", "wall"):
+            x, y = spec.get("wall", {}).get(p["id"], (x, y))
             lines.append(f"{layer} {file} {x} {y}")
             continue
         if "attached_to" in p or layer.startswith("habitat") or layer == "surface":
-            sort = parents.get(p.get("attached_to"), y)
-            lines.append(f"sort {file} {x} {y} {sort} - 0 - 0")
+            parent = p.get("attached_to")
+            sort = parents.get(parent, y)
+            over = file if parent in fronted else "-"
+            lines.append(f"sort {file} {x} {y} {sort} - 0 {over} 0")
             continue
         sort = p.get("sort_y", y + d.get("sort_baseline_y", 0))
         if "instance" in p:
@@ -260,6 +314,8 @@ def write_props(pack, guide, key, props, interior):
             over = use(pack, d["foreground_file"])
         elif "foreground_rows" in d:
             rows = d["foreground_rows"][1]
+        if (over != "-" or rows) and "instance" in p:
+            fronted.add(p["instance"])
         lines.append(f"sort {file} {x} {y} {sort} {shadow_name} {opacity} {over} {rows}")
     (TOWN / f"{key}.props").write_text("\n".join(lines) + "\n")
 
@@ -290,7 +346,10 @@ def main():
     ]:
         use(pack, name)
     for src, flat in sorted(used):
-        shutil.copyfile(src, ASSETS / flat)
+        if flat in edited:
+            edited[flat].save(ASSETS / flat)
+        else:
+            shutil.copyfile(src, ASSETS / flat)
     names = sorted({flat for _, flat in used} | {"prop-habitat-train-still.png"})
     arms = "\n".join(
         f'        "{n}" => include_bytes!("../../assets/town/{n}"),' for n in names

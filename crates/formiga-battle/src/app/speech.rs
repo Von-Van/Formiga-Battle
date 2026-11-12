@@ -124,7 +124,7 @@ impl BattleApp {
                 Speech::new("Wren", Some("wren"), self.wren_lines(), None)
             }
             (PlaceId::Studio, "tailor" | "counter") => Speech::new(
-                "The tailor",
+                "Bram",
                 Some("tailor"),
                 vec![
                     "Come in! Try a look in the mirror. Nothing here changes how your three play."

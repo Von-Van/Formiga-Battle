@@ -44,7 +44,7 @@ reached and used.
 | Arena | 13 × 8 | the visitors' table, the friends' board, the lessons shelf | Marlow |
 | Clubhouse | 13 × 8 | the trio register, the chalkboard, the history shelves | Iris |
 | Guild Hall | 13 × 8 | the season board, the Hall of Champions | Odile, Wren |
-| Handler Studio | 13 × 8 | the mirror, the counter | the tailor |
+| Handler Studio | 13 × 8 | the mirror, the counter | Bram, the tailor |
 
 ## The art
 
@@ -64,6 +64,14 @@ A place is drawn as the guide says: its background with shadows, rugs and wall p
 then every piece and everyone in the place back to front by their feet, then its foreground and
 the tops of trees, lamps, desks and bookcases over them. Light moves on the campus water. The cups
 won stand on the office and Arena sideboards in place of their empty stands.
+
+Two things are adjusted from the pack as it came. What stands on a desk or table whose near edge is
+drawn in front of people is drawn in front of that edge too, so the habitat, the lamp and the mug
+stand on the office desk rather than sinking into it. And the office's back wall is spaced out
+(Jake, 12 November): the script moves the two windows in the background picture to either side of
+the pennant, which hangs over the desk, and hangs the framed note over the trophy sideboard. A room
+a few pixels taller than the window keeps its back wall in sight until the Handler walks the last
+row to the door.
 
 When the pack changes, run the script again with its folder and check the pictures with
 `--render-window --review town` (the office), `--review campus` and `--review arrival`.
@@ -99,7 +107,7 @@ The thing in front, or the one Tab points to, shows its prompt over it.
 | Clubhouse | chalkboard | Playbooks |
 | Clubhouse | history shelves | History |
 | Guild Hall | board, Hall of Champions, Odile | Season |
-| Studio | mirror, counter, the tailor | the Handler Studio |
+| Studio | mirror, counter, Bram | the Handler Studio |
 
 ## Who says what
 
@@ -114,7 +122,7 @@ with nothing recorded yet it is a plain greeting (`app/speech.rs`). Nothing said
 | Iris | the trios in the register, by name | the Handler's page |
 | Odile | the Open Circuit points from friend matches, and the next event fixture | Season |
 | Wren | who she is, or how the meetings with her stand and how the last one went, from the career | nothing |
-| the tailor (also the Studio counter) | a welcome to try a look | the Handler Studio |
+| Bram, the tailor (also the Studio counter) | a welcome to try a look | the Handler Studio |
 | the gardener, the angler | one line of their own, nothing about anyone | nothing |
 | the notice board | the next cup and this season's fixture | nothing |
 | the beacon lamp, the greenhouse | what they are | nothing |
@@ -142,5 +150,5 @@ A character sheet is 4 rows of 48 × 48 cells, facing down, left, right and up, 
 The Handler is stacked from Jake's layered sheets in his draw order: hair behind, the accessory
 behind, body, outfit, the accessory in front, hair in front, then glasses or a cap. Wren, the
 gardener and the angler have full sheets (their last two frames are pointing, the watering can and
-the rod); Marlow, Iris, Odile and the tailor have staff sheets of 4 frames: two standing, two
+the rod); Marlow, Iris, Odile and Bram have staff sheets of 4 frames: two standing, two
 talking. Spoken to, a townsperson turns to the Handler and talks for a moment.
