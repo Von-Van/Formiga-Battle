@@ -244,6 +244,12 @@ pub fn camera(place: &Place, feet: (f32, f32)) -> (i32, i32) {
     let axis = |size: i32, view: i32, at: f32| {
         if size <= view {
             (size - view) / 2
+        } else if size - view <= TILE {
+            // A room a few pixels taller than the window keeps its back wall in sight, and slides
+            // down to its door only as the Handler walks the last rows towards it.
+            let rows = size / TILE;
+            let t = (at - (rows - 3) as f32).clamp(0.0, 1.0);
+            ((size - view) as f32 * t).round() as i32
         } else {
             let centre = (at * TILE as f32) as i32 + TILE / 2;
             (centre - view / 2).clamp(0, size - view)
@@ -270,6 +276,14 @@ mod tests {
                 assert!(cy + VIEW.1 <= campus.height * TILE);
             }
         }
+    }
+
+    #[test]
+    fn a_room_shows_its_back_wall_until_the_handler_nears_the_door() {
+        let office = PlaceId::Office.place();
+        assert_eq!(camera(&office, (6.0, 3.0)).1, 0);
+        let (_, at_door) = camera(&office, (6.0, 6.0));
+        assert_eq!(at_door, office.height * TILE - VIEW.1);
     }
 
     #[test]

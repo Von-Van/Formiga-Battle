@@ -19,7 +19,7 @@ impl BattleApp {
     }
 
     /// The companions' names, as a line says them: "Mochi, Biscuit and Fig".
-    fn companion_names(&self) -> String {
+    pub(super) fn companion_names(&self) -> String {
         let names: Vec<&str> = self
             .table
             .home

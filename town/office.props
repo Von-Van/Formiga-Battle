@@ -3,23 +3,23 @@ background place-office-bg.png
 foreground place-office-fg.png
 floor prop-floor-rug.png 128 166
 floor prop-doormat.png 192 220
-wall prop-pennant.png 232 12
-wall prop-framed-note.png 297 12
+wall prop-pennant.png 182 12
+wall prop-framed-note.png 64 12
 sort prop-trophy-sideboard.png 32 45 96 prop-trophy-sideboard-shadow.png 69 - 0
 cup 0 47 63 96 prop-trophy-empty-stand.png 41 57
 cup 1 69 63 96 prop-trophy-empty-stand.png 63 57
 cup 2 91 63 96 prop-trophy-empty-stand.png 85 57
 cup 3 113 63 96 prop-trophy-empty-stand.png 107 57
 sort prop-desk.png 150 72 128 prop-desk-shadow.png 69 prop-desk-fg.png 0
-sort prop-habitat-base.png 170 58 128 - 0 - 0
-sort prop-habitat-track.png 170 58 128 - 0 - 0
-sort prop-habitat-station.png 170 58 128 - 0 - 0
-sort prop-habitat-train-still.png 180 77 128 - 0 - 0
-sort prop-habitat-glass.png 170 58 128 - 0 - 0
-sort prop-lamp.png 247 67 128 - 0 - 0
-sort prop-field-notebook.png 160 86 128 - 0 - 0
-sort prop-desk-pencil.png 161 100 128 - 0 - 0
-sort prop-desk-mug.png 250 96 128 - 0 - 0
+sort prop-habitat-base.png 170 58 128 - 0 prop-habitat-base.png 0
+sort prop-habitat-track.png 170 58 128 - 0 prop-habitat-track.png 0
+sort prop-habitat-station.png 170 58 128 - 0 prop-habitat-station.png 0
+sort prop-habitat-train-still.png 180 77 128 - 0 prop-habitat-train-still.png 0
+sort prop-habitat-glass.png 170 58 128 - 0 prop-habitat-glass.png 0
+sort prop-lamp.png 247 67 128 - 0 prop-lamp.png 0
+sort prop-field-notebook.png 160 86 128 - 0 prop-field-notebook.png 0
+sort prop-desk-pencil.png 161 100 128 - 0 prop-desk-pencil.png 0
+sort prop-desk-mug.png 250 96 128 - 0 prop-desk-mug.png 0
 sort prop-bookcase.png 320 24 96 prop-bookcase-shadow.png 69 prop-bookcase-fg.png 0
 sort prop-armchair.png 62 114 160 prop-armchair-shadow.png 69 - 0
 sort prop-side-table.png 288 117 160 prop-side-table-shadow.png 69 - 0

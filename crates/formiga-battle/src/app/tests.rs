@@ -667,3 +667,65 @@ fn the_studio_tries_a_look_on_and_keeps_it_only_when_asked() {
     h.frames(2);
     assert_eq!(h.app.table.career.look.hair, 3, "kept");
 }
+
+#[test]
+fn marlow_says_where_the_cups_stand_then_opens_the_cups() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.frames(2);
+    h.app
+        .use_in_town(crate::town::map::PlaceId::Arena, "marlow");
+    h.frames(2);
+    assert!(says(&h, "MARLOW"));
+    h.app.speech_on();
+    h.frames(2);
+    assert!(says(&h, "Shall we set up a match?"));
+    assert_eq!(h.app.stage, Stage::Town, "still talking");
+    h.app.speech_on();
+    assert_eq!((h.app.stage, h.app.step), (Stage::Journal, Step::Where));
+}
+
+#[test]
+fn wren_only_says_what_the_career_records() {
+    let mut h = Headless::new();
+    let lines = |h: &Headless| {
+        h.app
+            .speech_for(crate::town::map::PlaceId::GuildHall, "wren")
+            .map(|s| s.lines_for_test())
+    };
+    let first = lines(&h).expect("Wren speaks");
+    assert!(first[0].contains("We haven't met"), "{first:?}");
+    h.app
+        .table
+        .career
+        .apply("m1", "wren", "woodland", Some(true), "2026-11-11T00:00:00Z");
+    let after = lines(&h).expect("Wren speaks");
+    assert!(
+        after[0].starts_with("We've met once. You've won 1, I've won 0"),
+        "{after:?}"
+    );
+    assert!(after[1].contains("Woodland"), "{after:?}");
+}
+
+#[test]
+fn escape_closes_a_conversation_without_opening_anything() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.frames(2);
+    h.app
+        .use_in_town(crate::town::map::PlaceId::Arena, "marlow");
+    h.frames(1);
+    let key = |pressed| egui::Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::default(),
+    };
+    h.frame(vec![key(true)]);
+    h.frame(vec![key(false)]);
+    assert!(h.app.speech.is_none());
+    assert_eq!(h.app.stage, Stage::Town);
+}

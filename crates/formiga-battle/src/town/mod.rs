@@ -390,7 +390,7 @@ pub fn person_name(id: &str) -> String {
         "marlow" => "Marlow".to_owned(),
         "iris" => "Iris".to_owned(),
         "odile" => "Odile".to_owned(),
-        "tailor" => "the tailor".to_owned(),
+        "tailor" => "Bram".to_owned(),
         "gardener" => "the gardener".to_owned(),
         "angler" => "the angler".to_owned(),
         "wren" => "Wren".to_owned(),

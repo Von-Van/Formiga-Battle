@@ -25,6 +25,7 @@ mod menus;
 mod playbooks;
 mod registry;
 mod season;
+mod speech;
 mod studio;
 #[cfg(test)]
 mod tests;
@@ -209,6 +210,8 @@ pub enum Review {
     Studio,
     /// The Handler in the courtyard, just out of the office gate.
     Campus,
+    /// The Handler in the Guild Hall, Wren speaking.
+    Talk,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -370,6 +373,9 @@ pub struct BattleApp {
     /// The look being tried on in the Handler Studio, and its preview's pictures.
     studio_draft: Option<crate::town::look::HandlerLook>,
     studio_pictures: Option<(crate::town::look::HandlerLook, Vec<egui::TextureHandle>)>,
+    /// Someone in town speaking, and their portrait's picture.
+    speech: Option<speech::Speech>,
+    speech_face: Option<egui::TextureHandle>,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -514,6 +520,8 @@ impl BattleApp {
             replaying: false,
             studio_draft: None,
             studio_pictures: None,
+            speech: None,
+            speech_face: None,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -598,6 +606,14 @@ impl BattleApp {
             }
             Some(Review::Welcome) => app.welcome = true,
             Some(Review::Town) => app.enter_town(),
+            Some(Review::Talk) => {
+                app.enter_town();
+                let mut town =
+                    crate::town::Town::through(crate::town::map::PlaceId::GuildHall, '1', 0.0);
+                town.dress(&app.table.career.look);
+                app.town = Some(town);
+                app.use_in_town(crate::town::map::PlaceId::GuildHall, "wren");
+            }
             Some(Review::Campus) => {
                 app.enter_town();
                 let mut town =
