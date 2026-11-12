@@ -64,6 +64,11 @@ impl Sheet {
         self.frame(facing, first + usize::from(out))
     }
 
+    /// Whether it has two frames of its own beyond walking and standing: a full sheet.
+    pub fn has_own_frames(&self) -> bool {
+        self.across == FRAMES
+    }
+
     /// Talking (or, on a full sheet, its own two frames: pointing, the can, the rod).
     pub fn talking(&self, facing: Facing, second: bool) -> Canvas {
         let first = if self.across == FRAMES { 6 } else { 2 };

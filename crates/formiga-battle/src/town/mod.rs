@@ -306,6 +306,14 @@ impl Town {
                     let facing = facing_toward(p.tile, self.walker.tile).unwrap_or(p.facing);
                     sheet.talking(facing, ((now - at) / 0.25) as u32 % 2 == 1)
                 }
+                // The gardener waters, the angler casts and Wren points now and then: their own
+                // two frames for two seconds in every seven, each in their own time.
+                _ if !reduce_motion
+                    && sheet.has_own_frames()
+                    && (now + i as f32 * 2.3).rem_euclid(7.0) < 2.0 =>
+                {
+                    sheet.talking(p.facing, (now * 2.0) as u32 % 2 == 1)
+                }
                 _ => sheet.standing(p.facing, breath(i as f32 * 0.7)),
             };
             drawn.push((picture::feet_depth(at), 1, figure(frame, at)));

@@ -763,3 +763,52 @@ fn the_habitat_shows_each_companion_as_desktop_keeps_them_and_escape_leaves_it()
     assert!(h.app.habitat.is_none());
     assert_eq!(h.app.stage, Stage::Town);
 }
+
+#[test]
+fn a_match_begun_in_town_comes_back_to_town_with_what_it_earned() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.app
+        .use_in_town(crate::town::map::PlaceId::Arena, "visitors");
+    h.app.begin();
+    let mut now = h.time as f32 + READY_SECS;
+    while !h.app.table.finished(now) {
+        h.app.table.coach_orders();
+        h.app.table.lock(now);
+        now += 20.0;
+        h.app.table.frame(now);
+    }
+    h.time = f64::from(now) + 1.0;
+    h.frames(4);
+    assert!(
+        !h.app.table.earned.is_empty(),
+        "the match earned something to say"
+    );
+    h.app.back_to_station();
+    h.frames(2);
+    assert_eq!(h.app.stage, Stage::Town);
+    assert!(h.app.speech.is_some(), "the card says what it earned");
+}
+
+#[test]
+fn m_opens_the_campus_map_marking_the_handler_and_closes_it_again() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.frames(2);
+    let key = |pressed| egui::Event::Key {
+        key: egui::Key::M,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::default(),
+    };
+    h.frame(vec![key(true)]);
+    h.frame(vec![key(false)]);
+    assert!(h.app.map.is_some());
+    assert!(says(&h, "YOU") && says(&h, "Your office") && says(&h, "Arena"));
+    h.frame(vec![key(true)]);
+    h.frame(vec![key(false)]);
+    assert!(h.app.map.is_none());
+}

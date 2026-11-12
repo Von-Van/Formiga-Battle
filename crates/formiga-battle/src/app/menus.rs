@@ -103,6 +103,7 @@ impl BattleApp {
         let now = self.clock;
         // In town, back to where the Handler was standing, the place coming up again, with any
         // cup the match just won on its stand.
+        let after_match = self.stage == Stage::Playing;
         let cups = self.cups_won();
         let news = self.table.next_event_fixture().is_some();
         let titled = !self.table.career.titles.is_empty();
@@ -114,9 +115,12 @@ impl BattleApp {
             self.stage = Stage::Town;
             self.turn = None;
             self.turned = now;
+            // What the match earned, on a card as the place comes up.
+            if after_match {
+                self.came_back();
+            }
             return;
         }
-        let after_match = self.stage == Stage::Playing;
         if let Some(station) = &mut self.station {
             if after_match {
                 station.come_in(now);

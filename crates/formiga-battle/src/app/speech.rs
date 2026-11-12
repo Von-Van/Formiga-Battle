@@ -221,6 +221,25 @@ impl BattleApp {
         lines
     }
 
+    /// Back in town from a match: a card with what it earned, in the words the match's own page
+    /// used, so nothing is said that was not recorded.
+    pub(super) fn came_back(&mut self) {
+        let lines: Vec<String> = self
+            .table
+            .earned
+            .iter()
+            .filter(|l| !l.trim().is_empty())
+            .cloned()
+            .collect();
+        if lines.is_empty() {
+            return;
+        }
+        let who = format!("Back from {}", self.table.arena.name);
+        let mut speech = Speech::new(&who, None, lines, None);
+        speech.since = self.clock;
+        self.speech = Some(speech);
+    }
+
     /// Starts a conversation, or opens the page straight away for a thing that does not speak.
     pub(super) fn talk_or_open(&mut self, place: PlaceId, what: &str) -> bool {
         match self.speech_for(place, what) {

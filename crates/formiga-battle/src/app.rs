@@ -21,6 +21,7 @@
 mod arrival;
 mod habitat;
 mod handler;
+mod map;
 mod match_screen;
 mod menus;
 mod playbooks;
@@ -381,6 +382,8 @@ pub struct BattleApp {
     speech_face: Option<egui::TextureHandle>,
     /// Looking into the habitat on the office desk.
     habitat: Option<habitat::Habitat>,
+    /// The campus map is open, with its picture.
+    map: Option<egui::TextureHandle>,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -528,6 +531,7 @@ impl BattleApp {
             speech: None,
             speech_face: None,
             habitat: None,
+            map: None,
         };
         match review {
             Some(Review::Playing) => app.begin(),
