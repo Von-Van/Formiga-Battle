@@ -5,8 +5,8 @@
 
 use super::*;
 use crate::town::look::{
-    ACCESSORIES, BUILDS, HAIR_COLOURS, HAIRSTYLES, HandlerLook, OUTFIT_COLOURS, OUTFITS,
-    SKIN_TONES, Swatch,
+    ACCESSORIES, ACCESSORY_COLOURS, BUILDS, HAIR_COLOURS, HAIRSTYLES, HandlerLook, OUTFIT_COLOURS,
+    OUTFITS, SHOE_COLOURS, SKIN_TONES, Swatch, TROUSER_COLOURS,
 };
 use crate::town::map::Facing;
 
@@ -117,7 +117,21 @@ impl BattleApp {
         choices(ui, "Build", &BUILDS, &mut look.build, u);
         choices(ui, "Hairstyle", &HAIRSTYLES, &mut look.hairstyle, u);
         choices(ui, "Outfit", &OUTFITS, &mut look.outfit, u);
+        swatches(ui, "Trousers", &TROUSER_COLOURS, &mut look.trousers, u);
+        swatches(ui, "Shoes", &SHOE_COLOURS, &mut look.shoes, u);
         choices(ui, "Accessory", &ACCESSORIES, &mut look.accessory, u);
+        // Only the satchel, the scarf and the field cap take another colour.
+        if let Some(own) = look.own_accessory_colour() {
+            let mut carried = ACCESSORY_COLOURS;
+            carried[0].1 = own;
+            swatches(
+                ui,
+                "Accessory colour",
+                &carried,
+                &mut look.accessory_colour,
+                u,
+            );
+        }
         ruled::write(
             ui,
             RichText::new("Only how I look: none of it changes anything in a match.")

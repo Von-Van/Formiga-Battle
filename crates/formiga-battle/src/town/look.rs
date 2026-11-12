@@ -1,6 +1,6 @@
 //! How the Handler looks in town, chosen in the Handler Studio and kept with the colony's career
-//! (`career.rs`): build, skin, hairstyle and hair colour, outfit and its colour, and one
-//! accessory. Purely how they look: nothing here touches a match, the record or the companions.
+//! (`career.rs`): build, skin, hairstyle and hair colour, outfit and its colour, trousers, shoes,
+//! and one accessory and its colour. Purely how they look: nothing here touches a match, the record or the companions.
 //!
 //! The Handler is drawn from Jake's layered sheets, stacked in his draw order: hair behind, the
 //! accessory behind, body, outfit, the accessory in front, hair in front, then glasses or a cap.
@@ -18,21 +18,51 @@ use serde::{Deserialize, Serialize};
 /// colour is the art's own and changes with the hairstyle or outfit.
 pub type Swatch = (&'static str, u32);
 
-pub const HAIR_COLOURS: [Swatch; 6] = [
+pub const HAIR_COLOURS: [Swatch; 8] = [
     ("As drawn", 0),
     ("Brown", 0x6b3c37),
     ("Black", 0x2a1e22),
     ("Auburn", 0x923c22),
     ("Blonde", 0xc9a040),
     ("Silver", 0x8c8892),
+    ("Ginger", 0xb5562a),
+    ("Ash", 0x7a7466),
 ];
-pub const OUTFIT_COLOURS: [Swatch; 6] = [
+pub const OUTFIT_COLOURS: [Swatch; 8] = [
     ("As drawn", 0),
     ("Navy", 0x4c4262),
     ("Forest", 0x285a4b),
     ("Maroon", 0x7a2c33),
     ("Mustard", 0xa47a2c),
     ("Slate", 0x4a6288),
+    ("Plum", 0x5e3a62),
+    ("Teal", 0x2f6a6e),
+];
+pub const TROUSER_COLOURS: [Swatch; 6] = [
+    ("As drawn", 0x676273),
+    ("Charcoal", 0x45424a),
+    ("Denim", 0x4f6a8c),
+    ("Khaki", 0x9a8a5c),
+    ("Olive", 0x5f6b3c),
+    ("Brown", 0x6e5040),
+];
+pub const SHOE_COLOURS: [Swatch; 6] = [
+    ("As drawn", 0x805842),
+    ("Black", 0x3a3036),
+    ("Tan", 0xb07a48),
+    ("Oxblood", 0x7a2e32),
+    ("Grey", 0x7a7880),
+    ("Green", 0x4e6a46),
+];
+/// The satchel's, scarf's or field cap's colour; glasses and the magnifier keep their own.
+pub const ACCESSORY_COLOURS: [Swatch; 7] = [
+    ("As drawn", 0),
+    ("Russet", 0xa0522d),
+    ("Navy", 0x4c4262),
+    ("Forest", 0x285a4b),
+    ("Crimson", 0x9a2c3a),
+    ("Mustard", 0xa47a2c),
+    ("Plum", 0x6a3a6a),
 ];
 pub const SKIN_TONES: [Swatch; 6] = [
     ("As drawn", 0xdc986b),
@@ -80,6 +110,13 @@ const OUTFIT: [Ramp; 6] = [
     [0x633947, 0x884d62, 0xae6580, 0xd98ea2],
     [0x584335, 0x7d5b43, 0xa17850, 0xc99e66],
 ];
+const TROUSERS: Ramp = [0x393344, 0x50495b, 0x676273, 0x888391];
+const SHOES: Ramp = [0x3c3032, 0x614437, 0x805842, 0xa47250];
+/// The satchel's leather. The scarf and the cap are drawn in three shades, so their darkest
+/// stands twice to keep the matched shade third.
+const SATCHEL: Ramp = [0x6e5439, 0xa68050, 0xc19c64, 0xd9b781];
+const SCARF: Ramp = [0x804455, 0x804455, 0xaa5563, 0xc98b85];
+const FIELD_CAP: Ramp = [0x505e4d, 0x505e4d, 0x647b58, 0x9ca37e];
 /// The shade a chosen colour is matched to: the third, the material's middle light.
 const MATCHED: usize = 2;
 
@@ -94,6 +131,9 @@ pub struct HandlerLook {
     pub outfit: u8,
     pub outfit_colour: u8,
     pub accessory: u8,
+    pub trousers: u8,
+    pub shoes: u8,
+    pub accessory_colour: u8,
 }
 
 /// The file names used for each choice.
@@ -114,6 +154,9 @@ impl HandlerLook {
             outfit: keep(self.outfit, OUTFITS.len()),
             outfit_colour: keep(self.outfit_colour, OUTFIT_COLOURS.len()),
             accessory: keep(self.accessory, ACCESSORIES.len()),
+            trousers: keep(self.trousers, TROUSER_COLOURS.len()),
+            shoes: keep(self.shoes, SHOE_COLOURS.len()),
+            accessory_colour: keep(self.accessory_colour, ACCESSORY_COLOURS.len()),
         }
     }
 
@@ -124,6 +167,23 @@ impl HandlerLook {
             HAIR[look.hairstyle as usize][MATCHED],
             OUTFIT[look.outfit as usize][MATCHED],
         )
+    }
+
+    /// The colours of the accessory chosen, if it takes another: its own colour is what
+    /// "As drawn" stands for.
+    fn accessory_ramp(&self) -> Option<&'static Ramp> {
+        match ACCESSORIES[self.sane().accessory as usize] {
+            "Satchel" => Some(&SATCHEL),
+            "Scarf" => Some(&SCARF),
+            "Field cap" => Some(&FIELD_CAP),
+            _ => None,
+        }
+    }
+
+    /// The colour "As drawn" stands for the accessory chosen, or `None` when it keeps its own
+    /// colour whatever is chosen (glasses, the magnifier, nothing).
+    pub fn own_accessory_colour(&self) -> Option<u32> {
+        self.accessory_ramp().map(|ramp| ramp[MATCHED])
     }
 
     /// The overworld sheets in draw order, by file name.
@@ -159,26 +219,29 @@ impl HandlerLook {
         .collect()
     }
 
-    /// Swaps the art's own colours for the chosen ones.
+    /// Swaps the art's own colours for the chosen ones, all at once, so a colour one material
+    /// is dyed to is never dyed again as another's.
     fn dye(&self, canvas: &mut Canvas) {
         let look = self.sane();
-        if look.hair != 0 {
-            recolour(
-                canvas,
-                &HAIR[look.hairstyle as usize],
-                HAIR_COLOURS[look.hair as usize].1,
-            );
+        let mut swaps = Vec::new();
+        let mut dye = |ramp: &Ramp, list: &[Swatch], chosen: u8| {
+            if chosen != 0 {
+                swaps.extend(shades(ramp, list[chosen as usize].1));
+            }
+        };
+        dye(&HAIR[look.hairstyle as usize], &HAIR_COLOURS, look.hair);
+        dye(
+            &OUTFIT[look.outfit as usize],
+            &OUTFIT_COLOURS,
+            look.outfit_colour,
+        );
+        dye(&SKIN, &SKIN_TONES, look.skin);
+        dye(&TROUSERS, &TROUSER_COLOURS, look.trousers);
+        dye(&SHOES, &SHOE_COLOURS, look.shoes);
+        if let Some(ramp) = look.accessory_ramp() {
+            dye(ramp, &ACCESSORY_COLOURS, look.accessory_colour);
         }
-        if look.outfit_colour != 0 {
-            recolour(
-                canvas,
-                &OUTFIT[look.outfit as usize],
-                OUTFIT_COLOURS[look.outfit_colour as usize].1,
-            );
-        }
-        if look.skin != 0 {
-            recolour(canvas, &SKIN, SKIN_TONES[look.skin as usize].1);
-        }
+        swap(canvas, &swaps);
     }
 
     /// The Handler's overworld sheet in this look.
@@ -210,6 +273,13 @@ impl HandlerLook {
             OUTFITS[look.outfit as usize].to_lowercase(),
             match ACCESSORIES[look.accessory as usize] {
                 "None" => "nothing carried".to_owned(),
+                a if look.accessory_ramp().is_some() && look.accessory_colour != 0 => format!(
+                    "the {} {}",
+                    ACCESSORY_COLOURS[look.accessory_colour as usize]
+                        .0
+                        .to_lowercase(),
+                    a.to_lowercase()
+                ),
                 a => format!("the {}", a.to_lowercase()),
             }
         );
@@ -276,20 +346,31 @@ fn from_hsv(h: f32, s: f32, v: f32) -> Rgba {
     Rgba::new(byte(r), byte(g), byte(b), 255)
 }
 
-/// Swaps a material's four shades for the same steps of `to`: each keeps how much darker or
+/// A material's four shades, each beside the same step of `to`: each keeps how much darker or
 /// paler it was than the matched shade, in the new colour's hue.
-pub fn recolour(canvas: &mut Canvas, ramp: &Ramp, to: u32) {
+fn shades(ramp: &Ramp, to: u32) -> Vec<(Rgba, Rgba)> {
     let (_, base_s, base_v) = hsv(rgb(ramp[MATCHED]));
     let (to_h, to_s, to_v) = hsv(rgb(to));
-    let swaps: Vec<(Rgba, Rgba)> = ramp
-        .iter()
+    ramp.iter()
         .map(|&from| {
             let (_, s, v) = hsv(rgb(from));
             let s_ratio = if base_s > 0.0 { s / base_s } else { 1.0 };
             let v_ratio = if base_v > 0.0 { v / base_v } else { 1.0 };
             (rgb(from), from_hsv(to_h, to_s * s_ratio, to_v * v_ratio))
         })
-        .collect();
+        .collect()
+}
+
+/// Swaps a material's four shades for the same steps of `to`.
+pub fn recolour(canvas: &mut Canvas, ramp: &Ramp, to: u32) {
+    swap(canvas, &shades(ramp, to));
+}
+
+/// Each pixel of a `from` colour painted its `to`, in one pass.
+fn swap(canvas: &mut Canvas, swaps: &[(Rgba, Rgba)]) {
+    if swaps.is_empty() {
+        return;
+    }
     for y in 0..canvas.height() as i32 {
         for x in 0..canvas.width() as i32 {
             let p = canvas.get(x, y);
@@ -373,6 +454,84 @@ mod tests {
             ..HandlerLook::default()
         };
         assert_eq!(odd.sane(), HandlerLook::default());
+    }
+
+    /// Dyeing one material changes only that material's pixels, somewhere in the sheet.
+    fn only_dyes(look: HandlerLook, ramp: &Ramp) {
+        let a = look.sheet();
+        let mut plain = look;
+        (plain.trousers, plain.shoes, plain.accessory_colour) = (0, 0, 0);
+        let b = plain.sheet();
+        let material: Vec<Rgba> = ramp.iter().map(|&h| rgb(h)).collect();
+        let mut changed = 0;
+        for facing in Facing::ALL {
+            let (fa, fb) = (a.frame(facing, 0), b.frame(facing, 0));
+            for y in 0..CELL {
+                for x in 0..CELL {
+                    if fa.get(x, y) != fb.get(x, y) {
+                        changed += 1;
+                        assert!(material.contains(&fb.get(x, y)), "{facing:?} ({x}, {y})");
+                    }
+                }
+            }
+        }
+        assert!(changed > 20, "only {changed} pixels changed");
+    }
+
+    #[test]
+    fn trousers_shoes_and_the_accessory_take_their_own_colours() {
+        let usual = HandlerLook::default();
+        only_dyes(
+            HandlerLook {
+                trousers: 2,
+                ..usual
+            },
+            &TROUSERS,
+        );
+        only_dyes(HandlerLook { shoes: 1, ..usual }, &SHOES);
+        only_dyes(
+            HandlerLook {
+                accessory_colour: 2,
+                ..usual
+            },
+            &SATCHEL,
+        );
+        only_dyes(
+            HandlerLook {
+                accessory: 2,
+                accessory_colour: 4,
+                ..usual
+            },
+            &SCARF,
+        );
+        only_dyes(
+            HandlerLook {
+                accessory: 3,
+                accessory_colour: 3,
+                ..usual
+            },
+            &FIELD_CAP,
+        );
+    }
+
+    #[test]
+    fn glasses_and_the_magnifier_keep_their_own_colours() {
+        for accessory in [1, 4, 5] {
+            let look = HandlerLook {
+                accessory,
+                accessory_colour: 3,
+                ..HandlerLook::default()
+            };
+            assert_eq!(look.own_accessory_colour(), None);
+            let plain = HandlerLook {
+                accessory_colour: 0,
+                ..look
+            };
+            assert_eq!(
+                look.sheet().frame(Facing::Left, 6),
+                plain.sheet().frame(Facing::Left, 6)
+            );
+        }
     }
 
     #[test]
