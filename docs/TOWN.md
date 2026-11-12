@@ -63,7 +63,10 @@ what Battle uses, all of it committed:
 A place is drawn as the guide says: its background with shadows, rugs and wall pieces laid on it,
 then every piece and everyone in the place back to front by their feet, then its foreground and
 the tops of trees, lamps, desks and bookcases over them. Light moves on the campus water. The cups
-won stand on the office and Arena sideboards in place of their empty stands.
+won stand on the office and Arena sideboards in place of their empty stands. The habitat's little
+train runs round its loop on the office desk (standing at the platform when motion is reduced), the
+courtyard's lanterns flicker, a red pin bobs on the notice board while a season fixture waits, and
+the season champion's shield hangs on the office wall once a title is won.
 
 Two things are adjusted from the pack as it came. What stands on a desk or table whose near edge is
 drawn in front of people is drawn in front of that edge too, so the habitat, the lamp and the mug
@@ -89,14 +92,19 @@ whatever stands there and uses it; any key gives the walk up.
 | E, Enter or Space | use what is in front |
 | Tab, Shift-Tab | point to the next or previous thing; E then walks there and uses it |
 | a click | walk there, or to the thing or person clicked and use it |
+| M | the campus map (below); M or Escape closes it |
 
 The thing in front, or the one Tab points to, shows its prompt over it.
+
+The campus map shows the whole courtyard at a whole number of screen pixels to its own, each
+building named at its door and the Handler marked where they stand, or at the door of the building
+they are in (`app/map.rs`). The town stands still under it.
 
 ## What each thing opens
 
 | Where | Thing or person | Opens |
 | --- | --- | --- |
-| Office | habitat | the Handler's page |
+| Office | habitat | looking into the habitat (below) |
 | Office | trophies | History |
 | Office | bookcase | Settings |
 | Campus | notice board | Season |
@@ -108,6 +116,14 @@ The thing in front, or the one Tab points to, shows its prompt over it.
 | Clubhouse | history shelves | History |
 | Guild Hall | board, Hall of Champions, Odile | Season |
 | Studio | mirror, counter, Bram | the Handler Studio |
+
+## Looking into the habitat
+
+The habitat on the office desk opens to the companions at their own size, standing on the little
+platform behind the glass, drawn by `formiga-art` from Desktop's look (`app/habitat.rs`). One is
+picked at a time, by the arrow keys, A and D, or a click, and the card under them gives its name,
+temperament and traits and the first thing the notebook has seen it do, as Desktop's record has
+them. Battle only shows these. E, Enter or Escape goes back to the office.
 
 ## Who says what
 
@@ -126,7 +142,9 @@ with nothing recorded yet it is a plain greeting (`app/speech.rs`). Nothing said
 | the gardener, the angler | one line of their own, nothing about anyone | nothing |
 | the notice board | the next cup and this season's fixture | nothing |
 | the beacon lamp, the greenhouse | what they are | nothing |
-| the habitat | the companions' names | the Handler's page |
+
+Coming back from a match, a card over the place says what it earned, in the same words as the
+match's own page.
 
 Closing the page, or finishing a match begun from it, comes back to the town where the Handler
 stood, and the way back is named after the place: "‹ Back to the Arena".
@@ -151,4 +169,5 @@ The Handler is stacked from Jake's layered sheets in his draw order: hair behind
 behind, body, outfit, the accessory in front, hair in front, then glasses or a cap. Wren, the
 gardener and the angler have full sheets (their last two frames are pointing, the watering can and
 the rod); Marlow, Iris, Odile and Bram have staff sheets of 4 frames: two standing, two
-talking. Spoken to, a townsperson turns to the Handler and talks for a moment.
+talking. Spoken to, a townsperson turns to the Handler and talks for a moment. The gardener waters,
+the angler casts and Wren points for two seconds in every seven, each in their own time.

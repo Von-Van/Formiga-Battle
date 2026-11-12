@@ -214,6 +214,7 @@ fn parse(args: Vec<String>) -> Result<Parsed> {
                     "studio" => app::Review::Studio,
                     "campus" => app::Review::Campus,
                     "talk" => app::Review::Talk,
+                    "habitat" => app::Review::Habitat,
                     other => bail!("unknown stage {other:?}"),
                 }
             }

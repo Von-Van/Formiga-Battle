@@ -42,6 +42,8 @@ impl BattleApp {
         let mut town = Town::new(now);
         town.dress(&self.table.career.look);
         town.cups = self.cups_won();
+        town.news = self.table.next_event_fixture().is_some();
+        town.titled = !self.table.career.titles.is_empty();
         self.town = Some(town);
         self.stage = Stage::Town;
         self.turn = None;
@@ -101,10 +103,23 @@ impl BattleApp {
     }
 
     pub(super) fn town_frame(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, now: f32) {
+        if self.habitat.is_some() {
+            self.habitat_frame(ui, ctx, now);
+            return;
+        }
+        let open_map = self.map.is_none()
+            && self.speech.is_none()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::M));
+        if open_map || self.map.is_some() {
+            // The town stands still under the map.
+            self.walk_keys.clear();
+        }
         let was_talking = self.speech.is_some();
         let talking = was_talking;
         // While someone is speaking the Handler stands still and listens.
-        let held = self.held_way(ctx).filter(|_| !talking);
+        let mapped = open_map || self.map.is_some();
+        let held = self.held_way(ctx).filter(|_| !talking && !mapped);
         let typing = ctx.egui_wants_keyboard_input();
         let (act, next, back) = ctx.input_mut(|i| {
             if typing {
@@ -131,10 +146,10 @@ impl BattleApp {
             return;
         };
         let mut happened = town.tick(held, now);
-        if next && !talking {
+        if next && !talking && !mapped {
             town.pick_next(back);
         }
-        if act && !was_talking && happened == Happened::Nothing {
+        if act && !was_talking && !mapped && happened == Happened::Nothing {
             happened = town.act(now);
         }
 
@@ -210,7 +225,7 @@ impl BattleApp {
         painter.text(
             pos2(picture_rect.min.x, picture_rect.max.y + BAR / 2.0),
             egui::Align2::LEFT_CENTER,
-            "WASD or arrows: walk   ·   E: use   ·   Tab: next thing   ·   or click",
+            "WASD or arrows: walk   ·   E: use   ·   Tab: next thing   ·   M: map   ·   or click",
             FontId::monospace(12.0),
             CREAM,
         );
@@ -227,6 +242,9 @@ impl BattleApp {
             self.speech_on();
         }
         self.speech_card(ctx, &painter, picture_rect);
+        if open_map || self.map.is_some() {
+            self.map_frame(ctx, ui.max_rect());
+        }
         self.town_happened(ctx, happened);
     }
 
@@ -244,6 +262,10 @@ impl BattleApp {
 
     /// The page a thing or a person in town opens.
     pub(super) fn use_in_town(&mut self, place: PlaceId, what: &str) {
+        if (place, what) == (PlaceId::Office, "habitat") {
+            self.open_habitat();
+            return;
+        }
         // Someone, or something, with something to say says it first.
         if self.talk_or_open(place, what) {
             return;

@@ -19,7 +19,9 @@
 //! made of (cards, notes, tokens, the watch) are in `widgets`.
 
 mod arrival;
+mod habitat;
 mod handler;
+mod map;
 mod match_screen;
 mod menus;
 mod playbooks;
@@ -212,6 +214,8 @@ pub enum Review {
     Campus,
     /// The Handler in the Guild Hall, Wren speaking.
     Talk,
+    /// Looking into the habitat, the second companion picked.
+    Habitat,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -376,6 +380,10 @@ pub struct BattleApp {
     /// Someone in town speaking, and their portrait's picture.
     speech: Option<speech::Speech>,
     speech_face: Option<egui::TextureHandle>,
+    /// Looking into the habitat on the office desk.
+    habitat: Option<habitat::Habitat>,
+    /// The campus map is open, with its picture.
+    map: Option<egui::TextureHandle>,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -522,6 +530,8 @@ impl BattleApp {
             studio_pictures: None,
             speech: None,
             speech_face: None,
+            habitat: None,
+            map: None,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -606,6 +616,14 @@ impl BattleApp {
             }
             Some(Review::Welcome) => app.welcome = true,
             Some(Review::Town) => app.enter_town(),
+            Some(Review::Habitat) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.enter_town();
+                app.open_habitat();
+                if let Some(h) = &mut app.habitat {
+                    h.pick(1);
+                }
+            }
             Some(Review::Talk) => {
                 app.enter_town();
                 let mut town =
@@ -615,10 +633,13 @@ impl BattleApp {
                 app.use_in_town(crate::town::map::PlaceId::GuildHall, "wren");
             }
             Some(Review::Campus) => {
+                // A season under way, so the notice board has its pin.
+                app.table.begin_next_event();
                 app.enter_town();
                 let mut town =
                     crate::town::Town::through(crate::town::map::PlaceId::Campus, '0', 0.0);
                 town.dress(&app.table.career.look);
+                town.news = app.table.next_event_fixture().is_some();
                 app.town = Some(town);
             }
             Some(Review::Studio) => {

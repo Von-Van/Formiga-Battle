@@ -13,7 +13,11 @@
 //!   on the floor at `opacity` of 255, and what of it stands in front of people: a picture of its
 //!   own (`over`), or its top `rows` rows;
 //! - `cup <slot> <x> <y> <sort> <stand> <sx> <sy>`: a place for a cup on a sideboard: the won cup
-//!   standing with its foot's middle at `x, y`, or the empty stand at `sx, sy`.
+//!   standing with its foot's middle at `x, y`, or the empty stand at `sx, sy`;
+//! - `train <x> <y> <sort> <front> <loop> <still> <sx> <sy>`: the office habitat's little train,
+//!   running round `loop` (its points from the habitat's corner at `x, y`, as `x,y;x,y;…`) at
+//!   depth `sort`, and in front of people too if `front` is 1; with reduced motion it stands at
+//!   the platform, the picture `still` at `sx, sy`.
 
 use super::art;
 use super::map::Place;
@@ -30,6 +34,91 @@ pub const VIEW: (i32, i32) = (416, 234);
 const SHADE: Rgba = Rgba::new(0x23, 0x14, 0x20, 255);
 /// A cup on the sideboard: a cell of `trophy-cups.png`.
 const CUP: (i32, i32) = (24, 32);
+/// How fast the habitat's train runs round its loop, in pixels a second, and how often its
+/// wheels turn a frame.
+const TRAIN_SPEED: f32 = 12.0;
+const TRAIN_FRAMES_PER_SECOND: f32 = 8.0;
+/// The lamps that flicker, by their lantern's picture.
+const LAMP: &str = "prop-campus-lamp-post-fg.png";
+const NOTICE_BOARD: &str = "prop-campus-notice-board.png";
+
+/// A stretch of the train's loop: from, to, and how long it is.
+type Leg = ((i32, i32), (i32, i32), f32);
+
+/// The office habitat's little train.
+#[derive(Clone, Debug)]
+struct Train {
+    corner: (i32, i32),
+    points: Vec<(i32, i32)>,
+    sort: i32,
+    front: bool,
+    across: Canvas,
+    upright: Canvas,
+    still: (Canvas, i32, i32),
+    /// Where among the pieces it is drawn.
+    at: usize,
+}
+
+impl Train {
+    /// The train now: its picture and where its top-left corner goes.
+    fn now(&self, now: f32, still: bool) -> (Canvas, i32, i32) {
+        if still || self.points.len() < 2 {
+            return self.still.clone();
+        }
+        let n = self.points.len();
+        let legs: Vec<Leg> = (0..n)
+            .map(|i| {
+                let (a, b) = (self.points[i], self.points[(i + 1) % n]);
+                let len = (((b.0 - a.0).pow(2) + (b.1 - a.1).pow(2)) as f32).sqrt();
+                (a, b, len)
+            })
+            .collect();
+        let total: f32 = legs.iter().map(|l| l.2).sum();
+        let mut d = (now * TRAIN_SPEED).rem_euclid(total);
+        let (a, b, len) = legs
+            .iter()
+            .copied()
+            .find(|l| {
+                if d <= l.2 {
+                    true
+                } else {
+                    d -= l.2;
+                    false
+                }
+            })
+            .unwrap_or(legs[0]);
+        let t = if len > 0.0 { d / len } else { 0.0 };
+        let at = (
+            a.0 as f32 + (b.0 - a.0) as f32 * t,
+            a.1 as f32 + (b.1 - a.1) as f32 * t,
+        );
+        let frame = (now * TRAIN_FRAMES_PER_SECOND) as i32 % 4;
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        // Running across, the strip faces east and is turned for west; up and down, the upright
+        // strip faces north and is turned for south.
+        let (strip, size, anchor, flip_x, flip_y) = if dx.abs() >= dy.abs() {
+            (&self.across, (22, 8), (11, 4), dx < 0, false)
+        } else {
+            (&self.upright, (8, 22), (4, 11), false, dy > 0)
+        };
+        let mut picture = Canvas::new(size.0 as u32, size.1 as u32);
+        for y in 0..size.1 {
+            for x in 0..size.0 {
+                let (sx, sy) = (frame * size.0 + x, y);
+                let (tx, ty) = (
+                    if flip_x { size.0 - 1 - x } else { x },
+                    if flip_y { size.1 - 1 - y } else { y },
+                );
+                picture.set(tx, ty, strip.get(sx, sy));
+            }
+        }
+        (
+            picture,
+            self.corner.0 + at.0.round() as i32 - anchor.0,
+            self.corner.1 + at.1.round() as i32 - anchor.1,
+        )
+    }
+}
 
 /// A piece drawn among the people.
 #[derive(Clone, Debug)]
@@ -57,8 +146,14 @@ pub struct Scenery {
     pieces: Vec<Piece>,
     cups: Vec<CupPlace>,
     cup_pictures: Option<Canvas>,
-    /// What stands in front of everyone, laid over last.
+    /// What stands in front of everyone, laid over last: below the habitat's train, if it is in
+    /// front of people too, and above it.
     front: Canvas,
+    front_above: Option<Canvas>,
+    train: Option<Train>,
+    /// The lanterns that flicker, and the notice board, by their top-left corners.
+    pub lamps: Vec<(i32, i32)>,
+    pub notice_board: Option<(i32, i32)>,
 }
 
 impl Scenery {
@@ -81,6 +176,10 @@ impl Scenery {
         let mut pieces = Vec::new();
         let mut cups = Vec::new();
         let mut overs: Vec<(Canvas, i32, i32)> = Vec::new();
+        let mut train: Option<Train> = None;
+        let mut split: Option<usize> = None;
+        let mut lamps = Vec::new();
+        let mut notice_board = None;
         for (n, line) in text.lines().enumerate() {
             let line = line.split('#').next().unwrap_or("").trim();
             if line.is_empty() {
@@ -122,6 +221,12 @@ impl Scenery {
                         }
                     }
                     let art = picture(file)?;
+                    if *top == LAMP {
+                        lamps.push((x, y));
+                    }
+                    if *file == NOTICE_BOARD {
+                        notice_board = Some((x, y));
+                    }
                     if *top != "-" {
                         overs.push((picture(top)?, x, y));
                     } else {
@@ -150,14 +255,45 @@ impl Scenery {
                     stand: picture(stand)?,
                     stand_at: (num(sx)?, num(sy)?),
                 }),
+                ["train", x, y, sort, front, points, still, sx, sy] => {
+                    let points = points
+                        .split(';')
+                        .map(|p| {
+                            let (a, b) = p.split_once(',').unwrap_or((p, "0"));
+                            Ok((num(a)?, num(b)?))
+                        })
+                        .collect::<Result<Vec<_>, String>>()?;
+                    let front = *front == "1";
+                    if front {
+                        split = Some(overs.len());
+                    }
+                    train = Some(Train {
+                        corner: (num(x)?, num(y)?),
+                        points,
+                        sort: num(sort)?,
+                        front,
+                        across: picture("prop-habitat-train.png")?,
+                        upright: picture("prop-habitat-train-vertical.png")?,
+                        still: (picture(still)?, num(sx)?, num(sy)?),
+                        at: pieces.len(),
+                    });
+                }
                 _ => return Err(format!("line {}: {line:?} is not a piece", n + 1)),
             }
         }
         let ground = ground.ok_or("no background")?;
         let mut front_layer = front.unwrap_or_else(|| Canvas::new(ground.width(), ground.height()));
-        for (pic, x, y) in &overs {
+        let split = split.unwrap_or(overs.len());
+        for (pic, x, y) in &overs[..split] {
             over(&mut front_layer, pic, *x, *y);
         }
+        let front_above = (split < overs.len()).then(|| {
+            let mut above = Canvas::new(ground.width(), ground.height());
+            for (pic, x, y) in &overs[split..] {
+                over(&mut above, pic, *x, *y);
+            }
+            above
+        });
         let cup_pictures = if cups.is_empty() {
             None
         } else {
@@ -169,13 +305,27 @@ impl Scenery {
             cups,
             cup_pictures,
             front: front_layer,
+            front_above,
+            train,
+            lamps,
+            notice_board,
         })
     }
 
     /// The pieces drawn among the people, with the cups won on their sideboards, in the order
     /// they are written (pieces on a piece come after it).
-    pub fn pieces(&self, won: [bool; 4]) -> Vec<Piece> {
+    pub fn pieces(&self, won: [bool; 4], now: f32, still: bool) -> Vec<Piece> {
         let mut out = self.pieces.clone();
+        if let Some(train) = &self.train {
+            let (picture, x, y) = train.now(now, still);
+            let piece = Piece {
+                picture,
+                x,
+                y,
+                sort: train.sort,
+            };
+            out.insert(train.at.min(out.len()), piece);
+        }
         for cup in &self.cups {
             let slot = cup.slot.min(3);
             let picture = match (&self.cup_pictures, won[slot]) {
@@ -205,9 +355,17 @@ impl Scenery {
         out
     }
 
-    /// What stands in front of everyone.
-    pub fn front(&self) -> &Canvas {
-        &self.front
+    /// Lays what stands in front of everyone over `world`, with the habitat's train among it
+    /// when its desk's near edge stands in front of people.
+    pub fn lay_front(&self, world: &mut Canvas, now: f32, still: bool) {
+        over(world, &self.front, 0, 0);
+        if let Some(train) = self.train.as_ref().filter(|t| t.front) {
+            let (picture, x, y) = train.now(now, still);
+            over(world, &picture, x, y);
+        }
+        if let Some(above) = &self.front_above {
+            over(world, above, 0, 0);
+        }
     }
 }
 
@@ -287,6 +445,21 @@ mod tests {
     }
 
     #[test]
+    fn the_habitat_train_runs_round_its_loop_and_stands_still_with_reduced_motion() {
+        let office = PlaceId::Office.scenery();
+        let train = office.train.as_ref().expect("the office has its train");
+        let places: std::collections::BTreeSet<(i32, i32)> = (0..40)
+            .map(|i| {
+                let (_, x, y) = train.now(i as f32 * 0.5, false);
+                (x, y)
+            })
+            .collect();
+        assert!(places.len() > 20, "it moves");
+        let (_, x, y) = train.now(3.0, true);
+        assert_eq!((x, y), (train.still.1, train.still.2));
+    }
+
+    #[test]
     fn every_place_has_its_art_the_size_of_its_tiles() {
         for id in PlaceId::ALL {
             let place = id.place();
@@ -314,8 +487,8 @@ mod tests {
     #[test]
     fn a_won_cup_stands_where_its_empty_stand_was() {
         let office = PlaceId::Office.scenery();
-        let none = office.pieces([false; 4]);
-        let one = office.pieces([true, false, false, false]);
+        let none = office.pieces([false; 4], 0.0, true);
+        let one = office.pieces([true, false, false, false], 0.0, true);
         assert_eq!(none.len(), one.len());
         let differs = none
             .iter()

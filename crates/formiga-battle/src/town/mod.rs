@@ -28,6 +28,9 @@ const REACH: f32 = 0.35;
 const TALK: f32 = 2.5;
 /// How long a place takes to come up after a door, in seconds.
 pub const ENTER: f32 = 0.25;
+/// Where the season champion's shield hangs on the office wall: its top-left corner, left of the
+/// framed note.
+const SHIELD: (i32, i32) = (22, 4);
 /// The colour round a place smaller than the window.
 const SURROUND: Rgba = Rgba::new(0x2f, 0x1c, 0x12, 255);
 
@@ -60,6 +63,10 @@ pub struct Town {
     people: HashMap<String, Sheet>,
     /// The cups won, in the order of the Circuit, for the trophy stands.
     pub cups: [bool; 4],
+    /// A fixture is waiting, for the pin on the notice board.
+    pub news: bool,
+    /// A season title is won, for the shield on the office wall.
+    pub titled: bool,
     /// When the place was entered.
     pub entered: f32,
     /// When the Handler last reached for something.
@@ -105,6 +112,8 @@ impl Town {
             sheet: look::HandlerLook::default().sheet(),
             people,
             cups: [false; 4],
+            news: false,
+            titled: false,
             entered: now,
             reached: f32::NEG_INFINITY,
             spoke_to: None,
@@ -117,11 +126,13 @@ impl Town {
         let Some(door) = self.place.door(mark).cloned() else {
             return Happened::Nothing;
         };
-        let (sheet, cups) = (self.sheet.clone(), self.cups);
+        let (sheet, cups, news, titled) = (self.sheet.clone(), self.cups, self.news, self.titled);
         *self = Self::through(door.to, door.to_mark, now);
-        // The Handler keeps their look, and the trophies stay won.
+        // The Handler keeps their look, and the record's keepsakes stay up.
         self.sheet = sheet;
         self.cups = cups;
+        self.news = news;
+        self.titled = titled;
         self.let_go = true;
         Happened::Entered(door.to)
     }
@@ -279,7 +290,7 @@ impl Town {
         // Pieces first at equal depth, so someone at a desk's foot stands in front of it.
         let mut drawn: Vec<(i32, u8, picture::Piece)> = self
             .scenery
-            .pieces(self.cups)
+            .pieces(self.cups, now, reduce_motion)
             .into_iter()
             .map(|p| (p.sort, 0, p))
             .collect();
@@ -294,6 +305,14 @@ impl Town {
                 Some((who, at)) if who == i && now - at < TALK => {
                     let facing = facing_toward(p.tile, self.walker.tile).unwrap_or(p.facing);
                     sheet.talking(facing, ((now - at) / 0.25) as u32 % 2 == 1)
+                }
+                // The gardener waters, the angler casts and Wren points now and then: their own
+                // two frames for two seconds in every seven, each in their own time.
+                _ if !reduce_motion
+                    && sheet.has_own_frames()
+                    && (now + i as f32 * 2.3).rem_euclid(7.0) < 2.0 =>
+                {
+                    sheet.talking(p.facing, (now * 2.0) as u32 % 2 == 1)
                 }
                 _ => sheet.standing(p.facing, breath(i as f32 * 0.7)),
             };
@@ -314,7 +333,11 @@ impl Town {
         for (_, _, piece) in &drawn {
             picture::over(&mut world, &piece.picture, piece.x, piece.y);
         }
-        picture::over(&mut world, self.scenery.front(), 0, 0);
+        self.scenery.lay_front(&mut world, now, reduce_motion);
+        if !reduce_motion {
+            self.flicker(&mut world, now);
+        }
+        self.keepsakes(&mut world, now, reduce_motion);
         let mut view = Canvas::new(picture::VIEW.0 as u32, picture::VIEW.1 as u32);
         for y in 0..picture::VIEW.1 {
             for x in 0..picture::VIEW.0 {
@@ -325,6 +348,43 @@ impl Town {
             }
         }
         view
+    }
+
+    /// The lamps' lanterns flickering, each a little out of step with the next.
+    fn flicker(&self, world: &mut Canvas, now: f32) {
+        let Some(strip) = art::bytes("anim-lamp.png").and_then(sheet::decode) else {
+            return;
+        };
+        for (i, &(x, y)) in self.scenery.lamps.iter().enumerate() {
+            let frame = ((now * 4.0) as i32 + i as i32 * 3) % 4;
+            let mut cell = Canvas::new(16, 16);
+            picture::over(&mut cell, &strip, -16 * frame, 0);
+            picture::over(world, &cell, x, y);
+        }
+    }
+
+    /// What the record puts up around town: a pin on the notice board while a fixture waits,
+    /// and the season champion's shield on the office wall once a title is won.
+    fn keepsakes(&self, world: &mut Canvas, now: f32, reduce_motion: bool) {
+        if self.news
+            && let Some((x, y)) = self.scenery.notice_board
+            && let Some(strip) = art::bytes("icon-notice.png").and_then(sheet::decode)
+        {
+            let frame = if reduce_motion {
+                0
+            } else {
+                (now * 2.0) as i32 % 2
+            };
+            let mut cell = Canvas::new(12, 12);
+            picture::over(&mut cell, &strip, -12 * frame, 0);
+            picture::over(world, &cell, x + 18, y - 4);
+        }
+        if self.titled
+            && self.place.id == PlaceId::Office
+            && let Some(shield) = art::bytes("trophy-season.png").and_then(sheet::decode)
+        {
+            picture::over(world, &shield, SHIELD.0, SHIELD.1);
+        }
     }
 
     /// Light moving on the water, four frames a few times a second.

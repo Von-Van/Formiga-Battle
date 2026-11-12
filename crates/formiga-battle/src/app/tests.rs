@@ -729,3 +729,86 @@ fn escape_closes_a_conversation_without_opening_anything() {
     assert!(h.app.speech.is_none());
     assert_eq!(h.app.stage, Stage::Town);
 }
+
+#[test]
+fn the_habitat_shows_each_companion_as_desktop_keeps_them_and_escape_leaves_it() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.app
+        .use_in_town(crate::town::map::PlaceId::Office, "habitat");
+    h.frames(2);
+    assert!(says(&h, "THE HABITAT"));
+    let first = h.app.table.home[0].0.traveler.name.clone();
+    assert!(
+        h.drawn.iter().any(|(w, _)| w.starts_with(&first)),
+        "{first} is named"
+    );
+    let key = |key, pressed| egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::default(),
+    };
+    h.frame(vec![key(egui::Key::ArrowRight, true)]);
+    h.frame(vec![key(egui::Key::ArrowRight, false)]);
+    let second = h.app.table.home[1].0.traveler.name.clone();
+    assert!(
+        h.drawn.iter().any(|(w, _)| w.starts_with(&second)),
+        "{second} is named"
+    );
+    h.frame(vec![key(egui::Key::Escape, true)]);
+    h.frame(vec![key(egui::Key::Escape, false)]);
+    assert!(h.app.habitat.is_none());
+    assert_eq!(h.app.stage, Stage::Town);
+}
+
+#[test]
+fn a_match_begun_in_town_comes_back_to_town_with_what_it_earned() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.app
+        .use_in_town(crate::town::map::PlaceId::Arena, "visitors");
+    h.app.begin();
+    let mut now = h.time as f32 + READY_SECS;
+    while !h.app.table.finished(now) {
+        h.app.table.coach_orders();
+        h.app.table.lock(now);
+        now += 20.0;
+        h.app.table.frame(now);
+    }
+    h.time = f64::from(now) + 1.0;
+    h.frames(4);
+    assert!(
+        !h.app.table.earned.is_empty(),
+        "the match earned something to say"
+    );
+    h.app.back_to_station();
+    h.frames(2);
+    assert_eq!(h.app.stage, Stage::Town);
+    assert!(h.app.speech.is_some(), "the card says what it earned");
+}
+
+#[test]
+fn m_opens_the_campus_map_marking_the_handler_and_closes_it_again() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.frames(2);
+    let key = |pressed| egui::Event::Key {
+        key: egui::Key::M,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::default(),
+    };
+    h.frame(vec![key(true)]);
+    h.frame(vec![key(false)]);
+    assert!(h.app.map.is_some());
+    assert!(says(&h, "YOU") && says(&h, "Your office") && says(&h, "Arena"));
+    h.frame(vec![key(true)]);
+    h.frame(vec![key(false)]);
+    assert!(h.app.map.is_none());
+}

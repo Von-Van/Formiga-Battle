@@ -54,7 +54,6 @@ impl BattleApp {
     /// What a person or a thing in town says, if it speaks at all.
     pub(super) fn speech_for(&self, place: PlaceId, what: &str) -> Option<Speech> {
         let record = &self.table.record;
-        let names = self.companion_names();
         Some(match (place, what) {
             (PlaceId::Arena, "marlow") => {
                 let next = crate::rewards::CUPS
@@ -179,12 +178,6 @@ impl BattleApp {
                 vec!["Warm glass and tomato vines. The gardener keeps it.".to_owned()],
                 None,
             ),
-            (PlaceId::Office, "habitat") if !names.is_empty() => Speech::new(
-                "The habitat",
-                None,
-                vec![format!("{names}, at home behind the glass.")],
-                Some((self.outing, Step::Handler)),
-            ),
             _ => return None,
         })
     }
@@ -226,6 +219,25 @@ impl BattleApp {
             });
         }
         lines
+    }
+
+    /// Back in town from a match: a card with what it earned, in the words the match's own page
+    /// used, so nothing is said that was not recorded.
+    pub(super) fn came_back(&mut self) {
+        let lines: Vec<String> = self
+            .table
+            .earned
+            .iter()
+            .filter(|l| !l.trim().is_empty())
+            .cloned()
+            .collect();
+        if lines.is_empty() {
+            return;
+        }
+        let who = format!("Back from {}", self.table.arena.name);
+        let mut speech = Speech::new(&who, None, lines, None);
+        speech.since = self.clock;
+        self.speech = Some(speech);
     }
 
     /// Starts a conversation, or opens the page straight away for a thing that does not speak.
