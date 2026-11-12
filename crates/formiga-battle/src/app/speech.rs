@@ -54,7 +54,6 @@ impl BattleApp {
     /// What a person or a thing in town says, if it speaks at all.
     pub(super) fn speech_for(&self, place: PlaceId, what: &str) -> Option<Speech> {
         let record = &self.table.record;
-        let names = self.companion_names();
         Some(match (place, what) {
             (PlaceId::Arena, "marlow") => {
                 let next = crate::rewards::CUPS
@@ -178,12 +177,6 @@ impl BattleApp {
                 None,
                 vec!["Warm glass and tomato vines. The gardener keeps it.".to_owned()],
                 None,
-            ),
-            (PlaceId::Office, "habitat") if !names.is_empty() => Speech::new(
-                "The habitat",
-                None,
-                vec![format!("{names}, at home behind the glass.")],
-                Some((self.outing, Step::Handler)),
             ),
             _ => return None,
         })

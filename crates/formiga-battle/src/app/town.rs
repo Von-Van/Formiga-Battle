@@ -101,6 +101,10 @@ impl BattleApp {
     }
 
     pub(super) fn town_frame(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, now: f32) {
+        if self.habitat.is_some() {
+            self.habitat_frame(ui, ctx, now);
+            return;
+        }
         let was_talking = self.speech.is_some();
         let talking = was_talking;
         // While someone is speaking the Handler stands still and listens.
@@ -244,6 +248,10 @@ impl BattleApp {
 
     /// The page a thing or a person in town opens.
     pub(super) fn use_in_town(&mut self, place: PlaceId, what: &str) {
+        if (place, what) == (PlaceId::Office, "habitat") {
+            self.open_habitat();
+            return;
+        }
         // Someone, or something, with something to say says it first.
         if self.talk_or_open(place, what) {
             return;

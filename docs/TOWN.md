@@ -96,7 +96,7 @@ The thing in front, or the one Tab points to, shows its prompt over it.
 
 | Where | Thing or person | Opens |
 | --- | --- | --- |
-| Office | habitat | the Handler's page |
+| Office | habitat | looking into the habitat (below) |
 | Office | trophies | History |
 | Office | bookcase | Settings |
 | Campus | notice board | Season |
@@ -108,6 +108,14 @@ The thing in front, or the one Tab points to, shows its prompt over it.
 | Clubhouse | history shelves | History |
 | Guild Hall | board, Hall of Champions, Odile | Season |
 | Studio | mirror, counter, Bram | the Handler Studio |
+
+## Looking into the habitat
+
+The habitat on the office desk opens to the companions at their own size, standing on the little
+platform behind the glass, drawn by `formiga-art` from Desktop's look (`app/habitat.rs`). One is
+picked at a time, by the arrow keys, A and D, or a click, and the card under them gives its name,
+temperament and traits and the first thing the notebook has seen it do, as Desktop's record has
+them. Battle only shows these. E, Enter or Escape goes back to the office.
 
 ## Who says what
 
@@ -126,7 +134,6 @@ with nothing recorded yet it is a plain greeting (`app/speech.rs`). Nothing said
 | the gardener, the angler | one line of their own, nothing about anyone | nothing |
 | the notice board | the next cup and this season's fixture | nothing |
 | the beacon lamp, the greenhouse | what they are | nothing |
-| the habitat | the companions' names | the Handler's page |
 
 Closing the page, or finishing a match begun from it, comes back to the town where the Handler
 stood, and the way back is named after the place: "‹ Back to the Arena".

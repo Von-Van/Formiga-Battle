@@ -21,6 +21,9 @@
   Iris, Odile, Wren, Bram the tailor, the gardener and the angler each with their own sheet and talking
   back when spoken to, light on the water, and the cups won standing on the sideboards.
   `scripts/town_art.py` brings a new revision of the art pack in.
+- Looking into the habitat on the office desk shows the companions at their own size on the little
+  platform behind the glass, one picked at a time with its temperament, traits and what the
+  notebook has seen it do, as Desktop keeps them.
 - The office's back wall is spaced out evenly: the windows either side of the pennant over the
   desk, the framed note over the trophy sideboard. The habitat, lamp and mug stand on the desk
   instead of sinking into it, and a room keeps its back wall in view until the Handler nears the

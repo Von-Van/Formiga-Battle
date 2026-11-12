@@ -19,6 +19,7 @@
 //! made of (cards, notes, tokens, the watch) are in `widgets`.
 
 mod arrival;
+mod habitat;
 mod handler;
 mod match_screen;
 mod menus;
@@ -212,6 +213,8 @@ pub enum Review {
     Campus,
     /// The Handler in the Guild Hall, Wren speaking.
     Talk,
+    /// Looking into the habitat, the second companion picked.
+    Habitat,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -376,6 +379,8 @@ pub struct BattleApp {
     /// Someone in town speaking, and their portrait's picture.
     speech: Option<speech::Speech>,
     speech_face: Option<egui::TextureHandle>,
+    /// Looking into the habitat on the office desk.
+    habitat: Option<habitat::Habitat>,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -522,6 +527,7 @@ impl BattleApp {
             studio_pictures: None,
             speech: None,
             speech_face: None,
+            habitat: None,
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -606,6 +612,14 @@ impl BattleApp {
             }
             Some(Review::Welcome) => app.welcome = true,
             Some(Review::Town) => app.enter_town(),
+            Some(Review::Habitat) => {
+                app.table.record = formiga_battle_contract::sample::record();
+                app.enter_town();
+                app.open_habitat();
+                if let Some(h) = &mut app.habitat {
+                    h.pick(1);
+                }
+            }
             Some(Review::Talk) => {
                 app.enter_town();
                 let mut town =

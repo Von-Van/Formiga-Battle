@@ -729,3 +729,37 @@ fn escape_closes_a_conversation_without_opening_anything() {
     assert!(h.app.speech.is_none());
     assert_eq!(h.app.stage, Stage::Town);
 }
+
+#[test]
+fn the_habitat_shows_each_companion_as_desktop_keeps_them_and_escape_leaves_it() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.app
+        .use_in_town(crate::town::map::PlaceId::Office, "habitat");
+    h.frames(2);
+    assert!(says(&h, "THE HABITAT"));
+    let first = h.app.table.home[0].0.traveler.name.clone();
+    assert!(
+        h.drawn.iter().any(|(w, _)| w.starts_with(&first)),
+        "{first} is named"
+    );
+    let key = |key, pressed| egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::default(),
+    };
+    h.frame(vec![key(egui::Key::ArrowRight, true)]);
+    h.frame(vec![key(egui::Key::ArrowRight, false)]);
+    let second = h.app.table.home[1].0.traveler.name.clone();
+    assert!(
+        h.drawn.iter().any(|(w, _)| w.starts_with(&second)),
+        "{second} is named"
+    );
+    h.frame(vec![key(egui::Key::Escape, true)]);
+    h.frame(vec![key(egui::Key::Escape, false)]);
+    assert!(h.app.habitat.is_none());
+    assert_eq!(h.app.stage, Stage::Town);
+}
