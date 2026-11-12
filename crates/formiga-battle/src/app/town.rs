@@ -39,7 +39,9 @@ impl BattleApp {
     /// Into the town, at the office desk.
     pub(super) fn enter_town(&mut self) {
         let now = self.clock;
-        self.town = Some(Town::new(now));
+        let mut town = Town::new(now);
+        town.dress(&self.table.career.look);
+        self.town = Some(town);
         self.stage = Stage::Town;
         self.turn = None;
         self.turned = now;
@@ -221,9 +223,12 @@ impl BattleApp {
             (PlaceId::Clubhouse, "shelves") | (PlaceId::Office, "sideboard") => own(Step::History),
             (PlaceId::GuildHall, _) | (PlaceId::Campus, "notices") => own(Step::Season),
             (PlaceId::Office, "bookcase") => own(Step::Settings),
-            (PlaceId::Office, "habitat") | (PlaceId::Clubhouse, _) | (PlaceId::Studio, _) => {
-                own(Step::Handler)
+            (PlaceId::Studio, _) => {
+                // A fresh try-on, starting from the look kept.
+                self.studio_draft = None;
+                own(Step::Studio)
             }
+            (PlaceId::Office, "habitat") | (PlaceId::Clubhouse, _) => own(Step::Handler),
             // The beacon and the greenhouse are only to look at.
             _ => return,
         };

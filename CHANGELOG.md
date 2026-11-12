@@ -13,6 +13,10 @@
   the Handler at the desk. After the first time only the train coming in is seen; Escape, Space,
   Enter or a click skips it, reduced motion leaves it out, and the Settings page shows it again.
   The country station is kept for its review picture.
+- The Handler Studio, in town and among the Handler's own pages: try a look on (hair colour,
+  jacket colour, skin tone, build, hairstyle, outfit, accessory) and keep it with the colony's
+  career. Hair, jacket and skin already show on the Handler; the other choices are kept until
+  their pictures are drawn. It changes nothing in a match.
 
 ## [0.68.1] - 2026-10-26
 

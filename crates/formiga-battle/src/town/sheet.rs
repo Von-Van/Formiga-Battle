@@ -57,6 +57,18 @@ impl Sheet {
     }
 }
 
+impl Sheet {
+    /// Every pixel of the sheet run through `f`, given its row.
+    pub(super) fn map_pixels(&mut self, f: impl Fn(i32, Rgba) -> Rgba) {
+        for y in 0..self.canvas.height() as i32 {
+            for x in 0..self.canvas.width() as i32 {
+                let p = self.canvas.get(x, y);
+                self.canvas.set(x, y, f(y, p));
+            }
+        }
+    }
+}
+
 /// A PNG's pixels, whatever colour type it was saved in; none if it is not a PNG.
 pub fn decode(bytes: &[u8]) -> Option<Canvas> {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));

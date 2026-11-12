@@ -9,6 +9,7 @@
 //! it is given, so the town is checked without a window; the window's side is `app/town.rs`.
 
 pub mod arrival;
+pub mod look;
 pub mod map;
 pub mod picture;
 pub mod sheet;
@@ -283,6 +284,11 @@ impl Town {
             }
         }
         view
+    }
+
+    /// Dresses the Handler in a look from the Studio.
+    pub fn dress(&mut self, look: &look::HandlerLook) {
+        self.sheet = look.sheet();
     }
 
     /// Where the window's view starts in the place, in its pixels, for placing prompts over it
