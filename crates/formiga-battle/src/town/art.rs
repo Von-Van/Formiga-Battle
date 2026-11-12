@@ -261,6 +261,10 @@ pub fn bytes(name: &str) -> Option<&'static [u8]> {
         "prop-habitat-train-still.png" => {
             include_bytes!("../../assets/town/prop-habitat-train-still.png")
         }
+        "prop-habitat-train-vertical.png" => {
+            include_bytes!("../../assets/town/prop-habitat-train-vertical.png")
+        }
+        "prop-habitat-train.png" => include_bytes!("../../assets/town/prop-habitat-train.png"),
         "prop-hat-shelf-shadow.png" => {
             include_bytes!("../../assets/town/prop-hat-shelf-shadow.png")
         }
@@ -305,7 +309,7 @@ pub fn bytes(name: &str) -> Option<&'static [u8]> {
 
 /// Every picture there is, for the tests.
 #[cfg(test)]
-pub const ALL: [&str; 171] = [
+pub const ALL: [&str; 173] = [
     "anim-beacon.png",
     "anim-flag.png",
     "anim-lamp.png",
@@ -453,6 +457,8 @@ pub const ALL: [&str; 171] = [
     "prop-habitat-station.png",
     "prop-habitat-track.png",
     "prop-habitat-train-still.png",
+    "prop-habitat-train-vertical.png",
+    "prop-habitat-train.png",
     "prop-hat-shelf-shadow.png",
     "prop-hat-shelf.png",
     "prop-lamp.png",

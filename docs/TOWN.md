@@ -63,7 +63,10 @@ what Battle uses, all of it committed:
 A place is drawn as the guide says: its background with shadows, rugs and wall pieces laid on it,
 then every piece and everyone in the place back to front by their feet, then its foreground and
 the tops of trees, lamps, desks and bookcases over them. Light moves on the campus water. The cups
-won stand on the office and Arena sideboards in place of their empty stands.
+won stand on the office and Arena sideboards in place of their empty stands. The habitat's little
+train runs round its loop on the office desk (standing at the platform when motion is reduced), the
+courtyard's lanterns flicker, a red pin bobs on the notice board while a season fixture waits, and
+the season champion's shield hangs on the office wall once a title is won.
 
 Two things are adjusted from the pack as it came. What stands on a desk or table whose near edge is
 drawn in front of people is drawn in front of that edge too, so the habitat, the lamp and the mug

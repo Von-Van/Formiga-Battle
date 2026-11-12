@@ -104,9 +104,13 @@ impl BattleApp {
         // In town, back to where the Handler was standing, the place coming up again, with any
         // cup the match just won on its stand.
         let cups = self.cups_won();
+        let news = self.table.next_event_fixture().is_some();
+        let titled = !self.table.career.titles.is_empty();
         if let Some(town) = &mut self.town {
             town.entered = now;
             town.cups = cups;
+            town.news = news;
+            town.titled = titled;
             self.stage = Stage::Town;
             self.turn = None;
             self.turned = now;

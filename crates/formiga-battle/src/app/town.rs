@@ -42,6 +42,8 @@ impl BattleApp {
         let mut town = Town::new(now);
         town.dress(&self.table.career.look);
         town.cups = self.cups_won();
+        town.news = self.table.next_event_fixture().is_some();
+        town.titled = !self.table.career.titles.is_empty();
         self.town = Some(town);
         self.stage = Stage::Town;
         self.turn = None;

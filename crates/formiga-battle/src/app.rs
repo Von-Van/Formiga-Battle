@@ -629,10 +629,13 @@ impl BattleApp {
                 app.use_in_town(crate::town::map::PlaceId::GuildHall, "wren");
             }
             Some(Review::Campus) => {
+                // A season under way, so the notice board has its pin.
+                app.table.begin_next_event();
                 app.enter_town();
                 let mut town =
                     crate::town::Town::through(crate::town::map::PlaceId::Campus, '0', 0.0);
                 town.dress(&app.table.career.look);
+                town.news = app.table.next_event_fixture().is_some();
                 app.town = Some(town);
             }
             Some(Review::Studio) => {

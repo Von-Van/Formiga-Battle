@@ -281,8 +281,15 @@ def write_props(pack, guide, key, props, interior, spec=None):
             parent = p.get("attached_to")
             sort = parents.get(parent, y)
             ax, ay = d["anchor_px"]
-            over = name if parent in fronted else "-"
-            lines.append(f"sort {name} {x - ax} {y - ay} {sort} - 0 {over} 0")
+            front = 1 if parent in fronted else 0
+            # The train runs round its loop in the habitat, standing at the platform only when
+            # motion is reduced: the habitat's corner, the loop's points from it, and the still.
+            hx, hy = next(q["at_px"] for q, e in props if q["id"] == "habitat-base")
+            loop = guide["habitat"]["office"]["rail_loop"]
+            use(pack, d["file"])
+            use(pack, guide["props"]["habitat-train-vertical"]["file"])
+            points = ";".join(f"{lx},{ly}" for lx, ly in loop)
+            lines.append(f"train {hx} {hy} {sort} {front} {points} {name} {x - ax} {y - ay}")
             continue
         if p["id"] == "trophy-empty-stand":
             parent = p["attached_to"]

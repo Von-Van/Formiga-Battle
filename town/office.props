@@ -14,7 +14,7 @@ sort prop-desk.png 150 72 128 prop-desk-shadow.png 69 prop-desk-fg.png 0
 sort prop-habitat-base.png 170 58 128 - 0 prop-habitat-base.png 0
 sort prop-habitat-track.png 170 58 128 - 0 prop-habitat-track.png 0
 sort prop-habitat-station.png 170 58 128 - 0 prop-habitat-station.png 0
-sort prop-habitat-train-still.png 180 77 128 - 0 prop-habitat-train-still.png 0
+train 170 58 128 1 13,7;64,7;67,10;67,24;64,27;13,27;9,23;9,11 prop-habitat-train-still.png 180 77
 sort prop-habitat-glass.png 170 58 128 - 0 prop-habitat-glass.png 0
 sort prop-lamp.png 247 67 128 - 0 prop-lamp.png 0
 sort prop-field-notebook.png 160 86 128 - 0 prop-field-notebook.png 0

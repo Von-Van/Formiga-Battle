@@ -21,6 +21,9 @@
   Iris, Odile, Wren, Bram the tailor, the gardener and the angler each with their own sheet and talking
   back when spoken to, light on the water, and the cups won standing on the sideboards.
   `scripts/town_art.py` brings a new revision of the art pack in.
+- The habitat's little train runs round its loop on the office desk, the courtyard's lanterns
+  flicker, a pin bobs on the notice board while a season fixture waits, and the champion's shield
+  hangs on the office wall once a season title is won.
 - Looking into the habitat on the office desk shows the companions at their own size on the little
   platform behind the glass, one picked at a time with its temperament, traits and what the
   notebook has seen it do, as Desktop keeps them.
