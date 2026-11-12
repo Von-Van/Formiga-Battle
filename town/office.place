@@ -1,0 +1,16 @@
+name Research Office
+size 13 8
+ground
+#############
+#sss.hhh..bb#
+#....hhh..bb#
+#.....@.....#
+#...,,,,,...#
+#...,,,,,...#
+#...,,,,,...#
+######1######
+# The office the train comes in at: the habitat on the desk, the trophies, the bookcase.
+thing s sideboard Look at the trophies
+thing h habitat Look in the habitat
+thing b bookcase Browse the bookcase
+door 1 campus 0 up

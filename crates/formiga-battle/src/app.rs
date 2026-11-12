@@ -26,6 +26,7 @@ mod registry;
 mod season;
 #[cfg(test)]
 mod tests;
+mod town;
 mod welcome;
 mod where_to;
 mod widgets;
@@ -88,6 +89,8 @@ pub enum Stage {
     /// The notebook open on getting ready: where, who, and the friend's room.
     Journal,
     Playing,
+    /// Walking the town round the Battleground (`crate::town`), between pages.
+    Town,
 }
 
 /// Where the companions are off to, chosen at the station.
@@ -191,6 +194,8 @@ pub enum Review {
     Playbooks,
     /// A match against the visitors with the trio's playbook filling in the orders.
     Planned,
+    /// The Handler in the town, at their office desk.
+    Town,
 }
 
 /// A review picture: after `at` seconds, save the window to `path` and close.
@@ -334,6 +339,11 @@ pub struct BattleApp {
     wheel: f32,
     /// Keeps how Battle looks and sounds for next time; none for a window opened for its picture.
     kept: Option<crate::settings::Keeper>,
+    /// The town round the Battleground, once the Handler has walked into it, and its picture.
+    town: Option<crate::town::Town>,
+    town_picture: Option<egui::TextureHandle>,
+    /// The walking keys down, in the order they were pressed.
+    walk_keys: Vec<(egui::Key, crate::town::map::Facing)>,
 }
 
 /// The field guide's topics, one showing at a time.
@@ -468,6 +478,9 @@ impl BattleApp {
             friends_open: false,
             wheel: 0.0,
             kept: None,
+            town: None,
+            town_picture: None,
+            walk_keys: Vec::new(),
         };
         match review {
             Some(Review::Playing) => app.begin(),
@@ -551,6 +564,7 @@ impl BattleApp {
                 app.begin_lesson();
             }
             Some(Review::Welcome) => app.welcome = true,
+            Some(Review::Town) => app.enter_town(),
             Some(Review::Station) | None => {}
         }
         app
@@ -862,7 +876,7 @@ impl BattleApp {
                 .enumerate()
                 .map(|(i, s)| format!("{} {}", i + 1, s.tab()))
                 .collect(),
-            Stage::Station => Vec::new(),
+            Stage::Station | Stage::Town => Vec::new(),
         }
     }
 
@@ -1012,6 +1026,13 @@ impl BattleApp {
         self.keys(&ctx);
         self.pokes.retain(|(_, at)| now - at < 0.6);
         let full = ui.max_rect();
+        if self.stage == Stage::Town {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| self.town_frame(ui, &ctx, now));
+            self.take_snap(&ctx);
+            return;
+        }
         if self.stage == Stage::Station {
             self.station_tick(&ctx, now);
         }
@@ -1059,6 +1080,8 @@ impl BattleApp {
                             formiga_pencil::ruled::RuleGrid::forget(ui.ctx());
                         });
                     }
+                    // Drawn on its own before the notebook, above.
+                    Stage::Town => {}
                     Stage::Playing => {
                         self.board_view(ui, &ctx, layout.left.shrink(u * 4.0), now, u);
                         self.board_page(ui, layout.left, now, u);

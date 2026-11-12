@@ -358,6 +358,7 @@ impl BattleApp {
                 _ => "Click the picture, or press Space, to hurry the train in.".to_owned(),
             },
             Stage::Journal => self.journal_hint(),
+            Stage::Town => String::new(),
             Stage::Playing if self.table.finished(now) && self.table.lesson.is_some() => {
                 "The lesson is over. Try it again, or go on, from the notes page.".to_owned()
             }

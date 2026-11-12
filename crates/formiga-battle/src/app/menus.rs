@@ -95,6 +95,14 @@ impl BattleApp {
         // An event fixture not yet played waits on the Season page.
         self.table.event_fixture = None;
         let now = self.clock;
+        // In town, back to where the Handler was standing, the place coming up again.
+        if let Some(town) = &mut self.town {
+            town.entered = now;
+            self.stage = Stage::Town;
+            self.turn = None;
+            self.turned = now;
+            return;
+        }
         let after_match = self.stage == Stage::Playing;
         if let Some(station) = &mut self.station {
             if after_match {

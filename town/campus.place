@@ -1,0 +1,25 @@
+name Campus
+size 20 12
+ground
+T#####T:::~~::#####T
+T#####T:::~~::#####T
+T##1##T::::~~:##2##T
+T::=::T::::~~:::=::T
+^^^=^^^::::==:::=::T
+:::=:::::::~~~~:=::T
+:::=:::nl:::::::=::T
+===================T
+ggg:####:###::####:T
+ggg:#3##:###::#4##:T
+:::::=:::::::::=:::T
+TTTTTTTTT0TTTTTTTTTT
+# The courtyard: the Arena on its terrace and the Clubhouse over the creek to the north, the
+# green in the middle, the Handler Studio and the Guild Hall to the south, the gate to the office.
+thing n notices Read the notice board
+thing l beacon Look at the beacon lamp
+thing g greenhouse Look in the greenhouse
+door 0 office 1 up
+door 1 arena 1 down
+door 2 clubhouse 1 down
+door 3 studio 1 down
+door 4 guildhall 1 down

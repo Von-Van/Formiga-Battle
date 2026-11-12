@@ -34,6 +34,8 @@ anyhow = "1.0.104"
 directories = "5.0.1"
 eframe = "0.36.2"
 getrandom = "0.4.3"
+# Reads the hand-drawn character sheets and town pictures built into Battle.
+png = "0.18.1"
 # Playback only: every sound is made in code, as Formiga Hill makes its own, so there is nothing
 # to decode.
 rodio = { version = "0.22.2", default-features = false, features = ["playback"] }

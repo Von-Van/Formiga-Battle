@@ -544,3 +544,56 @@ fn a_line_over_the_board_always_finds_its_moment() {
     assert_eq!(headline_moment(5.0, &[1.0, 9.0]), 5.0);
     assert_eq!(headline_moment(5.0, &[5.5, 4.6]), 5.5 + HEADLINE_SECS);
 }
+
+#[test]
+fn the_arena_table_opens_the_cups_and_closing_the_page_comes_back_to_town() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.frames(2);
+    assert_eq!(h.app.stage, Stage::Town);
+    h.app
+        .use_in_town(crate::town::map::PlaceId::Arena, "visitors");
+    assert_eq!(
+        (h.app.stage, h.app.outing, h.app.step),
+        (Stage::Journal, Outing::Home, Step::Where)
+    );
+    h.app.go_back();
+    assert_eq!(h.app.stage, Stage::Town);
+    h.frames(2);
+    assert!(
+        h.app.town.is_some(),
+        "the town is still there, the Handler where they stood"
+    );
+}
+
+#[test]
+fn the_town_draws_its_place_name_and_walks_from_the_keyboard() {
+    let mut h = Headless::new();
+    h.frames(2);
+    h.app.enter_town();
+    h.frames(2);
+    assert!(
+        h.drawn.iter().any(|(w, _)| w == "RESEARCH OFFICE"),
+        "{:?}",
+        h.drawn
+    );
+    let start = h.app.town.as_ref().unwrap().walker.tile;
+    let key = |pressed| egui::Event::Key {
+        key: egui::Key::S,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::default(),
+    };
+    h.frame(vec![key(true)]);
+    h.frames(6);
+    h.frame(vec![key(false)]);
+    h.frames(6);
+    let now = h.app.town.as_ref().unwrap().walker.tile;
+    assert_eq!(
+        now,
+        (start.0, start.1 + 2),
+        "two steps down in about half a second"
+    );
+}
