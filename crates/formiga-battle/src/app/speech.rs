@@ -16,8 +16,9 @@ use crate::town::sheet::decode;
 pub(super) struct Speech {
     /// Who is speaking, as their card names them.
     who: String,
-    /// Their portrait sheet, `portrait-<id>.png`: calm, talking, pleased, their own.
-    portrait: Option<Canvas>,
+    /// Their portrait sheet, `portrait-<id>-talk.png`: Jake's illustrated busts, calm, talking,
+    /// pleased and their own, two by two.
+    portrait: Option<String>,
     lines: Vec<String>,
     at: usize,
     /// The page opened after the last line, if any.
@@ -34,8 +35,8 @@ impl Speech {
 
     fn new(who: &str, id: Option<&str>, lines: Vec<String>, then: Option<(Outing, Step)>) -> Self {
         let portrait = id
-            .and_then(|id| crate::town::art::bytes(&format!("portrait-{id}.png")))
-            .and_then(decode);
+            .map(|id| format!("portrait-{id}-talk.png"))
+            .filter(|name| crate::town::art::bytes(name).is_some());
         Self {
             who: who.to_owned(),
             portrait,
@@ -300,39 +301,44 @@ impl BattleApp {
             egui::StrokeKind::Inside,
         );
         let mut text_left = card.min.x + 16.0;
-        if let Some(sheet) = &speech.portrait {
-            // Talking while the line is new, then calm.
+        if let Some(name) = speech.portrait.clone() {
+            // Talking while the line is new, then calm: the top two of the four busts.
             let talking = now - speech.since < TALKING;
             let cell = if talking && ((now - speech.since) / 0.15) as i32 % 2 == 0 {
-                1
+                1.0
             } else {
-                0
+                0.0
             };
-            let mut face = Canvas::new(64, 64);
-            crate::town::picture::over(&mut face, sheet, -64 * cell, 0);
-            let tex = match &mut self.speech_face {
-                Some(t) => {
-                    let mut image = egui::ColorImage::filled([1, 1], Color32::TRANSPARENT);
-                    into_image(&face, &mut image);
-                    t.set(image, egui::TextureOptions::NEAREST);
-                    t.id()
-                }
-                None => {
-                    let t = texture(ctx, "speech-face", &face);
-                    let id = t.id();
-                    self.speech_face = Some(t);
-                    id
-                }
-            };
-            let side = card.height() - 16.0;
-            let face_rect = Rect::from_min_size(card.min + vec2(8.0, 8.0), vec2(side, side));
-            painter.image(
-                tex,
-                face_rect,
-                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-                Color32::WHITE,
-            );
-            text_left = face_rect.max.x + 12.0;
+            let kept = matches!(&self.speech_face, Some((n, _)) if *n == name);
+            if !kept {
+                self.speech_face = crate::town::art::bytes(&name)
+                    .and_then(decode)
+                    .map(|sheet| {
+                        let image = egui::ColorImage::from_rgba_unmultiplied(
+                            [sheet.width() as usize, sheet.height() as usize],
+                            &sheet.rgba_bytes(),
+                        );
+                        // Illustrations, not pixel art: drawn smoothed.
+                        let t =
+                            ctx.load_texture("speech-face", image, egui::TextureOptions::LINEAR);
+                        (name.clone(), t)
+                    });
+            }
+            if let Some((_, t)) = &self.speech_face {
+                // The bust stands at the card's left, taller than the card, over its top edge.
+                let side = card.height() + 44.0;
+                let face_rect = Rect::from_min_size(
+                    pos2(card.min.x + 6.0, card.max.y - side - 2.0),
+                    vec2(side, side),
+                );
+                painter.image(
+                    t.id(),
+                    face_rect,
+                    Rect::from_min_max(pos2(cell * 0.5, 0.0), pos2(cell * 0.5 + 0.5, 0.5)),
+                    Color32::WHITE,
+                );
+                text_left = face_rect.max.x + 8.0;
+            }
         }
         painter.text(
             pos2(text_left, card.min.y + 12.0),

@@ -613,7 +613,7 @@ fn battle_opens_with_the_train_coming_into_the_habitat_and_ends_at_the_office_de
     );
     h.frames(4);
     assert_eq!(h.app.stage, Stage::Arrival);
-    assert!(h.drawn.iter().any(|(w, _)| w == "THE HABITAT"));
+    assert!(says(&h, "Arriving"), "the strip says where they are");
     // The whole of it the first time: about nine seconds at twenty frames a second.
     h.frames(200);
     assert_eq!(h.app.stage, Stage::Town);

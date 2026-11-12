@@ -549,12 +549,27 @@ impl BattleApp {
         let (title, how) = career::standing(&career);
         // My standing, on a card with my pennant.
         let width = ui.available_width();
-        let (rect, _) = ui.allocate_exact_size(vec2(width, u * 40.0), Sense::hover());
-        let painter = ui.painter().clone();
-        chrome::card(&painter, rect, u, ink::CARD, ink::LINE.gamma_multiply(0.55));
         let flag = self.event_flag(&ctx, "you");
         let fh = u * 26.0;
         let fw = flag.size_vec2().x * fh / flag.size_vec2().y;
+        // The words are laid out first, so the card is as tall as they need.
+        let words_width = width - (u * 14.0 + fw);
+        let words: Vec<_> = [
+            (
+                "Me, so far".to_owned(),
+                formiga_pencil::hand_bold(15.0),
+                ink::MUTED,
+            ),
+            (title.to_owned(), formiga_pencil::hand_bold(20.0), ink::PAGE),
+            (format!("{how}!"), formiga_pencil::hand(15.0), ink::FOREST),
+        ]
+        .into_iter()
+        .map(|(text, font, colour)| (ui.painter().layout(text, font, colour, words_width), colour))
+        .collect();
+        let tall = words.iter().map(|(g, _)| g.size().y).sum::<f32>() + u * 8.0;
+        let (rect, _) = ui.allocate_exact_size(vec2(width, tall.max(u * 40.0)), Sense::hover());
+        let painter = ui.painter().clone();
+        chrome::card(&painter, rect, u, ink::CARD, ink::LINE.gamma_multiply(0.55));
         painter.image(
             flag.id(),
             Rect::from_min_size(rect.min + vec2(u * 5.0, u * 6.0), vec2(fw, fh)),
@@ -563,16 +578,7 @@ impl BattleApp {
         );
         let x = rect.left() + u * 10.0 + fw;
         let mut y = rect.top() + u * 4.0;
-        for (text, font, colour) in [
-            (
-                "Me, so far".to_owned(),
-                formiga_pencil::hand_bold(15.0),
-                ink::MUTED,
-            ),
-            (title.to_owned(), formiga_pencil::hand_bold(20.0), ink::PAGE),
-            (format!("{how}!"), formiga_pencil::hand(15.0), ink::FOREST),
-        ] {
-            let galley = painter.layout(text, font, colour, rect.right() - x - u * 4.0);
+        for (galley, colour) in words {
             let h = galley.size().y;
             painter.galley(pos2(x, y), galley, colour);
             y += h;

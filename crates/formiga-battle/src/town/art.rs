@@ -126,48 +126,15 @@ pub fn bytes(name: &str) -> Option<&'static [u8]> {
         "place-office-fg.png" => include_bytes!("../../assets/town/place-office-fg.png"),
         "place-studio-bg.png" => include_bytes!("../../assets/town/place-studio-bg.png"),
         "place-studio-fg.png" => include_bytes!("../../assets/town/place-studio-fg.png"),
-        "portrait-acc-field-cap.png" => {
-            include_bytes!("../../assets/town/portrait-acc-field-cap.png")
+        "portrait-angler-talk.png" => include_bytes!("../../assets/town/portrait-angler-talk.png"),
+        "portrait-gardener-talk.png" => {
+            include_bytes!("../../assets/town/portrait-gardener-talk.png")
         }
-        "portrait-acc-glasses.png" => include_bytes!("../../assets/town/portrait-acc-glasses.png"),
-        "portrait-acc-satchel.png" => include_bytes!("../../assets/town/portrait-acc-satchel.png"),
-        "portrait-acc-scarf.png" => include_bytes!("../../assets/town/portrait-acc-scarf.png"),
-        "portrait-angler.png" => include_bytes!("../../assets/town/portrait-angler.png"),
-        "portrait-body.png" => include_bytes!("../../assets/town/portrait-body.png"),
-        "portrait-gardener.png" => include_bytes!("../../assets/town/portrait-gardener.png"),
-        "portrait-hair-braids.png" => include_bytes!("../../assets/town/portrait-hair-braids.png"),
-        "portrait-hair-bun.png" => include_bytes!("../../assets/town/portrait-hair-bun.png"),
-        "portrait-hair-curls.png" => include_bytes!("../../assets/town/portrait-hair-curls.png"),
-        "portrait-hair-long.png" => include_bytes!("../../assets/town/portrait-hair-long.png"),
-        "portrait-hair-short-crop.png" => {
-            include_bytes!("../../assets/town/portrait-hair-short-crop.png")
-        }
-        "portrait-hair-tousled.png" => {
-            include_bytes!("../../assets/town/portrait-hair-tousled.png")
-        }
-        "portrait-iris.png" => include_bytes!("../../assets/town/portrait-iris.png"),
-        "portrait-marlow.png" => include_bytes!("../../assets/town/portrait-marlow.png"),
-        "portrait-odile.png" => include_bytes!("../../assets/town/portrait-odile.png"),
-        "portrait-outfit-club-jersey.png" => {
-            include_bytes!("../../assets/town/portrait-outfit-club-jersey.png")
-        }
-        "portrait-outfit-field-jacket.png" => {
-            include_bytes!("../../assets/town/portrait-outfit-field-jacket.png")
-        }
-        "portrait-outfit-jumper.png" => {
-            include_bytes!("../../assets/town/portrait-outfit-jumper.png")
-        }
-        "portrait-outfit-lab-coat.png" => {
-            include_bytes!("../../assets/town/portrait-outfit-lab-coat.png")
-        }
-        "portrait-outfit-overalls.png" => {
-            include_bytes!("../../assets/town/portrait-outfit-overalls.png")
-        }
-        "portrait-outfit-waistcoat.png" => {
-            include_bytes!("../../assets/town/portrait-outfit-waistcoat.png")
-        }
-        "portrait-tailor.png" => include_bytes!("../../assets/town/portrait-tailor.png"),
-        "portrait-wren.png" => include_bytes!("../../assets/town/portrait-wren.png"),
+        "portrait-iris-talk.png" => include_bytes!("../../assets/town/portrait-iris-talk.png"),
+        "portrait-marlow-talk.png" => include_bytes!("../../assets/town/portrait-marlow-talk.png"),
+        "portrait-odile-talk.png" => include_bytes!("../../assets/town/portrait-odile-talk.png"),
+        "portrait-tailor-talk.png" => include_bytes!("../../assets/town/portrait-tailor-talk.png"),
+        "portrait-wren-talk.png" => include_bytes!("../../assets/town/portrait-wren-talk.png"),
         "prop-arena-model.png" => include_bytes!("../../assets/town/prop-arena-model.png"),
         "prop-arena-table-shadow.png" => {
             include_bytes!("../../assets/town/prop-arena-table-shadow.png")
@@ -309,7 +276,7 @@ pub fn bytes(name: &str) -> Option<&'static [u8]> {
 
 /// Every picture there is, for the tests.
 #[cfg(test)]
-pub const ALL: [&str; 173] = [
+pub const ALL: [&str; 156] = [
     "anim-beacon.png",
     "anim-flag.png",
     "anim-lamp.png",
@@ -372,30 +339,13 @@ pub const ALL: [&str; 173] = [
     "place-office-fg.png",
     "place-studio-bg.png",
     "place-studio-fg.png",
-    "portrait-acc-field-cap.png",
-    "portrait-acc-glasses.png",
-    "portrait-acc-satchel.png",
-    "portrait-acc-scarf.png",
-    "portrait-angler.png",
-    "portrait-body.png",
-    "portrait-gardener.png",
-    "portrait-hair-braids.png",
-    "portrait-hair-bun.png",
-    "portrait-hair-curls.png",
-    "portrait-hair-long.png",
-    "portrait-hair-short-crop.png",
-    "portrait-hair-tousled.png",
-    "portrait-iris.png",
-    "portrait-marlow.png",
-    "portrait-odile.png",
-    "portrait-outfit-club-jersey.png",
-    "portrait-outfit-field-jacket.png",
-    "portrait-outfit-jumper.png",
-    "portrait-outfit-lab-coat.png",
-    "portrait-outfit-overalls.png",
-    "portrait-outfit-waistcoat.png",
-    "portrait-tailor.png",
-    "portrait-wren.png",
+    "portrait-angler-talk.png",
+    "portrait-gardener-talk.png",
+    "portrait-iris-talk.png",
+    "portrait-marlow-talk.png",
+    "portrait-odile-talk.png",
+    "portrait-tailor-talk.png",
+    "portrait-wren-talk.png",
     "prop-arena-model.png",
     "prop-arena-table-shadow.png",
     "prop-arena-table.png",

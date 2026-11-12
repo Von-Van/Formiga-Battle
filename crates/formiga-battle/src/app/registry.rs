@@ -217,8 +217,9 @@ impl BattleApp {
                 (Part::Trim, "Edge"),
             ] {
                 ui.horizontal_top(|ui| {
+                    // Room for the longest of the four words and a gap before the tiles.
                     let (slot, _) =
-                        ui.allocate_exact_size(vec2(u * 34.0, TILE_ROW * u), Sense::hover());
+                        ui.allocate_exact_size(vec2(u * 46.0, TILE_ROW * u), Sense::hover());
                     let galley =
                         ui.painter()
                             .layout_job(hand_job(label, chrome::LABEL - 0.5, ink::MUTED));
@@ -492,61 +493,66 @@ impl BattleApp {
                 let y = ui.cursor().min.y;
                 let rule = rule_below(rules, y + rules.1);
                 ui.add_space((rule - rules.1 * 0.85 - y).max(0.0));
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing.x = u * 3.0;
-                    if !renaming
-                        && chrome::button(ui, "rename", Kind::Quiet, false, true, None, u).clicked()
-                    {
-                        rename_to = Some(Some(Renaming {
-                            id: trio.id.clone(),
-                            name: trio.name.clone(),
-                        }));
-                    }
-                    // Its own colours, or the Handler's: a step through the cloths.
-                    let own = trio.pennant.as_ref().map(|p| Style::of(p).field);
-                    let word = match own {
-                        Some(f) => format!("colours: {}", FIELDS[f].1.to_lowercase()),
-                        None => "colours: yours".to_owned(),
-                    };
-                    if chrome::button(ui, &word, Kind::Quiet, false, true, None, u)
-                        .on_hover_text("Fly your pennant in a colour of the trio's own")
-                        .clicked()
-                    {
-                        let next = match own {
-                            None => Some(0),
-                            Some(f) if f + 1 < FIELDS.len() => Some(f + 1),
-                            Some(_) => None,
+                // Top-aligned so the three stand on one line, and wrap when the page is narrow.
+                ui.with_layout(
+                    egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
+                    |ui| {
+                        ui.spacing_mut().item_spacing = vec2(u * 4.0, u * 2.0);
+                        if !renaming
+                            && chrome::button(ui, "rename", Kind::Quiet, false, true, None, u)
+                                .clicked()
+                        {
+                            rename_to = Some(Some(Renaming {
+                                id: trio.id.clone(),
+                                name: trio.name.clone(),
+                            }));
+                        }
+                        // Its own colours, or the Handler's: a step through the cloths.
+                        let own = trio.pennant.as_ref().map(|p| Style::of(p).field);
+                        let word = match own {
+                            Some(f) => format!("colours: {}", FIELDS[f].1.to_lowercase()),
+                            None => "colours: yours".to_owned(),
                         };
-                        update = Some(TrioCard {
-                            pennant: next.map(|field| {
-                                Style {
-                                    field,
-                                    ..handler_style
-                                }
-                                .pennant()
-                            }),
-                            ..trio.card()
-                        });
-                    }
-                    let (word, hint) = if trio.retired {
-                        (
-                            "bring back",
-                            "Recognise this trio again when its three are picked",
-                        )
-                    } else {
-                        ("retire", "Keep its record, but stop recognising it")
-                    };
-                    let may = !trio.retired || may_return;
-                    if chrome::button(ui, word, Kind::Quiet, false, may, None, u)
-                        .on_hover_text(hint)
-                        .clicked()
-                    {
-                        update = Some(TrioCard {
-                            retired: !trio.retired,
-                            ..trio.card()
-                        });
-                    }
-                });
+                        if chrome::button(ui, &word, Kind::Quiet, false, true, None, u)
+                            .on_hover_text("Fly your pennant in a colour of the trio's own")
+                            .clicked()
+                        {
+                            let next = match own {
+                                None => Some(0),
+                                Some(f) if f + 1 < FIELDS.len() => Some(f + 1),
+                                Some(_) => None,
+                            };
+                            update = Some(TrioCard {
+                                pennant: next.map(|field| {
+                                    Style {
+                                        field,
+                                        ..handler_style
+                                    }
+                                    .pennant()
+                                }),
+                                ..trio.card()
+                            });
+                        }
+                        let (word, hint) = if trio.retired {
+                            (
+                                "bring back",
+                                "Recognise this trio again when its three are picked",
+                            )
+                        } else {
+                            ("retire", "Keep its record, but stop recognising it")
+                        };
+                        let may = !trio.retired || may_return;
+                        if chrome::button(ui, word, Kind::Quiet, false, may, None, u)
+                            .on_hover_text(hint)
+                            .clicked()
+                        {
+                            update = Some(TrioCard {
+                                retired: !trio.retired,
+                                ..trio.card()
+                            });
+                        }
+                    },
+                );
             });
         });
         match (rename_to, draft) {

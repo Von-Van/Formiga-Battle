@@ -78,10 +78,11 @@ impl BattleApp {
             self.journal_strip(ui, area, u, now);
             return;
         }
-        if self.stage == Stage::Station {
+        if matches!(self.stage, Stage::Station | Stage::Town | Stage::Arrival) {
+            let words = self.strip_words();
             ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.label(hand_job("The Battleground", chrome::LABEL, ink::COVER));
+                    ui.label(hand_job(&words, chrome::LABEL, ink::COVER));
                 });
             });
             return;
@@ -358,7 +359,14 @@ impl BattleApp {
                 _ => "Click the picture, or press Space, to hurry the train in.".to_owned(),
             },
             Stage::Journal => self.journal_hint(),
-            Stage::Town | Stage::Arrival => String::new(),
+            Stage::Arrival => "Esc, Space or a click: skip".to_owned(),
+            Stage::Town if self.habitat.is_some() => {
+                "The arrows, A and D, or a click: choose. E or Esc: back to the office.".to_owned()
+            }
+            Stage::Town => {
+                "WASD or the arrows: walk. E: use. Tab: the next thing. M: the map. Or click."
+                    .to_owned()
+            }
             Stage::Playing if self.table.finished(now) && self.table.lesson.is_some() => {
                 "The lesson is over. Try it again, or go on, from the notes page.".to_owned()
             }

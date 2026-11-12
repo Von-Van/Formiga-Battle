@@ -6,7 +6,8 @@
 //! accessory behind, body, outfit, the accessory in front, hair in front, then glasses or a cap.
 //! A colour is a lookup, never a redraw: each recolourable material is painted in four shades of
 //! one hue (the ramps below, from the art pack's character layout), and a chosen colour swaps
-//! them for the same steps of the new one. "As drawn" keeps the art's own colour.
+//! them for the same steps of the new one. "As drawn" keeps the art's own colour. The Handler
+//! has no portrait: the Studio shows them walking (Jake, 12 November).
 
 use super::art;
 use super::sheet::{CELL, Sheet, decode};
@@ -158,27 +159,6 @@ impl HandlerLook {
         .collect()
     }
 
-    /// The portrait's pieces in draw order: a file, and which 64-pixel row of it.
-    fn portrait_layers(&self) -> Vec<(String, u32)> {
-        let look = self.sane();
-        let hair = slug(HAIRSTYLES[look.hairstyle as usize]);
-        let outfit = slug(OUTFITS[look.outfit as usize]);
-        let accessory = slug(ACCESSORIES[look.accessory as usize]);
-        let mut out = vec![
-            (format!("portrait-hair-{hair}.png"), 0),
-            ("portrait-body.png".to_owned(), 0),
-            (format!("portrait-outfit-{outfit}.png"), 0),
-        ];
-        if matches!(accessory.as_str(), "satchel" | "scarf") {
-            out.push((format!("portrait-acc-{accessory}.png"), 0));
-        }
-        out.push((format!("portrait-hair-{hair}.png"), 1));
-        if matches!(accessory.as_str(), "glasses" | "field-cap") {
-            out.push((format!("portrait-acc-{accessory}.png"), 0));
-        }
-        out
-    }
-
     /// Swaps the art's own colours for the chosen ones.
     fn dye(&self, canvas: &mut Canvas) {
         let look = self.sane();
@@ -211,26 +191,6 @@ impl HandlerLook {
         }
         self.dye(&mut canvas);
         Sheet::from_canvas(canvas, 8)
-    }
-
-    /// The Handler's portrait in this look, in one of its four expressions: calm, talking,
-    /// pleased and curious.
-    pub fn portrait(&self, expression: usize) -> Canvas {
-        let mut canvas = Canvas::new(64, 64);
-        for (name, row) in self.portrait_layers() {
-            let Some(layer) = art::bytes(&name).and_then(decode) else {
-                continue;
-            };
-            // The body has a column for each expression; the others are one picture.
-            let column = if name == "portrait-body.png" {
-                expression.min(3) as i32
-            } else {
-                0
-            };
-            stack(&mut canvas, &layer, -64 * column, -64 * row as i32);
-        }
-        self.dye(&mut canvas);
-        canvas
     }
 
     /// A few words for the look, as the Studio sums it up.
@@ -365,9 +325,6 @@ mod tests {
                         for name in look.layers() {
                             assert!(art::bytes(&name).is_some(), "no {name}");
                         }
-                        for (name, _) in look.portrait_layers() {
-                            assert!(art::bytes(&name).is_some(), "no {name}");
-                        }
                     }
                 }
             }
@@ -439,20 +396,6 @@ mod tests {
         assert_eq!(
             dyed.summary(),
             "Auburn tousled hair, a forest field jacket, the satchel"
-        );
-    }
-
-    #[test]
-    fn the_portrait_is_a_head_and_shoulders_in_every_expression() {
-        let look = HandlerLook::default();
-        for expression in 0..4 {
-            let p = look.portrait(expression);
-            assert!(p.pixels().iter().filter(|c| c.a > 0).count() > 600);
-        }
-        assert_ne!(
-            look.portrait(0),
-            look.portrait(1),
-            "talking moves the mouth"
         );
     }
 }

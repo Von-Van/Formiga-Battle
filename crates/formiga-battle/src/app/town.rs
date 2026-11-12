@@ -1,5 +1,7 @@
-//! The town on screen: the place the Handler is in, drawn at a whole number of screen pixels to
-//! each of its own, in a dark wooden frame with the place's name above it and the keys below.
+//! The town on screen, in the notebook every Formiga app opens in: the place the Handler is in,
+//! drawn at a whole number of screen pixels to each of its own and pasted on the left page; its
+//! name on the strip along the top, the keys along the foot, and on the ruled right page what
+//! there is to use and where the doors go, each a way to walk there.
 //! WASD or the arrow keys walk, E (or Enter, or Space) uses what is in front, Tab goes to the
 //! next thing to use, and a click walks to a tile or to whatever stands there and uses it.
 //!
@@ -12,16 +14,10 @@ use crate::town::picture::{TILE, VIEW};
 use crate::town::{Happened, Town};
 
 /// The frame round the picture and the words on it.
-pub(super) const FRAME: Color32 = Color32::from_rgb(0x5b, 0x3a, 0x27);
 const FRAME_DARK: Color32 = Color32::from_rgb(0x2f, 0x1c, 0x12);
-pub(super) const CREAM: Color32 = Color32::from_rgb(0xf3, 0xe6, 0xc4);
-pub(super) const BRASS: Color32 = Color32::from_rgb(0xcd, 0xb1, 0x7a);
-const FOREST: Color32 = Color32::from_rgb(0x1c, 0x41, 0x37);
 const PAPER: Color32 = Color32::from_rgb(0xff, 0xf8, 0xe4);
 const PLUM: Color32 = Color32::from_rgb(0x3b, 0x2b, 0x3a);
 const INK_DARK: Color32 = Color32::from_rgb(0x23, 0x36, 0x2f);
-/// The bars above and below the picture, in points.
-pub(super) const BAR: f32 = 40.0;
 
 /// The keys that walk, each with its way.
 const WALK_KEYS: [(egui::Key, Facing); 8] = [
@@ -203,41 +199,6 @@ impl BattleApp {
             prompt(&painter, at, &town.prompt(target), picture_rect);
         }
 
-        // The place's name above the picture, the Handler's on the right; the keys below.
-        let name = town.place.name.to_uppercase();
-        plate(
-            &painter,
-            pos2(picture_rect.min.x, picture_rect.min.y - BAR / 2.0),
-            &name,
-        );
-        let who = match (self.handler.trim(), self.club.trim()) {
-            ("", _) => String::new(),
-            (name, "") => name.to_owned(),
-            (name, club) => format!("{name} · {club}"),
-        };
-        painter.text(
-            pos2(picture_rect.max.x, picture_rect.min.y - BAR / 2.0),
-            egui::Align2::RIGHT_CENTER,
-            who,
-            FontId::proportional(16.0),
-            CREAM,
-        );
-        painter.text(
-            pos2(picture_rect.min.x, picture_rect.max.y + BAR / 2.0),
-            egui::Align2::LEFT_CENTER,
-            "WASD or arrows: walk   ·   E: use   ·   Tab: next thing   ·   M: map   ·   or click",
-            FontId::monospace(12.0),
-            CREAM,
-        );
-        if let Host::Rehearsal { .. } = self.host {
-            painter.text(
-                pos2(picture_rect.max.x, picture_rect.max.y + BAR / 2.0),
-                egui::Align2::RIGHT_CENTER,
-                "Rehearsal: the sample colony",
-                FontId::proportional(14.0),
-                BRASS,
-            );
-        }
         if go_on {
             self.speech_on();
         }
@@ -292,18 +253,6 @@ impl BattleApp {
     }
 }
 
-/// The place's name on a small green plate edged in brass.
-pub(super) fn plate(painter: &egui::Painter, left_centre: egui::Pos2, words: &str) {
-    let galley = painter.layout_no_wrap(words.to_owned(), FontId::monospace(13.0), CREAM);
-    let rect = Rect::from_min_size(
-        left_centre - vec2(0.0, galley.size().y / 2.0 + 4.0),
-        galley.size() + vec2(20.0, 8.0),
-    );
-    painter.rect_filled(rect, 0.0, FOREST);
-    painter.rect_stroke(rect, 0.0, Stroke::new(2.0, BRASS), egui::StrokeKind::Inside);
-    painter.galley(rect.min + vec2(10.0, 4.0), galley, CREAM);
-}
-
 /// A prompt card over a thing: the key to press and what it does, with a notch pointing down at
 /// it, kept inside the picture.
 fn prompt(painter: &egui::Painter, over: egui::Pos2, words: &str, inside: Rect) {
@@ -353,8 +302,8 @@ fn prompt(painter: &egui::Painter, over: egui::Pos2, words: &str, inside: Rect) 
 }
 
 /// A picture of the town (or the arrival) at a whole number of screen pixels to each of its own,
-/// in the dark wooden frame with room above and below for its words: the painter, the whole
-/// window, where the picture went and how many screen pixels each of its pixels took.
+/// pasted on the page it is given with a dark edge: the painter, the page, where the picture went
+/// and how many screen pixels each of its pixels took.
 pub(super) fn show_picture(
     ui: &egui::Ui,
     ctx: &egui::Context,
@@ -362,13 +311,9 @@ pub(super) fn show_picture(
     view: &Canvas,
 ) -> (egui::Painter, Rect, Rect, f32) {
     let full = ui.max_rect();
-    let painter = ui.painter_at(full);
-    painter.rect_filled(full, 0.0, FRAME);
+    let painter = ui.painter_at(full.expand(8.0));
     let ppp = ctx.pixels_per_point();
-    let room = Rect::from_min_max(
-        pos2(full.min.x + 16.0, full.min.y + BAR),
-        pos2(full.max.x - 16.0, full.max.y - BAR),
-    );
+    let room = full.shrink(6.0);
     let scale = ((room.width() * ppp) / VIEW.0 as f32)
         .min((room.height() * ppp) / VIEW.1 as f32)
         .floor()
@@ -384,6 +329,11 @@ pub(super) fn show_picture(
         None => *slot = Some(texture(ctx, "town", view)),
     }
     if let Some(t) = slot {
+        painter.rect_filled(
+            picture_rect.translate(vec2(3.0, 3.0)).expand(3.0),
+            0.0,
+            Color32::from_black_alpha(60),
+        );
         painter.rect_filled(picture_rect.expand(3.0), 0.0, FRAME_DARK);
         painter.image(
             t.id(),
@@ -393,4 +343,141 @@ pub(super) fn show_picture(
         );
     }
     (painter, full, picture_rect, scale)
+}
+
+impl BattleApp {
+    /// The words along the notebook's top strip in town: where the Handler is.
+    pub(super) fn strip_words(&self) -> String {
+        match self.stage {
+            Stage::Station => "The Battleground".to_owned(),
+            Stage::Arrival => "Arriving".to_owned(),
+            _ if self.habitat.is_some() => "The habitat".to_owned(),
+            _ => self
+                .town
+                .as_ref()
+                .map_or_else(|| "The Battleground".to_owned(), |t| t.place.name.clone()),
+        }
+    }
+
+    /// The ruled right page beside the town: where the Handler is, what there is here to use and
+    /// where the doors go, each a way to walk there; in the habitat, the companion picked.
+    pub(super) fn town_notes(&mut self, ui: &mut egui::Ui, u: f32) {
+        let now = self.clock;
+        let heading = |ui: &mut egui::Ui, words: &str| {
+            ruled::write(
+                ui,
+                RichText::new(words)
+                    .font(formiga_pencil::hand_bold(24.0))
+                    .color(ink::PAGE),
+            );
+        };
+        let line = |ui: &mut egui::Ui, words: &str, colour: Color32| {
+            ui.add(egui::Label::new(RichText::new(words).size(16.0).color(colour)).wrap());
+        };
+        if self.stage == Stage::Arrival {
+            heading(ui, "Arriving");
+            ui.add_space(u * 3.0);
+            let names = self.companion_names();
+            if !names.is_empty() {
+                line(ui, &format!("{names}, from Formiga Desktop."), ink::PAGE);
+            }
+            return;
+        }
+        if let Some(habitat) = &self.habitat {
+            heading(ui, "The habitat");
+            ui.add_space(u * 3.0);
+            let picked = habitat.picked();
+            if let Some((contender, _)) = self.table.home.get(picked) {
+                let character = &contender.traveler.character;
+                ruled::write(
+                    ui,
+                    RichText::new(&contender.traveler.name)
+                        .font(formiga_pencil::hand_bold(20.0))
+                        .color(ink::PAGE),
+                );
+                line(ui, &character.phrase, ink::MUTED);
+                line(ui, &character.traits.join(" · "), ink::MUTED);
+                ui.add_space(u * 3.0);
+                let note = match self.table.page(contender.traveler.id.0) {
+                    Some(page) => page
+                        .notes()
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| "No habits noted yet.".to_owned()),
+                    None => "Not in my notebook yet.".to_owned(),
+                };
+                line(ui, &format!("In the notebook: {note}"), ink::FOREST);
+            }
+            ui.add_space(u * 4.0);
+            line(
+                ui,
+                "As Formiga Desktop keeps them. Battle never changes who they are.",
+                ink::MUTED,
+            );
+            return;
+        }
+        let Some(town) = &self.town else {
+            return;
+        };
+        heading(ui, &town.place.name);
+        ui.add_space(u * 4.0);
+        // What there is to use here, and where the doors go: each a way to walk there.
+        let mut walk_to: Option<(i32, i32)> = None;
+        let targets = town.place.targets();
+        if !targets.is_empty() {
+            ruled::write(ui, RichText::new("Here").size(17.0).color(ink::FOREST));
+            for target in targets {
+                let words = town.prompt(target);
+                let tile = town.place.tiles_of(target)[0];
+                if chrome::button(
+                    ui,
+                    &words,
+                    Kind::Quiet,
+                    false,
+                    self.speech.is_none(),
+                    None,
+                    u,
+                )
+                .clicked()
+                {
+                    walk_to = Some(tile);
+                }
+            }
+            ui.add_space(u * 3.0);
+        }
+        ruled::write(ui, RichText::new("Doors").size(17.0).color(ink::FOREST));
+        for door in &town.place.doors {
+            let words = format!("To {}", place_words(door.to));
+            if chrome::button(
+                ui,
+                &words,
+                Kind::Quiet,
+                false,
+                self.speech.is_none(),
+                None,
+                u,
+            )
+            .clicked()
+            {
+                walk_to = Some(door.tile);
+            }
+        }
+        if let (Some(tile), Some(town)) = (walk_to, &mut self.town) {
+            let happened = town.click(tile, now);
+            let ctx = ui.ctx().clone();
+            self.town_happened(&ctx, happened);
+        }
+    }
+}
+
+/// How a door's other side is named on the notes page.
+fn place_words(place: PlaceId) -> &'static str {
+    match place {
+        PlaceId::Office => "the office",
+        PlaceId::Campus => "the courtyard",
+        PlaceId::Arena => "the Arena",
+        PlaceId::Clubhouse => "the Clubhouse",
+        PlaceId::GuildHall => "the Guild Hall",
+        PlaceId::Studio => "the Handler Studio",
+    }
 }

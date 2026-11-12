@@ -8,6 +8,10 @@ it. The code is `crates/formiga-battle/src/town/` (places, walking, sheets, pict
 `crates/formiga-battle/src/app/town.rs` (the window's side).
 
 Battle opens in town: the train arrives on the Handler's desk, and the Handler walks from there.
+The town is drawn in the notebook every Formiga app opens in: the place pasted on the left page,
+its name on the strip along the top and the keys along the foot, and on the ruled right page what
+there is to use and where the doors go, each a way to walk there (in the habitat, the companion
+picked).
 The country station is kept for its review picture (`--review station`).
 
 ## Arriving
@@ -49,7 +53,7 @@ reached and used.
 ## The art
 
 Every picture in town is Jake's, from his overworld art pack. The pack itself stays out of git
-(`.dev/design/formiga-battle-assets-v*`); `scripts/town_art.py` reads its layout guide and writes
+(`art-source/formiga-battle-assets-v*` at the top of the checkout); `scripts/town_art.py` reads its layout guide and writes
 what Battle uses, all of it committed:
 
 - the pictures the town draws, in `crates/formiga-battle/assets/town/`, and the list of them
@@ -127,7 +131,10 @@ them. Battle only shows these. E, Enter or Escape goes back to the office.
 
 ## Who says what
 
-The townspeople speak on a card over the foot of the picture, with their portrait; E, Space,
+The townspeople speak on a card over the foot of the picture, with their portrait: Jake's
+illustrated busts (`portrait-<name>-reactions.png` in the pack, lined up by their draw offsets
+and brought in at 256-pixel cells as `portrait-<name>-talk.png`), talking while a line is new.
+E, Space,
 Enter or a click goes on, and after the last line opens the page they keep, if any. Escape
 closes it. Everything said about the Handler or their companions is what the record shows, and
 with nothing recorded yet it is a plain greeting (`app/speech.rs`). Nothing said changes anything.
@@ -159,7 +166,8 @@ nothing in it touches a match or the record.
 
 A colour is a lookup, never a redraw: each recolourable material is painted in shades of one hue,
 and a chosen colour swaps them for the same steps of the new one (`town/look.rs`, with the ramps
-from the pack's character layout). The portrait is stacked the same way from its own layers.
+from the pack's character layout). The Handler has no portrait: the Studio shows them walking
+each way (Jake, 12 November).
 
 ## Character sheets
 
