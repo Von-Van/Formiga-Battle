@@ -361,11 +361,6 @@ fn shades(ramp: &Ramp, to: u32) -> Vec<(Rgba, Rgba)> {
         .collect()
 }
 
-/// Swaps a material's four shades for the same steps of `to`.
-pub fn recolour(canvas: &mut Canvas, ramp: &Ramp, to: u32) {
-    swap(canvas, &shades(ramp, to));
-}
-
 /// Each pixel of a `from` colour painted its `to`, in one pass.
 fn swap(canvas: &mut Canvas, swaps: &[(Rgba, Rgba)]) {
     if swaps.is_empty() {
