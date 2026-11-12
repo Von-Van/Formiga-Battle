@@ -391,6 +391,9 @@ struct Room {
     /// When a side first reported that the match ended on its board after the last locked turn.
     /// From then no turn locks while the other side's last board is awaited.
     finishing_since: Option<Millis>,
+    /// Both sides were away at once and the match was called off: nobody won it, so it is never
+    /// confirmed, however the boards came out.
+    called_off: bool,
 }
 
 impl Room {
@@ -411,10 +414,11 @@ impl Room {
 
     /// The match is over on the board and both windows came to the same board after every turn.
     /// A forfeit is never confirmed, even with both boards in for the turns before it: it has no
-    /// last board to wait for.
+    /// last board to wait for. Nor is a match called off, which nobody finished.
     fn confirmed(&self) -> bool {
         self.stage == Stage::Over
             && !self.ending.as_ref().is_some_and(|e| e.forfeited.is_some())
+            && !self.called_off
             && !self.out_of_step
             && self.both_reported()
             && self.boards[0].map(|b| b.1) == self.boards[1].map(|b| b.1)
@@ -553,6 +557,7 @@ impl Relay {
                         ending: None,
                         over_since: None,
                         finishing_since: None,
+                        called_off: false,
                     },
                 );
                 Answer::Seat { code, seat }
@@ -624,7 +629,10 @@ impl Relay {
                         return Err(Refusal::Malformed);
                     }
                     room.pending[side.index()] = Some(orders);
-                    if room.pending.iter().all(Option::is_some) {
+                    // While a side's report that the match ended awaits the other's last board,
+                    // no turn locks, sent plans included: a locked turn would leave that last
+                    // board a turn behind.
+                    if room.finishing_since.is_none() && room.pending.iter().all(Option::is_some) {
                         lock(room, now, grace);
                     }
                     Ok(())
@@ -659,6 +667,19 @@ impl Relay {
                     // The same board cannot have ended for one window and not the other.
                     if a.1 != b.1 || a.2 != b.2 {
                         room.out_of_step = true;
+                        // Both last boards are in and they disagree: nothing more is awaited, so
+                        // the match ends here, unconfirmed.
+                        if room.stage == Stage::Playing
+                            && room.finishing_since.is_some()
+                            && room.both_reported()
+                        {
+                            room.stage = Stage::Over;
+                            room.over_since = Some(now);
+                            room.ending = Some(Ending {
+                                forfeited: None,
+                                reason: "The two windows came to different boards, so the match ended without a result.".to_owned(),
+                            });
+                        }
                     } else if a.2 && b.2 && room.stage == Stage::Playing {
                         room.stage = Stage::Over;
                         room.over_since = Some(now);
@@ -889,6 +910,7 @@ fn catch_up(room: &mut Room, now: Millis, limits: Limits) {
                 ),
             },
         };
+        room.called_off = ending.forfeited.is_none();
         room.stage = Stage::Over;
         room.over_since = Some(now);
         room.ending = Some(ending);

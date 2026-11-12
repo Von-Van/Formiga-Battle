@@ -1374,7 +1374,7 @@
    ]
   },
   {
-   "name": "the same board ended for one window and not the other is out of step",
+   "name": "the same board ended for one window and not the other is out of step, and ends the match unconfirmed",
    "steps": [
     {
      "at": 0,
@@ -1449,7 +1449,278 @@
      "expect": {
       "status": 200,
       "view": {
+       "stage": "over",
+       "ending.forfeited": null,
        "out_of_step": true,
+       "confirmed": false
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "last boards that disagree on the hash end the match unconfirmed, with no wait",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 100,
+     "as": "left",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 200,
+     "as": "right",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000008",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 300,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": null,
+       "out_of_step": true,
+       "confirmed": false
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "plans sent while the friend's last board is awaited lock no turn, and the late board still confirms the match",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 20,
+     "as": "left",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 30,
+     "as": "right",
+     "orders": {
+      "turn": 1,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 100,
+     "as": "left",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 200,
+     "as": "left",
+     "orders": {
+      "turn": 2,
+      "orders": []
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 300,
+     "as": "right",
+     "orders": {
+      "turn": 2,
+      "orders": []
+     },
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "playing",
+       "locked.length": 1,
+       "turn": 2
+      }
+     }
+    },
+    {
+     "at": 400,
+     "as": "right",
+     "board": {
+      "turn": 1,
+      "hash": "0000000000000007",
+      "finished": true
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 500,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": null,
+       "locked.length": 1,
+       "confirmed": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a match called off is never confirmed, even when both boards after its last turn agree",
+   "steps": [
+    {
+     "at": 0,
+     "as": "left",
+     "open": "jake",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 10,
+     "as": "right",
+     "join": "friend",
+     "expect": {
+      "status": 201
+     }
+    },
+    {
+     "at": 133010,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": null,
+       "locked.length": 3,
+       "confirmed": false
+      }
+     }
+    },
+    {
+     "at": 133020,
+     "as": "left",
+     "board": {
+      "turn": 3,
+      "hash": "0000000000000007",
+      "finished": false
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 133030,
+     "as": "right",
+     "board": {
+      "turn": 3,
+      "hash": "0000000000000007",
+      "finished": false
+     },
+     "expect": {
+      "status": 200
+     }
+    },
+    {
+     "at": 133040,
+     "as": "left",
+     "look": true,
+     "expect": {
+      "status": 200,
+      "view": {
+       "stage": "over",
+       "ending.forfeited": null,
        "confirmed": false
       }
      }
